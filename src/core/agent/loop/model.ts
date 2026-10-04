@@ -110,7 +110,8 @@ export function parseModelAnswer(raw: unknown, row: number): ParsedAnswer | null
 export function buildModelRequest(opts: { messages: object[]; options?: object }): Record<string, unknown> {
   return {
     messages: opts.messages,
-    tools: TOOL_DEFINITIONS,
+    // TOOL_DEFINITIONS is the block of 05-agent as text (its hash is pinned); the model takes the array.
+    tools: JSON.parse(TOOL_DEFINITIONS) as object[],
     max_tokens: MODEL_MAX_TOKENS,
     ...(opts.options ?? {}),
   };

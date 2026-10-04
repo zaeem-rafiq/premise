@@ -34,7 +34,7 @@
     "deploy:test": "npm run check && wrangler deploy --env test",
     "deploy": "npm run check && wrangler deploy --env=\"\"",
     "pool:create": "node scripts/ops/not-built.ts pool:create 'Slice 1'",
-    "measure:models": "node scripts/ops/not-built.ts measure:models 'step 2.2a (--early), then Slice 4'",
+    "measure:models": "node scripts/measure/models.ts",
     "soak": "node scripts/ops/not-built.ts soak 'Slice 8'",
     "calibrate:clef": "node scripts/ops/not-built.ts calibrate:clef 'Slice 15'",
     "rehearse:hero": "node scripts/ops/not-built.ts rehearse:hero 'Slice 6'",

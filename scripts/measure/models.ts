@@ -3,7 +3,8 @@
 // writes `docs/measurements/models/<UTC date>-early-<model>.json` and `.transcripts.jsonl`.
 //
 // Usage: node scripts/measure/models.ts --early --model <id> [--max-usd 3] [--runs n] [--out dir]
-//                                        [--dry-run] [--build sha] [--transcripts]
+//                                        [--dry-run] [--build sha]
+// Transcripts are always written beside the result file.
 // `--dry-run` runs the whole plan against a scripted fake model: no network, no credentials.
 
 import { execFileSync } from "node:child_process";

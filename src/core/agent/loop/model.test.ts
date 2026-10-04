@@ -100,13 +100,25 @@ describe("parseModelAnswer (TL3)", () => {
 });
 
 describe("buildModelRequest (TL2/MP1)", () => {
-  it("sends messages, TOOL_DEFINITIONS, MODEL_MAX_TOKENS and the model options — nothing else", () => {
+  it("sends messages, the seven tool definitions as an array, MODEL_MAX_TOKENS and the model options — nothing else", () => {
     const request = buildModelRequest({
       messages: [{ role: "system", content: "s" }],
       options: { reasoning_effort: "low" },
     });
     expect(Object.keys(request).sort()).toEqual(["max_tokens", "messages", "reasoning_effort", "tools"]);
-    expect(request.tools).toBe(TOOL_DEFINITIONS);
+    // The service takes the tool definitions as an array (platform record E9). Sending the block as
+    // text is rejected with error 5006, which the first real measurement run showed.
+    expect(Array.isArray(request.tools)).toBe(true);
+    expect(request.tools).toEqual(JSON.parse(TOOL_DEFINITIONS));
+    expect((request.tools as Array<{ type: string; function: { name: string } }>).map((t) => t.function.name)).toEqual([
+      "outline",
+      "read",
+      "list",
+      "search",
+      "write",
+      "replace",
+      "submit",
+    ]);
     expect(request.max_tokens).toBe(MODEL_MAX_TOKENS);
     expect(request.reasoning_effort).toBe("low");
   });

@@ -7,6 +7,16 @@
 import type { AgentStopReason } from "../protocol/attempt.ts";
 import type { HeadsUp } from "../protocol/headsup.ts";
 import type { ModelToolMessage, ToolName } from "../protocol/tools.ts";
+import { GOLD_A } from "./casts/gold-a.ts";
+import { GOLD_B } from "./casts/gold-b.ts";
+import { HERO_C } from "./casts/hero-c.ts";
+import { HERO_H } from "./casts/hero-h.ts";
+import { HERO_J } from "./casts/hero-j.ts";
+import { HERO_S } from "./casts/hero-s.ts";
+import { SWEEP_A } from "./casts/sweep-a.ts";
+import { SWEEP_B } from "./casts/sweep-b.ts";
+import { WRAP_A } from "./casts/wrap-a.ts";
+import { WRAP_B } from "./casts/wrap-b.ts";
 import { ADD_ENERGY } from "./patterns/add-energy.ts";
 import { ADD_PLAIN } from "./patterns/add-plain.ts";
 import { ADD_RELATIVE } from "./patterns/add-relative.ts";
@@ -48,7 +58,24 @@ export type Pattern = {
 };
 
 /** The patterns the launcher knows, in table order of 02-tidepool.md 10.3. */
-const PATTERNS: readonly Pattern[] = [ADD_PLAIN, ADD_ENERGY, ADD_RELATIVE, RESCALE_ENERGY, COSMETIC];
+const PATTERNS: readonly Pattern[] = [
+  ADD_PLAIN,
+  ADD_ENERGY,
+  ADD_RELATIVE,
+  RESCALE_ENERGY,
+  COSMETIC,
+  // The canned casts of 02-tidepool.md 10.5, in the table's order.
+  HERO_S,
+  HERO_C,
+  HERO_H,
+  HERO_J,
+  GOLD_A,
+  GOLD_B,
+  WRAP_A,
+  WRAP_B,
+  SWEEP_A,
+  SWEEP_B,
+];
 
 const BY_ID = new Map<string, Pattern>(PATTERNS.map((pattern) => [pattern.id, pattern]));
 

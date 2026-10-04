@@ -27,6 +27,7 @@ const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
 const FAKE_ARTIFACTS = join(REPO_ROOT, "test/workerd/landing/fake-artifacts.mjs");
 const STUB_AGENT = join(REPO_ROOT, "test/workerd/landing/stub-agent.mjs");
+const TRUNK_DOWN = join(REPO_ROOT, "test/workerd/reads/trunk-down.mjs");
 const ORIGIN = "http://premise.test";
 
 type Stub = { fetch(url: string, init?: RequestInit): Promise<Response> };
@@ -59,6 +60,12 @@ export type LandingWorker = {
   runAlarm(pool: string, nowMs?: number): Promise<Response>;
   /** The `premise-swarm` workflow instance's status, when `swarm: true` was passed. */
   swarmInstanceStatus(id: string): Promise<string>;
+  /** A client socket on the pool's Floor stream route (`GET /api/pools/{pool}/stream`, 12.2). */
+  stream(pool: string): Promise<WebSocket>;
+  /** Re-bind the `TRUNK` namespace to a class that answers 503 to every fetch, then restart the
+   * Worker on the same storage — Slice 7 item 5's "Trunk unreachable" half (FS2, AS16). The
+   * pool's Trunk object stays down for the rest of the deployment; there is no way back. */
+  breakTrunk(): Promise<void>;
   /** Dispose the Worker and start it again on the same storage — a Trunk abort, LP7 (C20-C22). */
   restart(): Promise<void>;
   dispose(): Promise<void>;
@@ -171,62 +178,79 @@ export async function startLandingWorker(options: {
   });
   const readServer = await startReadServer(projectRoot);
 
-  const workerOptions = convertV4MiniflareOptions({
-    cf: false,
-    telemetry: { enabled: false },
-    // The Durable Objects' SQLite under the test root — a `restart()` then starts a new
-    // Worker over the same storage, which is what LP7 reconciles on (C20-C22).
-    resourcePersistencePath: join(projectRoot, "persist"),
-    workers: [
-      {
-        name: "premise",
-        modules: [{ type: "ESModule", path: BUNDLE }],
-        compatibilityDate: "2026-10-01",
-        compatibilityFlags: ["nodejs_compat"],
-        bindings: options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
-        durableObjects: Object.fromEntries(
-          Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [
-            binding,
-            binding === "AGENT" && options.agentStub === true
-              ? { className: "StubAgent", scriptName: "stub-agent" }
-              : { className, useSQLite: true },
-          ]),
-        ),
-        ...(options.swarm === true
-          ? {
-              workflows: { SWARM: { name: "premise-swarm", className: "SwarmWorkflow" } },
-              workflowExports: { SwarmWorkflow: { name: "premise-swarm" } },
-            }
-          : {}),
-        serviceBindings: { POOLS: { name: "fake-artifacts" } },
-        assets: {
-          directory: CLIENT,
-          binding: "ASSETS",
-          routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true },
-          assetConfig: { not_found_handling: "single-page-application" },
+  // `trunkDown` is what `breakTrunk()` sets: the next Miniflare this build describes binds the
+  // `TRUNK` namespace to the 503 stand-in of trunk-down.mjs instead of the real Trunk.
+  let trunkDown = false;
+  const buildWorkerOptions = () =>
+    convertV4MiniflareOptions({
+      cf: false,
+      telemetry: { enabled: false },
+      // The Durable Objects' SQLite under the test root — a `restart()` then starts a new
+      // Worker over the same storage, which is what LP7 reconciles on (C20-C22).
+      resourcePersistencePath: join(projectRoot, "persist"),
+      workers: [
+        {
+          name: "premise",
+          modules: [{ type: "ESModule", path: BUNDLE }],
+          compatibilityDate: "2026-10-01",
+          compatibilityFlags: ["nodejs_compat"],
+          bindings: options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
+          durableObjects: Object.fromEntries(
+            Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [
+              binding,
+              binding === "AGENT" && options.agentStub === true
+                ? { className: "StubAgent", scriptName: "stub-agent" }
+                : binding === "TRUNK" && trunkDown
+                  ? { className: "TrunkDown", scriptName: "trunk-down" }
+                  : { className, useSQLite: true },
+            ]),
+          ),
+          ...(options.swarm === true
+            ? {
+                workflows: { SWARM: { name: "premise-swarm", className: "SwarmWorkflow" } },
+                workflowExports: { SwarmWorkflow: { name: "premise-swarm" } },
+              }
+            : {}),
+          serviceBindings: { POOLS: { name: "fake-artifacts" } },
+          assets: {
+            directory: CLIENT,
+            binding: "ASSETS",
+            routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true },
+            assetConfig: { not_found_handling: "single-page-application" },
+          },
         },
-      },
-      {
-        name: "fake-artifacts",
-        modules: [{ type: "ESModule", path: FAKE_ARTIFACTS }],
-        compatibilityDate: "2026-10-01",
-        compatibilityFlags: ["nodejs_compat"],
-        bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
-      },
-      ...(options.agentStub === true
-        ? [
-            {
-              name: "stub-agent",
-              modules: [{ type: "ESModule" as const, path: STUB_AGENT }],
-              compatibilityDate: "2026-10-01",
-              compatibilityFlags: ["nodejs_compat"],
-              durableObjects: { StubAgent: { className: "StubAgent", useSQLite: true } },
-            },
-          ]
-        : []),
-    ],
-  });
-  let miniflare = new Miniflare(workerOptions);
+        {
+          name: "fake-artifacts",
+          modules: [{ type: "ESModule", path: FAKE_ARTIFACTS }],
+          compatibilityDate: "2026-10-01",
+          compatibilityFlags: ["nodejs_compat"],
+          bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
+        },
+        ...(options.agentStub === true
+          ? [
+              {
+                name: "stub-agent",
+                modules: [{ type: "ESModule" as const, path: STUB_AGENT }],
+                compatibilityDate: "2026-10-01",
+                compatibilityFlags: ["nodejs_compat"],
+                durableObjects: { StubAgent: { className: "StubAgent", useSQLite: true } },
+              },
+            ]
+          : []),
+        ...(trunkDown
+          ? [
+              {
+                name: "trunk-down",
+                modules: [{ type: "ESModule" as const, path: TRUNK_DOWN }],
+                compatibilityDate: "2026-10-01",
+                compatibilityFlags: ["nodejs_compat"],
+                durableObjects: { TrunkDown: { className: "TrunkDown", useSQLite: true } },
+              },
+            ]
+          : []),
+      ],
+    });
+  let miniflare = new Miniflare(buildWorkerOptions());
   await miniflare.ready;
 
   let namespaces = new Map<DurableObjectBinding, { idFromName(name: string): unknown; get(id: unknown): Stub }>();
@@ -290,10 +314,30 @@ export async function startLandingWorker(options: {
       if (instance === undefined) throw new Error(`no swarm instance ${id}`);
       return (await instance.status()).status;
     },
+    stream: async (pool) => {
+      const response = await object("FLOOR", pool).fetch(`/api/pools/${pool}/stream`, {
+        headers: { upgrade: "websocket" },
+      });
+      // `webSocket` is the Workerd extension of `Response`; the test program's DOM type lacks it.
+      const socket = (response as Response & { webSocket: WebSocket | null }).webSocket;
+      if (response.status !== 101 || socket === null) {
+        throw new Error(`stream upgrade failed: ${response.status} ${await response.text()}`);
+      }
+      // Workerd's socket needs `accept()` — the DOM type of the test program does not name it.
+      (socket as unknown as { accept(): void }).accept();
+      return socket;
+    },
+    breakTrunk: async () => {
+      trunkDown = true;
+      await miniflare.dispose();
+      namespaces = new Map();
+      miniflare = new Miniflare(buildWorkerOptions());
+      await miniflare.ready;
+    },
     restart: async () => {
       await miniflare.dispose();
       namespaces = new Map();
-      miniflare = new Miniflare(workerOptions);
+      miniflare = new Miniflare(buildWorkerOptions());
       await miniflare.ready;
     },
     dispose: async () => {

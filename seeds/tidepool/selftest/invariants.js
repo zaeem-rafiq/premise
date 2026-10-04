@@ -36,33 +36,33 @@ export function checkFiles(kinds) {
 
 // Checks after one tick. Adds to `tally` and returns the problems found this tick.
 export function checkTick(world, kinds, tally) {
-  const bad = [];
+  const nowBad = [];
   for (const creature of world.creatures) {
     const kind = creature.kind;
     tally.ticks[kind] = (tally.ticks[kind] || 0) + 1;
     if (isResting(creature)) tally.resting[kind] = (tally.resting[kind] || 0) + 1;
-    if (!isInside(creature.x, creature.y)) bad.push({ name: "in_bounds", kind });
+    if (!isInside(creature.x, creature.y)) nowBad.push({ name: "in_bounds", kind });
     if (usesEnergy(creature) && !(creature.energy >= 0 && creature.energy <= ENERGY_MAX)) {
-      bad.push({ name: "energy_range", kind });
+      nowBad.push({ name: "energy_range", kind });
     }
   }
   const expected = Object.keys(kinds)
     .filter((kind) => !world.benched[kind])
     .reduce((sum, kind) => sum + countFor(kinds[kind]), 0);
-  if (world.creatures.length !== Math.min(MAX_CREATURES, expected)) bad.push({ name: "population", kind: null });
-  return bad;
+  if (world.creatures.length !== Math.min(MAX_CREATURES, expected)) nowBad.push({ name: "population", kind: null });
+  return nowBad;
 }
 
 // Checks on one drawn frame. `report` comes from draw().
 export function checkFrame(report) {
-  const bad = [];
+  const frameBad = [];
   for (const item of report) {
-    if (item.rejected > 0) bad.push({ name: "pen_rules", kind: item.kind });
+    if (item.rejected > 0) frameBad.push({ name: "pen_rules", kind: item.kind });
     const size = item.box === null ? 0 : Math.max(item.box[2] - item.box[0], item.box[3] - item.box[1]);
-    if (size < MIN_DRAWN) bad.push({ name: "visible", kind: item.kind });
+    if (size < MIN_DRAWN) frameBad.push({ name: "visible", kind: item.kind });
     if (item.box !== null && item.box.some((edge) => Math.abs(edge) > MAX_REACH)) {
-      bad.push({ name: "within_reach", kind: item.kind });
+      frameBad.push({ name: "within_reach", kind: item.kind });
     }
   }
-  return bad;
+  return frameBad;
 }

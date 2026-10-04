@@ -94,10 +94,10 @@ export function createPen(surface) {
       else fill = hex;
     },
     stroke(colour, lineWidth = 2) {
-      const hex = colour === null ? null : toHex(colour);
-      if (mode === "idle" || (colour !== null && hex === null) || !Number.isFinite(lineWidth)) rejected += 1;
+      const lineHex = colour === null ? null : toHex(colour);
+      if (mode === "idle" || (colour !== null && lineHex === null) || !Number.isFinite(lineWidth)) rejected += 1;
       else {
-        stroke = hex;
+        stroke = lineHex;
         width = Math.min(8, Math.max(0.5, lineWidth));
       }
     },

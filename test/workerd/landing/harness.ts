@@ -53,6 +53,14 @@ export type LandingWorker = {
   gitRequests(): RecordedRequest[];
   /** The fault hook of the local git server (LP5 rows): assigned per test. */
   setGitFault(fault: ((request: RecordedRequest & { body?: Buffer }) => GitFault) | null): void;
+  /** Arms the Artifacts scope check on the stand-in git server (SE5c): a `read` token answers
+   * upload-pack (fetch/clone) only; every `git-receive-pack` path takes the `write` token; any
+   * other credential — or none — is refused (401 on a read path, 403 on a write path). This is
+   * the stand-in's version of the real service's "scope `read` cannot write". Implemented on the
+   * fault hook, so it and a `setGitFault` fault do not coexist — a later assignment wins. */
+  enforceTokenScopes(tokens: { read: string; write: string }): void;
+  /** The remote URL a stock-git client clones `repo` from (`http://127.0.0.1:<port>/<repo>`). */
+  remoteFor(repo: string): string;
   /** A remote's refs as stock git sees them (`refs/heads/main`, `refs/notes/premise`). */
   refs(repo: string): { main: string | null; notes: string | null };
   /** `POST /internal/alarm` on the pool's Trunk — `nowMs` makes the due-check read a later time,
@@ -297,6 +305,19 @@ export async function startLandingWorker(options: {
     setGitFault: (fault) => {
       gitServer.fault = fault ?? (() => ({ action: "forward" }));
     },
+    enforceTokenScopes: ({ read, write }) => {
+      gitServer.fault = (request) => {
+        const bearer = request.authorization;
+        if (request.path.includes("git-receive-pack")) {
+          // A push — discovery and the pack alike — takes the write token and nothing else.
+          return bearer === `Bearer ${write}` ? { action: "forward" } : { action: "answer", status: 403 };
+        }
+        return bearer === `Bearer ${read}` || bearer === `Bearer ${write}`
+          ? { action: "forward" }
+          : { action: "answer", status: 401 };
+      };
+    },
+    remoteFor: (repo) => `${gitServer.origin}/${repo}`,
     refs: (repo) => {
       const dir = directories.get(repo);
       if (dir === undefined) throw new Error(`no repo named ${repo}`);

@@ -7,8 +7,21 @@ Date: 2026-10-04.
 - `npm run check` exits 0 and `npm run test:workerd` exits 0 on `main` after merging Slice 0a, Slice 0b,
   the pure git encoding (track 1B, first part), the tide pool seed (track 1G, first part), the leaf
   modules (track 1A) and the stream lane (track 1E).
-- Acceptance item 8 of plan 2.1 (a deploy to the `test` environment with the three live probes) is not
-  done yet. It is recorded here when it is.
+- Acceptance item 8 of plan 2.1, on the `test` environment (Worker `premise-test`, deployed 2026-10-04
+  from `main` at `bd86214`): `wrangler deploy --env test` exited 0 and created the four Durable Object
+  classes, the three Workflows, both Artifacts bindings, the AI binding and the Worker Loader binding.
+  Live probes:
+
+  | Request | Answer |
+  | --- | --- |
+  | `POST /api/pools`, JSON, before `OWNER_KEY` was set | 503 |
+  | `POST /api/pools`, JSON, key set, none sent | 401 |
+  | `POST /api/pools`, `text/plain` | 415 |
+  | `GET /api/pools/x/stream` without an upgrade | 426 (the Floor is built; the plan's 503 was for the stub) |
+  | `GET /` and `GET /floor.json` | 200 |
+
+  The page does not carry the security headers of SE14 yet. They arrive with track 1D
+  (`src/worker/security/**`).
 
 ## Citations checked (plan 2.1, acceptance item 11)
 

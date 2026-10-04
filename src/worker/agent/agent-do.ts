@@ -254,6 +254,7 @@ export class Agent extends DurableObject<Env> {
         model_calls: 0,
         tokens_in: 0,
         tokens_out: 0,
+        usd_spent: 0,
         started_at: started,
         deadline_at: started + ATTEMPT_TIMEOUT_MS,
         step_limit: MAX_STEPS,
@@ -392,6 +393,19 @@ export class Agent extends DurableObject<Env> {
         }
         if (run.length > 0) {
           this.#showHeadsUps(next.show);
+          continue;
+        }
+
+        // AG4: a spent budget ends the attempt here, before the next step;
+        // a journaled call and a needed sync still complete above. The time
+        // budget is the attempt_timeout timer; the rest are counters.
+        if (
+          this.#int("step") >= this.#int("step_limit") ||
+          this.#int("model_calls") >= this.#int("model_limit") ||
+          this.#int("tokens_in") + this.#int("tokens_out") >= this.#int("token_limit") ||
+          this.#int("usd_spent") >= this.#int("usd_limit")
+        ) {
+          this.#set("pending_stop", "budget");
           continue;
         }
 

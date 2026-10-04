@@ -17,8 +17,10 @@ import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
 import { deliverEvents, recordTrunkError, runEffects, type EffectRef } from "./after-commit.ts";
+import { cardAction } from "./card-action.ts";
 import { deliverHeadsUps, outboxRow, pushOutbox, reconcileOnStart } from "./push.ts";
 import { armAlarm, runAlarm } from "./alarm.ts";
+import { deliverResumes } from "./resume.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
@@ -32,7 +34,7 @@ export type EntryContext = {
 };
 
 /** The shape an entry returns: `{ response, status?, effects? }`; a bare value is the response. */
-type EntryResult = { response?: unknown; status?: number; effects?: EffectRef[] };
+export type EntryResult = { response?: unknown; status?: number; effects?: EffectRef[] };
 
 const BAD_JSON = Symbol("bad_json");
 
@@ -162,6 +164,13 @@ export class Trunk extends DurableObject<Env> {
      * and leaves a `_remote_probe` effect, whose handler posts to `args.url` — the fake remote's
      * request log is the proof the request left the object after the commit.
      */
+    /**
+     * The card route's entry (13.6, CD4): the owner's tap on a card — `land`, `decline`,
+     * `retry`, `choose` — checked against the stored card row, then run through the engine's
+     * `owner` entry (T13, T14, T21). Implemented in card-action.ts.
+     */
+    card_action: (input, ctx) => cardAction(input, ctx),
+
     _probe: (input, ctx) => {
       const request = input as { call_id?: unknown; args?: { url?: unknown; marker?: unknown } };
       const url = request?.args?.url;
@@ -264,6 +273,13 @@ export class Trunk extends DurableObject<Env> {
    */
   async #postCommit(): Promise<void> {
     for (let pass = 0; pass < POST_COMMIT_PASSES; pass += 1) {
+      // Before the events flush: the resume cycle's `cause` is read off the still-pending
+      // `attempt.reopened` row (RS1), and a T20r this pass applies lands in the same flush.
+      try {
+        await deliverResumes(this.env, this.ctx);
+      } catch {
+        recordTrunkError(this.ctx, "resume", "transport");
+      }
       try {
         await deliverEvents(this.env, this.ctx);
       } catch {
@@ -438,6 +454,9 @@ export class Trunk extends DurableObject<Env> {
           recordTrunkError(this.ctx, "heads_up", "transport");
         }
       },
+      // A throw means the store itself failed: the alarm's own catch re-arms the row at a
+      // backoff (AL2). The transport answers are handled inside `deliverResumes`.
+      resume: (now) => deliverResumes(this.env, this.ctx, now),
     });
   }
 

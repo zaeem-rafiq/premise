@@ -23,6 +23,8 @@ export type AlarmDeps = {
   push?: (now: number) => Promise<void>;
   /** The `repush` timer's work (HU5b): heads-up delivery to the attempt's Agent. */
   repush?: (now: number) => Promise<void>;
+  /** The `resume` timer's work (RS1): the resume call's delivery and its T20r deadline. */
+  resume?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -55,7 +57,7 @@ function rescheduleTimer(sql: Sql, timer: TimerRow): void {
  * deleted before its work runs, so work that re-arms itself is not clobbered; a throw puts the row
  * back with a backoff (AL2). The alarm is always re-armed before the handler returns (AL1).
  */
-export async function runAlarm({ env, ctx, sql, runEntry, push, repush, now: at }: AlarmDeps): Promise<void> {
+export async function runAlarm({ env, ctx, sql, runEntry, push, repush, resume, now: at }: AlarmDeps): Promise<void> {
   const now = at ?? Date.now();
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {
@@ -68,8 +70,9 @@ export async function runAlarm({ env, ctx, sql, runEntry, push, repush, now: at 
       continue;
     }
     // The shell's own timer kinds run their handler, not an engine entry: `push` is the outbox's
-    // retry (9.6), `repush` the heads-up delivery (HU5b).
-    const shellWork = timer.kind === "push" ? push : timer.kind === "repush" ? repush : undefined;
+    // retry (9.6), `repush` the heads-up delivery (HU5b), `resume` the resume cycle (RS1).
+    const shellWork =
+      timer.kind === "push" ? push : timer.kind === "repush" ? repush : timer.kind === "resume" ? resume : undefined;
     if (shellWork !== undefined) {
       // Deleted before the work runs, like an engine timer: the work puts the timer back itself
       // when it has to run again (a push retry, an undelivered heads-up). A row left in place is

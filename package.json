@@ -43,6 +43,7 @@
     "spend": "node scripts/ops/not-built.ts spend 'Slice 4'"
   },
   "dependencies": {
+    "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.18.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

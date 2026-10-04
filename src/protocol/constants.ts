@@ -11,6 +11,10 @@ export const MAX_BATCH = 64;
 export const MAX_PACK_BYTES = 8 * 1024 * 1024;
 export const MAX_PATH_LEN = 120;
 export const MAX_FILE_BYTES = 32_768;
+/** `06-repos.md` IR4: an imported repository larger than this is refused. */
+export const IMPORT_MAX_ENTRIES = 5_000;
+/** `06-repos.md` IR4: the bytes of the blobs of at most MAX_FILE_BYTES that an imported pool stores. */
+export const IMPORT_MAX_TEXT_BYTES = 24_000_000;
 export const MAX_POOL_FILES = 2_000;
 export const MAX_POOL_BYTES = 8 * 1024 * 1024;
 export const MAX_QUERY_LEN = 128;

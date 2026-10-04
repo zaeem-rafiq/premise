@@ -876,6 +876,10 @@ Acceptance: `CASES=required npm run test:cases`, `npm run test:workerd -- triage
 3. workerd, with a fake `AI` binding that answers with given probabilities, for a real attempt that read a whole shared file while one of its entities changes: the `info` heads-up with a pending item is created in the accept transaction (TR1); the Clef request leaves only after the commit (TR2); a second `premise.judged` carries `clef.p` (JE1); an answer that arrives after a new operation is recorded as `stale` (TR4); a state over `CLEF_STATE_MAX_CHARS` is never sent (TR7); a synthetic attempt causes no request (TR8).
 4. The real service is exercised by `calibrate:clef`, which calls the same adapters.
 
+### 2.16a Slice 16: real repositories (added 2026-10-04)
+
+The owner decided on 2026-10-04 that a pool can also be made from a public git repository, in any language, with entity-level premises for TypeScript beside JavaScript and, as a stretch, for Python and Go. `06-repos.md` is the specification of this slice: its section 5 holds the three steps and their acceptance. Slice 12 (Race and choose) is kept. Step 3 starts only if steps 1 and 2 pass by 2026-10-08.
+
 ### 2.17 STRETCH
 
 Clef vision check of screenshots, duplicate-intent detection, outside agents over MCP, the audience phone page. None is scheduled before the submission. One may start only when M5 passed with every SHOULD slice in the build and both reviews closed. Otherwise none starts before 2026-10-16.

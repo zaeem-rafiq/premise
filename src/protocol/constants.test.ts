@@ -1,6 +1,6 @@
 // Acceptance item 2 (04-build-plan 2.1): this test parses the constants tables out of the
 // specification files — 01-core.md Appendix C, 02-tidepool.md Appendix B, 03-floor.md Appendix A and
-// 05-agent.md Appendix A — and compares every name and value with `constants.ts`. A difference
+// 05-agent.md Appendix A, 06-repos.md Appendix A — and compares every name and value with `constants.ts`. A difference
 // fails, in either direction: a name the table has and the module does not, or a constant the module
 // exports and no table names.
 //
@@ -118,6 +118,7 @@ describe("constants.ts against the constants tables of the specification", () =>
     ["02-tidepool.md", "Appendix B"],
     ["03-floor.md", "Appendix A"],
     ["05-agent.md", "Appendix A"],
+    ["06-repos.md", "Appendix A"],
   ] as const) {
     for (const [name, value] of parseTable(file, heading)) {
       if (tables.has(name)) {

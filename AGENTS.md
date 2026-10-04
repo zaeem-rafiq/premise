@@ -4,8 +4,9 @@ Rules for coding agents that work in this repository. `CLAUDE.md` points here.
 
 Premise is one Cloudflare Worker project in TypeScript. The specification is binding and lives in `docs/spec/`:
 `01-core.md` (rules and protocol), `02-tidepool.md` (the demo codebase), `03-floor.md` (the web page),
-`04-build-plan.md` (layout, toolchain, slices, lanes) and `05-agent.md` (the agent's prompt, its tools and its
-turn loop). Read the sections your task names before you write code.
+`04-build-plan.md` (layout, toolchain, slices, lanes), `05-agent.md` (the agent's prompt, its tools and its
+turn loop) and `06-repos.md` (pools made from real repositories, and the languages beyond JavaScript). Read the
+sections your task names before you write code.
 
 **Glossary.** Use the words of `docs/spec/01-core.md` section 1, one name for one thing: pool, intent, attempt,
 premise, change, Trunk, heads-up, go-around, landing, green line, Floor, Swarm, Replay.

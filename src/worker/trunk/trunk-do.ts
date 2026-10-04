@@ -243,7 +243,11 @@ export class Trunk extends DurableObject<Env> {
    * their own transaction (SY2), so nothing here wraps the call: a nested transactionSync would
    * throw. The pool must exist (every entry but `pool_create` serves an existing pool).
    */
-  async #callEngineEntry(name: string, input: unknown): Promise<{ result: unknown } | { error: Response }> {
+  async #callEngineEntry(
+    name: string,
+    input: unknown,
+    now?: number,
+  ): Promise<{ result: unknown } | { error: Response }> {
     const entry = this.#engine.entries.get(name);
     if (entry === undefined) return { error: notBuilt() };
     if (metaGet(this.#sql, "pool_id") === null) {
@@ -252,7 +256,9 @@ export class Trunk extends DurableObject<Env> {
     try {
       // S6a: the engine cannot import `src/swarm`, so the object hands it the scripted triage
       // of synthetic attempts (TR8). Real attempts never use it.
-      const trunk = TrunkEngine.open(this.#sql, { now: () => Date.now(), syncTriage: ScriptedTriage });
+      // A driven `now` (the alarm's `?now=` hook) is the engine clock for the call, so a test
+      // drives time-dependent rules — RW1's lapse — without sleeping (LP5a's convention).
+      const trunk = TrunkEngine.open(this.#sql, { now: () => now ?? Date.now(), syncTriage: ScriptedTriage });
       const result = await Promise.resolve(entry(input, trunk));
       return { result };
     } catch {
@@ -358,9 +364,9 @@ export class Trunk extends DurableObject<Env> {
 
   /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
    * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
-  async #runTimerEntry(kind: string): Promise<boolean> {
+  async #runTimerEntry(kind: string, input: unknown, now?: number): Promise<boolean> {
     if (!this.#engine.entries.has(kind)) return false;
-    const r = await this.#callEngineEntry(kind, {});
+    const r = await this.#callEngineEntry(kind, input, now);
     if ("error" in r) throw new Error(`timer ${kind} failed`);
     await this.#postCommit();
     return true;
@@ -443,7 +449,7 @@ export class Trunk extends DurableObject<Env> {
       ctx: this.ctx,
       sql: this.#sql,
       now,
-      runEntry: (kind) => this.#runTimerEntry(kind),
+      runEntry: (kind, input) => this.#runTimerEntry(kind, input, now),
       push: async (now) => {
         if (await this.#pushOnce(now)) await this.#postCommit();
       },

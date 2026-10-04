@@ -26,7 +26,8 @@ import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
 import { buildPack } from "../git/pack.ts";
-import { openAttempt, type OpenArgs } from "./intents.ts";
+import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
+import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
 import { blobId } from "../sync/sha1.ts";
@@ -1108,6 +1109,22 @@ export class Trunk {
 
   restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {
     return wrapCall(this.pool, () => restart(this.pool, args));
+  }
+
+  /**
+   * RW1: the `right_of_way` timer fired — lapse the grant when the attempt still holds the one
+   * this row was armed for (a re-grant overwrote the row, so `due_at` is the grant's identity),
+   * then wake the tick so whatever RW3 held back can go. RW1 names no event for the lapse
+   * itself, so none is emitted; the landing it unblocks is the observable end.
+   */
+  expireRightOfWay(input: { attempt_id: string; due_at: number }): void {
+    wrapCall(this.pool, () => {
+      const a = this.pool.attempts.get(input.attempt_id);
+      if (a === undefined || a.right_of_way_at === null) return;
+      if (a.right_of_way_at + RIGHT_OF_WAY_MS !== input.due_at) return;
+      clearRightOfWay(this.pool, a);
+      tick(this.pool);
+    });
   }
 
   triage(args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number }): void {

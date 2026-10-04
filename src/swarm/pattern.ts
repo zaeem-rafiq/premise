@@ -7,7 +7,11 @@
 import type { AgentStopReason } from "../protocol/attempt.ts";
 import type { HeadsUp } from "../protocol/headsup.ts";
 import type { ModelToolMessage, ToolName } from "../protocol/tools.ts";
+import { ADD_ENERGY } from "./patterns/add-energy.ts";
 import { ADD_PLAIN } from "./patterns/add-plain.ts";
+import { ADD_RELATIVE } from "./patterns/add-relative.ts";
+import { COSMETIC } from "./patterns/cosmetic.ts";
+import { RESCALE_ENERGY } from "./patterns/rescale-energy.ts";
 
 /** What a pattern asks for at one turn. The three kinds mirror `Driver.next` of `ports.ts`. */
 export type PatternStep =
@@ -43,8 +47,8 @@ export type Pattern = {
   next(turn: PatternTurn): PatternStep;
 };
 
-/** The patterns the launcher knows, in table order of 02-tidepool.md 10.3. Slice 1: `add-plain`. */
-const PATTERNS: readonly Pattern[] = [ADD_PLAIN];
+/** The patterns the launcher knows, in table order of 02-tidepool.md 10.3. */
+const PATTERNS: readonly Pattern[] = [ADD_PLAIN, ADD_ENERGY, ADD_RELATIVE, RESCALE_ENERGY, COSMETIC];
 
 const BY_ID = new Map<string, Pattern>(PATTERNS.map((pattern) => [pattern.id, pattern]));
 

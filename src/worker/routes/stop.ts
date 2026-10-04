@@ -22,7 +22,8 @@ export const stopAttempt: RouteHandler = async ({ env, params }) => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ attempt_id }),
     });
-    if (!response.ok) return json(await response.json().catch(() => ({ error: { code: "agent_error" } })), response.status);
+    if (!response.ok)
+      return json(await response.json().catch(() => ({ error: { code: "agent_error" } })), response.status);
   } catch {
     return json({ error: { code: "agent_error" } }, 502);
   }

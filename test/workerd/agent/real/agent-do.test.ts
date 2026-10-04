@@ -33,13 +33,7 @@ import {
   TOOL_DEFINITIONS,
 } from "../../../../src/protocol/agent-prompt.ts";
 import { MODEL_PLAN, MODEL_OPTIONS, WORKHORSE_MODEL } from "../../../../src/config/model-plan.ts";
-import {
-  FakeModel,
-  FakeTrunk,
-  startRealWorker,
-  waitFor,
-  type RealWorker,
-} from "./harness.ts";
+import { FakeModel, FakeTrunk, startRealWorker, waitFor, type RealWorker } from "./harness.ts";
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
 const POOL = "p_real";
@@ -78,11 +72,17 @@ function openReal(id: string, extra: Record<string, unknown> = {}): Promise<unkn
       ...extra,
     }),
   );
-  return worker.object("AGENT", id).fetch(`/open?q=${q}`).then((r) => r.json());
+  return worker
+    .object("AGENT", id)
+    .fetch(`/open?q=${q}`)
+    .then((r) => r.json());
 }
 
 const inspect = (id: string) =>
-  worker.object("AGENT", id).fetch("/internal/inspect").then((r) => r.json()) as Promise<{
+  worker
+    .object("AGENT", id)
+    .fetch("/internal/inspect")
+    .then((r) => r.json()) as Promise<{
     meta: Record<string, string>;
     journal: { call_id: string; kind: string; tries: number; request: Record<string, unknown> } | null;
     inbox: { hn: number; shown_step: number | null; result: string; wake: boolean }[];
@@ -94,8 +94,16 @@ const inspect = (id: string) =>
 const alarm = (id: string) => worker.object("AGENT", id).fetch("/internal/alarm");
 
 const gateState = () =>
-  worker.gate().fetch("/internal/state").then((r) => r.json()) as Promise<{
-    state: { spent_usd: number; killed: boolean; slots: Record<string, unknown>; reservations: Record<string, unknown> } | null;
+  worker
+    .gate()
+    .fetch("/internal/state")
+    .then((r) => r.json()) as Promise<{
+    state: {
+      spent_usd: number;
+      killed: boolean;
+      slots: Record<string, unknown>;
+      reservations: Record<string, unknown>;
+    } | null;
   }>;
 
 const floorEvents = (pool: string) =>
@@ -141,7 +149,14 @@ const SCRIPT_FULL = [
   { tool_calls: [{ name: "list", arguments: { path: "creatures/" } }] },
   { tool_calls: [{ name: "read", arguments: { path: "GUIDE.md" } }] },
   { tool_calls: [{ name: "read", arguments: { path: "creatures/fish.js" } }] },
-  { tool_calls: [{ name: "write", arguments: { path: "creatures/jellyfish.js", content: "export function spawn() { return {}; }" } }] },
+  {
+    tool_calls: [
+      {
+        name: "write",
+        arguments: { path: "creatures/jellyfish.js", content: "export function spawn() { return {}; }" },
+      },
+    ],
+  },
   { tool_calls: [{ name: "submit", arguments: { summary: "add a jellyfish" } }] },
 ];
 
@@ -222,7 +237,11 @@ describe("the real Agent in workerd (05-agent)", () => {
     await waitFor(async () => (await inspect("a_hu")).meta.state === "validated", 15_000);
 
     // MR4: the read's tool message carries the heads-up run, first.
-    const second = model.requests[1]!.request.messages as Array<{ role: string; content: string; tool_call_id?: string }>;
+    const second = model.requests[1]!.request.messages as Array<{
+      role: string;
+      content: string;
+      tool_call_id?: string;
+    }>;
     const toolRow = second.find((m) => m.role === "tool" && m.content.includes("heads_ups"));
     expect(toolRow).toBeDefined();
     const body = JSON.parse(toolRow!.content) as { heads_ups?: Array<{ hn: number; result: string }> };

@@ -188,9 +188,12 @@ export class Agent extends DurableObject<Env> {
     }
     if (this.#meta("driver") === "model") {
       const model_url = this.#meta("model_url");
-      const ai = model_url !== null ? urlModel(model_url) : (this.env.AI as unknown as {
-        run(model: string, request: Record<string, unknown>): Promise<unknown>;
-      });
+      const ai =
+        model_url !== null
+          ? urlModel(model_url)
+          : (this.env.AI as unknown as {
+              run(model: string, request: Record<string, unknown>): Promise<unknown>;
+            });
       this.#model = new ModelDriver({
         sql: this.#sql,
         ai,
@@ -397,11 +400,7 @@ export class Agent extends DurableObject<Env> {
       ? (body.script as Script)
       : {
           pattern: pattern?.id ?? "",
-          truth: Array.isArray(body.truth)
-            ? (body.truth as string[])
-            : pattern === undefined
-              ? []
-              : [...pattern.truth],
+          truth: Array.isArray(body.truth) ? (body.truth as string[]) : pattern === undefined ? [] : [...pattern.truth],
           steps: [], // unused — the PatternDriver owns the steps; `script` meta stays unset.
         };
     const now = Date.now();
@@ -848,8 +847,7 @@ export class Agent extends DurableObject<Env> {
   // a stop goes to Trunk like any other (TL16).
   async #serveModel(journal: JournalRow): Promise<void> {
     if (this.#model === null) return;
-    const parked =
-      (journal.request as { waiting?: boolean }).waiting === true && journal.deadline_at > Date.now();
+    const parked = (journal.request as { waiting?: boolean }).waiting === true && journal.deadline_at > Date.now();
     if (parked) return;
     const result = await this.#model.serveCall(journal);
     await this.#deliverEvents();

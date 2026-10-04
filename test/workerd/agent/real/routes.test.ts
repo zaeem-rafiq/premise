@@ -23,12 +23,7 @@ import { git } from "../../../git/helpers.ts";
 import { TOOL_DEFINITIONS, firstUserMessage, systemPrompt } from "../../../../src/protocol/agent-prompt.ts";
 import { MODEL_OPTIONS, MODEL_PLAN, WORKHORSE_MODEL } from "../../../../src/config/model-plan.ts";
 import { H } from "../../../../src/core/sync/h.ts";
-import {
-  FakeModel,
-  type LandingRealWorker,
-  startRealLandingWorker,
-  waitFor,
-} from "./harness.ts";
+import { FakeModel, type LandingRealWorker, startRealLandingWorker, waitFor } from "./harness.ts";
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
 const POOL = "p-rland";
@@ -86,25 +81,52 @@ const SCRIPT_LANDING = [
   { tool_calls: [{ name: "submit", arguments: { summary: "a jellyfish that drifts up and down" } }] },
   // TD6: o batch do seed pode empurrar durante a rodada → needs_confirm com
   // heads-up; a segunda submit carrega `statement` (o loop preenche os hns).
-  { tool_calls: [{ name: "submit", arguments: { summary: "a jellyfish that drifts up and down", statement: "checked the heads-up: nothing of mine relied on the pushed files" } }] },
-  { tool_calls: [{ name: "submit", arguments: { summary: "a jellyfish that drifts up and down", statement: "re-checked: still nothing relied on the pushed files" } }] },
+  {
+    tool_calls: [
+      {
+        name: "submit",
+        arguments: {
+          summary: "a jellyfish that drifts up and down",
+          statement: "checked the heads-up: nothing of mine relied on the pushed files",
+        },
+      },
+    ],
+  },
+  {
+    tool_calls: [
+      {
+        name: "submit",
+        arguments: {
+          summary: "a jellyfish that drifts up and down",
+          statement: "re-checked: still nothing relied on the pushed files",
+        },
+      },
+    ],
+  },
 ];
 
 let model: FakeModel;
 let worker: LandingRealWorker;
 
 async function intentReq(pool: string, requestId: string, extra: Record<string, unknown> = {}) {
-  const res = await worker.fetch(`/api/pools/${pool}/intents`, bearer({
-    text: INTENT_TEXT, race: false, prewritten: false, request_id: requestId, ...extra,
-  }));
+  const res = await worker.fetch(
+    `/api/pools/${pool}/intents`,
+    bearer({
+      text: INTENT_TEXT,
+      race: false,
+      prewritten: false,
+      request_id: requestId,
+      ...extra,
+    }),
+  );
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }
 
 async function attemptState(pool: string, attemptId: string): Promise<Record<string, unknown> | undefined> {
   const events = await worker.events(pool);
-  const last = [...events].reverse().find(
-    (e) => e.attempt_id === attemptId && (e.type === "attempt.state" || e.type === "attempt.opened"),
-  );
+  const last = [...events]
+    .reverse()
+    .find((e) => e.attempt_id === attemptId && (e.type === "attempt.state" || e.type === "attempt.opened"));
   return last;
 }
 
@@ -139,10 +161,7 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
     expect(intent_id).toBe(derivedId("i_", "r-land-1"));
     const attempt_id = derivedId("a_", "r-land-1");
 
-    await waitFor(
-      async () => (await worker.eventTypes(POOL)).includes("landing.landed"),
-      120_000,
-    );
+    await waitFor(async () => (await worker.eventTypes(POOL)).includes("landing.landed"), 120_000);
 
     // CM1: o commit da criatura tem autor = o id do modelo.
     const events = await worker.events(POOL);
@@ -214,7 +233,7 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
       body: "{isto não é json",
     });
     expect(bad.status).toBe(400);
-    expect((await bad.json() as { error: { code: string } }).error.code).toBe("bad_json");
+    expect(((await bad.json()) as { error: { code: string } }).error.code).toBe("bad_json");
 
     const missing = await worker.fetch(`/api/pools/${POOL}/intents`, bearer({ text: "x" }));
     expect(missing.status).toBe(400);
@@ -236,10 +255,10 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
 
     const base = model.requests.length;
     await waitFor(async () => model.requests.length >= base + 2, 60_000); // loop em andamento
-    const stop = await worker.fetch(
-      `/api/pools/${POOL}/attempts/${attempt_id}/stop`,
-      { method: "POST", headers: { authorization: `Bearer ${KEY}` } },
-    );
+    const stop = await worker.fetch(`/api/pools/${POOL}/attempts/${attempt_id}/stop`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${KEY}` },
+    });
     expect(stop.status).toBe(200);
 
     await waitFor(async () => {
@@ -253,10 +272,10 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
     const stateEventsBefore = (await worker.events(POOL)).filter(
       (e) => e.type === "attempt.state" && e.attempt_id === attempt_id,
     ).length;
-    const again = await worker.fetch(
-      `/api/pools/${POOL}/attempts/${attempt_id}/stop`,
-      { method: "POST", headers: { authorization: `Bearer ${KEY}` } },
-    );
+    const again = await worker.fetch(`/api/pools/${POOL}/attempts/${attempt_id}/stop`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${KEY}` },
+    });
     expect(again.status).toBe(200);
     await new Promise((r) => setTimeout(r, 3_000));
     const stateEventsAfter = (await worker.events(POOL)).filter(
@@ -323,26 +342,28 @@ describe("item 3: SPEND_CAP_USD abaixo do bound do primeiro call", () => {
   it("SE6/refusal: o bound do primeiro call excede o cap → spend_cap sem nenhum send", async () => {
     capModel.script = [...SCRIPT_LANDING];
     capModel.requests = [];
-    const res = await capWorker.fetch(`/api/pools/${CAP_POOL}/intents`, bearer({
-      text: INTENT_TEXT, race: false, prewritten: false, request_id: "r-cap-1",
-    }));
+    const res = await capWorker.fetch(
+      `/api/pools/${CAP_POOL}/intents`,
+      bearer({
+        text: INTENT_TEXT,
+        race: false,
+        prewritten: false,
+        request_id: "r-cap-1",
+      }),
+    );
     expect(res.status).toBe(200);
     const attempt_id = derivedId("a_", "r-cap-1");
 
     await waitFor(async () => {
       const st = await (async () => {
         const evs = await capWorker.events(CAP_POOL);
-        return [...evs].reverse().find(
-          (e) => e.attempt_id === attempt_id && e.type === "attempt.state",
-        );
+        return [...evs].reverse().find((e) => e.attempt_id === attempt_id && e.type === "attempt.state");
       })();
       return st?.to === "stopped";
     }, 90_000);
 
     const events = await capWorker.events(CAP_POOL);
-    const stopped = [...events].reverse().find(
-      (e) => e.attempt_id === attempt_id && e.type === "attempt.state",
-    );
+    const stopped = [...events].reverse().find((e) => e.attempt_id === attempt_id && e.type === "attempt.state");
     expect(stopped?.reason).toBe("spend_cap");
     // O gate recusou a reserva ANTES do provider: o fake viu zero requests.
     expect(capModel.requests.length).toBe(0);

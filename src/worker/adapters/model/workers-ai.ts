@@ -47,7 +47,9 @@ export function classifyModelError(error: unknown): ModelOutcome {
         ? ((error as { code: number }).code as number)
         : null;
   const retry =
-    typeof error === "object" && error !== null && typeof (error as { retryAfterMs?: unknown }).retryAfterMs === "number"
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { retryAfterMs?: unknown }).retryAfterMs === "number"
       ? ((error as { retryAfterMs: number }).retryAfterMs as number)
       : null;
   if (status === 429 || status === 3040) return { kind: "rate_limited", retry_after_ms: retry };

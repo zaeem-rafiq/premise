@@ -118,7 +118,12 @@ export async function startRealWorker(options: RealWorkerOptions): Promise<RealW
 // queue answers a generic stop-free tool call so an over-run is visible.
 
 export type ModelScriptEntry =
-  | { content?: string; tool_calls?: Array<{ name: string; arguments: Record<string, unknown> }>; finish_reason?: string; usage?: { prompt_tokens: number; completion_tokens: number } }
+  | {
+      content?: string;
+      tool_calls?: Array<{ name: string; arguments: Record<string, unknown> }>;
+      finish_reason?: string;
+      usage?: { prompt_tokens: number; completion_tokens: number };
+    }
   | { http: number; code?: number; retry_after_ms?: number }
   | { raw: unknown };
 
@@ -160,7 +165,10 @@ export class FakeModel {
     return { seen, release: releaseFn };
   }
 
-  async #handle(body: { model: string; request: Record<string, unknown> }): Promise<{ status: number; json: unknown; headers?: Record<string, string> }> {
+  async #handle(body: {
+    model: string;
+    request: Record<string, unknown>;
+  }): Promise<{ status: number; json: unknown; headers?: Record<string, string> }> {
     this.requests.push(body);
     const held = this.#held.shift();
     if (held !== undefined) {
@@ -178,7 +186,11 @@ export class FakeModel {
     if ("http" in entry) {
       const headers: Record<string, string> = {};
       if (entry.retry_after_ms !== undefined) headers["retry-after"] = String(Math.ceil(entry.retry_after_ms / 1000));
-      return { status: entry.http, headers, json: { code: entry.code ?? null, retry_after_ms: entry.retry_after_ms ?? null } };
+      return {
+        status: entry.http,
+        headers,
+        json: { code: entry.code ?? null, retry_after_ms: entry.retry_after_ms ?? null },
+      };
     }
     if ("raw" in entry) return { status: 200, json: entry.raw };
     return { status: 200, json: answer(entry) };
@@ -204,7 +216,9 @@ function answer(entry: {
             function: { name: call.name, arguments: JSON.stringify(call.arguments) },
           })),
         },
-        finish_reason: entry.finish_reason ?? (entry.tool_calls === undefined || entry.tool_calls.length === 0 ? "stop" : "tool_calls"),
+        finish_reason:
+          entry.finish_reason ??
+          (entry.tool_calls === undefined || entry.tool_calls.length === 0 ? "stop" : "tool_calls"),
       },
     ],
     usage: entry.usage ?? { prompt_tokens: 1000, completion_tokens: 60 },
@@ -292,7 +306,10 @@ export class FakeTrunk {
     if (path === "/sync") {
       const heads_ups = this.syncHeadsUps;
       this.syncHeadsUps = [];
-      return { status: 200, json: { heads_ups, heads_ups_more: false, head_seq: 0, attempt: attemptBlock(this.state) } };
+      return {
+        status: 200,
+        json: { heads_ups, heads_ups_more: false, head_seq: 0, attempt: attemptBlock(this.state) },
+      };
     }
     if (path === "/stop") {
       this.stopped = { reason: String(body.reason ?? "") };
@@ -317,7 +334,16 @@ export class FakeTrunk {
         result = { path: args.path, oid: "0".repeat(40), content: "// fake guide", edited_by_you: false };
         break;
       case "write":
-        result = { path: args.path, op_seq: 1, created: true, bytes: String(args.content ?? "").length, added: [], altered: [], removed: [], relied_on_by: {} };
+        result = {
+          path: args.path,
+          op_seq: 1,
+          created: true,
+          bytes: String(args.content ?? "").length,
+          added: [],
+          altered: [],
+          removed: [],
+          relied_on_by: {},
+        };
         break;
       case "submit":
         result = { status: "validated", submit_id: "s_fake", tier: "auto", checks: [] };

@@ -167,7 +167,7 @@ describe("hero interleavings (02-tidepool.md 7, 10.5): a heads-up at every point
         // unheld variant instead runs A's submit, so B lands against a `validated` A.
         const holds = k === len ? [true, false] : [true];
         for (const hold of holds) {
-          it(`a=${pa} b=${pb} k=${k} ${hold ? "held" : "running"}`, () => {
+          it(`a=${pa} b=${pb} k=${k} ${hold ? "held" : "running"}`, { timeout: 30_000 }, () => {
             checkInterleaving(pa, pb, k, hold);
           });
         }

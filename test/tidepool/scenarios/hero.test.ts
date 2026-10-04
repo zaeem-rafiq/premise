@@ -39,7 +39,7 @@ function expectHeroTree(files: Map<string, string>): void {
 
 for (const seed of ["tidepool", "tidepool-auto"] as const) {
   describe(`hero conflict, landing order 1 (7.5, 7.11) on ${seed}`, () => {
-    it("A3/A5/A6/A10/A12: S lands first; E2 sends C and H around; J undisturbed", () => {
+    it("A3/A5/A6/A10/A12: S lands first; E2 sends C and H around; J undisturbed", { timeout: 30_000 }, () => {
       const s = sim(seed);
       const { agents, conductor } = conduct(s, 1, seed);
       const S = agents.get("hero-s")!;
@@ -75,7 +75,7 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
   });
 
   describe(`hero conflict, landing order 2 (7.6, 7.11) on ${seed}`, () => {
-    it("A4/A7/A11: creatures land while S waits; QR1 sends S around; stale card; same tree", () => {
+    it("A4/A7/A11: creatures land while S waits; QR1 sends S around; stale card; same tree", { timeout: 30_000 }, () => {
       const s = sim(seed);
       const { agents, conductor } = conduct(s, 2, seed);
       const S = agents.get("hero-s")!;

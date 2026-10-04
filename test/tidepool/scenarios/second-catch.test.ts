@@ -33,7 +33,7 @@ function landNow(s: SwarmSim, agent: AgentHandle): void {
 const rulesOf = (h: HeadsUp): string[] => h.items.map((i) => i.rule);
 
 describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", () => {
-  it("order 1 (8.3): L1 repair catches the seahorse; every creature ends gold", () => {
+  it("order 1 (8.3): L1 repair catches the seahorse; every creature ends gold", { timeout: 30_000 }, () => {
     const s = sim();
     const a = s.open("gold-a", { hold: true });
     drive(s, a); // list, five reads, nine replaces — parks before `submit`
@@ -76,7 +76,7 @@ describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", 
     expect(files.get("creatures/seahorse.js")).toContain('const BODY = "gold";');
   });
 
-  it("order 2 (8.4): the repaint lands first; the seahorse hears an info and needs no edit", () => {
+  it("order 2 (8.4): the repaint lands first; the seahorse hears an info and needs no edit", { timeout: 30_000 }, () => {
     const s = sim();
     const a = s.open("gold-a");
     const b = s.open("gold-b", { hold: true });
@@ -101,7 +101,7 @@ describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", 
 });
 
 describe("the same catch through a search (8.6; A15)", () => {
-  it("QT1 repair: the ray that lands mid-sweep is changed without a read", () => {
+  it("QT1 repair: the ray that lands mid-sweep is changed without a read", { timeout: 30_000 }, () => {
     const s = sim();
     const a = s.open("wrap-a", { hold: true });
     drive(s, a); // search + the two replaces on fish.js

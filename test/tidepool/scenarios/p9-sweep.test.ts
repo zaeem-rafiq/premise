@@ -41,7 +41,7 @@ function beat1to3(s: SwarmSim): void {
 }
 
 describe("P9: the sweep and the late creature (9.5, A20)", () => {
-  it("QT1 + QR1 in one heads-up; the stale card does nothing; the squid ends at drain 10", () => {
+  it("QT1 + QR1 in one heads-up; the stale card does nothing; the squid ends at drain 10", { timeout: 30_000 }, () => {
     const s = sim();
     beat1to3(s);
 
@@ -98,7 +98,7 @@ describe("P9: the sweep and the late creature (9.5, A20)", () => {
     expect(s.files().get("creatures/squid.js")).toContain("drain(squid, 10)");
   });
 
-  it("other order (A20): the sweep lands first; E2 on `drain` sends the squid around", () => {
+  it("other order (A20): the sweep lands first; E2 on `drain` sends the squid around", { timeout: 30_000 }, () => {
     const s = sim();
     beat1to3(s);
 

@@ -1381,6 +1381,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `needs.badge` | Needs you {n} (visitor and Replay: Needs the owner {n}) |
 | `needs.title` | Needs you ({n}) (visitor and Replay: Needs the owner ({n})) |
 | `card.open` | Open |
+| `card.close` | Close |
 | `strip.label` | Counters |
 | `strip.clock` | Run clock |
 | `strip.agents` | Real agents |

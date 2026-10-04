@@ -163,10 +163,8 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
               </p>
             )}
           </div>
-          {/* The 2.4 drawing's [Close] has no copy id yet (needs `card.close` in src/copy);
-           * rendered literally until it lands. */}
           <button type="button" className="card-sheet__close" onClick={onClose}>
-            Close
+            {t("card.close")}
           </button>
         </header>
 

@@ -73,6 +73,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "needs.badge": { text: "Needs you {n}", visitor: "Needs the owner {n}" },
   "needs.title": { text: "Needs you ({n})", visitor: "Needs the owner ({n})" },
   "card.open": { text: "Open" },
+  "card.close": { text: "Close" },
   "strip.label": { text: "Counters" },
   "strip.clock": { text: "Run clock" },
   "strip.agents": { text: "Real agents" },

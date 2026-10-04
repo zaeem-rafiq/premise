@@ -10,7 +10,7 @@ export type Features = {
   held: boolean; // 10.2 in full: previews, blast radius, risk lines, `land_now`. false: the minimal form (HD1)
   race: boolean; // 11.4
   undo: boolean; // 11.3: the owner's Undo, the undo-plan and undo routes
-  green: "none" | "static" | "isolate"; // 11.5
+  green: "none" | "static" | "full"; // 11.5: no verification | static checks only (GR5) | the isolate self-test
   clef: boolean; // triage (7.3), risk (10.4) and contradiction (GL4) questions
   attempt_repos: boolean; // 11.5a
 };

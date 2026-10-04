@@ -1,20 +1,15 @@
 // The recorded operations and the replay of 01-core.md 5.1, with the drops of OP1-OP6.
-//
-// The `Operation` here is the shape section 5.1 fixes. `src/protocol/operations.ts` defines a
-// different union (create_file / edit_file / create_entities / ...) that no section of 01-core.md
-// names; it is left alone, and this local type is the one replay consumes (reported to the lead).
 
 import { ABSENT } from "../../protocol/premise.ts";
+import type { Operation } from "../../protocol/operations.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { isModulePath } from "../keys/paths.ts";
 import { occurrences } from "../keys/search.ts";
 import { parseModule, regionTargets } from "../entities/entities.ts";
 
-/** An operation of 5.1: a whole-file `write` or a unique-span `replace`, in `op_seq` order. */
-export type ReplayOperation =
-  | { op_seq: number; op: "write"; path: string; content: string | null; base_oid: string }
-  | { op_seq: number; op: "replace"; path: string; old: string; new: string; targets: string[] };
+/** An operation of 5.1: the protocol's `Operation`, kept under this name for the replay API. */
+export type ReplayOperation = Operation;
 
 /** The rule under which a replay stops (OP1-OP5; OP6 is the drop it causes, not a rule). */
 export type ReplayRule = "OP1" | "OP2" | "OP3" | "OP4" | "OP5";

@@ -16,7 +16,7 @@ export const FEATURE_OFF_NAMES: Readonly<Record<"held" | "race" | "undo" | "atte
 
 /** Line 7's `{runtime sentence}` by `features.green`. */
 const GREEN_SENTENCE: Record<Features["green"], string> = {
-  isolate: "every landing by running the pool's self-test in a sandboxed isolate",
+  full: "every landing by running the pool's self-test in a sandboxed isolate",
   static: "every landing with static checks only",
   none: "",
 };

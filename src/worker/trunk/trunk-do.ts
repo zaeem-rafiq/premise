@@ -1,37 +1,32 @@
 // The Trunk Durable Object — one per pool (01-core 3.1): the shell around the engine table
-// (src/core/trunk/engine.ts). Every request and every timer resolves to an entry by name; the entry
-// runs inside one `transactionSync` with no `await` (SY2), and only after the commit do its effects
-// reach the network (LP3, EV2). While the engine lane registers no entries, unbuilt work answers
-// `not_built` — the scaffold's fail-closed code.
+// (src/core/trunk/engine.ts). Every request and every timer resolves to an entry by name. An
+// engine entry is called with the pool's `Trunk` facade (src/core/trunk/registry.ts) — its
+// methods open their own transaction through `wrapCall`, run to commit with no `await` (SY2)
+// and leave `events_out`, the `outbox` and `heads_ups` to the after-commit pipeline (9.4 step 6):
+// events to the Floor first, then the push, then the heads-up delivery (HU5b).
 //
-// The shell itself owns three entries: `pool_create` (PL1 — a slice-1 stand-in until the engine
-// lane's entry of the same name lands; the engine's wins when both exist), and `_probe`, the small
-// fake engine entry the SY2 acceptance test drives.
-//
-// Requests arrive as JSON: a POST/PUT/DELETE body, or `?q=<json>` on a GET — the convention the
-// Agent Durable Object uses, which also lets `fetchDurableObject` in workerd tests drive every path.
+// The shell's own entries are `pool_create` (PL1: the seed's files arrive with the call — the
+// object cannot read deployment assets inside a transaction) and `_probe`, the fake engine
+// entry the SY2 acceptance drives.
 
 import { DurableObject } from "cloudflare:workers";
 import { engineTable, type EngineTable } from "../../core/trunk/engine.ts";
-import { MAX_REAL_AGENTS } from "../../protocol/constants.ts";
+import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
 import { deliverEvents, recordTrunkError, runEffects, type EffectRef } from "./after-commit.ts";
+import { deliverHeadsUps, pushOutbox, reconcileOnStart } from "./push.ts";
 import { armAlarm, runAlarm } from "./alarm.ts";
-import { appendEvent, applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList } from "./sql.ts";
+import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList } from "./sql.ts";
 
-/** The context every engine entry gets: storage, identity and the request it serves. */
+/** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
   sql: Sql;
-  /** The pool this object is — the Durable Object's name. */
   pool: string;
   env: Env;
-  /** The request's clock. */
   now: number;
-  /** The path the request came in on (`alarm` for a timer). */
   path: string;
-  /** The request's query (`?seq=` of undo-plan, the `?q=` carrier excluded). */
   query: URLSearchParams;
 };
 
@@ -56,8 +51,16 @@ function normalizeResult(result: unknown): { response: unknown; status: number; 
   return { response: result ?? { ok: true }, status: 200, effects: [] };
 }
 
-/** `input` of the `pool_create` entry — forwarded by `POST /api/pools` (PL1). */
-type CreatePoolInput = { pool: string; seed: string; summary_only: boolean; request_id: string; remote: string };
+/** `input` of `pool_create` — forwarded by `POST /api/pools` (PL1), with the seed's whole tree. */
+type CreatePoolInput = {
+  pool: string;
+  seed: string;
+  summary_only: boolean;
+  request_id: string;
+  remote: string;
+  /** When absent, the object reads the named seed through ASSETS before the transaction (PL1). */
+  files?: Record<string, string>;
+};
 
 function asCreatePoolInput(input: unknown): CreatePoolInput | null {
   if (typeof input !== "object" || input === null) return null;
@@ -67,11 +70,35 @@ function asCreatePoolInput(input: unknown): CreatePoolInput | null {
     typeof body.seed !== "string" ||
     typeof body.summary_only !== "boolean" ||
     typeof body.request_id !== "string" ||
-    typeof body.remote !== "string"
+    typeof body.remote !== "string" ||
+    (body.files !== undefined &&
+      (typeof body.files !== "object" ||
+        body.files === null ||
+        !Object.values(body.files).every((v) => typeof v === "string")))
   ) {
     return null;
   }
   return body as CreatePoolInput;
+}
+
+/** The named seed's files, read through ASSETS (PL1, gap 3): `dist/client/seeds.json`, the bundle
+ * `npm run build:seeds` writes. Null when the binding or the seed is unavailable; undefined when
+ * the bundle answers but names no such seed. */
+async function seedFiles(env: Env, seed: string): Promise<Record<string, string> | null | undefined> {
+  const assets = env.ASSETS as Fetcher | undefined;
+  if (assets === undefined) return null;
+  let bundle: unknown;
+  try {
+    const response = await assets.fetch("https://assets/seeds.json");
+    if (!response.ok) return null;
+    bundle = await response.json();
+  } catch {
+    return null;
+  }
+  const files = (bundle as Record<string, unknown>)[seed];
+  if (typeof files !== "object" || files === null) return undefined;
+  if (!Object.values(files).every((v) => typeof v === "string")) return undefined;
+  return files as Record<string, string>;
 }
 
 export class Trunk extends DurableObject<Env> {
@@ -91,19 +118,18 @@ export class Trunk extends DurableObject<Env> {
 
   /**
    * The shell's own entries, consulted only when the engine table has no entry of the name (the
-   * engine's wins when both exist). `pool_create` is PL1's stand-in for this slice; `_probe` is the
-   * SY2 acceptance's fake engine entry — each name starts with `_` or is spec-named so a real
-   * engine entry always supersedes.
+   * engine's wins when both exist). Each runs without a wrapping transaction of the shell's —
+   * `pool_create` opens the engine's own transaction, `_probe` writes one row.
    */
-  readonly #shellEntries: Record<string, (input: unknown, ctx: EntryContext) => EntryResult> = {
+  readonly #shellEntries: Record<string, (input: unknown, ctx: EntryContext) => EntryResult | Promise<EntryResult>> = {
     /**
-     * PL1: stores the creation record in `meta` — `summary_only` fixed here, carried by every
-     * `pool.state` (EV6) — and emits the first two stream events (EM1): `pool.state` then
-     * `pool.files`. The seed tree is built into the deployment but reaches Trunk only through the
-     * engine, so this slice emits `files: []` and `head_commit: ""` (see the track report). A
-     * repeated `request_id` is a no-op (9.8); a second create for a live pool answers `pool_exists`.
+     * PL1: creates the pool — the schema, the seed files and the seed commit, `pool.state` and
+     * `pool.files` as events 1 and 2 (EM1), and the seed's outbox batch (PL1's "land the seed on
+     * Artifacts through the pusher" — the after-commit push sends it). `summary_only` is fixed
+     * here (EV6). A repeated `request_id` is a no-op (9.8); a second create for a live pool
+     * answers `pool_exists`.
      */
-    pool_create: (input, ctx) => {
+    pool_create: async (input, ctx) => {
       const create = asCreatePoolInput(input);
       if (create === null) return { response: { error: { code: "invalid_args" } }, status: 400 };
       if (metaGet(ctx.sql, "pool_id") !== null) {
@@ -111,59 +137,23 @@ export class Trunk extends DurableObject<Env> {
           ? { response: { ok: true, already: true } }
           : { response: { error: { code: "pool_exists" } }, status: 409 };
       }
-      const now = ctx.now;
-      for (const [key, value] of Object.entries({
+      const files = create.files ?? (await seedFiles(ctx.env, create.seed));
+      if (files === null) return { response: { error: { code: "seed_unavailable" } }, status: 502 };
+      if (files === undefined) return { response: { error: { code: "invalid_args" } }, status: 400 };
+      TrunkEngine.create(ctx.sql, files, {
         pool_id: create.pool,
-        pool_state: "ready",
-        head_seq: "0",
-        head_commit: "",
-        green_seq: "0",
-        green_commit: "",
-        epoch: "1",
-        summary_only: create.summary_only ? "1" : "0",
-        synthetic: "0",
-        repo: create.remote,
-        create_request_id: create.request_id,
-      })) {
-        metaSet(ctx.sql, key, value);
-      }
-      appendEvent(ctx.sql, now, {
-        ts: now,
-        pool: create.pool,
-        src: "trunk",
-        type: "pool.state",
-        head_seq: 0,
-        head_commit: "",
-        green_seq: 0,
-        landed_seq: 0,
-        landed_commit: "",
-        state: "ready",
-        reason: null,
-        epoch: 1,
-        remote: create.remote,
-        plain_remote: null,
-        rebuild: null,
-        unwitnessed: [],
-        real_agents: 0,
-        max_real_agents: MAX_REAL_AGENTS,
-        synthetic: false,
         summary_only: create.summary_only,
+        remote: create.remote,
+        request_id: create.request_id,
+        now: () => ctx.now,
       });
-      appendEvent(ctx.sql, now, {
-        ts: now,
-        pool: create.pool,
-        src: "trunk",
-        type: "pool.files",
-        files: [],
-      });
-      return { response: { ok: true, pool: create.pool }, effects: [{ kind: "events" }] };
+      return { response: { ok: true, pool: create.pool } };
     },
 
     /**
      * The fake engine entry of the SY2 acceptance: commits `probe:<marker>` inside its transaction
      * and leaves a `_remote_probe` effect, whose handler posts to `args.url` — the fake remote's
-     * request log is the proof the request left the object after the commit. Removed when a real
-     * entry of the name exists (never — the name is reserved).
+     * request log is the proof the request left the object after the commit.
      */
     _probe: (input, ctx) => {
       const request = input as { call_id?: unknown; args?: { url?: unknown; marker?: unknown } };
@@ -190,31 +180,40 @@ export class Trunk extends DurableObject<Env> {
   };
 
   /**
-   * LP7: on the first request after start-up — never in the constructor — reconcile the outbox with
-   * the remote through the `restart` entry when the git lane registers it. The flag is in-memory on
-   * purpose: the check belongs to this object's start, not to the pool's life, so an evicted object
-   * reconciles again at its next start.
+   * LP7: on the first request after start-up — never in the constructor — reconcile the outbox
+   * with the remote through the `restart` entry. The flag is in-memory on purpose: an evicted
+   * object reconciles again at its next start.
    */
   #reconciled = false;
   #ensureReconciled(): void {
     if (this.#reconciled) return;
     this.#reconciled = true;
-    if (!this.#engine.entries.has("restart")) return;
-    void this.#runEntry("restart", { restart: true }, "restart", new URLSearchParams()).catch(() =>
-      recordTrunkError(this.ctx, "restart", "engine_error"),
-    );
+    // No pool yet: nothing to reconcile — and no `trunk.error` may precede `pool.state` (EM1).
+    if (metaGet(this.#sql, "pool_id") === null) return;
+    void reconcileOnStart(this.env, this.ctx, async (input) => {
+      const r = await this.#callEngineEntry("restart", input);
+      if ("error" in r) return;
+      await this.#postCommit();
+    }).catch(() => recordTrunkError(this.ctx, "restart", "engine_error"));
   }
 
-  /** The engine entry for a path — the tool endpoints, the internal creation call and the owner
-   * actions of 13.6 — or null (the object answers `not_built`). Entry names are provisional for the
-   * engine lane's wiring (see the track report). */
+  /**
+   * The engine entry for a path — the tool endpoints, the internal creation and launch calls and
+   * the owner actions of 13.6 — or null (the object answers `not_built`). `/tool` resolves to the
+   * single `tool` entry: the request body carries the tool name.
+   */
   #entryFor(pathname: string, input: unknown): string | null {
+    // A tool call names its entry in `tool` (4.3): the seven real tools all reach the single
+    // `tool` entry, but a name that is itself a registered entry — the test's `_probe` — wins.
     if (pathname === "/tool") {
-      const tool = (input as { tool?: unknown })?.tool;
-      return typeof tool === "string" ? tool : null;
+      const tool = (input as { tool?: unknown } | null)?.tool;
+      if (typeof tool === "string" && (this.#engine.entries.has(tool) || tool in this.#shellEntries)) return tool;
+      return "tool";
     }
     if (pathname === "/sync" || pathname === "/register" || pathname === "/stop") return pathname.slice(1);
     if (pathname === "/internal/create-pool") return "pool_create";
+    if (pathname === "/internal/open-attempt") return "open_attempt";
+    if (pathname === "/internal/tick") return "tick";
     if (/^\/api\/pools\/[^/]+\/intents$/.test(pathname)) return "create_intent";
     if (/^\/api\/pools\/[^/]+\/cards\/[^/]+$/.test(pathname)) return "card_action";
     if (/^\/api\/pools\/[^/]+\/undo-plan$/.test(pathname)) return "undo_plan";
@@ -224,44 +223,94 @@ export class Trunk extends DurableObject<Env> {
   }
 
   /**
-   * One entry, the SY2 shape: the transaction runs start to commit with no `await`; effects — the
-   * network work — run after. An entry may return a promise for work it intentionally defers past
-   * the commit (the `restart` reconciliation of LP7); its synchronous part still committed first.
+   * Calls an engine entry with the pool's `Trunk` facade — the entry's methods open and commit
+   * their own transaction (SY2), so nothing here wraps the call: a nested transactionSync would
+   * throw. The pool must exist (every entry but `pool_create` serves an existing pool).
    */
+  async #callEngineEntry(name: string, input: unknown): Promise<{ result: unknown } | { error: Response }> {
+    const entry = this.#engine.entries.get(name);
+    if (entry === undefined) return { error: notBuilt() };
+    if (metaGet(this.#sql, "pool_id") === null) {
+      return { error: json({ error: { code: "pool_not_found" } }, 404) };
+    }
+    try {
+      const trunk = TrunkEngine.open(this.#sql, { now: () => Date.now() });
+      const result = await Promise.resolve(entry(input, trunk));
+      return { result };
+    } catch {
+      recordTrunkError(this.ctx, `entry:${name}`, "engine_error");
+      return { error: json({ error: { code: "internal_error" } }, 500) };
+    }
+  }
+
+  /**
+   * 9.4 step 6: after every commit, in this order and none awaited by the next — the events to
+   * the Floor (EV2), the push (9.6), the heads-up delivery (HU5b). Each step's failure is a
+   * `trunk.error`, not a lost transaction: the timers they arm retry them.
+   */
+  async #postCommit(): Promise<void> {
+    try {
+      await deliverEvents(this.env, this.ctx);
+    } catch {
+      recordTrunkError(this.ctx, "events", "transport");
+    }
+    try {
+      await pushOutbox(this.env, this.ctx, async (name, input) => {
+        const r = await this.#callEngineEntry(name, input);
+        if ("error" in r) throw new Error(`push apply ${name} failed`);
+        await this.#postCommit();
+        return r.result;
+      });
+    } catch {
+      recordTrunkError(this.ctx, "push", "transport");
+    }
+    try {
+      await deliverHeadsUps(this.env, this.ctx);
+    } catch {
+      recordTrunkError(this.ctx, "heads_up", "transport");
+    }
+  }
+
+  /** Entry calls answered since the object started — the app-server acceptance's proof that no
+   * `/pool/` request reaches Trunk (AS16): its reads are Floor reads. In-memory on purpose. */
+  readonly #served = new Map<string, number>();
+
+  /** One entry's request path: run it, run its returned effects, then the after-commit pipeline. */
   async #runEntry(name: string, input: unknown, path: string, query: URLSearchParams): Promise<Response> {
-    const entry = this.#engine.entries.get(name) ?? this.#shellEntries[name];
+    this.#served.set(name, (this.#served.get(name) ?? 0) + 1);
+    if (this.#engine.entries.has(name)) {
+      const r = await this.#callEngineEntry(name, input);
+      if ("error" in r) return r.error;
+      const { response, status, effects } = normalizeResult(r.result);
+      await runEffects(this.env, this.ctx, effects);
+      await this.#postCommit();
+      return json(response, status);
+    }
+    const entry = this.#shellEntries[name];
     if (entry === undefined) return notBuilt();
     const ctx: EntryContext = { sql: this.#sql, pool: this.#pool, env: this.env, now: Date.now(), path, query };
     let result: unknown;
     try {
-      result = await Promise.resolve(this.#sql.transaction(() => entry(input, ctx)));
-    } catch {
+      result = await Promise.resolve(entry(input, ctx));
+    } catch (cause) {
+      console.error(`trunk entry ${name} failed`, cause);
       recordTrunkError(this.ctx, `entry:${name}`, "engine_error");
-      return json({ error: { code: "internal_error" } }, 500);
+      const detail = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
+      return json({ error: { code: "internal_error", detail } }, 500);
     }
     const { response, status, effects } = normalizeResult(result);
     await runEffects(this.env, this.ctx, effects);
+    await this.#postCommit();
     return json(response, status);
   }
 
-  /** A timer's engine entry for the alarm: false when unregistered; entry errors propagate so the
-   * alarm can re-schedule with backoff (AL2). */
-  async #runTimerEntry(
-    kind: string,
-    input: { timer: { kind: string; key: string; due_at: number } },
-  ): Promise<boolean> {
-    const entry = this.#engine.entries.get(kind);
-    if (entry === undefined) return false;
-    const ctx: EntryContext = {
-      sql: this.#sql,
-      pool: this.#pool,
-      env: this.env,
-      now: Date.now(),
-      path: "alarm",
-      query: new URLSearchParams(),
-    };
-    const result = await Promise.resolve(this.#sql.transaction(() => entry(input, ctx)));
-    await runEffects(this.env, this.ctx, normalizeResult(result).effects);
+  /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
+   * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
+  async #runTimerEntry(kind: string): Promise<boolean> {
+    if (!this.#engine.entries.has(kind)) return false;
+    const r = await this.#callEngineEntry(kind, {});
+    if ("error" in r) throw new Error(`timer ${kind} failed`);
+    await this.#postCommit();
     return true;
   }
 
@@ -291,6 +340,7 @@ export class Trunk extends DurableObject<Env> {
       meta: metaAll(this.#sql),
       events_out: pendingEvents(this.#sql).map((row) => ({ ...row, body: JSON.parse(row.body) as unknown })),
       timers: timerList(this.#sql),
+      served: Object.fromEntries(this.#served),
     });
   }
 
@@ -308,10 +358,7 @@ export class Trunk extends DurableObject<Env> {
       if (input === BAD_JSON) return json({ error: { code: "bad_json" } }, 400);
       const name = this.#entryFor(pathname, input);
       if (name === null) return notBuilt();
-      const response = await this.#runEntry(name, input, pathname, url.searchParams);
-      // EV2: this entry's events — and any stragglers an earlier crash left — flush to the Floor.
-      await deliverEvents(this.env, this.ctx);
-      return response;
+      return await this.#runEntry(name, input, pathname, url.searchParams);
     } catch {
       return json({ error: { code: "internal_error" } }, 500);
     } finally {
@@ -336,7 +383,26 @@ export class Trunk extends DurableObject<Env> {
       env: this.env,
       ctx: this.ctx,
       sql: this.#sql,
-      runEntry: (kind, input) => this.#runTimerEntry(kind, input),
+      runEntry: (kind) => this.#runTimerEntry(kind),
+      push: async () => {
+        try {
+          await pushOutbox(this.env, this.ctx, async (name, input) => {
+            const r = await this.#callEngineEntry(name, input);
+            if ("error" in r) throw new Error(`push apply ${name} failed`);
+            await this.#postCommit();
+            return r.result;
+          });
+        } catch {
+          recordTrunkError(this.ctx, "push", "transport");
+        }
+      },
+      repush: async () => {
+        try {
+          await deliverHeadsUps(this.env, this.ctx);
+        } catch {
+          recordTrunkError(this.ctx, "heads_up", "transport");
+        }
+      },
     });
   }
 

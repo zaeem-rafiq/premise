@@ -22,16 +22,19 @@ import {
   type ClassifyItem,
 } from "./sets.ts";
 import { blobId } from "../sync/sha1.ts";
-import { utf8 } from "../sync/bytes.ts";
+import { utf8, bytesToHex } from "../sync/bytes.ts";
+import { PUSH_REJECT_LIMIT, TICK_MS } from "../../protocol/constants.ts";
 import { landingCommit, notesCommit } from "../git/commit.ts";
 import { makeTreeFromFiles } from "../git/tree-files.ts";
 import { notesTree } from "../git/notes-tree.ts";
 import { makeBlob, makeCommit, type GitObject } from "../git/objects.ts";
 import { canonicalJson, noteBytes } from "../git/note.ts";
-import { event } from "./events.ts";
+import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { buildPack } from "../git/pack.ts";
 import {
   closeCard,
   frozen,
+  scheduleTick,
   inflight,
   isWaiting,
   openAttempt,
@@ -360,6 +363,41 @@ export function seedCommit(pool: Pool, files: FileMap): GitObject {
   });
   pool.objects.set(commit.oid, commit);
   return commit;
+}
+
+/**
+ * The objects `roots` reach through `pool.objects` (LP6): commits to their trees and parents,
+ * trees to their entries. An object the map does not hold — a parent pushed by an earlier batch
+ * and rebuilt out of memory — is simply not in the pack: the remote already has it.
+ */
+function reachableObjects(pool: Pool, roots: readonly string[]): GitObject[] {
+  const out: GitObject[] = [];
+  const seen = new Set<string>();
+  const visit = (oid: string): void => {
+    if (oid === "" || seen.has(oid)) return;
+    const object = pool.objects.get(oid);
+    if (object === undefined) return;
+    seen.add(oid);
+    out.push(object);
+    if (object.type === "commit") {
+      for (const line of new TextDecoder().decode(object.content).split("\n")) {
+        if (line.startsWith("tree ")) visit(line.slice(5, 45).trim());
+        else if (line.startsWith("parent ")) visit(line.slice(7, 47).trim());
+        else if (line === "") break;
+      }
+    } else if (object.type === "tree") {
+      const bytes = object.content;
+      let i = 0;
+      while (i < bytes.length) {
+        const space = bytes.indexOf(0x20, i);
+        const nul = bytes.indexOf(0, space);
+        visit(bytesToHex(bytes.subarray(nul + 1, nul + 21)));
+        i = nul + 21;
+      }
+    }
+  };
+  for (const root of roots) visit(root);
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -774,7 +812,22 @@ export function tick(pool: Pool): void {
     main: false,
     notes: false,
   };
+  // LP6: the batch's pack — every object `new_main` and `new_notes` reach that `pool.objects`
+  // holds — is stored with the row, so a restart of the object pushes the same bytes.
+  pool.outboxPack = buildPack(reachableObjects(pool, [newMain, notes.oid]));
   pool.dirtyOutbox = true;
+  // EM1: `head_seq`/`head_commit` changed — `pool.state` is emitted again.
+  emitPoolState(pool);
+  // EM1: `pool.files` is emitted again after a landing that adds or removes a path or changes
+  // the policy.
+  const changed = changedPaths(pre, running);
+  const addedOrRemoved = [...pre.keys()].some((p) => !running.has(p)) || [...running.keys()].some((p) => !pre.has(p));
+  if (addedOrRemoved || changed.includes(".premise/policy.json")) emitPoolFiles(pool);
+  // 9.4: the tick fires every TICK_MS while candidates or undo requests remain — the batch that
+  // just landed clears LP1's block on the next alarm; work the batch could not take (MAX_BATCH,
+  // the budget) ticks again at the cadence.
+  const workRemains = pool.undoQueue.length > 0 || [...pool.attempts.values()].some((x) => x.state === "validated");
+  if (workRemains) scheduleTick(pool, TICK_MS);
 
   // Reopened attempts get their repair heads-up (T19): the premises whose dep key changed.
   for (const r of reopened) {
@@ -837,11 +890,13 @@ export function tick(pool: Pool): void {
 export function markLanded(pool: Pool): void {
   const outbox = pool.outbox;
   if (outbox === null) return;
+  let changed = false;
   for (let s = outbox.first_seq; s <= outbox.last_seq; s++) {
     const l = pool.landings.find((x) => x.seq === s);
     if (l === undefined || l.pushed_at !== null) continue;
     l.pushed_at = pool.now();
     pool.out.landed.push(s);
+    changed = true;
     event(pool, "landing.landed", {
       seq: s,
       batch_id: outbox.batch_id,
@@ -860,12 +915,19 @@ export function markLanded(pool: Pool): void {
       }
     }
   }
+  if (changed) {
+    // EM1: `landed_seq`/`landed_commit` moved — `pool.state` is emitted again.
+    pool.meta.set("landed_seq", String(outbox.last_seq));
+    const last = pool.landings.find((x) => x.seq === outbox.last_seq);
+    if (last !== undefined) pool.meta.set("landed_commit", last.commit_oid);
+    emitPoolState(pool);
+  }
 }
 
-/** `push_ok` (9.8): the whole batch is on both refs. */
+/** `push_ok` (9.8): the whole batch is on both refs. `batch.pushed` precedes `landing.landed`
+ * (acceptance stream order: `landing.accepted`, `batch.pushed`, `landing.landed`). */
 export function pushOk(pool: Pool): void {
   if (pool.outbox === null) return;
-  markLanded(pool);
   event(pool, "batch.pushed", {
     batch_id: pool.outbox.batch_id,
     first_seq: pool.outbox.first_seq,
@@ -875,10 +937,16 @@ export function pushOk(pool: Pool): void {
     tries: pool.outbox.tries,
     ms: pool.now() - pool.outbox.created_at,
   });
+  markLanded(pool);
   pool.outbox.pushed_at = pool.now();
   pool.outbox.state = "pushed";
   pool.outbox = null;
+  pool.outboxPack = null;
   pool.dirtyOutbox = true;
+  // The outbox that gated the tick (LP1) is clear — the work it blocked runs at the next alarm.
+  if (pool.undoQueue.length > 0 || [...pool.attempts.values()].some((x) => x.state === "validated")) {
+    scheduleTick(pool);
+  }
 }
 
 /**
@@ -900,7 +968,30 @@ export function reconcile(
     pool.dirtyOutbox = true;
     return "pause";
   }
-  if (remote_main === "old") return remote_notes === "new" ? "retry_main" : "repush";
+  // LP5b: a batch rejected PUSH_REJECT_LIMIT times while both refs kept their old values is
+  // poison — the server refused the pack or the commands, never the compare — pause the pool.
+  if (
+    remote_main === "old" &&
+    remote_notes === "old" &&
+    outbox.rejects >= PUSH_REJECT_LIMIT &&
+    pool.meta.get("pause_reason") !== "push_rejected"
+  ) {
+    pool.meta.set("pool_state", "paused");
+    pool.meta.set("pause_reason", "push_rejected");
+    event(pool, "pool.paused", { reason: "push_rejected", detail: `rejected ${outbox.rejects} times` });
+    pool.dirtyOutbox = true;
+    return "pause";
+  }
+  if (remote_main === "old") {
+    if (remote_notes === "new") {
+      // LP5: the notes command alone applied — `pending` stands (the spec keeps the row state
+      // there); the in-memory flag narrows the next request's commands (LP6).
+      outbox.notes = true;
+      pool.dirtyOutbox = true;
+      return "retry_main";
+    }
+    return "repush";
+  }
   // remote_main === "new": the landings are on main.
   if (remote_notes === "new") {
     pushOk(pool);
@@ -908,7 +999,10 @@ export function reconcile(
   }
   markLanded(pool);
   if (remote_notes === "old") {
+    // LP5: `notes_pending` — the next request carries the notes command only.
     outbox.main = true;
+    outbox.state = "notes_pending";
+    pool.dirtyOutbox = true;
     return "retry_notes";
   }
   pool.meta.set("pool_state", "paused");
@@ -1122,6 +1216,7 @@ export function owner(
     pool.undoQueue.push(req);
     pool.undoLog.set(request_id, req);
     pool.dirtyUndo.add(request_id);
+    scheduleTick(pool);
     event(pool, "undo.planned", { request_id, cause: "undo", target_seq: target.seq, ...detail });
     return { undo: detail };
   }

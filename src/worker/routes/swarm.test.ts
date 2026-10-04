@@ -43,6 +43,35 @@ class FakeAgentNamespace {
   }
 }
 
+/** The Trunk Durable Object behind `/internal/open-attempt` (SWR2/9.2: the attempt opens in the
+ *  pool's Trunk before its agent). */
+class FakeTrunkNamespace {
+  readonly opens: Array<{ pool: string; payload: Record<string, unknown> }> = [];
+  idFromName(name: string): string {
+    return name;
+  }
+  get(id: string): { fetch(input: string | URL, init?: RequestInit): Promise<Response> } {
+    return {
+      fetch: (input, init) => {
+        const path = new URL(String(input)).pathname;
+        if (path === "/internal/open-attempt") {
+          const payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          this.opens.push({ pool: id, payload });
+          return Promise.resolve(
+            Response.json({
+              ok: true,
+              attempt_id: payload.attempt_id,
+              change_id: `c_${payload.attempt_id}`,
+              intent_id: payload.intent_id,
+            }),
+          );
+        }
+        return Promise.resolve(new Response("not found", { status: 404 }));
+      },
+    };
+  }
+}
+
 class FakeGateNamespace {
   private readonly killed: boolean;
   constructor(killed: boolean) {
@@ -57,10 +86,11 @@ class FakeGateNamespace {
   }
 }
 
-function fakeEnv(killed = false): { env: Env; agents: FakeAgentNamespace } {
+function fakeEnv(killed = false): { env: Env; agents: FakeAgentNamespace; trunk: FakeTrunkNamespace } {
   const agents = new FakeAgentNamespace();
-  const env = { AGENT: agents, GATE: new FakeGateNamespace(killed) } as unknown as Env;
-  return { env, agents };
+  const trunk = new FakeTrunkNamespace();
+  const env = { AGENT: agents, GATE: new FakeGateNamespace(killed), TRUNK: trunk } as unknown as Env;
+  return { env, agents, trunk };
 }
 
 function handler(): RouteHandler {

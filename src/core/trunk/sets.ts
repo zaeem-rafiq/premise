@@ -291,6 +291,8 @@ export type Pool = {
   landings: Landing[];
   cards: CardRec[];
   outbox: OutboxRow | null;
+  /** The batch's pack bytes, stored with the row in `outbox_chunks` at the same transaction (LP6). */
+  outboxPack: Uint8Array | null;
   undoQueue: UndoRequest[];
   order: number; // landing-candidate order counter
   out: Trace;

@@ -1,26 +1,12 @@
 // Source resolution for the app server (02-tidepool 4.1, SE19). Moving sources resolve from the
 // pool's Floor Durable Object state (FS2); commit sources resolve to themselves. Pure — this module
 // does the shape checks and nothing else.
-
 /**
- * The fields of the pool Floor's read (FS2, `FloorRead` of src/worker/floor/floor-do.ts) the app
- * server consumes. A local mirror keeps this file importable by the Node test program, which does
- * not carry the Worker's ambient types; `FloorRead` assigns to it structurally.
+ * The fields of the pool Floor's read (FS2) the app server consumes. The wire shape is `FloorRead`
+ * of src/protocol/internal.ts (gap 1's one-definition rule); `PoolFloorRead` stays as this
+ * adapter's name for it so the Node test program keeps working.
  */
-export type PoolFloorRead = {
-  n: number;
-  pool: {
-    state: string;
-    head_seq: number;
-    head_commit: string | null;
-    landed_seq: number;
-    landed_commit: string | null;
-  };
-  green: { seq: number | null; commit: string | null };
-  plain: { commit: string; tree: string; through_seq: number } | null;
-  landings_by_commit: Record<string, number>;
-  paths: Record<string, number>;
-};
+export type PoolFloorRead = import("../../../protocol/internal.ts").FloorRead;
 
 /** What `resolve` answers: the immutable version token and the `seq` the page reports in stats. */
 export type Resolved = { version: string; seq: number | null };

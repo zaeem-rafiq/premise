@@ -13,6 +13,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const SEED_DIRECTORY = join(repoRoot, "seeds", "tidepool");
 const BUNDLE_FILE = join(repoRoot, "dist", "seeds.json");
+// The Worker's copy: served through the ASSETS binding so a Trunk Durable Object can read a
+// seed's files at pool creation, outside the creation transaction (PL1, gap 3).
+const ASSETS_BUNDLE_FILE = join(repoRoot, "dist", "client", "seeds.json");
 
 /** One seed tree: the path of each file inside the tree to its contents. */
 export type SeedTree = ReadonlyMap<string, string>;
@@ -101,8 +104,10 @@ export function buildSeeds(seed: SeedTree = readSeed()): ReadonlyMap<string, See
 export function main(): void {
   const seeds = buildSeeds();
   const bundle = Object.fromEntries([...seeds].map(([name, tree]) => [name, Object.fromEntries(tree)]));
-  mkdirSync(dirname(BUNDLE_FILE), { recursive: true });
-  writeFileSync(BUNDLE_FILE, `${JSON.stringify(bundle, null, 2)}\n`);
+  for (const file of [BUNDLE_FILE, ASSETS_BUNDLE_FILE]) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(bundle, null, 2)}\n`);
+  }
   console.log(`build:seeds: wrote ${[...seeds.keys()].join(", ")} to ${BUNDLE_FILE}`);
 }
 

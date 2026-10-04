@@ -4,6 +4,7 @@
 // inside Trunk only — it is returned, never logged (13.1).
 
 import type { TokenSource } from "../../../protocol/ports.ts";
+import { poolRepoName } from "../../repos.ts";
 
 /**
  * The slice of the namespace binding this adapter uses — `env.POOLS` at runtime, a fake in

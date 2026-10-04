@@ -33,6 +33,11 @@ export function unauthorized(): Response {
   return Response.json({ error: { code: "unauthorized" } }, { status: 401 });
 }
 
+/** SE3: a cookie-authenticated mutating request whose `Origin` is not the Floor's origin. */
+export function forbidden(): Response {
+  return Response.json({ error: { code: "forbidden" } }, { status: 403 });
+}
+
 /** SE3: a request with a body whose content type is not `application/json` is rejected before
  * authentication. */
 export function unsupportedMediaType(): Response {

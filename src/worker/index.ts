@@ -6,7 +6,8 @@
 // This file also re-exports the seven class files `wrangler.jsonc` names (Slice 0).
 
 import type { Env } from "./env.ts";
-import { notBuilt, notConfigured, notFound, unauthorized, unsupportedMediaType } from "./not-built.ts";
+import { forbidden, notBuilt, notConfigured, notFound, unauthorized, unsupportedMediaType } from "./not-built.ts";
+import { credentialKind, originOkFor } from "./security/session.ts";
 import { APP_ROUTES, ROUTES, type Route } from "../protocol/routes.ts";
 import { wire as wireTrunk } from "./routes/wiring.ts";
 import { wire as wireSwarm } from "./routes/swarm.ts";
@@ -109,32 +110,6 @@ function matchRoute(route: Route, method: string, path: string): Record<string, 
 
 // ---- The role guards of 13.6 ----
 
-/** Constant-time compare for the shared owner key. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const left = new TextEncoder().encode(a);
-  const right = new TextEncoder().encode(b);
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    diff |= (left[index] ?? 0) ^ (right[index] ?? 0);
-  }
-  return diff === 0;
-}
-
-/** SE2: the owner proves the key as `Authorization: Bearer <key>` or the `premise_owner` cookie.
- * The cookie is HMAC-signed by `src/worker/security/**`; a cookie this Worker never minted is no
- * credential, so it counts as none until that lane is built. */
-function hasOwnerCredential(request: Request, env: Env): boolean {
-  const key = env.OWNER_KEY;
-  if (key === undefined) return false;
-  const authorization = request.headers.get("authorization");
-  return (
-    authorization !== null &&
-    authorization.startsWith("Bearer ") &&
-    timingSafeEqual(authorization.slice("Bearer ".length), key)
-  );
-}
-
 const JSON_MEDIA = "application/json";
 const BODY_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
 
@@ -150,7 +125,12 @@ function guard(route: Route, request: Request, env: Env): Response | null {
   if (BODY_METHODS.has(request.method) && contentType !== null && !contentType.startsWith(JSON_MEDIA)) {
     return unsupportedMediaType();
   }
-  if (route.role === "owner" && !hasOwnerCredential(request, env)) return unauthorized();
+  if (route.role !== "owner") return null;
+  // SE2/SE3: either credential proves the owner — the Bearer key or the signed `premise_owner`
+  // cookie — but a cookie-authenticated mutating request must also name this origin in `Origin`.
+  const credential = credentialKind(request, env);
+  if (credential === "none") return unauthorized();
+  if (BODY_METHODS.has(request.method) && !originOkFor(request, credential)) return forbidden();
   return null;
 }
 

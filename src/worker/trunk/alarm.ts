@@ -18,6 +18,10 @@ export type AlarmDeps = {
   /** Runs the engine entry registered under a timer's kind. Resolves false when no entry is
    * registered; rejects when the entry itself threw (its transaction already rolled back). */
   runEntry: (kind: string, input: { timer: TimerRow }) => Promise<boolean>;
+  /** The `push` timer's work (9.6): the outbox's due push and its LP5 apply. */
+  push?: () => Promise<void>;
+  /** The `repush` timer's work (HU5b): heads-up delivery to the attempt's Agent. */
+  repush?: () => Promise<void>;
 };
 
 /** AL1: the alarm is always set to the smallest `due_at` — or deleted when `timers` is empty. */
@@ -47,7 +51,7 @@ function rescheduleTimer(sql: Sql, timer: TimerRow): void {
  * deleted before its entry runs, so an entry that re-arms itself is not clobbered; a throw puts the
  * row back with a backoff (AL2). The alarm is always re-armed before the handler returns (AL1).
  */
-export async function runAlarm({ env, ctx, sql, runEntry }: AlarmDeps): Promise<void> {
+export async function runAlarm({ env, ctx, sql, runEntry, push, repush }: AlarmDeps): Promise<void> {
   const now = Date.now();
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {
@@ -56,6 +60,18 @@ export async function runAlarm({ env, ctx, sql, runEntry }: AlarmDeps): Promise<
       } catch {
         rescheduleTimer(sql, timer);
         recordTrunkError(ctx, "timer:events", "timer_failed");
+      }
+      continue;
+    }
+    // The shell's own timer kinds run their handler, not an engine entry: `push` is the outbox's
+    // retry (9.6), `repush` the heads-up delivery (HU5b).
+    const shellWork = timer.kind === "push" ? push : timer.kind === "repush" ? repush : undefined;
+    if (shellWork !== undefined) {
+      try {
+        await shellWork();
+      } catch {
+        rescheduleTimer(sql, timer);
+        recordTrunkError(ctx, `timer:${timer.kind}`, "timer_failed");
       }
       continue;
     }

@@ -86,11 +86,28 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     }
   });
 
-  it("the seam builders run; the engine table is empty until its lane wires it", () => {
+  it("a seam holds no logic: registrations live only in the seams' wiring modules", () => {
+    // Slice 0's gate required empty tables; Slice 1 fills them. What still holds is the rule that
+    // made the seams safe: only a wiring module touches a seam table, so the call sites of
+    // `entries.set`, `effects.set` and `handlers.set` are exactly the wiring modules of 3.2.
+    const wiring = new Set(SEAMS.flatMap(({ wiring }) => wiring));
+    for (const file of codeFilesUnder(REPO_ROOT, "src")) {
+      if (wiring.has(file)) continue;
+      const text = readText(REPO_ROOT, file);
+      expect(text, `${file} registers into a seam table outside its lane's wiring module`).not.toMatch(
+        /\.(?:entries|effects|handlers)\.(?:set|add)\(/,
+      );
+    }
+  });
+
+  it("the engine table carries the engine's entries and the effect kinds its transactions emit", () => {
     // The pure seams are called here; the worker seams are checked from their text above: the
-    // Worker's types are not part of this test's program (plan 1.3, mechanism 1).
-    expect(engineTable().entries.size).toBe(0);
-    expect(engineTable().effects.size).toBe(0);
+    // Worker's types are not part of this test's program (plan 1.3, mechanism 1). The entry and
+    // effect names are the internal contract `src/worker/trunk/trunk-do.ts` dispatches on.
+    expect([...engineTable().entries.keys()].sort()).toEqual(
+      ["open_attempt", "owner", "push_ok", "push_result", "restart", "stop", "sync", "tick", "tool", "triage"].sort(),
+    );
+    expect([...engineTable().effects].sort()).toEqual(["events", "push"]);
     // The Floor's registry is filled since track 1F: floor-shell registers its views, sheets and keys.
     expect(registry().entries.size).toBeGreaterThan(0);
   });

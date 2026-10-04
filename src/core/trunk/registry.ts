@@ -24,7 +24,8 @@ import type {
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
-import { event } from "./events.ts";
+import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { buildPack } from "../git/pack.ts";
 import { openAttempt, type OpenArgs } from "./intents.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
@@ -59,7 +60,13 @@ const bool = (v: unknown): boolean => v === 1 || v === true || v === "1";
 export function createPool(
   sql: Sql,
   files: Record<string, string>,
-  opts: PoolOptions & { summary_only?: boolean; synthetic?: boolean } = {},
+  opts: PoolOptions & {
+    pool_id?: string;
+    summary_only?: boolean;
+    synthetic?: boolean;
+    remote?: string;
+    request_id?: string;
+  } = {},
 ): Pool {
   applySchema(sql);
   const pool = emptyPool(sql, opts);
@@ -67,19 +74,26 @@ export function createPool(
   sql.transaction(() => {
     metaSet(sql, "schema_version", SCHEMA_VERSION);
     metaSet(sql, "hash_version", HASH_VERSION);
-    metaSet(sql, "pool_id", pool.meta.get("pool_id") ?? "pool");
+    metaSet(sql, "pool_id", opts.pool_id ?? pool.meta.get("pool_id") ?? "pool");
     metaSet(sql, "head_seq", "0");
     metaSet(sql, "head_commit", seed.oid);
     metaSet(sql, "head_tree", "");
     metaSet(sql, "notes_commit", "");
     metaSet(sql, "green_seq", "0");
     metaSet(sql, "green_commit", "");
+    metaSet(sql, "landed_seq", "0");
+    // SE19: the seed is what `main` means before the first landing — `landed_commit` carries it.
+    metaSet(sql, "landed_commit", seed.oid);
     metaSet(sql, "pool_state", "ready");
     metaSet(sql, "next_batch_id", "1");
     metaSet(sql, "next_event_n", "1");
-    metaSet(sql, "epoch", "0");
+    // EV2: source epochs count from 1 — the Floor rejects `epoch < 1`.
+    metaSet(sql, "epoch", "1");
     metaSet(sql, "summary_only", opts.summary_only === true ? "1" : "0");
     metaSet(sql, "synthetic", opts.synthetic === true ? "1" : "0");
+    metaSet(sql, "remote", opts.remote ?? "");
+    metaSet(sql, "real_agents", "0");
+    if (opts.request_id !== undefined) metaSet(sql, "create_request_id", opts.request_id);
     for (const [path, content] of Object.entries(files)) {
       sql.exec(
         "INSERT INTO files (path, mode, oid, content, parse_state, changed_seq) VALUES (?, '100644', ?, ?, 'ok', 0)",
@@ -87,12 +101,32 @@ export function createPool(
         blobId(utf8(content)),
         utf8(content),
       );
+      pool.files.set(path, content);
+      pool.modes.set(path, "100644");
       sql.exec(
         "INSERT OR REPLACE INTO blobs (oid, content, seq) VALUES (?, ?, 0)",
         blobId(utf8(content)),
         utf8(content),
       );
     }
+    // EM1: `pool.state` is event 1 (`head_seq` 0), `pool.files` follows with the seed tree.
+    pool.meta = metaAll(sql);
+    pool.eventCounter = 1;
+    emitPoolState(pool);
+    emitPoolFiles(pool);
+    // The seed lands on Artifacts like every commit (PL1, gap 3): batch 0 of the outbox pushes
+    // `main` from nothing to the seed commit. Its pack — the seed's objects — is stored with the
+    // row, so the bytes survive a restart of the object (LP6).
+    const pack = buildPack([...pool.objects.values()]);
+    sql.exec(
+      `INSERT INTO outbox (batch_id, state, first_seq, last_seq, old_main, new_main, old_notes, new_notes,
+         tries, rejects, next_try, last_error, created_at, pushed_at)
+       VALUES (0, 'pending', 0, 0, '', ?, '', '', 0, 0, NULL, NULL, ?, NULL)`,
+      seed.oid,
+      pool.now(),
+    );
+    sql.exec("INSERT INTO outbox_chunks (batch_id, i, bytes) VALUES (0, 0, ?)", pack);
+    metaSet(sql, "next_event_n", String(pool.eventCounter));
   });
   return openPool(sql, opts);
 }
@@ -221,6 +255,19 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     (str(ob.state) === "pending" || str(ob.state) === "notes_pending" || str(ob.state) === "diverged")
   ) {
     pool.outbox = outboxFromRow(ob);
+    const chunks = sql
+      .exec("SELECT bytes FROM outbox_chunks WHERE batch_id = ? ORDER BY i", pool.outbox.batch_id)
+      .toArray();
+    if (chunks.length > 0) {
+      const parts = chunks.map((c) => (c.bytes instanceof Uint8Array ? c.bytes : utf8(String(c.bytes))));
+      const pack = new Uint8Array(parts.reduce((n, b) => n + b.byteLength, 0));
+      let off = 0;
+      for (const part of parts) {
+        pack.set(part, off);
+        off += part.byteLength;
+      }
+      pool.outboxPack = pack;
+    }
   }
   // undo requests: the queue plus the log of completed ones
   for (const row of sql.exec("SELECT * FROM undo_requests").toArray()) {
@@ -258,6 +305,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     landings: [],
     cards: [],
     outbox: null,
+    outboxPack: null,
     undoQueue: [],
     order: 0,
     out: beginTrace(),
@@ -845,6 +893,18 @@ export function persist(pool: Pool): void {
     sql.exec("DELETE FROM outbox");
     sql.exec("DELETE FROM outbox_chunks");
     if (pool.outbox !== null) {
+      const pack = pool.outboxPack;
+      if (pack !== null && pack.byteLength > 0) {
+        const CHUNK = 64 * 1024;
+        for (let i = 0; i * CHUNK < pack.byteLength; i += 1) {
+          sql.exec(
+            "INSERT INTO outbox_chunks (batch_id, i, bytes) VALUES (?, ?, ?)",
+            pool.outbox.batch_id,
+            i,
+            pack.subarray(i * CHUNK, (i + 1) * CHUNK),
+          );
+        }
+      }
       const o = pool.outbox;
       sql.exec(
         `INSERT INTO outbox (batch_id, state, first_seq, last_seq, old_main, new_main, old_notes, new_notes, tries, rejects, next_try, last_error, created_at, pushed_at)
@@ -938,7 +998,13 @@ export class Trunk {
   static create(
     sql: Sql,
     files: Record<string, string>,
-    opts: PoolOptions & { summary_only?: boolean; synthetic?: boolean } = {},
+    opts: PoolOptions & {
+      pool_id?: string;
+      summary_only?: boolean;
+      synthetic?: boolean;
+      remote?: string;
+      request_id?: string;
+    } = {},
   ): Trunk {
     return new Trunk(createPool(sql, files, opts));
   }

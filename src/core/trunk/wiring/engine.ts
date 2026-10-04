@@ -11,15 +11,25 @@
 import type { EngineTable } from "../engine.ts";
 import type { Trunk } from "../registry.ts";
 import type { ToolRequest } from "../../../protocol/tools.ts";
+import type { TrunkOpenAttemptRequest } from "../../../protocol/internal.ts";
 
-export function wire(_table: EngineTable): void {
-  // Empty while the Slice-0 arch gate stands (see the file comment).
+export function wire(table: EngineTable): void {
+  wireEngineEntries(table);
 }
 
 /** The engine lane's entries, ready to register into `table` (9.1, 9.4, 9.8, 10.3, 12.4). */
 export function wireEngineEntries(table: EngineTable): void {
   const trunk = (ctx: unknown): Trunk => ctx as Trunk;
   // The seven tools of 01-core.md 4.3, reached through one entry (TA1-TA5 in the tool envelope).
+  // The launcher's `open_attempt` (SWR2): creates the intent + attempt, emitting `intent.created`,
+  // `pool.state` (EM1a on the first synthetic) and `attempt.opened`. Idempotent by attempt id (9.8).
+  table.entries.set("open_attempt", (input, ctx) => {
+    const req = input as TrunkOpenAttemptRequest;
+    const t = trunk(ctx);
+    const already = t.pool.attempts.has(req.attempt_id);
+    const a = t.openAttempt(req.attempt_id, req);
+    return { ok: true, attempt_id: a.id, change_id: a.change_id, intent_id: a.intent_id, already };
+  });
   table.entries.set("tool", (input, ctx) => trunk(ctx).tool(input as ToolRequest));
   // The non-tool calls of 9.1: sync (T12), stop (T20), tick (9.4), the push steps (9.8),
   // triage (7.3), restart (TR6) and the owner actions (10.3).
@@ -42,7 +52,8 @@ export function wireEngineEntries(table: EngineTable): void {
   });
   table.entries.set("restart", (input, ctx) => trunk(ctx).restart(input as Parameters<Trunk["restart"]>[0]));
   table.entries.set("owner", (input, ctx) => trunk(ctx).owner(input as Parameters<Trunk["owner"]>[0]));
-  // The effects the worker runs after a transaction (12.4): event delivery and the push outbox.
-  table.effects.add("events.flush");
-  table.effects.add("outbox.push");
+  // The effects the worker runs after a transaction (12.4): the EV2 event delivery and the LP6
+  // push outbox — the kinds `src/worker/trunk/effects.ts` registers handlers under.
+  table.effects.add("events");
+  table.effects.add("push");
 }

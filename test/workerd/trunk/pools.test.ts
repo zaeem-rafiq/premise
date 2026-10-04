@@ -53,7 +53,9 @@ describe("pool creation in workerd", () => {
     const after = (await worker.trunk("tp1").state()) as { events_out: unknown[] };
     expect(after.events_out).toHaveLength(0);
     const floor = (await worker.floor("tp1").state()) as { n: number; pool: { state: string } };
-    expect(floor.n).toBe(2); // pool.state then pool.files (EM1)
+    // pool.state then pool.files (EM1) — more follow if the seed's push retries against the
+    // unreachable remote (LP5a), but the first two are what EM1 requires.
+    expect(floor.n).toBeGreaterThanOrEqual(2);
     expect(floor.pool.state).toBe("ready");
 
     const socket = await worker.stream("tp1");
@@ -100,12 +102,19 @@ describe("pool creation in workerd", () => {
     );
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ ok: true });
-    // The stored record is the first one's — summary_only stays as created.
+    // The stored record is the first one's — summary_only stays as created, and the stream still
+    // holds exactly one pool.state and one pool.files: the duplicate emitted none (9.8). Other
+    // rows (the seed's push.retry of LP5a, against the unreachable remote) are not the create's.
     const state = (await worker.trunk("tp3").state()) as { meta: Record<string, string> };
     expect(state.meta.summary_only).toBe("0");
-    // The Floor still holds only the first creation's two events.
-    const floor = (await worker.floor("tp3").state()) as { n: number };
-    expect(floor.n).toBe(2);
+    const replay = await worker.floor("tp3").fetch("/api/pools/tp3/replay.ndjson");
+    const types = (await replay.text())
+      .trim()
+      .split("\n")
+      .slice(1)
+      .map((line) => (JSON.parse(line) as { type: string }).type);
+    expect(types.filter((type) => type === "pool.state")).toHaveLength(1);
+    expect(types.filter((type) => type === "pool.files")).toHaveLength(1);
     // A different request_id on a live pool is refused.
     const conflict = await worker.fetch(
       "/api/pools",

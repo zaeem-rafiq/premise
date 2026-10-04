@@ -33,7 +33,7 @@
     "dev": "npm run build && wrangler dev --port 8787",
     "deploy:test": "npm run check && wrangler deploy --env test",
     "deploy": "npm run check && wrangler deploy --env=\"\"",
-    "pool:create": "node scripts/ops/not-built.ts pool:create 'Slice 1'",
+    "pool:create": "node scripts/ops/pool-create.ts",
     "measure:models": "node scripts/measure/models.ts",
     "soak": "node scripts/ops/not-built.ts soak 'Slice 8'",
     "calibrate:clef": "node scripts/ops/not-built.ts calibrate:clef 'Slice 15'",

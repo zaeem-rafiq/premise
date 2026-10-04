@@ -46,6 +46,13 @@ import type {
   ToolRequest,
   ToolResponse,
 } from "../../protocol/tools.ts";
+import type {
+  AgentOpenRequest,
+  AgentPushRequest,
+  AgentPushResponse,
+  AgentReleaseRequest,
+  AgentReleaseResponse,
+} from "../../protocol/internal.ts";
 import {
   applySchema,
   inboxHns,
@@ -77,25 +84,15 @@ import {
   type TrunkTransport,
 } from "./trunk-client.ts";
 import { ScriptedDriver, scriptedHeadsUpForModel, type Script } from "./scripted-driver.ts";
+import { PatternDriver } from "./pattern-driver.ts";
+import { patternById } from "../../swarm/pattern.ts";
 
-// What a pool's launcher POSTs to the Agent's /open (SW4; the swarm lane's
-// launch call carries the same fields). `trunk_url` points the Trunk client
-// at an HTTP endpoint instead of the Trunk Durable Object; tests use it for
-// a local fake that follows src/protocol/tools.ts.
-export type AgentOpenRequest = {
-  attempt_id: string;
-  intent_id: string;
-  change_id: string;
-  pool_id: string;
-  intent_text: string;
-  agent_kind: "real" | "synthetic";
-  model: string | null;
-  revision: number;
-  script?: Script;
-  trunk_url?: string;
-};
-
-type PushRequest = { attempt_id: string; heads_ups: HeadsUp[] };
+// What a pool's launcher POSTs to the Agent's /open is `AgentOpenRequest` of
+// src/protocol/internal.ts (SW4; the swarm lane's launch call carries the same
+// fields). `trunk_url` points the Trunk client at an HTTP endpoint instead of
+// the Trunk Durable Object; tests use it for a local fake that follows
+// src/protocol/tools.ts.
+type PushRequest = AgentPushRequest;
 
 type JournalRequest = { call: "tool"; request: ToolRequest };
 
@@ -158,8 +155,24 @@ export class Agent extends DurableObject<Env> {
         ? durableObjectTransport(this.env.TRUNK, this.#meta("pool_id") ?? "")
         : urlTransport(trunk_url);
     this.#trunk = new TrunkCalls(transport, attempt_id);
+    const pattern = this.#meta("pattern");
     const script = this.#meta("script");
-    if (script !== null) this.#driver = new ScriptedDriver(JSON.parse(script) as Script);
+    if (pattern !== null) {
+      const p = patternById(pattern);
+      if (p !== undefined) {
+        const think = JSON.parse(this.#meta("think_ms") ?? "[0,0]") as [number, number];
+        this.#driver = new PatternDriver(p, {
+          seed: this.#int("seed"),
+          agent_n: this.#int("agent_n"),
+          hold: this.#meta("hold") === "1",
+          think_ms: Array.isArray(think) && think.length === 2 ? [think[0] ?? 0, think[1] ?? 0] : [0, 0],
+          released: () => metaGet(this.#sql, "released") === "1",
+        });
+      }
+    }
+    if (this.#driver === null && script !== null) {
+      this.#driver = new ScriptedDriver(JSON.parse(script) as Script);
+    }
   }
 
   #secrets(): string[] {
@@ -199,6 +212,8 @@ export class Agent extends DurableObject<Env> {
           return await this.#open(body);
         case "/push":
           return await this.#push(body);
+        case "/release":
+          return await this.#release(body);
         case "/resume":
           return await this.#resume(body);
         case "/stop":
@@ -226,24 +241,44 @@ export class Agent extends DurableObject<Env> {
 
   async #open(body: unknown): Promise<Response> {
     if (!isRecord(body)) return invalid("an open request object is required");
-    for (const k of ["attempt_id", "intent_id", "change_id", "pool_id"] as const) {
+    // The launcher's shape names the pool `pool`; the test/debug shape names it `pool_id`.
+    const pool_id =
+      typeof body.pool_id === "string" && body.pool_id !== ""
+        ? body.pool_id
+        : typeof body.pool === "string"
+          ? body.pool
+          : "";
+    for (const k of ["attempt_id", "intent_id", "change_id"] as const) {
       if (typeof body[k] !== "string" || body[k] === "") return invalid(`${k} is required`);
     }
-    if (body.agent_kind !== "synthetic") {
+    if (pool_id === "") return invalid("pool_id is required");
+    if (body.agent_kind !== undefined && body.agent_kind !== "synthetic") {
       // Real agents arrive with the model driver (the loop track); the
       // scripted path is the only one Slice 1 builds.
       return notBuilt();
     }
-    if (!isRecord(body.script) || !Array.isArray(body.script.steps) || !Array.isArray(body.script.truth)) {
-      return invalid("a synthetic attempt requires script.steps and script.truth");
+    // Two driver carries: `script` (the canned-steps shape of the lane's tests) or `pattern` +
+    // `seed` + `agent_n` (the Swarm launcher's SWR2 shape — the pattern is the driver).
+    const hasScript = isRecord(body.script) && Array.isArray(body.script.steps) && Array.isArray(body.script.truth);
+    const pattern = typeof body.pattern === "string" ? patternById(body.pattern) : undefined;
+    if (!hasScript && pattern === undefined) {
+      return invalid("a synthetic attempt requires script.steps and script.truth, or a known pattern");
     }
 
     const existing = this.#meta("attempt_id");
     if (existing !== null) {
-      return existing === body.attempt_id ? json({ ok: true }) : json({ ok: false, error: "already_open" }, 409);
+      return existing === body.attempt_id
+        ? json({ ok: true, already: true })
+        : json({ ok: false, error: "already_open" }, 409);
     }
 
-    const script = body.script as Script;
+    const script = hasScript
+      ? (body.script as Script)
+      : {
+          pattern: pattern!.id,
+          truth: Array.isArray(body.truth) ? (body.truth as string[]) : [...pattern!.truth],
+          steps: [], // unused — the PatternDriver owns the steps; `script` meta stays unset.
+        };
     const now = Date.now();
     const started = typeof body.started_at === "number" ? body.started_at : now;
     this.#sql.transaction(() => {
@@ -251,7 +286,7 @@ export class Agent extends DurableObject<Env> {
         attempt_id: body.attempt_id as string,
         intent_id: body.intent_id as string,
         change_id: body.change_id as string,
-        pool_id: body.pool_id as string,
+        pool_id,
         intent_text: redact(String(body.intent_text ?? ""), this.#secrets()),
         agent_kind: "synthetic",
         model: body.model === null || body.model === undefined ? "" : String(body.model),
@@ -273,12 +308,20 @@ export class Agent extends DurableObject<Env> {
         token_limit: MAX_ATTEMPT_TOKENS,
         usd_limit: MAX_ATTEMPT_USD,
         truth: JSON.stringify(script.truth),
-        script: JSON.stringify(script),
+        released: "0",
         driver_state: "null",
         driver_last: "null",
         sync_needed: "0",
         resume_show: "0",
       };
+      if (hasScript) init.script = JSON.stringify(body.script);
+      if (pattern !== undefined) {
+        init.pattern = pattern.id;
+        init.seed = Number(body.seed ?? 0);
+        init.agent_n = Number(body.agent_n ?? 0);
+        init.hold = body.hold === true ? "1" : "0";
+        init.think_ms = JSON.stringify(Array.isArray(body.think_ms) ? body.think_ms : [0, 0]);
+      }
       if (typeof body.trunk_url === "string") init.trunk_url = body.trunk_url;
       for (const [k, v] of Object.entries(init)) metaSet(this.#sql, k, v);
       timerPut(this.#sql, "watchdog", "main", now + AGENT_WATCHDOG_MS);
@@ -301,6 +344,20 @@ export class Agent extends DurableObject<Env> {
       inbox.receive(this.#sql, heads_ups, Date.now());
     });
     if (heads_ups.some((hu) => hu.wake) && !TERMINAL_STATES.has(this.#meta("state") as AttemptState)) {
+      this.ctx.waitUntil(this.#run());
+    }
+    return json({ ok: true });
+  }
+
+  // -- release: the launcher's SWR3 (a held scripted agent may now call submit) --
+
+  async #release(body: unknown): Promise<Response> {
+    if (!isRecord(body)) return invalid("a release request object is required");
+    const stored = this.#meta("attempt_id");
+    if (stored === null || stored !== body.attempt_id) return invalid("attempt is not open");
+    if (this.#meta("released") === "1") return json({ ok: true, already: true });
+    this.#set("released", "1");
+    if (!TERMINAL_STATES.has(this.#meta("state") as AttemptState)) {
       this.ctx.waitUntil(this.#run());
     }
     return json({ ok: true });
@@ -459,9 +516,11 @@ export class Agent extends DurableObject<Env> {
   }
 
   // The heads-up run is shown in one `user` transcript row (SP5), which
-  // advances shown_hn and hands the heads-ups to the driver as its next last.
+  // advances shown_hn and hands the heads-ups to the driver as its next last. `raw_heads_ups`
+  // rides beside the model view — a `PatternDriver` consumes the `HeadsUp` shape itself.
   #showHeadsUps(hns: number[]): void {
-    const hus = inbox.bodies(this.#sql, hns).map((hu) => scriptedHeadsUpForModel(hu));
+    const raw = inbox.bodies(this.#sql, hns);
+    const hus = raw.map((hu) => scriptedHeadsUpForModel(hu));
     const step = this.#int("step") + 1;
     const now = Date.now();
     this.#sql.transaction(() => {
@@ -480,7 +539,7 @@ export class Agent extends DurableObject<Env> {
       inbox.markShown(this.#sql, hns, step);
       this.#set("step", step);
       if (hns.length > 0) this.#set("shown_hn", Math.max(...hns));
-      this.#set("driver_last", JSON.stringify({ heads_ups: hus }));
+      this.#set("driver_last", JSON.stringify({ heads_ups: hus, raw_heads_ups: raw }));
       this.#set("resume_show", "0");
     });
   }
@@ -536,9 +595,13 @@ export class Agent extends DurableObject<Env> {
     finishCall(this.#sql, journal.call_id, () => {
       inbox.receive(this.#sql, response.heads_ups ?? [], now);
       const run = inbox.next(this.#sql, shownBefore).show;
-      const hus = inbox.bodies(this.#sql, run).map((hu) => scriptedHeadsUpForModel(hu));
-      const msg: ModelToolMessage = {};
-      if (hus.length > 0) msg.heads_ups = hus;
+      const raw = inbox.bodies(this.#sql, run);
+      const hus = raw.map((hu) => scriptedHeadsUpForModel(hu));
+      const msg: ModelToolMessage & { raw_heads_ups?: HeadsUp[] } = {};
+      if (hus.length > 0) {
+        msg.heads_ups = hus;
+        msg.raw_heads_ups = raw;
+      }
       if (response.ok) {
         if (response.result !== undefined) msg.result = response.result;
       } else {

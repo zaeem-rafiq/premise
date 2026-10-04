@@ -2,6 +2,15 @@
 // (10.2) and submit. Truth list `bounce`, `step`, `wander`; on a `repair` (E2) on one of them it
 // reads the entity again and acknowledges "still valid". Every other heads-up takes the default
 // answers of SW6; a held agent waits before its first `submit` (SW8, SWR3).
+//
+// A `write` or `submit` sent while an unshown heads-up waits is refused `heads_up_first` (TA3):
+// the operation is NOT recorded, and the heads-up arrives on that answer. Queued re-reads keep
+// their slot until confirmed, so a refused one is re-issued rather than skipped.
+//
+// Points where the row is silent, answered from the same-file row's spirit and SW6:
+// `read_first` on the creature write — the name was taken between the `list` and the `write` —
+// re-lists `creatures/` and writes the next free name; a dropped write does the same (F1/OP5):
+// relist, rewrite the next free name on the current source, then acknowledge.
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
@@ -32,7 +41,7 @@ const STEP_WRITE = 5;
 const STEP_SUBMIT = 6;
 
 /** What the pattern asked with its last issued call, so the next turn can consume the answer. */
-type Issued = "none" | "script" | "reread" | "rewrite" | "submit";
+type Issued = "none" | "script" | "relist" | "reread" | "submit";
 
 type AddPlainState = {
   issued: Issued;
@@ -42,8 +51,8 @@ type AddPlainState = {
   colour: string | null;
   speed: number | null;
   seen_hns: number[]; // heads-ups already answered (re-pushes arrive again, HU5)
-  rereads: string[]; // entity keys "path#name" to read again (E2 repairs)
-  rewrite: boolean; // a dropped write to apply again (SW6)
+  rereads: string[]; // entity keys "path#name" to read again (E2 repairs); the head is in flight
+  relist: boolean; // the creature name raced a landing: list again, then write the next free name
   acks: Array<{ hn: number; statement: string }>; // pending `acknowledge` entries for the submit
   released: boolean;
   withdrawn: boolean;
@@ -60,7 +69,7 @@ function initialState(): AddPlainState {
     speed: null,
     seen_hns: [],
     rereads: [],
-    rewrite: false,
+    relist: false,
     acks: [],
     released: false,
     withdrawn: false,
@@ -71,8 +80,9 @@ function initialState(): AddPlainState {
 /**
  * SW6 and the pattern's own row (02 10.3): what a new heads-up costs.
  * `repair` (E2) on a truth entity: read it again, acknowledge "still valid".
- * `repair` with a dropped operation: apply the write again, then acknowledge.
- * `confirm` or any other `repair`: acknowledge, no edit ("not affected"). `info`: nothing.
+ * `repair` with a dropped operation: the write is gone — re-list, write the next free name
+ * on the current source, then acknowledge. `confirm` or any other `repair`: acknowledge, no
+ * edit ("not affected"). `info`: nothing.
  */
 function answerHeadsUp(state: AddPlainState, headsUp: HeadsUp): void {
   if (state.seen_hns.includes(headsUp.hn)) return;
@@ -94,7 +104,9 @@ function answerHeadsUp(state: AddPlainState, headsUp: HeadsUp): void {
     }
     if (onTruth) statement = "still valid";
     if (headsUp.dropped_ops.length > 0) {
-      state.rewrite = true;
+      // The dropped op is the creature write (the only write the pattern makes).
+      state.name = null;
+      state.relist = true;
       statement = "reapplied the edit";
     }
   }
@@ -112,7 +124,13 @@ function consumeLast(state: AddPlainState, turn: PatternTurn): void {
     if (code === "attempt_closed" || code === "attempt_unknown") {
       state.done = true;
     } else if (code === "heads_up_first") {
-      // The submit was refused for unseen heads-ups; they arrive and are answered, then it retries.
+      // TA3: refused without being recorded; the heads-ups ride this answer and the step is
+      // decided again below, never replayed.
+    } else if (code === "read_first" && issued === "script" && state.step === STEP_WRITE) {
+      // The creature name was taken between `list` and `write`: re-list, then write the
+      // next free name (the same-file row's answer, generalized).
+      state.relist = true;
+      state.name = null;
     } else {
       // SW6: a call answering `limit_reached`, `no_match` or `ambiguous`, and any other failure the
       // script cannot fix, ends the attempt with `stop` `withdrawn`.
@@ -123,6 +141,17 @@ function consumeLast(state: AddPlainState, turn: PatternTurn): void {
   if (issued === "script") {
     if (state.step === STEP_LIST) state.entries = fileNamesOf(last.result);
     state.step += 1;
+    return;
+  }
+  if (issued === "relist") {
+    state.entries = fileNamesOf(last.result);
+    state.name = null;
+    state.step = STEP_WRITE;
+    state.relist = false;
+    return;
+  }
+  if (issued === "reread") {
+    state.rereads.shift(); // the confirmed re-read leaves the queue
     return;
   }
   if (issued === "submit") {
@@ -144,8 +173,6 @@ function consumeLast(state: AddPlainState, turn: PatternTurn): void {
       state.done = true;
     }
   }
-  // "reread" and "rewrite" answers need no bookkeeping: the acknowledgement was queued at
-  // schedule time.
 }
 
 export const ADD_PLAIN: Pattern = {
@@ -161,7 +188,7 @@ export const ADD_PLAIN: Pattern = {
     for (const headsUp of turn.heads_ups) answerHeadsUp(state, headsUp);
 
     // A pull-back (GA3) or a landed-time answer reopens work after a successful submit.
-    if (state.done && (state.acks.length > 0 || state.rereads.length > 0 || state.rewrite)) {
+    if (state.done && (state.acks.length > 0 || state.rereads.length > 0 || state.relist)) {
       state.done = false;
       state.step = STEP_SUBMIT;
     }
@@ -171,19 +198,13 @@ export const ADD_PLAIN: Pattern = {
       return { kind: "stop", reason, state };
     }
     if (state.rereads.length > 0) {
-      const key = state.rereads.shift() as string;
+      const key = state.rereads[0] as string;
       state.issued = "reread";
       return { kind: "tool", tool: "read", args: readArgsOf(key), state };
     }
-    if (state.rewrite && state.name !== null) {
-      state.rewrite = false;
-      state.issued = "rewrite";
-      return {
-        kind: "tool",
-        tool: "write",
-        args: { path: state.name, content: tPlain(state.colour as string, state.speed as number) },
-        state,
-      };
+    if (state.relist) {
+      state.issued = "relist";
+      return { kind: "tool", tool: "list", args: { path: "creatures/" }, state };
     }
     if (state.done) return { kind: "wait", state };
 

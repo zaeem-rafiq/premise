@@ -182,6 +182,9 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
   it("SW6: a dropped write is applied again, then acknowledged", () => {
     const inject = new Map([[6, [headsUp(1, { result: "repair", rule: "F1", dropped: true })]]]);
     const { calls } = run({ rand: agentRandom(7, 0), respond: seedRespond, inject });
+    // F1 + OP5 drops the write because its name was taken: the pattern re-lists
+    // `creatures/` and writes to the next free name (the mock's list leaves s0004 free),
+    // never replaying the dropped call's arguments.
     expect(calls.map((call) => call.tool)).toEqual([
       "list",
       "read",
@@ -189,12 +192,14 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
       "read",
       "read",
       "write",
+      "list",
       "write",
       "submit",
     ]);
-    expect((calls[6] as Call).tool).toBe("write");
-    expect(((calls[6] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
-    expect((calls[7] as Call).args).toEqual({
+    expect((calls[6] as Call).tool).toBe("list");
+    expect((calls[7] as Call).tool).toBe("write");
+    expect(((calls[7] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
+    expect((calls[8] as Call).args).toEqual({
       summary: "add a creature",
       acknowledge: [1],
       statement: "reapplied the edit",

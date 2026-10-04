@@ -118,7 +118,8 @@ function consumeLast(state: CosmeticState, turn: PatternTurn): void {
     if (code === "attempt_closed" || code === "attempt_unknown") {
       state.done = true;
     } else if (code === "heads_up_first") {
-      // The submit was refused for unseen heads-ups; they arrive and are answered, then it retries.
+      // TA3: refused without being recorded; the heads-ups ride this answer and the step is
+      // decided again below, never replayed.
     } else {
       // SW6: a call answering `limit_reached`, `no_match` or `ambiguous`, and any other failure the
       // script cannot fix, ends the attempt with `stop` `withdrawn`.
@@ -128,6 +129,10 @@ function consumeLast(state: CosmeticState, turn: PatternTurn): void {
   }
   if (issued === "script") {
     state.step += 1;
+    return;
+  }
+  if (issued === "reapply") {
+    state.reapply = false; // confirmed
     return;
   }
   if (issued === "submit") {
@@ -175,7 +180,8 @@ export const COSMETIC: Pattern = {
       return { kind: "stop", reason, state };
     }
     if (state.reapply && state.own !== null) {
-      state.reapply = false;
+      // The flag clears only when the answer confirms the reapply: a `heads_up_first` refusal
+      // (TA3, the operation is not recorded) re-issues it instead of dropping it.
       state.issued = "reapply";
       return {
         kind: "tool",

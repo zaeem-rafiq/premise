@@ -57,29 +57,29 @@ describe("4.4 runClock", () => {
 });
 
 describe("AC3 (FL3): landing.accepted with no landing.landed", () => {
-  // The tracer's event 22 is `landing.accepted` seq 1; its `landing.landed` is event 25.
-  const accepted = stream("tracer", 22);
+  // The tracer's event 23 is `landing.accepted` seq 1; its `landing.landed` is event 26.
+  const accepted = stream("tracer", 23);
   const attempt = accepted.attempts["a_T"]!;
   const landing = accepted.landings[1]!;
 
   it("the attempt shows status.accepted - the copy id for 'Landing…'", () => {
     expect(statusWordId(attempt, accepted)).toBe("status.accepted");
     expect(text("status.accepted")).toBe("Landing…");
-    // The same after the attempt.state event to `accepted` (n=23).
-    const state = stream("tracer", 23);
+    // The same after the attempt.state event to `accepted` (n=24).
+    const state = stream("tracer", 24);
     expect(statusWordId(state.attempts["a_T"]!, state)).toBe("status.accepted");
   });
 
   it("an attempt.state to `landed` before landing.landed still says Landing…", () => {
     // FL3 pins the word to the landing event, not to the attempt's own state word.
-    const state = stream("tracer", 24); // landed_seq set, landing.landed not yet arrived
+    const state = stream("tracer", 25); // landed_seq set, landing.landed not yet arrived
     const attempt = state.attempts["a_T"]!;
     expect(statusWordId(attempt, state)).not.toBe("status.landed");
   });
 
   it("the Landed counter does not move: counters.landed_changes stays 0", () => {
     expect(accepted.counters.landed_changes).toBe(0);
-    const landed = stream("tracer", 25); // n=25: landing.landed seq 1
+    const landed = stream("tracer", 26); // n=26: landing.landed seq 1
     expect(landed.counters.landed_changes).toBe(1);
     expect(statusWordId(landed.attempts["a_T"]!, landed)).toBe("status.landed");
   });
@@ -87,14 +87,14 @@ describe("AC3 (FL3): landing.accepted with no landing.landed", () => {
   it("the pool frame's commit does not move: pool.landed_commit stays the seed's", () => {
     const seed = stream("tracer", 1).pool.landed_commit;
     expect(accepted.pool.landed_commit).toBe(seed);
-    const landed = stream("tracer", 25);
+    const landed = stream("tracer", 26);
     expect(landed.pool.landed_commit).not.toBe(seed);
   });
 
   it("the landing offers no Why card: landing.landed is null (whyOffered)", () => {
     expect(landing.digest).not.toBe(true);
     expect(whyOffered(landing)).toBe(false);
-    const landed = stream("tracer", 25);
+    const landed = stream("tracer", 26);
     expect(whyOffered(landed.landings[1]!)).toBe(true);
   });
 });
@@ -111,11 +111,11 @@ describe("4.4 sentBack / pushStalled / greenRed / quietPool", () => {
   });
 
   it("pushStalled only after PUSH_STALL_MS of pending push", () => {
-    const state = stream("tracer", 23); // landing.accepted at n=22 starts `push`
+    const state = stream("tracer", 24); // landing.accepted at n=23 starts `push`
     const first = state.push!.first_accepted_ts;
     expect(pushStalled(state, first + PUSH_STALL_MS)).toBe(false);
     expect(pushStalled(state, first + PUSH_STALL_MS + 1)).toBe(true);
-    expect(pushStalled(stream("tracer", 26), first + PUSH_STALL_MS + 1)).toBe(false); // batch.pushed n=26 clears `push`
+    expect(pushStalled(stream("tracer", 27), first + PUSH_STALL_MS + 1)).toBe(false); // batch.pushed n=27 clears `push`
   });
 
   it("greenRed: a confirmed failed check with no revert landed", () => {

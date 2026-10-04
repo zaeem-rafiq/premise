@@ -73,16 +73,16 @@ describe("03-floor 3.2: the collapsed attempt card on the tracer fixture", () =>
     expect(html).toContain("Waiting for you");
   });
 
-  it("event 23: accepted shows 'Landing…' before its landing.landed (AC3)", () => {
-    const state = stateAt(events, 23);
+  it("event 24: accepted shows 'Landing…' before its landing.landed (AC3)", () => {
+    const state = stateAt(events, 24);
     const html = cardHtml(state, must(state.attempts.a_T), true);
     expect(html).toContain("Landing…");
     expect(html).not.toContain(">Landed<");
     expect(html).toContain("Recorded by Trunk. Being pushed to main.");
   });
 
-  it("event 27: landed shows 'Landed' and 'On main as landing 1.'", () => {
-    const state = stateAt(events, 27);
+  it("event 28: landed shows 'Landed' and 'On main as landing 1.'", () => {
+    const state = stateAt(events, 28);
     const html = cardHtml(state, must(state.attempts.a_T), true);
     expect(html).toContain("Landed");
     expect(html).toContain("On main as landing 1.");

@@ -203,7 +203,8 @@ describe("tracer.ndjson", () => {
     expect(must(state.landings[1]).undone_by).toBe(2);
     expect(must(state.landings[2])).toMatchObject({ kind: "undo", request_id: "r_1" });
     expect(must(state.undo.r_1)).toMatchObject({ target_seq: 1, landing_seq: 2 });
-    expect(must(state.attempts.a_T)).toMatchObject({ reopened_by: "undo", revision: 2 });
+    // UN5a: the undo target's attempt stops (T18, "undone") — it is not reopened.
+    expect(must(state.attempts.a_T)).toMatchObject({ state: "stopped", stop_reason: "undone" });
   });
 
   it("pool.paused then a fresh pool.state returned the pool to ready", () => {

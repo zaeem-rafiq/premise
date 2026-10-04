@@ -21,7 +21,7 @@ import { landingConfirmed } from "../attempt-card/model.ts";
 import { AttemptCard } from "../attempt-card/attempt-card.tsx";
 import { changeName } from "../../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../../copy/format.ts";
-import { MAX_INTENT_CHARS } from "../../../protocol/constants.ts";
+import { IntentBox } from "../intent-box/intent-box.tsx";
 
 export type RailProps = {
   floor: FloorState;
@@ -38,18 +38,6 @@ export type RailProps = {
   /** Opens the attempt's card sheet (`attempt.open_card` on a held card). */
   onOpenCard: (cardId: string) => void;
 };
-
-function intentBlocker(floor: FloorState, mode: string, owner: boolean, cap: boolean): string | null {
-  if (mode === "replay") return "intent.replay";
-  if (!owner) return "intent.visitor";
-  if (floor.limits?.killed === true) return "intent.killed";
-  if (floor.pool.state === "paused") return "intent.paused";
-  if (floor.pool.state === "rebuilding") return "intent.rebuilding";
-  if (cap) return "intent.cap";
-  const queued = Object.values(floor.attempts).some((a) => a.state === "opened");
-  if (queued) return "intent.queue";
-  return null;
-}
 
 /** An attempt that still belongs to the Working tab: in flight (which counts `accepted`),
  * or `landed` while its `landing.landed` has not arrived — it reads "Landing…" too (FL3). */
@@ -82,9 +70,6 @@ export function Rail(props: RailProps) {
   const t = shell.t;
   const { floor } = props;
   const [tab, setTab] = useState<"working" | "landed" | "stopped">("working");
-  const [draft, setDraft] = useState("");
-
-  const blocker = intentBlocker(floor, props.mode, props.owner, props.capReached);
   const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
   const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped");
@@ -128,35 +113,7 @@ export function Rail(props: RailProps) {
 
   return (
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
-      <div className="intent-box">
-        <textarea
-          className="intent-field"
-          placeholder={t("intent.placeholder")}
-          maxLength={MAX_INTENT_CHARS}
-          value={draft}
-          disabled={blocker !== null}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-label={t("intent.placeholder")}
-        />
-        {blocker !== null ? (
-          <p className="intent-note">{t(blocker)}</p>
-        ) : (
-          <div className="intent-row">
-            <span className="intent-count">{t("intent.count", { n: draft.length, max: MAX_INTENT_CHARS })}</span>
-            <button
-              type="button"
-              className="primary"
-              disabled={draft.trim() === ""}
-              onClick={() => {
-                props.onSend(draft);
-                setDraft("");
-              }}
-            >
-              {t("intent.send")}
-            </button>
-          </div>
-        )}
-      </div>
+      <IntentBox floor={floor} mode={props.mode} owner={props.owner} capReached={props.capReached} />
 
       {tray.length > 0 && (
         <div className="tray" role="list">

@@ -49,9 +49,9 @@ describe("the Worker bundle in workerd, deployed with no OWNER_KEY", () => {
 
   // The Floor Durable Object is built since track 1E: its routes (`/api/pools/{pool}/stream`,
   // `/api/pools/{pool}/landings/{seq}/note`) are tested under test/workerd/floor/ and no longer answer
-  // not_built. A route leaves this list when its lane lands.
+  // not_built. So are the session and pool routes since track 1D (test/workerd/trunk/). A route leaves
+  // this list when its lane lands.
   it.each([
-    ["GET", "/api/session"], // the Worker route, unregistered
     ["GET", "/pool/x/main/"], // the app server
     ["GET", "/pool/x/main/world/energy.js"], // a pool file
   ])("%s %s is not built: 503 with the code not_built, never the page", async (method, path) => {
@@ -142,7 +142,9 @@ describe("the guards of SE1 to SE3 with OWNER_KEY configured", () => {
     expect(response.status).toBe(415);
   });
 
-  it("POST /api/pools with the right key reaches the unbuilt Worker route: 503 not_built", async () => {
+  // POST /api/pools is built since track 1D: with the right key it validates its arguments. Its
+  // behaviour is tested in test/workerd/trunk/pools.test.ts.
+  it("POST /api/pools with the right key and an empty body answers 400 invalid_args", async () => {
     const response = await worker.fetch("/api/pools", {
       method: "POST",
       headers: {
@@ -151,8 +153,8 @@ describe("the guards of SE1 to SE3 with OWNER_KEY configured", () => {
       },
       body: "{}",
     });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual(NOT_BUILT_BODY);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "invalid_args" } });
   });
 
   it("POST /api/kill with the right key reaches the stub gate: 503 not_built", async () => {

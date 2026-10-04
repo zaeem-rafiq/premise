@@ -1,0 +1,116 @@
+// The wiring the lanes left for this pass, on the real page:
+//  - the card sheet renders exactly once, through the registry's `sheet.card` entry and
+//    the shell's `SheetTarget` (the rail no longer draws it);
+//  - the tile menu's Who/Why entries are absent while those sheets are unregistered;
+//  - the self-test badge shows on the main frame;
+//  - `intent.queue` fills its `{max}` from `pool.max_real_agents` (FR26).
+
+import { expect, test } from "@playwright/test";
+import {
+  serveStream,
+  serveSession,
+  ev,
+  poolState,
+  intentCreated,
+  attemptOpened,
+  attemptState,
+  cardOpened,
+  choiceCard,
+  metrics,
+  limits,
+} from "../shell/stream.ts";
+
+const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><script>
+  var part = location.pathname.split("/")[3];
+  var v = (part === "main" || part === "green" || part === "plain") ? "c-live" : "c-" + part;
+  window.__st = null;
+  window.addEventListener("message", function (e) {
+    var d = e.data;
+    if (d && d.type === "advance") v = d.version;
+    if (d && d.type === "probe" && d.selftest === true) {
+      window.__st = { version: v, ok: true, failed: [] };
+    }
+  });
+  function beat() {
+    parent.postMessage({ type: "stats", source: part, version: v, seq: 1,
+      tick: 1, paused: false, kinds: {}, shown: 0, total: 0, swap: null, selftest: window.__st }, "*");
+  }
+  beat();
+  setInterval(beat, 200);
+</script>`;
+
+for (const size of [
+  { name: "stage", w: 1920, h: 1080 },
+  { name: "laptop", w: 1440, h: 900 },
+]) {
+  test.describe(`at ${size.name}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width: size.w, height: size.h });
+      await page.route("**/pool/**", (route) =>
+        route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
+      );
+    });
+
+    // (b) One place draws the card sheet: the shell's SheetTarget -> the registry's
+    // sheet.card binding. A tap on the tray's Open button or key N opens it; Esc closes.
+    test("the card sheet draws once, through sheet.card", async ({ page }) => {
+      await serveStream(page, [
+        poolState(1),
+        intentCreated(2),
+        attemptOpened(3),
+        attemptState(4, "a_1", "opened", "working"),
+        cardOpened(5, choiceCard("card_1", "push_rejected", "Land the change?")),
+      ]);
+      await serveSession(page, false);
+      await page.goto("/");
+      const startCard = page.locator(".start-card");
+      if (await startCard.isVisible()) {
+        await page.locator(".start-card button", { hasText: /look/i }).click();
+      }
+      await expect(page.locator(".tray")).toContainText("Land the change?");
+      await page.locator(".tray-row button", { hasText: "Open" }).click();
+      const sheet = page.locator(".card-sheet");
+      await expect(sheet).toHaveCount(1);
+      await expect(sheet).toContainText("Land the change?");
+      await sheet.getByRole("button", { name: /close|Close/ }).first().click();
+      await expect(sheet).toHaveCount(0);
+    });
+
+    // (a) The tile menu: the Who/Why sheets are not registered, so the shell passes no
+    // callbacks and the file tiles offer no menu at all - they are inert cells.
+    test("file tiles offer no menu while Who/Why sheets are unregistered", async ({ page }) => {
+      await page.goto("/replay/hero-c04");
+      await expect(page.locator(".tiles-grid .tile").first()).toBeVisible();
+      expect(await page.locator(".tiles-grid button.tile").count()).toBe(0);
+      await page.locator(".tiles-grid .tile", { hasText: "energy.js" }).click({ force: true });
+      await expect(page.locator(".tile-menu")).toHaveCount(0);
+      await expect(page.locator(".card-sheet")).toHaveCount(0);
+    });
+
+    // (a) The self-test badge on the main frame (CO25a).
+    test("the self-test badge shows on the pool frame", async ({ page }) => {
+      await page.goto("/replay/hero-c04");
+      await expect(page.locator(".pf-selftest")).toBeVisible();
+      await expect(page.locator(".pf-selftest")).toContainText(/Self-test/);
+    });
+
+    // (c) intent.queue's {max}: with every slot busy the note reads the pool's limit.
+    test("intent.queue names the pool's agent limit (FR26)", async ({ page }) => {
+      await serveStream(page, [
+        poolState(1, { real_agents: 6, max_real_agents: 6 }),
+        intentCreated(2),
+        attemptOpened(3),
+        attemptState(4, "a_1", "opened", "working"),
+        metrics(5),
+        limits(6, { spend: 1.0, cap: 40.0 }),
+      ]);
+      await serveSession(page, true);
+      await page.goto("/");
+      const startCard = page.locator(".start-card");
+      if (await startCard.isVisible()) {
+        await page.locator(".start-card button", { hasText: /look/i }).click();
+      }
+      await expect(page.locator(".intent-note")).toContainText("All 6 agent slots are busy");
+    });
+  });
+}

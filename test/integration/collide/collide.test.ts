@@ -347,31 +347,31 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
   });
 
   it("escape repro (X0, SW2, TA3): a held add-energy re-decides its refused write from the heads-up", () => {
-      // The 2026-10-04 incident on the real service: `add-energy` held before submit reads
-      // ENERGY_MAX = 100; `rescale-energy` lands in between. The X0 heads-up is `info`, so the
-      // Agent does not show it (HE2): the `write` the pattern had already decided with the old
-      // value is refused `heads_up_first` (TA3 — the operation is NOT recorded) and the
-      // heads-up rides that answer. The pattern must decide the step again with what the
-      // heads-up told it: threshold 0.3 x 1 = 0.3, and the SW2 oracle stays empty.
-      const sim = new SwarmSim(swarmFiles(), { seed: 7 });
-      const ae = sim.open("add-energy", { hold: true });
-      for (let i = 0; i < 5; i += 1) sim.step(ae); // list, GUIDE.md and the three entity reads
-      expect(sim.attempt(ae)?.opCount ?? 0).toBe(0);
+    // The 2026-10-04 incident on the real service: `add-energy` held before submit reads
+    // ENERGY_MAX = 100; `rescale-energy` lands in between. The X0 heads-up is `info`, so the
+    // Agent does not show it (HE2): the `write` the pattern had already decided with the old
+    // value is refused `heads_up_first` (TA3 — the operation is NOT recorded) and the
+    // heads-up rides that answer. The pattern must decide the step again with what the
+    // heads-up told it: threshold 0.3 x 1 = 0.3, and the SW2 oracle stays empty.
+    const sim = new SwarmSim(swarmFiles(), { seed: 7 });
+    const ae = sim.open("add-energy", { hold: true });
+    for (let i = 0; i < 5; i += 1) sim.step(ae); // list, GUIDE.md and the three entity reads
+    expect(sim.attempt(ae)?.opCount ?? 0).toBe(0);
 
-      const rescale = sim.open("rescale-energy");
-      drive(sim, rescale);
-      sim.land();
-      expect(sim.state(rescale)).toBe("landed");
+    const rescale = sim.open("rescale-energy");
+    drive(sim, rescale);
+    sim.land();
+    expect(sim.state(rescale)).toBe("landed");
 
-      const sent = sentTo(sim, ae);
-      expect(sent).toHaveLength(1);
-      expect(sent[0]?.result).toBe("info");
-      expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0" }]);
+    const sent = sentTo(sim, ae);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.result).toBe("info");
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0" }]);
 
-      sim.release(ae);
-      sim.settle();
-      expect(sim.state(ae)).toBe("landed");
-      expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
-      expect(sw2Escapes(sim.files())).toEqual([]);
+    sim.release(ae);
+    sim.settle();
+    expect(sim.state(ae)).toBe("landed");
+    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sw2Escapes(sim.files())).toEqual([]);
   });
 });

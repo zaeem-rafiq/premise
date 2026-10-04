@@ -262,8 +262,7 @@ export class SwarmSim {
    * `attempt_closed` answer learns the real state through a sync. */
   private sendStop(agent: AgentHandle, reason: string): void {
     const res = this.trunk.stop({ attempt_id: agent.id, reason }) as
-      | { ok: true; stop_reason: string; attempt?: { state: AttemptState } }
-      | { ok: false; error: string };
+      { ok: true; stop_reason: string; attempt?: { state: AttemptState } } | { ok: false; error: string };
     if (res.ok === true || (res as { error?: string }).error === "attempt_unknown") {
       agent.mirror = "stopped";
       return;

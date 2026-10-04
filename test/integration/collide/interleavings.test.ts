@@ -114,11 +114,16 @@ function isSpecGap(pa: string, pb: string, k: number): boolean {
 
 const GAP_RULE =
   'SW2: "the threshold number divided by ENERGY_MAX at head MUST be 0.3 … expected count ' +
-  "of escapes is 0\" — but D2 pins the `refs:` premise at the operation, so a referrer that " +
+  'of escapes is 0" — but D2 pins the `refs:` premise at the operation, so a referrer that ' +
   "landed before the rescale's replace can never be caught by QR1; the engine's answer " +
   "leaves escapes ['creatures/s0004.js']";
 
-function runInterleaving(pa: string, pb: string, k: number, hold: boolean): { sim: SwarmSim; a: AgentHandle; b: AgentHandle } {
+function runInterleaving(
+  pa: string,
+  pb: string,
+  k: number,
+  hold: boolean,
+): { sim: SwarmSim; a: AgentHandle; b: AgentHandle } {
   const sim = new SwarmSim(swarmFiles(), { seed: 7 });
   const a = sim.open(pa, { hold });
   for (let i = 0; i < k; i += 1) sim.step(a);

@@ -296,9 +296,7 @@ export function makeEnergyAdd(opts: AddEnergyOpts): Pattern {
         const threshold = opts.relative ? "ENERGY_MAX * 0.3" : thresholdText(state.v ?? 100);
         state.pending = threshold;
         state.issued = "script";
-        const content = opts.relative
-          ? tRelative(state.colour as string)
-          : tEnergy(state.colour as string, threshold);
+        const content = opts.relative ? tRelative(state.colour as string) : tEnergy(state.colour as string, threshold);
         return {
           kind: "tool",
           tool: "write",

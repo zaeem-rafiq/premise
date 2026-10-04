@@ -44,9 +44,16 @@ describe("event fields of 12.1, worked by hand (BP1)", () => {
     const re = sim.open("rescale-energy");
     drive(sim, re);
     // rescale-energy's first call is `read world/energy.js#ENERGY_MAX` (02-tidepool 10.3). A
-    // read pins the entity premise with `read`, so TA7 lists exactly that one premise.
+    // read pins the entity premise with `read`. The row then reads the `update` entity of
+    // every creature module `relied_on_by` names — on the swarm seed fish, minnow and
+    // turtle — so TA7 lists exactly those four premises.
     const recorded = sim.eventsOf("premise.recorded").filter((e) => e.attempt_id === re.id && e.tool === "read");
-    expect(recorded).toHaveLength(1);
+    expect(recorded.map((e) => (e.premise as { key: string }).key)).toEqual([
+      ENERGY_KEY,
+      "creatures/fish.js#update",
+      "creatures/minnow.js#update",
+      "creatures/turtle.js#update",
+    ]);
     expect(recorded[0]).toEqual(
       expect.objectContaining({
         src: "trunk",

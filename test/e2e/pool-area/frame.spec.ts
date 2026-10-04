@@ -226,15 +226,17 @@ test.describe("the pool frame component", () => {
     await expect(iframe).toHaveAttribute("src", `/pool/tidepool/${LANDED_1}/?seed=7`);
     // The next landing posts advance {version}, not probe, and the src stays put (RY17).
     await sendEvents(page, EVENTS.length - 1);
-    const frame = poolFrame(page);
+    // Re-resolve the frame inside the poll: a navigation mid-test invalidates a captured handle.
     await expect
       .poll(async () =>
-        frame?.evaluate(() =>
+        poolFrame(page)?.evaluate(() =>
           (window as never as { __log: { type: string; version?: string }[] }).__log.map((m) => m.type),
         ),
       )
       .toContain("advance");
-    const posts = await frame!.evaluate(() => (window as never as { __log: { type: string }[] }).__log);
+    const posts = await poolFrame(page)!.evaluate(
+      () => (window as never as { __log: { type: string }[] }).__log,
+    );
     expect(posts.every((m) => m.type !== "probe")).toBe(true);
     await expect(iframe).toHaveAttribute("src", `/pool/tidepool/${LANDED_1}/?seed=7`);
   });

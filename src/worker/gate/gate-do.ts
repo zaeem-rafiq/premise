@@ -44,6 +44,7 @@ import { SPEND_CAP_USD } from "../../protocol/constants.ts";
 import type { KillRequest } from "../../protocol/routes.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
+import { notBuilt } from "../not-built.ts";
 import { sqlOver } from "../sql-port.ts";
 import { deliverDue, nextRetryAt } from "./deliver.ts";
 import { pausePoolForOwner, resumePoolForOwner } from "./effects.ts";
@@ -236,7 +237,7 @@ export class ModelGate extends DurableObject<Env> {
         return json({ killed: this.#killed() });
       }
       if (request.method !== "POST") {
-        return json({ error: { code: "not_found" } }, 404);
+        return notBuilt();
       }
       let body: unknown = null;
       const raw = await request.text();
@@ -255,7 +256,7 @@ export class ModelGate extends DurableObject<Env> {
         return json({ ok: true });
       }
       const mapped = this.#callFor(pathname, body);
-      if (mapped === null) return json({ error: { code: "not_found" } }, 404);
+      if (mapped === null) return notBuilt();
       if (mapped.invalid) return json({ error: { code: "invalid_args" } }, 400);
       const now = Date.now();
       if (mapped.call === null) return json({ error: { code: "invalid_args" } }, 400);

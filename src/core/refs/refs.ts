@@ -648,11 +648,7 @@ export function referencesIn(nodes: readonly AstNode[]): {
           } else {
             visit(inner, scope);
           }
-        } else if (
-          isNode(nameNode) &&
-          nameNode.type === "JSXIdentifier" &&
-          /^[A-Z]/u.test(nameOf(nameNode))
-        ) {
+        } else if (isNode(nameNode) && nameNode.type === "JSXIdentifier" && /^[A-Z]/u.test(nameOf(nameNode))) {
           bound.add(nameNode);
           if (!scope.has(nameOf(nameNode))) add(nameNode, null);
         }
@@ -773,10 +769,7 @@ const TOP_LEVEL = new Set([
  * The reference tables of 6.2 for `files` (path -> content): R(E), G(E), the unresolved and
  * banned lists, and the negative lookups. Only files that are modules and parse take part.
  */
-export function analyse(
-  files: ReadonlyMap<string, string>,
-  languages: LanguageSet = TIDEPOOL_LANGUAGES,
-): Analysis {
+export function analyse(files: ReadonlyMap<string, string>, languages: LanguageSet = TIDEPOOL_LANGUAGES): Analysis {
   const modules = new Map<string, ModuleInfo>();
   for (const [path, content] of files) {
     const language = languageOfPath(path, languages);

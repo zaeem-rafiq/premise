@@ -28,7 +28,10 @@ describe("matchContainers under a language set (LG1)", () => {
 
 describe("textMembers under a language set", () => {
   it("finds members in .ts files only when the set includes them", () => {
-    const tree = new Map([["m.ts", source], ["n.js", "export const w = 1;\n"]]);
+    const tree = new Map([
+      ["m.ts", source],
+      ["n.js", "export const w = 1;\n"],
+    ]);
     const imported = textMembers(tree, "/", "a: string", IMPORT_LANGUAGES);
     assert.ok(imported.some((member) => member.startsWith("m.ts#I*")));
     const tidepool = textMembers(tree, "/", "a: string");

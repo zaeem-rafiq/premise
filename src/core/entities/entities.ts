@@ -172,8 +172,7 @@ function declareHoisted(
   get: (name: string, kind: EntityKind) => WorkingEntity,
   names: string[],
 ): void {
-  const kind: EntityKind =
-    declaration.type === "ClassDeclaration" ? "class" : "function"; // TSDeclareFunction included (LG2)
+  const kind: EntityKind = declaration.type === "ClassDeclaration" ? "class" : "function"; // TSDeclareFunction included (LG2)
   const name = isDefault ? nameOf(declaration.id as AstNode) || "default" : nameOf(declaration.id as AstNode);
   const entity = get(name, kind);
   entity.nodes.push(clean(declaration) as AstNode);
@@ -205,14 +204,12 @@ function declareTs(
  * does not parse; the caller decides whether the file is a module at all (2.1: opaque).
  */
 export function parseModule(source: string, language: Language = "javascript"): ModuleInfo {
-  const program = (
-    language === "javascript"
-      ? acorn.parse(source, PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" })
-      : (language === "typescript" ? TS_PARSER : TSX_PARSER).parse(
-          source,
-          TS_PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module"; locations: true },
-        )
-  ) as unknown as AstNode;
+  const program = (language === "javascript"
+    ? acorn.parse(source, PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" })
+    : (language === "typescript" ? TS_PARSER : TSX_PARSER).parse(
+        source,
+        TS_PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module"; locations: true },
+      )) as unknown as AstNode;
   const body = program.body as AstNode[];
   const entities = new Map<string, WorkingEntity>();
   const imports: ImportTable = new Map();
@@ -385,8 +382,7 @@ export function parseModule(source: string, language: Language = "javascript"): 
       const canonical = canon({ exports, nodes: entity.nodes });
       const firstFunction = entity.nodes.find(
         (node) =>
-          (node.type === "FunctionDeclaration" || node.type === "TSDeclareFunction") &&
-          Array.isArray(node.params),
+          (node.type === "FunctionDeclaration" || node.type === "TSDeclareFunction") && Array.isArray(node.params),
       );
       return {
         name: entity.name,

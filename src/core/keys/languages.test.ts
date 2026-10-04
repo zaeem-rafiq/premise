@@ -2,12 +2,7 @@
 // (2.1, unchanged) and under the imported-pool set, and the language each names.
 
 import { describe, expect, it } from "vitest";
-import {
-  IMPORT_LANGUAGES,
-  isModulePath,
-  languageOfPath,
-  TIDEPOOL_LANGUAGES,
-} from "./paths.ts";
+import { IMPORT_LANGUAGES, isModulePath, languageOfPath, TIDEPOOL_LANGUAGES } from "./paths.ts";
 
 describe("the language sets of LG1", () => {
   it("the tide-pool set is exactly the .js and .mjs of 2.1", () => {

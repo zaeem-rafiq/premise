@@ -121,11 +121,16 @@ describe("the TypeScript entity rows of LG2", () => {
   });
 
   it("an overloaded function is one entity (EN4)", () => {
-    const e = entity("function ov(a: string): void;\nfunction ov(a: number): void;\nfunction ov(a: unknown) {}\n", "ov");
+    const e = entity(
+      "function ov(a: string): void;\nfunction ov(a: number): void;\nfunction ov(a: unknown) {}\n",
+      "ov",
+    );
     assert.equal(e.kind, "function");
     assert.equal(e.nodes.length, 3);
     assert.equal(e.arity, 1);
-    assert.deepEqual(entity("export function ov(a: string): void;\nexport function ov(a: number) {}\n", "ov").exports, ["ov"]);
+    assert.deepEqual(entity("export function ov(a: string): void;\nexport function ov(a: number) {}\n", "ov").exports, [
+      "ov",
+    ]);
   });
 
   it("merged interfaces and namespaces are one entity (EN4)", () => {
@@ -152,7 +157,10 @@ describe("the TypeScript hash (2.4)", () => {
   it("a change to whitespace or comments does not change the entity hash", () => {
     const a = ts("export function f(x: number): number { return x }\n");
     const b = ts("// hi\nexport   function   f (\n  x : number ) : number {\n  return x /* in */\n}\n");
-    assert.equal(hashOf("export function f(x: number): number { return x }\n", "f"), b.entities.find((e) => e.name === "f")?.hash);
+    assert.equal(
+      hashOf("export function f(x: number): number { return x }\n", "f"),
+      b.entities.find((e) => e.name === "f")?.hash,
+    );
     assert.equal(moduleHash(a), moduleHash(b));
   });
 
@@ -193,7 +201,10 @@ describe("regions and entity source for TypeScript (EN6, EN7)", () => {
     const source = "export interface I { a: string }\ntype T = number;\ndeclare function d(x: T): void;\n";
     const info = ts(source);
     assert.equal(info.regions.length, 3);
-    assert.deepEqual(info.regions.map((r) => r.names), [["I"], ["T"], ["d"]]);
+    assert.deepEqual(
+      info.regions.map((r) => r.names),
+      [["I"], ["T"], ["d"]],
+    );
     assert.equal(entitySource(source, ts(source), "I"), "export interface I { a: string }");
     // the last region runs to end of file, keeping the statement's trailing newline (EN6)
     assert.equal(entitySource(source, ts(source), "d"), "declare function d(x: T): void;\n");

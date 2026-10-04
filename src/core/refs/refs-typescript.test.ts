@@ -69,7 +69,10 @@ describe("resolveSpecifier under IMPORT_LANGUAGES (LG3)", () => {
 describe("references in type positions (6.2, LG3)", () => {
   it("parameter, return and variable annotations are references", () => {
     const files = new Map<string, string>([
-      ["types.ts", "export interface Creature { energy: number }\nexport type Kind = string;\nexport const MAX = 100;\n"],
+      [
+        "types.ts",
+        "export interface Creature { energy: number }\nexport type Kind = string;\nexport const MAX = 100;\n",
+      ],
       [
         "use.ts",
         "import type { Creature, Kind } from './types.ts';\n" +
@@ -103,9 +106,7 @@ describe("references in type positions (6.2, LG3)", () => {
   });
 
   it("a type name bound by a type parameter does not leak as a global", () => {
-    const files = new Map<string, string>([
-      ["m.ts", "export function f<T extends object>(x: T): T { return x }\n"],
-    ]);
+    const files = new Map<string, string>([["m.ts", "export function f<T extends object>(x: T): T { return x }\n"]]);
     const { globals, unresolved } = analyse(files, IMPORT_LANGUAGES);
     assert.deepEqual([...(globals.get("m.ts#f") ?? [])], []);
     assert.deepEqual(unresolved, []);
@@ -137,7 +138,10 @@ describe("analyse under a language set (LG1, LG3)", () => {
       ["c.cjs", "export const n = 1;\n"],
       ["d.mts", "export const m = 2;\n"],
       ["e.cts", "export const k = 3;\n"],
-      ["main.ts", "import { n } from './c.cjs';\nimport { m } from './d.mts';\nimport { k } from './e.cts';\nexport const all = n + m + k;\n"],
+      [
+        "main.ts",
+        "import { n } from './c.cjs';\nimport { m } from './d.mts';\nimport { k } from './e.cts';\nexport const all = n + m + k;\n",
+      ],
     ]);
     const { modules, refs } = analyse(files, IMPORT_LANGUAGES);
     assert.deepEqual([...modules.keys()].sort(), ["a.tsx", "b.jsx", "c.cjs", "d.mts", "e.cts", "main.ts"]);

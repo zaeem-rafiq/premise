@@ -473,8 +473,6 @@ export class Agent extends DurableObject<Env> {
       }
       if (isReal) init.driver = "model";
       if (typeof body.trunk_url === "string") init.trunk_url = body.trunk_url;
-      if (typeof body.model_url === "string") init.model_url = body.model_url;
-      if (typeof body.gate_url === "string") init.gate_url = body.gate_url;
       for (const [k, v] of Object.entries(init)) metaSet(this.#sql, k, v);
       if (isReal) {
         // SP1/SP2: the system prompt and the first user message — rows 1 and 2.

@@ -3,9 +3,9 @@
 //
 // Diferente do agent-do.test.ts (que abre o Agent DO direto com fakes de Trunk
 // e Gate), aqui TUDO é real menos o modelo: Trunk DO, engine, git remoto via
-// fake-artifacts, Floor, eventos — o único fake é o FakeModel HTTP que o
-// MODEL_URL da deployment injeta no open do Agent (mesmo gancho do
-// open-attempt que o teste DO usa, agora via rota).
+// fake-artifacts, Floor, eventos — o único fake é o FakeModel HTTP atrás do
+// binding `AI` do worker de teste (fake-ai.mjs), do jeito que um deploy liga
+// o modelo de verdade.
 //
 //   item 1    POST /api/pools/{pool}/intents → real agent → landing.landed,
 //             CM1 (autor = model id), attempt.step com tokens/cost reais e o

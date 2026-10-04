@@ -427,8 +427,9 @@ export async function waitFor(check: () => Promise<boolean> | boolean, ms = 15_0
 // ---------------------------------------------------------------------------
 // The landing deployment (04-build-plan 2.5 item 1): the real Worker bundle,
 // the real bare-git remote behind `git http-backend`, and the fake Artifacts
-// worker — the same three pieces as the Slice-1 landing harness, plus
-// `MODEL_URL` so the route hands the Agent the scripted model.
+// worker — the same three pieces as the Slice-1 landing harness, with the
+// fake model behind the `AI` service binding the way a deployment binds the
+// real one (fake-ai.mjs offers `run`).
 
 import { mkdirSync } from "node:fs";
 import { mkdtempSync } from "node:fs";

@@ -1,0 +1,17 @@
+{
+  // The pure core (plan 1.3, mechanism 1). No Cloudflare types and no DOM: `DurableObjectState`, `Env` and
+  // `document` are compile errors in this program.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/protocol/**/*.ts",
+    "src/copy/**/*.ts",
+    "src/config/**/*.ts",
+    "src/core/**/*.ts",
+    "src/swarm/**/*.ts"
+  ],
+  "exclude": ["**/*.test.ts"]
+}

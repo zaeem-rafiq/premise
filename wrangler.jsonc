@@ -1,0 +1,121 @@
+{
+  // Premise: one Worker project (docs/spec/04-build-plan.md 1.6).
+  // The top level is the `production` environment (Worker `premise`). `env.test` is Worker `premise-test`.
+  //
+  // No account_id on purpose: wrangler takes the account from the login or from CLOUDFLARE_ACCOUNT_ID.
+  //
+  // OWNER_KEY is a secret (SE1) and is deliberately not listed under `secrets.required`: a deployment
+  // without it must start and fail closed (SE1, RP2). Set it with `wrangler secret put OWNER_KEY`.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "premise",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // 01-core 9.4: Trunk sets the CPU limit. The specification gives no number. This is the value the
+  // platform record's harness deployed with. A tick limits itself with TICK_CPU_BUDGET_MS.
+  "limits": {
+    "cpu_ms": 300000
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // The Floor, the host script and the recordings. The Worker runs first, so one module sets every
+  // security header (SE14, SE14a) and applies the rate limits (SE21). Unknown paths answer the Floor
+  // page (the client route /replay/{id}).
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+
+  // POOLS: pool repos and plain-merge repos. ATTEMPTS: attempt repos, which no route serves (SE22).
+  "artifacts": [
+    { "binding": "POOLS", "namespace": "premise-pools" },
+    { "binding": "ATTEMPTS", "namespace": "premise-attempts" }
+  ],
+
+  // Coding models and Clef.
+  "ai": {
+    "binding": "AI"
+  },
+
+  // The Dynamic Worker isolate that runs the self-test for the green line (platform record: no container,
+  // no Browser Run).
+  "worker_loaders": [{ "binding": "LOADER" }],
+
+  // One Trunk per pool, one Agent per attempt, one Floor per pool, one ModelGate per deployment.
+  "durable_objects": {
+    "bindings": [
+      { "name": "TRUNK", "class_name": "Trunk" },
+      { "name": "AGENT", "class_name": "Agent" },
+      { "name": "FLOOR", "class_name": "Floor" },
+      { "name": "GATE", "class_name": "ModelGate" }
+    ]
+  },
+  // SQLite-backed classes are declared here, the form the platform record's harness deployed with.
+  // `migrations` is not used.
+  "exports": {
+    "Trunk": { "type": "durable-object", "storage": "sqlite" },
+    "Agent": { "type": "durable-object", "storage": "sqlite" },
+    "Floor": { "type": "durable-object", "storage": "sqlite" },
+    "ModelGate": { "type": "durable-object", "storage": "sqlite" }
+  },
+
+  // Workflow names are unique in an account, so `env.test` uses its own names.
+  "workflows": [
+    { "name": "premise-swarm", "binding": "SWARM", "class_name": "SwarmWorkflow" },
+    { "name": "premise-green", "binding": "GREEN", "class_name": "GreenLineWorkflow" },
+    { "name": "premise-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" }
+  ],
+
+  // BP9: the sum of SPEND_CAP_USD over all deployed environments is 40 (production 30, test 10).
+  // The three Clef switches are `on` only after spike S6 (01-core Appendix C).
+  // APP_HOST (SE14b) is optional and not set: both the Floor and the app server run on one host.
+  "vars": {
+    "SPEND_CAP_USD": "30",
+    "CLEF_TRIAGE": "off",
+    "CLEF_RISK": "off",
+    "CLEF_CONTRADICTION": "off"
+  },
+
+  "env": {
+    // Integration tests create pools named `it-<ULID>` here. Its own namespaces, Durable Objects and Workflows.
+    "test": {
+      "name": "premise-test",
+      "artifacts": [
+        { "binding": "POOLS", "namespace": "premise-test-pools" },
+        { "binding": "ATTEMPTS", "namespace": "premise-test-attempts" }
+      ],
+      "ai": {
+        "binding": "AI"
+      },
+      "worker_loaders": [{ "binding": "LOADER" }],
+      "durable_objects": {
+        "bindings": [
+          { "name": "TRUNK", "class_name": "Trunk" },
+          { "name": "AGENT", "class_name": "Agent" },
+          { "name": "FLOOR", "class_name": "Floor" },
+          { "name": "GATE", "class_name": "ModelGate" }
+        ]
+      },
+      "workflows": [
+        { "name": "premise-test-swarm", "binding": "SWARM", "class_name": "SwarmWorkflow" },
+        { "name": "premise-test-green", "binding": "GREEN", "class_name": "GreenLineWorkflow" },
+        { "name": "premise-test-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" }
+      ],
+      "vars": {
+        "SPEND_CAP_USD": "10",
+        "CLEF_TRIAGE": "off",
+        "CLEF_RISK": "off",
+        "CLEF_CONTRADICTION": "off"
+      }
+    }
+  }
+}

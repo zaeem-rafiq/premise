@@ -1,0 +1,63 @@
+{
+  "name": "premise",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Git records only what an agent wrote. Premise also records what it read.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18.0 <23"
+  },
+  "scripts": {
+    "types": "wrangler types --strict-vars false",
+    "typecheck": "tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.floor.json && tsc --noEmit -p tsconfig.host.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.test-browser.json",
+    "test": "vitest run --project unit --project arch --project cases --project git --project tidepool",
+    "test:cases": "vitest run --project cases --silent=false",
+    "test:workerd": "npm run build && vitest run --project workerd",
+    "test:e2e": "playwright test",
+    "test:integration": "vitest run --project integration",
+    "clean": "node scripts/build/clean.ts",
+    "build": "npm run clean && npm run build:seeds && npm run build:host && npm run build:floor && npm run build:worker",
+    "build:seeds": "node scripts/seeds/build.ts",
+    "build:host": "vite build --config vite.host.config.ts",
+    "build:floor": "node scripts/build/floor-json.ts && vite build",
+    "build:worker": "wrangler deploy --dry-run --env=\"\" --outdir dist/worker --metafile dist/meta/worker.json",
+    "format": "prettier --write .",
+    "check": "prettier --check . && npm run typecheck && npm test && npm run build && npm run check:licenses && npm run check:secrets",
+    "check:licenses": "node scripts/build/check-licenses.ts",
+    "check:secrets": "node scripts/ops/check-secrets.ts",
+    "check:lane": "node scripts/ops/check-lane.ts",
+    "check:submission": "node scripts/ops/not-built.ts check:submission 'Slice 10'",
+    "agents-md": "node scripts/build/agents-md.ts",
+    "dev:floor": "node scripts/build/floor-json.ts && vite",
+    "dev": "npm run build && wrangler dev --port 8787",
+    "deploy:test": "npm run check && wrangler deploy --env test",
+    "deploy": "npm run check && wrangler deploy --env=\"\"",
+    "pool:create": "node scripts/ops/not-built.ts pool:create 'Slice 1'",
+    "measure:models": "node scripts/ops/not-built.ts measure:models 'step 2.2a (--early), then Slice 4'",
+    "soak": "node scripts/ops/not-built.ts soak 'Slice 8'",
+    "calibrate:clef": "node scripts/ops/not-built.ts calibrate:clef 'Slice 15'",
+    "rehearse:hero": "node scripts/ops/not-built.ts rehearse:hero 'Slice 6'",
+    "record:export": "node scripts/ops/not-built.ts record:export 'Slice 9'",
+    "cleanup:test": "node scripts/ops/not-built.ts cleanup:test 'Slice 1'",
+    "spend": "node scripts/ops/not-built.ts spend 'Slice 4'"
+  },
+  "dependencies": {
+    "acorn": "8.18.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "miniflare": "5.20261001.0-alpha",
+    "prettier": "3.9.9",
+    "typescript": "7.0.2",
+    "vite": "8.3.2",
+    "vitest": "5.0.3",
+    "wrangler": "4.147.0"
+  }
+}

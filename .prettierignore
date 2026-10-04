@@ -1,0 +1,23 @@
+# Working material from before the build. Not product code and not changed by the build (plan 1.1, BP6).
+reference/
+
+# Seed files are fixed character for character by docs/spec/02-tidepool.md.
+seeds/
+
+# The specification and the recorded evidence. Tests read exact text from these files.
+docs/
+
+# Generated files and build output.
+dist/
+coverage/
+.wrangler/
+worker-configuration.d.ts
+package-lock.json
+public/floor.json
+
+# Recorded event streams: one JSON object per line.
+*.ndjson
+
+# Playwright output.
+test-results/
+playwright-report/

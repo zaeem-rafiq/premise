@@ -1,0 +1,238 @@
+{
+  "about": "The lanes of docs/spec/04-build-plan.md 3.1 as globs. `**` matches any characters, `*` matches any characters except `/`. A path belongs to the one lane whose `paths` match it and whose `except` do not. A path that no lane lists belongs to the lead. `npm run check:lane` and the lane table of AGENTS.md are built from this file: after a change, run `npm run agents-md`.",
+  "base": "main",
+  "lead": {
+    "named": [
+      "*",
+      "docs/**",
+      "public/**",
+      "src/protocol/*.ts",
+      "src/config/**",
+      "src/copy/index.ts",
+      "src/core/trunk/engine.ts",
+      "src/worker/index.ts",
+      "src/worker/env.ts",
+      "src/worker/trunk/effects.ts",
+      "src/worker/adapters/index.ts",
+      "src/worker/adapters/not-built.ts",
+      "src/floor/app/registry.ts",
+      "scripts/build/**",
+      "scripts/ops/**",
+      "scripts/submission/**",
+      "test/arch/**",
+      "test/support/**",
+      "test/cases/load.ts",
+      "test/cases/required.json",
+      "test/cases/list.test.ts",
+      "test/workerd/cases-smoke.test.ts",
+      "test/e2e/lead/**"
+    ]
+  },
+  "lanes": [
+    {
+      "lane": "leaf",
+      "paths": [
+        "src/core/sync/**",
+        "src/core/keys/**",
+        "src/core/entities/**",
+        "src/core/refs/**",
+        "src/core/replay/**",
+        "src/core/policy/**",
+        "src/core/diff/**",
+        "src/core/classify/**",
+        "src/core/plain/**",
+        "src/core/undo/**",
+        "test/tidepool/scenarios/**"
+      ],
+      "except": []
+    },
+    {
+      "lane": "git",
+      "paths": [
+        "src/core/git/**",
+        "src/core/outbox/**",
+        "src/core/rebuild/**",
+        "src/core/trunk/outbox-apply.*",
+        "src/core/trunk/restart.*",
+        "src/core/trunk/register.*",
+        "src/core/trunk/wiring/git.*",
+        "src/worker/adapters/pusher/**",
+        "src/worker/adapters/token-source/**",
+        "src/worker/adapters/notes-reader/**",
+        "src/worker/adapters/verifier/**",
+        "src/worker/trunk/push-runner.*",
+        "src/worker/trunk/reconcile.*",
+        "src/worker/trunk/rebuild-job.*",
+        "src/worker/trunk/plain-runner.*",
+        "src/worker/trunk/preview-runner.*",
+        "src/worker/trunk/wiring/git.*",
+        "src/worker/workflows/green-line.*",
+        "test/git/**",
+        "test/integration/landing/**",
+        "test/integration/green/**"
+      ],
+      "except": ["src/worker/adapters/verifier/harness/**"]
+    },
+    {
+      "lane": "engine",
+      "paths": ["src/core/trunk/**", "test/cases/driver.ts", "test/cases/run.test.ts"],
+      "except": [
+        "src/core/trunk/engine.ts",
+        "src/core/trunk/outbox-apply.*",
+        "src/core/trunk/restart.*",
+        "src/core/trunk/register.*",
+        "src/core/trunk/wiring/git.*"
+      ]
+    },
+    {
+      "lane": "trunk",
+      "paths": [
+        "src/worker/trunk/**",
+        "src/worker/routes/**",
+        "src/worker/security/**",
+        "test/workerd/trunk/**",
+        "test/workerd/landing/**",
+        "test/integration/**"
+      ],
+      "except": [
+        "src/worker/trunk/effects.ts",
+        "src/worker/trunk/push-runner.*",
+        "src/worker/trunk/reconcile.*",
+        "src/worker/trunk/rebuild-job.*",
+        "src/worker/trunk/plain-runner.*",
+        "src/worker/trunk/preview-runner.*",
+        "src/worker/trunk/wiring/git.*",
+        "src/worker/routes/swarm.*",
+        "test/integration/landing/**",
+        "test/integration/green/**",
+        "test/integration/collide/**",
+        "test/integration/hero/**"
+      ]
+    },
+    {
+      "lane": "agent",
+      "paths": [
+        "src/core/agent/**",
+        "src/core/gate/**",
+        "src/worker/agent/**",
+        "src/worker/gate/**",
+        "src/worker/adapters/model/**",
+        "src/worker/adapters/attempt-repo/**",
+        "src/worker/adapters/triage/**",
+        "src/worker/adapters/risk/**",
+        "src/worker/workflows/attempt-repo.*",
+        "test/workerd/agent/**",
+        "test/workerd/gate/**",
+        "test/workerd/triage/**",
+        "scripts/calibrate/**"
+      ],
+      "except": ["src/core/agent/loop/**"],
+      "note": "On Day 1 and Day 2 `src/core/agent/loop/**` belongs to the measure lane. From Day 3 this lane also owns it and `scripts/measure/**`: the lead moves both globs here at IP1."
+    },
+    {
+      "lane": "measure",
+      "paths": ["scripts/measure/**", "src/core/agent/loop/**"],
+      "except": [],
+      "note": "Used on Day 1 and Day 2 for the early model measurement (plan 2.2a). At IP1 the lead moves both globs to the agent lane."
+    },
+    {
+      "lane": "stream",
+      "paths": [
+        "src/protocol/reducer/**",
+        "src/worker/floor/**",
+        "test/workerd/floor/**",
+        "test/fixtures/streams/**",
+        "scripts/fixtures/**",
+        "scripts/recordings/**"
+      ],
+      "except": []
+    },
+    {
+      "lane": "floor-shell",
+      "paths": [
+        "src/floor/main.tsx",
+        "src/floor/app/**",
+        "src/floor/stream/**",
+        "src/floor/replay/**",
+        "src/floor/state/**",
+        "src/floor/styles/**",
+        "src/floor/keys/**",
+        "src/floor/components/strip/**",
+        "src/floor/components/banners/**",
+        "src/floor/components/owner-key/**",
+        "src/floor/components/kill-switch/**",
+        "src/floor/components/toast/**",
+        "src/floor/components/about/**",
+        "src/floor/components/swarm/**",
+        "src/floor/components/green/**",
+        "test/e2e/shell/**"
+      ],
+      "except": ["src/floor/app/registry.ts", "src/floor/app/wiring/rail.*", "src/floor/app/wiring/pool-area.*"]
+    },
+    {
+      "lane": "floor-rail",
+      "paths": [
+        "src/floor/app/wiring/rail.*",
+        "src/floor/components/intent-box/**",
+        "src/floor/components/attempt-card/**",
+        "src/floor/components/lights/**",
+        "src/floor/components/heads-up/**",
+        "src/floor/components/tray/**",
+        "src/floor/components/card-sheet/**",
+        "src/floor/components/held-sheet/**",
+        "src/floor/components/race-sheet/**",
+        "src/floor/components/risk/**",
+        "test/e2e/rail/**"
+      ],
+      "except": []
+    },
+    {
+      "lane": "floor-pool",
+      "paths": [
+        "src/floor/app/wiring/pool-area.*",
+        "src/floor/components/pool-frame/**",
+        "src/floor/components/plain-frame/**",
+        "src/floor/components/compare/**",
+        "src/floor/components/tiles/**",
+        "src/floor/components/why/**",
+        "src/floor/components/git-drawer/**",
+        "src/floor/components/who-relies/**",
+        "src/floor/components/undo-sheet/**",
+        "test/e2e/pool-area/**"
+      ],
+      "except": []
+    },
+    {
+      "lane": "copy",
+      "paths": ["src/copy/**"],
+      "except": ["src/copy/index.ts"],
+      "note": "Used on Day 1 and Day 2. From Day 3 these paths belong to the lead."
+    },
+    {
+      "lane": "pool",
+      "paths": [
+        "seeds/**",
+        "scripts/seeds/**",
+        "src/host/**",
+        "src/worker/app-server/**",
+        "src/worker/adapters/pool-source/**",
+        "src/worker/adapters/verifier/harness/**",
+        "test/tidepool/**"
+      ],
+      "except": ["test/tidepool/scenarios/**"]
+    },
+    {
+      "lane": "swarm",
+      "paths": [
+        "src/swarm/**",
+        "src/worker/routes/swarm.*",
+        "src/worker/workflows/swarm.*",
+        "scripts/soak/**",
+        "scripts/rehearse/**",
+        "test/integration/collide/**",
+        "test/integration/hero/**"
+      ],
+      "except": []
+    }
+  ]
+}

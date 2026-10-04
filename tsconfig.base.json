@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+
+    // Every relative import names the file that exists ("./x.ts"). Node runs scripts/ with no build step,
+    // and Node only strips types: no enums, no namespaces, no parameter properties.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    // Each program names its own libraries and type packages. Nothing is picked up by default.
+    "lib": ["ES2023"],
+    "types": []
+  }
+}

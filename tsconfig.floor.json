@@ -1,0 +1,12 @@
+{
+  // The Floor: browser code, React. No Node: `process` and `Buffer` are compile errors in this program.
+  // Its unit tests need Node's types, so they are compiled by tsconfig.test-browser.json.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx"
+  },
+  "include": ["src/floor/**/*.ts", "src/floor/**/*.tsx"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+}

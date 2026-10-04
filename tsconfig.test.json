@@ -1,0 +1,22 @@
+{
+  // Everything that runs in Node and tests no browser and no Worker code: the unit tests of the pure paths,
+  // the tests under test/, the scripts, and the configuration files of vitest and Vite.
+  // A test is compiled with the libraries of the code it tests. So the Worker's unit tests are in
+  // tsconfig.worker.json, and the unit tests of the Floor and of the host and the browser specs of test/e2e/
+  // are in tsconfig.test-browser.json.
+  // `test/arch/fixtures/` holds files that break the rules on purpose; they are read as text, never compiled.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts",
+    "vite.config.ts",
+    "vite.host.config.ts"
+  ],
+  "exclude": ["test/arch/fixtures/**", "src/worker/**", "src/floor/**", "src/host/**", "test/e2e/**"]
+}

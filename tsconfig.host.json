@@ -1,0 +1,11 @@
+{
+  // The pool host: browser code that runs inside the sandboxed pool frame. No React, no Node.
+  // Its unit tests need Node's types, so they are compiled by tsconfig.test-browser.json.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["src/host/**/*.ts"],
+  "exclude": ["**/*.test.ts"]
+}

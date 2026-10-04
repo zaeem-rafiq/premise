@@ -1,0 +1,47 @@
+/* Stub (Slice 0). Plain CSS with custom properties: no framework, no icon set, no font files (03-floor VD2, VD5, VD6). */
+
+:root {
+  color-scheme: light dark;
+  --page: #ffffff;
+  --ink: #16181d;
+  --ink-soft: #5b6270;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #101216;
+    --ink: #eceef2;
+    --ink-soft: #9aa2b1;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+}
+
+.not-built {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.not-built h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.not-built p {
+  margin: 0;
+  color: var(--ink-soft);
+}

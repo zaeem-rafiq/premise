@@ -1,0 +1,21 @@
+{
+  // Tests of browser code: the unit tests of the Floor and of the pool host, the Playwright specs of test/e2e/
+  // and Playwright's configuration file. They run in Node and name DOM types, so this program has both.
+  // The Floor and the host themselves are compiled without Node, by tsconfig.floor.json and tsconfig.host.json.
+  // A file of theirs that a unit test imports is compiled here a second time, with Node's types present. The
+  // two programs differ on a bare `setTimeout`, which returns a number only without Node: write
+  // `window.setTimeout`, which returns a number in both.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/floor/**/*.test.ts",
+    "src/floor/**/*.test.tsx",
+    "src/host/**/*.test.ts",
+    "test/e2e/**/*.ts",
+    "playwright.config.ts"
+  ]
+}

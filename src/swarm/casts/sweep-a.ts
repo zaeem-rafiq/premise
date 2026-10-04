@@ -32,11 +32,17 @@ function percentText(n: number): string {
   return String(Number((n * 100).toPrecision(12)));
 }
 
-/** The replaces that turn every `drain` call a text holds into percent. */
+/** The replaces that turn every `drain` call a text holds into percent. One call text is
+ * replaced once: the QT1 item and the QR1 item of the same heads-up both carry the gained
+ * module's `update` (9.5 beat 5), and a second `replace` of the same text would fail
+ * `no_match`. */
 function drainToPercent(s: CastState, path: string, text: string): void {
+  const done = (s.data.fixed ??= []) as string[];
   for (const match of text.matchAll(DRAIN_CALL)) {
     const next = `drain(${match[1]}, ${percentText(Number(match[2]))})`;
-    if (next === match[0]) continue;
+    const key = `${path}${match[0]}`;
+    if (next === match[0] || done.includes(key)) continue;
+    done.push(key);
     s.queue.push({ tool: "replace", args: { path, old: match[0], new: next }, why: "repair" });
   }
 }

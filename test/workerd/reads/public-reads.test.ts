@@ -39,10 +39,14 @@ describe("Slice 7 item 5: public reads never reach Trunk (SE19, FS2, AS16)", () 
       case 1: {
         const ws = await worker.stream(POOL);
         ws.send(JSON.stringify({ hello: 1, after: 0 }));
-        const frame = (await snapshotFrame(ws)) as { snapshot?: { n: number; state: unknown } };
+        const frame = (await snapshotFrame(ws)) as {
+          snapshot?: { n: number; state: { pool?: { landed_seq?: number; landed_commit?: string } } };
+        };
         ws.close();
-        const state = JSON.stringify(frame.snapshot?.state);
-        return { name: "stream", signature: `101:${frame.snapshot?.n}:${state.length}:${sha256(Buffer.from(state))}` };
+        // The stream may legitimately grow between the two phases (post-landing events still
+        // append), so the signature is the snapshot's stable landed markers, not the frame's n.
+        const pool = frame.snapshot?.state.pool;
+        return { name: "stream", signature: `101:${pool?.landed_seq}:${pool?.landed_commit}` };
       }
       case 2: {
         const r = await worker.fetch(`/pool/${POOL}/main/`);

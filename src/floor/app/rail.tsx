@@ -1,23 +1,42 @@
-// The shell's fallback rail, drawn while `view.rail` is not registered (the floor-rail
-// lane's wiring module registers it). It is honest but minimal: the intent box with its
-// disabled states (3.1, FL7), the tray of open cards, the three tabs with counts, and one
-// row per attempt or landing with its status word (5.3) - enough for AC3 and for a
-// recording to be watched. All mutating controls stay absent for a visitor and in Replay.
+// The rail of the Floor view (03-floor 3.2): the intent box with its disabled states (3.1,
+// FL7), the tray of open cards, and the three tabs with counts — Working, Landed, Stopped.
+// Every attempt is drawn by the floor-rail lane's `AttemptCard`; landings are rows, one per
+// `landing.*` of the stream, that offer the Why card once `landing.landed` is on it
+// (FL3/AC3). All mutating controls stay absent for a visitor and in Replay.
+//
+// The Working tab is the reduced stream read as CO9 orders it: attempts of one intent move
+// as one group, intents with an attempt in a top state (`going_around`, `needs_confirm`)
+// come first by entry time, the rest newest intent first. The reducer's `working_order`
+// holds that order for the attempts it keeps; an `accepted` attempt leaves the order yet
+// is still in flight — it must keep its card, reading "Landing…", until `landing.landed`
+// (3.2, FL3). The list is therefore built from `state.attempts` with the same rules, not
+// read off `working_order` alone. A `landed` attempt whose landing is confirmed dwells in
+// place for the beat of 3.2 (1.2 s; 2 s with reduced motion) before it moves to Landed.
 
-import { useContext, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { FloorState, AttemptView, LandingEntry } from "../../protocol/reducer/state.ts";
 import { ShellContext } from "./context.ts";
-import { statusWordId, inFlight, sentBack, whyOffered } from "../state/derive.ts";
+import { inFlight, whyOffered } from "../state/derive.ts";
+import { landingConfirmed } from "../components/attempt-card/model.ts";
+import { AttemptCard } from "../components/attempt-card/attempt-card.tsx";
 import { changeName } from "../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../copy/format.ts";
 import { MAX_INTENT_CHARS } from "../../protocol/constants.ts";
 
-export type RailFallbackProps = {
+export type RailProps = {
   floor: FloorState;
   mode: "live" | "replay";
   owner: boolean;
+  /** CP7: a visitor, and everyone in Replay (the owner sees `false`). */
+  visitor: boolean;
+  /** The page clock: the stream clock live, the recorded clock in Replay (FL9). */
+  clock: number;
+  /** The dwell of 3.2 the Working tab gives a landed card: 1.2 s, 2 s with reduced motion. */
+  dwellMs: number;
   capReached: boolean;
   onSend: (text: string) => void;
+  /** Opens the attempt's card sheet (`attempt.open_card` on a held card). */
+  onOpenCard: (cardId: string) => void;
 };
 
 function intentBlocker(floor: FloorState, mode: string, owner: boolean, cap: boolean): string | null {
@@ -32,7 +51,33 @@ function intentBlocker(floor: FloorState, mode: string, owner: boolean, cap: boo
   return null;
 }
 
-export function RailFallback(props: RailFallbackProps) {
+/** An attempt that still belongs to the Working tab: in flight (which counts `accepted`),
+ * or `landed` while its `landing.landed` has not arrived — it reads "Landing…" too (FL3). */
+function workingAttempt(floor: FloorState, attempt: AttemptView): boolean {
+  return inFlight(attempt) || (attempt.state === "landed" && !landingConfirmed(floor, attempt));
+}
+
+/** The Working tab's order (CO9), built over every working attempt — including `accepted`,
+ * which the reducer has already taken out of `working_order` (its own bookkeeping) but not
+ * off the rail. */
+export function workingOrder(floor: FloorState): AttemptView[] {
+  const topGroupTs = new Map<string, number>();
+  for (const attempt of Object.values(floor.attempts)) {
+    if (attempt.top_ts === null) continue;
+    topGroupTs.set(attempt.intent_id, Math.min(topGroupTs.get(attempt.intent_id) ?? attempt.top_ts, attempt.top_ts));
+  }
+  const rank = new Map<string, number>(Object.keys(floor.intents).map((id, index) => [id, index]));
+  const working = Object.values(floor.attempts).filter((a) => workingAttempt(floor, a));
+  const top = working
+    .filter((a) => topGroupTs.has(a.intent_id))
+    .sort((a, b) => (topGroupTs.get(a.intent_id) ?? 0) - (topGroupTs.get(b.intent_id) ?? 0));
+  const rest = working
+    .filter((a) => !topGroupTs.has(a.intent_id))
+    .sort((a, b) => (rank.get(b.intent_id) ?? 0) - (rank.get(a.intent_id) ?? 0));
+  return [...top, ...rest];
+}
+
+export function Rail(props: RailProps) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const { floor } = props;
@@ -40,12 +85,46 @@ export function RailFallback(props: RailFallbackProps) {
   const [draft, setDraft] = useState("");
 
   const blocker = intentBlocker(floor, props.mode, props.owner, props.capReached);
-  const working = floor.working_order
-    .map((id) => floor.attempts[id])
-    .filter((a): a is AttemptView => a !== undefined && inFlight(a));
+  const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
-  const stopped = Object.values(floor.attempts).filter((a) => ["stopped", "declined", "not_chosen"].includes(a.state));
+  const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped");
   const tray = floor.open_cards.map((id) => floor.cards[id]).filter((c) => c !== undefined && c.open);
+
+  // The 3.2 dwell: a card whose `landing.landed` arrived keeps its place for `dwellMs`
+  // before it moves to the Landed tab, so the "Landed" state reads in place.
+  const landedAt = useRef(new Map<string, number>());
+  const [now, setNow] = useState(() => Date.now());
+  const dwelling = useMemo(() => {
+    const out: AttemptView[] = [];
+    for (const attempt of Object.values(floor.attempts)) {
+      if (attempt.state !== "landed" || !landingConfirmed(floor, attempt)) {
+        landedAt.current.delete(attempt.id);
+        continue;
+      }
+      const seen = landedAt.current.get(attempt.id);
+      if (seen === undefined) {
+        landedAt.current.set(attempt.id, Date.now());
+        out.push(attempt);
+      } else if (now - seen < props.dwellMs) {
+        out.push(attempt);
+      }
+    }
+    return out;
+    // `floor.n` ticks on every applied event; `now` re-reads the dwell map at deadlines.
+  }, [floor, floor.n, now, props.dwellMs]);
+
+  useEffect(() => {
+    const timers: number[] = [];
+    for (const seen of landedAt.current.values()) {
+      const wait = props.dwellMs - (Date.now() - seen);
+      if (wait > 0) timers.push(window.setTimeout(() => setNow(Date.now()), wait));
+    }
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [floor.n, now, props.dwellMs]);
+
+  const workingTab = [...working, ...dwelling];
+  // CO10: the compact card form when more than five cards are on the rail.
+  const compact = workingTab.length > 5;
 
   return (
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
@@ -84,7 +163,9 @@ export function RailFallback(props: RailFallbackProps) {
           {tray.map((view) => (
             <div className="tray-row" role="listitem" key={view!.card.card_id}>
               <span className="tray-title">{view!.card.title}</span>
-              <button type="button">{t("card.open")}</button>
+              <button type="button" onClick={() => props.onOpenCard(view!.card.card_id)}>
+                {t("card.open")}
+              </button>
             </div>
           ))}
         </div>
@@ -93,7 +174,7 @@ export function RailFallback(props: RailFallbackProps) {
       <div className="tabs" role="tablist">
         {(
           [
-            ["working", "rail.tab.working", working.length],
+            ["working", "rail.tab.working", workingTab.length],
             ["landed", "rail.tab.landed", landed.length],
             ["stopped", "rail.tab.stopped", stopped.length],
           ] as const
@@ -113,10 +194,20 @@ export function RailFallback(props: RailFallbackProps) {
 
       <div className="rail-list" role="tabpanel">
         {tab === "working" &&
-          (working.length === 0 ? (
+          (workingTab.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.working", { visitor: !props.owner })}</p>
           ) : (
-            working.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} floor={floor} />)
+            workingTab.map((attempt) => (
+              <AttemptCard
+                key={attempt.id}
+                attempt={attempt}
+                state={floor}
+                clock={props.clock}
+                visitor={props.visitor}
+                compact={compact}
+                onOpenCard={props.onOpenCard}
+              />
+            ))
           ))}
         {tab === "landed" &&
           (landed.length === 0 ? (
@@ -128,7 +219,17 @@ export function RailFallback(props: RailFallbackProps) {
           (stopped.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.stopped")}</p>
           ) : (
-            stopped.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} floor={floor} />)
+            stopped.map((attempt) => (
+              <AttemptCard
+                key={attempt.id}
+                attempt={attempt}
+                state={floor}
+                clock={props.clock}
+                visitor={props.visitor}
+                compact={compact}
+                onOpenCard={props.onOpenCard}
+              />
+            ))
           ))}
       </div>
     </aside>
@@ -143,31 +244,6 @@ function attemptName(attempt: AttemptView, floor: FloorState): string {
     model: attempt.model,
     premises: Object.values(attempt.premises).map((p) => ({ kind: p.kind, key: p.key, edit: p.edit })),
   });
-}
-
-function AttemptRow({ attempt, floor }: { attempt: AttemptView; floor: FloorState }) {
-  const shell = useContext(ShellContext)!;
-  const word = statusWordId(attempt, floor);
-  return (
-    <div className="attempt-row" data-state={attempt.state}>
-      <div className="attempt-line">
-        <span className="attempt-name" dir="auto">
-          {attemptName(attempt, floor)}
-        </span>
-        <span className="attempt-status">{shell.t(word)}</span>
-      </div>
-      <div className="attempt-sub">
-        {attempt.agent === "synthetic" && <span className="tag tag-synthetic">{shell.t("attempt.tag.synthetic")}</span>}
-        {floor.intents[attempt.intent_id]?.prewritten === true && (
-          <span className="tag">{shell.t("attempt.tag.prewritten")}</span>
-        )}
-        {sentBack(attempt) > 0 && (
-          <span className="attempt-sentback">{shell.t("attempt.sent_back_n", { n: sentBack(attempt) })}</span>
-        )}
-        {attempt.model !== null && <span className="attempt-model">{shell.model(attempt.model)}</span>}
-      </div>
-    </div>
-  );
 }
 
 function LandedRow({ landing, floor }: { landing: LandingEntry; floor: FloorState }) {

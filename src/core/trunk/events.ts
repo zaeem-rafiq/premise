@@ -9,7 +9,23 @@ import { metaSet } from "./schema.ts";
  * Append one event: numbered `next_event_n`, clock from `pool.now()`, and persisted immediately
  * inside the call's transaction. `fields` is the type's body without the envelope keys.
  */
-export function event(pool: Pool, type: string, fields: Record<string, unknown>): void {
+export function event(
+  pool: Pool,
+  type: string,
+  fields: Record<string, unknown>,
+  opts: { headsup?: boolean } = {},
+): void {
+  if (pool.meta.get("summary_only") === "1") {
+    // EV6: the detailed per-op, per-premise and per-step events are not emitted on a
+    // summary-only stream; a `premise.judged` of `holds` emits only when a heads-up item
+    // carries it (X0's info, a triage outcome's item); `headsup.sent` and `landing.landed`
+    // lose their detail bodies while the rest of the event stands.
+    if (type === "attempt.step" || type === "premise.recorded" || type === "premise.removed" || type === "op.recorded")
+      return;
+    if (type === "premise.judged" && fields.result === "holds" && opts.headsup !== true) return;
+    if (type === "headsup.sent") fields = { ...fields, items: null };
+    else if (type === "landing.landed") fields = { ...fields, note_json: null };
+  }
   const n = pool.eventCounter;
   pool.eventCounter += 1;
   pool.meta.set("next_event_n", String(pool.eventCounter));

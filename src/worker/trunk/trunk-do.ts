@@ -12,6 +12,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { engineTable, type EngineTable } from "../../core/trunk/engine.ts";
 import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
+import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
@@ -150,6 +151,7 @@ export class Trunk extends DurableObject<Env> {
         summary_only: create.summary_only,
         remote: create.remote,
         request_id: create.request_id,
+        syncTriage: ScriptedTriage,
         now: () => ctx.now,
       });
       return { response: { ok: true, pool: create.pool } };
@@ -239,7 +241,9 @@ export class Trunk extends DurableObject<Env> {
       return { error: json({ error: { code: "pool_not_found" } }, 404) };
     }
     try {
-      const trunk = TrunkEngine.open(this.#sql, { now: () => Date.now() });
+      // S6a: the engine cannot import `src/swarm`, so the object hands it the scripted triage
+      // of synthetic attempts (TR8). Real attempts never use it.
+      const trunk = TrunkEngine.open(this.#sql, { now: () => Date.now(), syncTriage: ScriptedTriage });
       const result = await Promise.resolve(entry(input, trunk));
       return { result };
     } catch {

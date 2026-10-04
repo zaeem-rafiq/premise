@@ -101,10 +101,10 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(note?.go_arounds[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
   });
 
-  it.fails("item 2 (T8): the attempt.state event to going_around reports go_arounds 1", () => {
+  it("item 2 (T8): the attempt.state event to going_around reports go_arounds 1", () => {
     // 01-core 9.2 T8: `going_around`, effect `go_arounds += 1`; the acceptance text expects
-    // "attempt.state to going_around with go_arounds: 1". The engine emits the event inside
-    // setState BEFORE enterRepair's increment, so the event carries go_arounds: 0.
+    // "attempt.state to going_around with go_arounds: 1". The event reports the count after
+    // the transition: enterRepair applies T8's effect before setState emits it.
     const sim = new SwarmSim(swarmFiles(), { seed: 7 });
     const { held } = order1(sim, ["add-energy"]);
     const ae = held[0] as AgentHandle;
@@ -198,12 +198,11 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
-  it.fails("item 6 (EV6, HU12): a summary_only pool strips the stream detail", () => {
+  it("item 6 (EV6, HU12): a summary_only pool strips the stream detail", () => {
     // 01-core EV6 and plan item 6: on a `summary_only` pool `headsup.sent` keeps the keys with
     // `items: null`, `landing.landed` carries `note_json: null`, and the stream holds no
-    // `premise.recorded`, `op.recorded` or `attempt.step`. The engine records every event body
-    // whole (meta summary_only is stored, never consulted): `items` is the full array,
-    // `note_json` is the note, and all three event types are emitted.
+    // `premise.recorded`, `op.recorded` or `attempt.step`. event() consults the pool's
+    // summary_only meta: it drops the detailed records and rewrites the two detail bodies.
     const sim = new SwarmSim(swarmFiles(), { seed: 7, summary_only: true });
     const { held } = order1(sim, ["add-energy"]);
     const ae = held[0] as AgentHandle;
@@ -254,32 +253,28 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(other.trunk.pool.landings).toEqual([]);
   });
 
-  it.fails(
-    "item 7 (HD1, CD4): the minimal held card offers land+decline, an empty blast radius, and refuses other options",
-    () => {
-      // HD1: `card.opened` of kind `held` with `preview: null`, an EMPTY blast radius and
-      // exactly the options `land` and `decline`. The engine opens the card with `options: []`
-      // and a blast radius filled with the attempt's entry. CD4: an option the card does not
-      // offer answers `invalid_args`; `trunk.owner` answers `{}` for an unknown action.
-      const sim = new SwarmSim(tidepoolFiles(), { seed: 7 });
-      const rescale = sim.open("rescale-energy");
-      drive(sim, rescale);
-      const cards = sim.eventsOf("card.opened");
-      expect(cards).toHaveLength(1);
-      const card = cards[0]?.card as {
-        options?: Array<{ id: string }>;
-        blast_radius?: object;
-        preview?: unknown;
-        risk?: unknown;
-      };
-      expect(card.preview).toBeNull();
-      expect(card.risk).toBeNull();
-      expect(card.blast_radius).toEqual({});
-      expect(card.options?.map((o) => o.id)).toEqual(["land", "decline"]);
-      const answer = sim.trunk.owner({ action: "land_now_forever", attempt: rescale.id });
-      expect(answer).toMatchObject({ error: { code: "invalid_args" } });
-    },
-  );
+  it("item 7 (HD1, CD4): the minimal held card offers land+decline, an empty blast radius, and refuses other options", () => {
+    // HD1: `card.opened` of kind `held` with `preview: null`, an EMPTY blast radius and
+    // exactly the options `land` and `decline` while `features.held` is off. CD4: an option
+    // the card does not offer answers `invalid_args`, and so does an unknown owner action.
+    const sim = new SwarmSim(tidepoolFiles(), { seed: 7 });
+    const rescale = sim.open("rescale-energy");
+    drive(sim, rescale);
+    const cards = sim.eventsOf("card.opened");
+    expect(cards).toHaveLength(1);
+    const card = cards[0]?.card as {
+      options?: Array<{ id: string }>;
+      blast_radius?: object;
+      preview?: unknown;
+      risk?: unknown;
+    };
+    expect(card.preview).toBeNull();
+    expect(card.risk).toBeNull();
+    expect(card.blast_radius).toEqual({});
+    expect(card.options?.map((o) => o.id)).toEqual(["land", "decline"]);
+    const answer = sim.trunk.owner({ action: "land_now_forever", attempt: rescale.id });
+    expect(answer).toMatchObject({ error: { code: "invalid_args" } });
+  });
 
   it("item 8 (E1, OP1, TA9, TA9a): the second rescale withdraws through `stop`; no card opens", () => {
     const sim = new SwarmSim(swarmFiles(), { seed: 7 });

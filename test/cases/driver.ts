@@ -14,6 +14,7 @@ import type { Vector } from "./load.ts";
 import { Trunk, type Pool } from "../../src/core/trunk/registry.ts";
 import { keyHash } from "../../src/core/trunk/sets.ts";
 import { ABSENT } from "../../src/protocol/premise.ts";
+import { ScriptedTriage } from "../../src/swarm/scripted-triage.ts";
 
 /** `node:sqlite` speaks the `Sql` port (it stands in for the Durable Object's storage). */
 export function sqlOver(db: DatabaseSync): Sql {
@@ -164,6 +165,12 @@ export function runCase(vector: Vector, pools: Pools): string[] {
   let trunk = Trunk.create(sql, seed, {
     constants: top.constants,
     switches: { CLEF_TRIAGE: top.switches?.CLEF_TRIAGE === "off" ? "off" : "on" },
+    // The cases run on the engine in Node, where every engine part is present: the full held
+    // form shows the blast radius and offers `land_now` (C49, C55). The `SyncTriage` port is
+    // the one scripted implementation (S6a): the vectors' attempts are real, so it answers
+    // only if a case ever opens a synthetic one.
+    syncTriage: ScriptedTriage,
+    features: { held: true },
   });
   // PL1: the seed's batch 0 is on Artifacts before any attempt works — the vectors predate the
   // seed push, so the driver replays it here (the `batch.pushed` it emits only adds to the trace;

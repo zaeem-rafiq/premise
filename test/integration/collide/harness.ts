@@ -15,6 +15,7 @@ import { agentRandom } from "../../../src/swarm/prng.ts";
 import type { Landing } from "../../../src/core/trunk/sets.ts";
 import type { Note } from "../../../src/protocol/note.ts";
 import { buildSeeds } from "../../../scripts/seeds/build.ts";
+import { ScriptedTriage } from "../../../src/swarm/scripted-triage.ts";
 
 /** The files of the seed `tidepool-swarm` (scripts/seeds/build.ts, 02-tidepool.md 10.1). */
 export function swarmFiles(): Record<string, string> {
@@ -60,6 +61,9 @@ export class SwarmSim {
     this.db = new DatabaseSync(":memory:");
     this.trunk = Trunk.create(sqlOver(this.db), files, {
       summary_only: opts.summary_only === true,
+      // S6a/TR8: the pool's `SyncTriage` port is the one scripted implementation; every agent
+      // the harness opens is synthetic, so its truth list answers the triage rows.
+      syncTriage: ScriptedTriage,
     });
     // PL1: the seed is batch 0 of the outbox and nothing lands before it is on Artifacts. This
     // harness has no remote, so it confirms the seed push here, as `test/cases/driver.ts` does.

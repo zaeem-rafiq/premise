@@ -6,7 +6,7 @@
 // one at head and one per file state the engine needs. The attempt record mirrors the columns of
 // 3.2; the engine loads it from SQLite at the start of a call and persists it at the end.
 
-import type { Sql } from "../../protocol/ports.ts";
+import type { Sql, SyncTriage } from "../../protocol/ports.ts";
 import type { Operation } from "../../protocol/operations.ts";
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Check } from "../../protocol/tools.ts";
@@ -284,6 +284,9 @@ export type Pool = {
   ids: { next(kind: string): string };
   K: { GO_AROUND_LIMIT: number; STARVATION_AFTER: number; MAX_BATCH: number; T_REPAIR: number; T_CONFIRM: number };
   clefOn: boolean; // switches.CLEF_TRIAGE === "on"
+  killed: boolean; // the kill switch (SE10) as the pool last heard it: OffTriage (TR5)
+  syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
+  featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   meta: Map<string, string>;
   files: FileMap; // head: path -> content
   modes: Map<string, string>; // head: path -> mode
@@ -331,6 +334,8 @@ export type Pool = {
       result: Judgment["result"];
       reason: string;
       asked_op_seq?: number | null;
+      heads_up?: boolean; // EV6: a heads-up item carries this judgment
+      clef?: { model: string; p: number | null; error: string | null };
     },
   ): Judgment;
   fileMapAt(seq: number): FileMap;

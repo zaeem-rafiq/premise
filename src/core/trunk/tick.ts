@@ -9,7 +9,7 @@ import type { PremiseKind } from "../../protocol/premise.ts";
 import type { HeadsUpItem } from "../../protocol/headsup.ts";
 import type { Note } from "../../protocol/note.ts";
 import type { ToolError } from "../../protocol/tools.ts";
-import type { Attempt, FileMap, Judgment, Landing, Op, Pool, Premise } from "./sets.ts";
+import type { Attempt, CardRec, FileMap, Judgment, Landing, Op, Pool, Premise } from "./sets.ts";
 import {
   curOps,
   entityAt,
@@ -44,7 +44,9 @@ import {
   setState,
   unvalidate,
 } from "./intents.ts";
-import { applyClassification, blast, classify, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { applyClassification, blast, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { classify } from "../classify/table.ts";
+import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 
@@ -570,6 +572,8 @@ export function tick(pool: Pool): void {
         setState(pool, a, "stopped", "T18", "undone");
       } else {
         // T19: a dependent landing's attempt is reopened with its frozen state.
+        a.go_arounds += 1;
+        a.right_of_way_at = null;
         setState(pool, a, "going_around", "T19");
         event(pool, "attempt.reopened", {
           attempt_id: a.id,
@@ -579,8 +583,6 @@ export function tick(pool: Pool): void {
         });
         a.revision += 1;
         a.resumes += 1;
-        a.go_arounds += 1;
-        a.right_of_way_at = null;
         unvalidate(pool, a);
         a.ops = x.ops.map((o) => ({
           ...o,
@@ -660,7 +662,7 @@ export function tick(pool: Pool): void {
         rule: "CKL",
         klass: "rule",
         result: "repair",
-        reason: "non_empty",
+        reason: "checks_failed_at_landing",
       });
       j.dirty = true;
       pool.out.judgments.push(j);
@@ -674,7 +676,7 @@ export function tick(pool: Pool): void {
               premise: { kind: "check" as Premise["kind"], key: "non_empty" },
               rule: "CKL",
               result: "repair",
-              reason: "non_empty",
+              reason: "checks_failed_at_landing",
               old_hash: "",
               new_hash: "",
               cause_seq: null,
@@ -695,7 +697,7 @@ export function tick(pool: Pool): void {
       c.tier = "held";
       setState(pool, c, "held", "T4");
       openCard(pool, "held", "held_path", [c.id], {
-        blast_radius: { [c.id]: { ...blast(pool, c), right_of_way: [] } },
+        blast_radius: { [c.id]: blast(pool, c) },
         submit_ids: c.submit_id === null ? {} : { [c.id]: c.submit_id },
       });
       continue;
@@ -1052,14 +1054,12 @@ export function triage(
   pool.pendingTriage.splice(i, 1);
   const a = t.a;
   const p = t.p;
-  let result: "holds" | "confirm" | "repair";
-  if (args.p === null || args.p === undefined) result = "confirm";
-  else if (args.p >= pool.K.T_REPAIR) result = "repair";
-  else if (args.p >= pool.K.T_CONFIRM) result = "confirm";
-  else result = "holds";
+  const outcome = triageOutcome(pool, args.p ?? null);
+  const result = outcome.result;
   p.status = result === "repair" ? "pending_repair" : result === "confirm" ? "pending_confirm" : "holds";
   const j = t.judgment;
   j.result = result;
+  j.reason = outcome.reason;
   j.clef_p = args.p ?? null;
   j.t_repair = pool.K.T_REPAIR;
   j.t_confirm = pool.K.T_CONFIRM;
@@ -1122,9 +1122,38 @@ export function owner(
   args: { action: string; attempt?: string; seq?: number; expect_reverted?: number[]; reason?: string },
 ): Record<string, unknown> {
   const action = args.action;
-  if (action === "land" || action === "land_now") {
+  const bad = (message: string): Record<string, unknown> => ({
+    ok: false,
+    error: { code: "invalid_args", message },
+  });
+  const closeOwned = (c: CardRec, opt: string, attempt_id: string | null = null): void => {
+    c.open = false;
+    c.closed_at = pool.now();
+    pool.dirtyCards.add(c.card_id);
+    event(pool, "card.closed", {
+      card_id: c.card_id,
+      action: opt,
+      by: "owner",
+      attempt_id,
+      reason: opt === "decline" || opt === "choose" ? (args.reason ?? null) : null,
+    });
+  };
+  // CD4: an option the card does not offer is refused; a tap on a card that is not open does
+  // nothing (C34's stale card).
+  const offered = (c: CardRec, id: string): boolean => c.body.options.some((o) => o.id === id);
+
+  if (action === "land" || action === "land_now" || action === "decline") {
     const a = pool.attempts.get(args.attempt ?? "");
     if (a === undefined) return {};
+    const card = pool.cards.find((c) => c.open && c.kind === "held" && c.attempt_ids.includes(a.id));
+    if (card === undefined) return {};
+    if (!offered(card, action)) return bad(`card ${card.card_id} does not offer ${action}`);
+    if (action === "decline") {
+      // T14: the owner's decline stops the held attempt.
+      closeOwned(card, "decline");
+      setState(pool, a, "stopped", "T14", "declined");
+      return {};
+    }
     // T13: a held attempt lands when the owner taps; `land_now` also bypasses right of way (RW5).
     if (
       a.state === "held" &&
@@ -1132,19 +1161,12 @@ export function owner(
       a.heads.every((h) => h.resolved_at !== null) &&
       a.submit_id === submitIdOf(a)
     ) {
-      closeCard(pool, a, action);
+      closeOwned(card, action);
       a.approved_by = "owner";
       a.bypass_row = action === "land_now";
       setState(pool, a, "validated", "T13");
       a.validated_at = ++pool.order;
     }
-    return {};
-  }
-  if (action === "decline") {
-    const a = pool.attempts.get(args.attempt ?? "");
-    if (a === undefined) return {};
-    closeCard(pool, a, "decline");
-    setState(pool, a, "stopped", "T14", "declined");
     return {};
   }
   if (action === "choose") {
@@ -1220,32 +1242,51 @@ export function owner(
     event(pool, "undo.planned", { request_id, cause: "undo", target_seq: target.seq, ...detail });
     return { undo: detail };
   }
-  if (action === "retry") {
-    // T21: the owner retries a stopped attempt that holds a choice card.
+  if (action === "retry" || action === "stop" || action === "keep_landed" || action === "new_attempt") {
     const a = pool.attempts.get(args.attempt ?? "");
     if (a === undefined) return {};
-    for (const c of pool.cards) {
-      if (c.open && c.kind === "choice" && c.attempt_ids[0] === a.id) {
-        c.open = false;
-        c.closed_at = pool.now();
-        pool.dirtyCards.add(c.card_id);
-        event(pool, "card.closed", {
-          card_id: c.card_id,
-          action: "retry",
-          by: "owner",
-          attempt_id: null,
-          reason: null,
+    const card = pool.cards.find((c) => c.open && c.kind === "choice" && c.attempt_ids.includes(a.id));
+    if (card === undefined) return {};
+    if (!offered(card, action)) return bad(`card ${card.card_id} does not offer ${action}`);
+    if (action !== "retry") {
+      closeOwned(card, action);
+      if (action === "new_attempt") {
+        // UN6a: the engine entry of the option opens a new attempt for the same intent.
+        const intent = pool.intents.get(a.intent_id);
+        const n = [...pool.attempts.values()].filter((x) => x.intent_id === a.intent_id).length;
+        openAttempt(pool, `${a.id}~${n}`, {
+          intent_id: a.intent_id,
+          intent: intent?.text ?? "",
+          agent_kind: a.agent_kind,
+          race: a.race,
         });
       }
+      // GL3a: a card that closes with any option other than `retry` deletes the parked
+      // attempt's premises and operations; the intent stops when no other attempt of it is in
+      // flight or landed (CD4).
+      a.premises.clear();
+      a.ops.length = 0;
+      pool.dirtyAttempts.add(a.id);
+      const intent = pool.intents.get(a.intent_id);
+      if (
+        intent !== undefined &&
+        ![...pool.attempts.values()].some((x) => x.intent_id === a.intent_id && x !== a && x.state !== "stopped")
+      ) {
+        intent.state = "stopped";
+        pool.dirtyIntents.add(a.intent_id);
+      }
+      return {};
     }
+    // T21: the owner retries a stopped attempt that holds a choice card.
+    closeOwned(card, "retry");
     a.go_arounds = 0;
     a.pull_backs = 0;
     a.right_of_way_at = ++pool.order;
     a.stop_reason = null;
     const open = a.heads.filter((h) => h.resolved_at === null);
     if (open.some((h) => h.result === "repair")) {
-      setState(pool, a, "going_around", "T21");
       a.go_arounds = 1;
+      setState(pool, a, "going_around", "T21");
     } else if (open.length > 0) {
       setState(pool, a, "needs_confirm", "T21");
     } else {
@@ -1256,18 +1297,5 @@ export function owner(
     pool.dirtyAttempts.add(a.id);
     return {};
   }
-  if (action === "stop") {
-    const a = pool.attempts.get(args.attempt ?? "");
-    if (a === undefined) return {};
-    for (const c of pool.cards) {
-      if (c.open && c.kind === "choice" && c.attempt_ids[0] === a.id) {
-        c.open = false;
-        c.closed_at = pool.now();
-        pool.dirtyCards.add(c.card_id);
-        event(pool, "card.closed", { card_id: c.card_id, action: "stop", by: "owner", attempt_id: null, reason: null });
-      }
-    }
-    return {};
-  }
-  return {};
+  return bad(`unknown owner action: ${action}`);
 }

@@ -5,7 +5,7 @@
 //
 // The engine never awaits, never reads a clock it was not given, and never touches the network.
 
-import type { Sql } from "../../protocol/ports.ts";
+import type { Sql, SyncTriage } from "../../protocol/ports.ts";
 import type { ToolRequest, ToolResponse } from "../../protocol/tools.ts";
 import type {
   Attempt,
@@ -37,6 +37,9 @@ export type PoolOptions = {
   pool_id?: string;
   constants?: Partial<Pool["K"]>;
   switches?: { CLEF_TRIAGE?: "on" | "off" };
+  killed?: boolean; // SE10's kill switch, as the caller last heard it
+  syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
+  features?: { held?: boolean };
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -298,6 +301,9 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       })(),
     K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
     clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    killed: opts.killed === true,
+    syncTriage: opts.syncTriage ?? null,
+    featuresHeld: opts.features?.held === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     files: new Map<string, string>(),
     modes: new Map<string, string>(),
@@ -366,6 +372,8 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         result: Judgment["result"];
         reason: string;
         asked_op_seq?: number | null;
+        heads_up?: boolean; // EV6: a heads-up item carries this judgment
+        clef?: { model: string; p: number | null; error: string | null };
       },
     ): Judgment {
       const record: Judgment = {
@@ -384,10 +392,10 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         asked_at: j.klass === "triage" ? pool.now() : null,
         tries: 0,
         reason: j.reason,
-        clef_model: null,
-        clef_p: null,
+        clef_model: j.clef?.model ?? null,
+        clef_p: j.clef?.p ?? null,
         clef_ms: null,
-        clef_error: null,
+        clef_error: j.clef?.error ?? null,
         t_repair: null,
         t_confirm: null,
         created_at: pool.now(),
@@ -396,20 +404,25 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         item: null,
       };
       pool.judgments.set(record.judgment_id, record);
-      event(pool, "premise.judged", {
-        attempt_id: a.id,
-        kind: j.kind,
-        key: j.key,
-        old_hash: j.old_hash,
-        new_hash: j.new_hash,
-        cause: j.cause,
-        cause_seq: j.cause_seq,
-        rule: j.rule,
-        class: j.klass,
-        result: j.result,
-        reason: j.reason,
-        clef: null,
-      });
+      event(
+        pool,
+        "premise.judged",
+        {
+          attempt_id: a.id,
+          kind: j.kind,
+          key: j.key,
+          old_hash: j.old_hash,
+          new_hash: j.new_hash,
+          cause: j.cause,
+          cause_seq: j.cause_seq,
+          rule: j.rule,
+          class: j.klass,
+          result: j.result,
+          reason: j.reason,
+          clef: j.clef ?? null,
+        },
+        { headsup: j.heads_up === true },
+      );
       return record;
     },
     fileMapAt(seq: number): FileMap {

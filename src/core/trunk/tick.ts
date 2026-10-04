@@ -972,7 +972,7 @@ export function reconcile(
   // poison — the server refused the pack or the commands, never the compare — pause the pool.
   if (
     remote_main === "old" &&
-    remote_notes === "old" &&
+    (remote_notes === "old" || outbox.new_notes === "") &&
     outbox.rejects >= PUSH_REJECT_LIMIT &&
     pool.meta.get("pause_reason") !== "push_rejected"
   ) {

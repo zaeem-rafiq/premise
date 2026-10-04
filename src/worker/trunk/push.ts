@@ -300,7 +300,10 @@ async function pushOutboxInner(
       : refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
 
   const rejected = result.kind === "rejected";
-  if (rejected && remote_main === "old" && remote_notes === "old") countReject(ctx, outbox);
+  // LP5b's "both refs kept their old values": for a batch that commands no notes update (the
+  // seed) the notes ref cannot have moved — the absent ref counts as unchanged here.
+  const notesUnchanged = outbox.new_notes === "" ? remote_notes !== "other" : remote_notes === "old";
+  if (rejected && remote_main === "old" && notesUnchanged) countReject(ctx, outbox);
 
   const action = await apply("push_result", { remote_main, remote_notes });
   switch (action) {

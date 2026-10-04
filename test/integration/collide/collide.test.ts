@@ -318,9 +318,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(again.stop_reason).toBe("withdrawn");
   });
 
-  it.fails(
-    "10.3 (X0, SW2): a rescale landing before the write gives info; the write uses the new value",
-    () => {
+  it("10.3 (X0, SW2): a rescale landing before the write gives info; the write uses the new value", () => {
     const sim = new SwarmSim(swarmFiles(), { seed: 7 });
     const ae = sim.open("add-energy");
     // Drive the script through its five calls before the write: list, read GUIDE.md and the
@@ -346,12 +344,9 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sim.state(ae)).toBe("landed");
     expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
-    },
-  );
+  });
 
-  it.fails(
-    "escape repro (X0, SW2, TA3): a held add-energy re-decides its refused write from the heads-up",
-    () => {
+  it("escape repro (X0, SW2, TA3): a held add-energy re-decides its refused write from the heads-up", () => {
       // The 2026-10-04 incident on the real service: `add-energy` held before submit reads
       // ENERGY_MAX = 100; `rescale-energy` lands in between. The X0 heads-up is `info`, so the
       // Agent does not show it (HE2): the `write` the pattern had already decided with the old
@@ -378,6 +373,5 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
       expect(sim.state(ae)).toBe("landed");
       expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
       expect(sw2Escapes(sim.files())).toEqual([]);
-    },
-  );
+  });
 });

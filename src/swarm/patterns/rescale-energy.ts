@@ -6,6 +6,15 @@
 // acknowledges. A `repair` (E1, with OP1) means another rescale landed first: `stop` `withdrawn`.
 // Everything else takes the defaults of SW6; a held agent waits before its first `submit` (SW8,
 // SWR3).
+//
+// A `replace` or `submit` sent while an unshown heads-up waits is refused `heads_up_first` (TA3):
+// the operation is NOT recorded, and the heads-up arrives on that answer. Queued repairs keep
+// their slot until confirmed, so a refused one is re-issued rather than skipped.
+//
+// A point where the row is silent: an `info` (X0) on `ENERGY_MAX` before the `replace` — another
+// rescale landed between the read and the replace, so `own` no longer matches the file. The
+// pattern decides the step again from the fresh value the item's `after` carries (the row's
+// "whichever applies" re-decided), instead of replaying the stale `old` into a `no_match`.
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp, HeadsUpItem } from "../../protocol/headsup.ts";
@@ -28,10 +37,11 @@ type Issued = "none" | "script" | "repair" | "submit";
 type RescaleState = {
   issued: Issued;
   step: number;
-  own: { old: string; new: string } | null; // its `ENERGY_MAX` replace args, for SW6 reapply
+  v: number | null; // ENERGY_MAX as last seen: its own read, or a heads-up's `after` (X0)
+  own: { old: string; new: string } | null; // its `ENERGY_MAX` replace args, re-derived from `v`
   newV: number | null; // the value it is landing; `0.3 x newV` is the QR1 repair's threshold
   seen_hns: number[]; // heads-ups already answered (re-pushes arrive again, HU5)
-  repairs: Array<{ path: string; old: string; new: string }>; // QR1 `replace` calls, then its own
+  repairs: Array<{ path: string; old: string; new: string }>; // QR1 `replace` calls, then its own; the head is in flight
   acks: Array<{ hn: number; statement: string }>; // pending `acknowledge` entries for the submit
   released: boolean;
   withdrawn: boolean;
@@ -42,6 +52,7 @@ function initialState(): RescaleState {
   return {
     issued: "none",
     step: STEP_READ,
+    v: null,
     own: null,
     newV: null,
     seen_hns: [],
@@ -57,6 +68,14 @@ function initialState(): RescaleState {
 function pathOf(key: string): string {
   const cut = key.indexOf("#");
   return cut < 0 ? key : key.slice(0, cut);
+}
+
+/** The row's "or the reverse, whichever applies": the replace a fresh `V` asks for, or null
+ * when neither side of the canned flip applies. */
+function flipOf(v: number): { own: { old: string; new: string }; newV: number } | null {
+  if (v === 100) return { own: { old: "ENERGY_MAX = 100", new: "ENERGY_MAX = 1" }, newV: 1 };
+  if (v === 1) return { own: { old: "ENERGY_MAX = 1", new: "ENERGY_MAX = 100" }, newV: 100 };
+  return null;
 }
 
 /**
@@ -85,15 +104,33 @@ function qr1Repairs(item: HeadsUpItem, newV: number): Array<{ path: string; old:
 
 /**
  * The heads-up answers of the row and SW6.
+ * `info` (X0) on `ENERGY_MAX`: the row is silent — the fresh `after` re-derives the replace the
+ * row names ("whichever applies"), so the refused `replace` is re-decided, not replayed.
  * `repair` (E1) on `ENERGY_MAX`: another rescale landed first -> `stop` `withdrawn`.
  * `repair` (QR1): the gained-module `replace`s, then acknowledge "rescaled the threshold".
  * `confirm` and any other `repair`: acknowledge "not affected"; a dropped operation is applied
- * again on the current source, then acknowledged (SW6). `info`: nothing.
+ * again on the current source, then acknowledged (SW6).
  */
 function answerHeadsUp(state: RescaleState, headsUp: HeadsUp): void {
   if (state.seen_hns.includes(headsUp.hn)) return;
   state.seen_hns.push(headsUp.hn);
-  if (headsUp.result === "info") return;
+  if (headsUp.result === "info") {
+    for (const item of headsUp.items) {
+      if (item.premise.kind === "entity" && item.premise.key === ENERGY_KEY && item.diff.kind === "entity") {
+        const v = energyMaxOf(item.diff.after);
+        if (v === null) continue;
+        state.v = v;
+        const flip = flipOf(v);
+        if (flip === null) {
+          state.withdrawn = true; // neither side of the canned flip applies
+          return;
+        }
+        state.own = flip.own;
+        state.newV = flip.newV;
+      }
+    }
+    return;
+  }
   if (
     headsUp.result === "repair" &&
     headsUp.items.some(
@@ -137,7 +174,8 @@ function consumeLast(state: RescaleState, turn: PatternTurn): void {
     if (code === "attempt_closed" || code === "attempt_unknown") {
       state.done = true;
     } else if (code === "heads_up_first") {
-      // The submit was refused for unseen heads-ups; they arrive and are answered, then it retries.
+      // TA3: refused without being recorded; the heads-ups ride this answer and the step is
+      // decided again below, never replayed.
     } else {
       // SW6: a call answering `limit_reached`, `no_match` or `ambiguous`, and any other failure the
       // script cannot fix, ends the attempt with `stop` `withdrawn`.
@@ -148,19 +186,20 @@ function consumeLast(state: RescaleState, turn: PatternTurn): void {
   if (issued === "script") {
     if (state.step === STEP_READ) {
       const v = energyMaxOf(sourceOf(last.result));
-      // The row: `ENERGY_MAX = 100` -> `1`, or the reverse, whichever applies.
-      if (v === 100) {
-        state.own = { old: "ENERGY_MAX = 100", new: "ENERGY_MAX = 1" };
-        state.newV = 1;
-      } else if (v === 1) {
-        state.own = { old: "ENERGY_MAX = 1", new: "ENERGY_MAX = 100" };
-        state.newV = 100;
-      } else {
+      state.v = v;
+      const flip = v === null ? null : flipOf(v);
+      if (flip === null) {
         state.withdrawn = true; // neither applies: the rescale has nothing to replace
         return;
       }
+      state.own = flip.own;
+      state.newV = flip.newV;
     }
     state.step += 1;
+    return;
+  }
+  if (issued === "repair") {
+    state.repairs.shift(); // the confirmed `replace` leaves the queue
     return;
   }
   if (issued === "submit") {
@@ -182,7 +221,6 @@ function consumeLast(state: RescaleState, turn: PatternTurn): void {
       state.done = true;
     }
   }
-  // A "repair" answer needs no bookkeeping: the acknowledgement was queued at schedule time.
 }
 
 export const RESCALE_ENERGY: Pattern = {
@@ -198,7 +236,7 @@ export const RESCALE_ENERGY: Pattern = {
     for (const headsUp of turn.heads_ups) answerHeadsUp(state, headsUp);
 
     // A pull-back (GA3) or a landed-time answer reopens work after a successful submit.
-    if (state.done && state.acks.length > 0) {
+    if (state.done && (state.acks.length > 0 || state.repairs.length > 0)) {
       state.done = false;
       state.step = STEP_SUBMIT;
     }
@@ -208,7 +246,7 @@ export const RESCALE_ENERGY: Pattern = {
       return { kind: "stop", reason, state };
     }
     if (state.repairs.length > 0) {
-      const repair = state.repairs.shift() as { path: string; old: string; new: string };
+      const repair = state.repairs[0] as { path: string; old: string; new: string };
       state.issued = "repair";
       return { kind: "tool", tool: "replace", args: repair, state };
     }

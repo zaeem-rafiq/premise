@@ -2,6 +2,10 @@
 // Replay draw the same components of the same `FloorState` (FE4). The pool area and the rail are
 // regions of the view, imported directly; named views and sheets resolve through the registry's
 // tags (the contract of `registry.ts`, the merge of `bindings.tsx`).
+//
+// The shell owns the layout frame of 2.1-2.10 (header, banners, strip, body, Replay bar),
+// the owner session of 3.17 (FR21 expiry included), the theme and size of 6.3 (kept in the
+// browser; the size otherwise follows the window width) and the keyboard map of 6.6.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FloorJson } from "../../protocol/floor-json.ts";
@@ -16,6 +20,7 @@ import type { SheetTarget, Toast } from "../state/view-state.ts";
 import { Header } from "./header.tsx";
 import { Strip } from "../components/strip/strip.tsx";
 import { Banners } from "../components/banners/banners.tsx";
+import { RebuildDialog } from "../components/banners/rebuild-dialog.tsx";
 import { Toasts } from "../components/toast/toasts.tsx";
 import { Announcer } from "../components/toast/announcer.tsx";
 import { AboutSheet } from "../components/about/about.tsx";
@@ -28,9 +33,10 @@ import { Rail } from "../components/rail/rail.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
 import { ReplayMenu } from "../replay/replay-menu.tsx";
-import { loadRecordingIndex, recordingFileUrl, type RecordingIndex } from "../replay/player.ts";
+import { loadRecordingIndex, type RecordingIndex } from "../replay/player.ts";
 import { replayError } from "../../copy/replay.ts";
 import { errorSentence } from "../../copy/errors.ts";
+import { text } from "../../copy/strings.ts";
 import { sessionPath } from "../stream/urls.ts";
 import { duration } from "../../copy/format.ts";
 
@@ -51,30 +57,68 @@ function call(entry: RegistryEntry | undefined, props: Record<string, unknown>):
 
 let toastSeq = 0;
 
+/** `ViewState.theme`/`size` are kept in the browser (6.3, VD19) under these keys. */
+const THEME_KEY = "premise.theme";
+const SIZE_KEY = "premise.size";
+
+function readTheme(): "dark" | "light" {
+  try {
+    const kept = window.localStorage.getItem(THEME_KEY);
+    if (kept === "dark" || kept === "light") return kept;
+  } catch {
+    // storage can be off; the system setting is the fallback then
+  }
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function readSize(): "stage" | "laptop" | null {
+  try {
+    const kept = window.localStorage.getItem(SIZE_KEY);
+    if (kept === "stage" || kept === "laptop") return kept;
+  } catch {
+    // storage can be off
+  }
+  return null;
+}
+
+function keep(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // storage can be off
+  }
+}
+
 export function FloorApp({ settings, table }: { settings: FloorJson; table: RegistryTable }) {
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
   const [view, setView] = useState<"floor" | "compare" | "swarm">("floor");
   const [sheet, setSheet] = useState<SheetTarget>({ kind: "none" });
   const [owner, setOwner] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [theme, setTheme] = useState<"dark" | "light">(() =>
-    window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark",
-  );
-  const [size, setSize] = useState<"stage" | "laptop">("laptop");
+  const [theme, setTheme] = useState<"dark" | "light">(readTheme);
+  // The type size follows the window width (2.1: stage from 1600); key Z overrides it and
+  // the override is kept in the browser (VD19).
+  const [sizePick, setSizePick] = useState<"stage" | "laptop" | null>(readSize);
+  const [wide, setWide] = useState(() => window.matchMedia?.("(min-width: 1600px)").matches ?? false);
+  const size = sizePick ?? (wide ? "stage" : "laptop");
   const [shortcuts, setShortcuts] = useState(true);
-  const [framesPaused, setFramesPaused] = useState(false);
+  // Reduced motion starts the pool frames paused (6.4, AC11).
+  const [framesPaused, setFramesPaused] = useState(reducedMotion);
   const [startDismissed, setStartDismissed] = useState(false);
   const [replayIndex, setReplayIndex] = useState<RecordingIndex | null>(null);
   const [replayMenuOpen, setReplayMenuOpen] = useState(false);
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
   const replay = route.kind === "replay";
   const session = useSession(route, settings, reducedMotion);
+  // FR10/CO3: while the connection is lost every owner control is off and the last
+  // content keeps, dimmed. Replay never is "offline" - it plays a file, not a socket.
+  const offline = !replay && session.connection === "lost";
   const shell = useMemo(() => makeShell(settings, owner, replay), [settings, owner, replay]);
 
   // ---- routing (client routes of 4.5; the page never reloads) ----
   const navigate = useCallback((path: string) => {
-    window.history.pushState(null, "", path);
+    if (path !== window.location.pathname) window.history.pushState(null, "", path);
     setRoute(parseRoute(path));
     setSheet({ kind: "none" });
   }, []);
@@ -121,13 +165,34 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     }
   }, [session.effects, session.floor.n]);
   const dropToast = useCallback((id: number) => setToasts((old) => old.filter((t) => t.id !== id)), []);
-  const toast = useCallback((text: string) => setToasts((old) => [...old, { id: ++toastSeq, text }].slice(-3)), []);
+  const toast = useCallback((line: string) => setToasts((old) => [...old, { id: ++toastSeq, text: line }].slice(-3)), []);
+
+  // ---- sheets: openers are remembered so focus returns to them on close (AX4) ----
+  const sheetOpener = useRef<HTMLElement | null>(null);
+  const openSheet = useCallback((next: SheetTarget) => {
+    sheetOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSheet(next);
+  }, []);
+  const closeSheet = useCallback(() => setSheet({ kind: "none" }), []);
+  useEffect(() => {
+    if (sheet.kind === "none") {
+      sheetOpener.current?.focus();
+      sheetOpener.current = null;
+    }
+  }, [sheet.kind]);
 
   // ---- theme + size on the root element (6.3, 6.6) ----
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.size = size;
   }, [theme, size]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1600px)");
+    const onChange = () => setWide(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   // ---- the replay index, lazily (the menu and key R share it) ----
   const index = useRef<Promise<RecordingIndex | null> | null>(null);
@@ -157,6 +222,14 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     });
   }, [getIndex, openRecording]);
 
+  // ---- FR21: an owner request answered 401 - the session ended server-side. The page is
+  // a visitor's again, the toast says so, and the key dialog opens for a new key. ----
+  const sessionExpired = useCallback(() => {
+    setOwner(false);
+    setSheet({ kind: "owner" });
+    setToasts((old) => [...old, { id: ++toastSeq, text: text("owner.expired") }].slice(-3));
+  }, []);
+
   // ---- actions the views ask for ----
   const sendIntent = useCallback(
     async (text_: string) => {
@@ -167,41 +240,38 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text: text_, race: false, prewritten: false, request_id: crypto.randomUUID() }),
         });
-        if (!response.ok) toast(errorSentence(response.status));
+        if (response.status === 401) sessionExpired();
+        else if (!response.ok) toast(errorSentence(response.status));
         else toast(shell.t("toast.sent"));
       } catch {
         toast(errorSentence(null));
       }
     },
-    [pool, shell, toast],
+    [pool, shell, toast, sessionExpired],
   );
+
+  const allow = useCallback(() => {
+    void allowAgents().then((status) => {
+      if (status === 401) sessionExpired();
+      else if (status < 200 || status >= 300) toast(errorSentence(status === 0 ? null : status));
+    });
+  }, [sessionExpired, toast]);
 
   const onBannerAction = useCallback(
     (action: string) => {
       if (action === "kill.allow") {
-        void allowAgents().then((ok) => {
-          if (!ok) toast(errorSentence(null));
-        });
+        allow();
       } else if (action === "pool.rebuild") {
-        setSheet({ kind: "none" });
-        void fetch(`/api/pools/${encodeURIComponent(pool)}/rebuild`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ request_id: crypto.randomUUID() }),
-        })
-          .then((response) => {
-            if (!response.ok) toast(errorSentence(response.status));
-          })
-          .catch(() => toast(errorSentence(null)));
+        openSheet({ kind: "rebuild" });
       }
     },
-    [pool, toast],
+    [allow, openSheet],
   );
 
   const openNeeds = useCallback(() => {
     const cardId = session.floor.open_cards[0];
-    if (cardId !== undefined) setSheet({ kind: "card", card_id: cardId });
-  }, [session.floor]);
+    if (cardId !== undefined) openSheet({ kind: "card", card_id: cardId });
+  }, [session.floor, openSheet]);
 
   // ---- the key map of 6.6 ----
   const onKey = useCallback(
@@ -210,6 +280,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
       switch (event.action) {
         case "escape":
           if (sheet.kind !== "none") setSheet({ kind: "none" });
+          else if (replayMenuOpen) setReplayMenuOpen(false);
           else if (view === "compare") setView("floor");
           break;
         case "focus-intent":
@@ -222,7 +293,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           setView("swarm");
           break;
         case "view-about":
-          setSheet({ kind: "about" });
+          openSheet({ kind: "about" });
           break;
         case "view-compare":
           setView((v) => (v === "compare" ? "floor" : "compare"));
@@ -239,20 +310,26 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           setFramesPaused((p) => !p);
           break;
         case "kill":
-          if (owner && !replay) setSheet({ kind: "kill" });
+          if (owner && !replay && !offline) openSheet({ kind: "kill" });
           break;
         case "replay-default":
           pauseNextReplay(); // RY26: R opens the default recording paused
           openDefaultRecording();
           break;
-        case "theme":
-          setTheme((t) => (t === "dark" ? "light" : "dark"));
+        case "theme": {
+          const next = theme === "dark" ? "light" : "dark";
+          setTheme(next);
+          keep(THEME_KEY, next);
           break;
-        case "type-size":
-          setSize((s) => (s === "stage" ? "laptop" : "stage"));
+        }
+        case "type-size": {
+          const next = size === "stage" ? "laptop" : "stage";
+          setSizePick(next);
+          keep(SIZE_KEY, next);
           break;
+        }
         case "shortcuts":
-          setSheet({ kind: "shortcuts" });
+          openSheet({ kind: "shortcuts" });
           break;
         case "replay-toggle":
           player?.toggle();
@@ -277,7 +354,20 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           break;
       }
     },
-    [session.player, sheet.kind, view, owner, replay, openDefaultRecording, openNeeds],
+    [
+      session.player,
+      sheet.kind,
+      view,
+      owner,
+      replay,
+      replayMenuOpen,
+      theme,
+      size,
+      openDefaultRecording,
+      openNeeds,
+      openSheet,
+      offline,
+    ],
   );
   useKeys({ replay, shortcuts, onKey });
 
@@ -308,9 +398,51 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     connectionTries: session.tries,
     staleFor: session.staleFor,
     owner,
+    offline,
   };
   const banners = bannerList(floor, clock, bannerOpts);
   const cells = stripCells(floor, clock, { greenFeature: settings.features.green });
+  const sheets = (
+    <>
+      {sheet.kind === "about" && (
+        <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
+      )}
+      {sheet.kind === "shortcuts" && (
+        <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
+      )}
+      {sheet.kind === "owner" && (
+        <OwnerDialog
+          unlocked={owner}
+          onToast={toast}
+          onDone={(next) => {
+            setOwner(next);
+            closeSheet();
+            if (!next) toast(shell.t("owner.locked_toast"));
+          }}
+          onClose={closeSheet}
+        />
+      )}
+      {sheet.kind === "kill" && (
+        <KillDialog onClose={closeSheet} onToast={toast} onExpired={sessionExpired} offline={offline} />
+      )}
+      {sheet.kind === "rebuild" && (
+        <RebuildDialog pool={pool} onClose={closeSheet} onToast={toast} onExpired={sessionExpired} offline={offline} />
+      )}
+      {replayMenuOpen && (
+        <ReplayMenu
+          index={replayIndex}
+          owner={owner && !replay}
+          pool={pool}
+          onPick={(id) => {
+            setReplayMenuOpen(false);
+            openRecording(id);
+          }}
+          onClose={() => setReplayMenuOpen(false)}
+        />
+      )}
+    </>
+  );
+
   let body: React.ReactNode;
   if (replay && session.replay.phase === "loading") {
     body = (
@@ -351,8 +483,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     const swarmEntry = table.entries.get("view.swarm");
     body = (
       <main className="floor-body floor-swarm">
-        {call(swarmEntry, { floor, owner, pool: settings.swarm_pool }) ?? (
-          <SwarmView floor={floor} owner={owner} pool={settings.swarm_pool} />
+        {call(swarmEntry, { floor, owner: owner && !replay && !offline, pool: settings.swarm_pool }) ?? (
+          <SwarmView floor={floor} owner={owner && !replay && !offline} pool={settings.swarm_pool} />
         )}
       </main>
     );
@@ -401,7 +533,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           dwellMs={reducedMotion ? 2000 : 1200}
           capReached={capReached(floor)}
           onSend={(t) => void sendIntent(t)}
-          onOpenCard={(cardId) => setSheet({ kind: "card", card_id: cardId })}
+          onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
         />
       </main>
     );
@@ -409,7 +541,12 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   return (
     <ShellContext.Provider value={shell}>
-      <div className="floor" data-mode={replay ? "replay" : "live"} data-view={view}>
+      <div
+        className="floor"
+        data-mode={replay ? "replay" : "live"}
+        data-view={view}
+        data-state={session.connection === "lost" ? "offline" : undefined}
+      >
         <Header
           pool={pool}
           view={view}
@@ -417,76 +554,37 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           needs={needs}
           owner={owner}
           killed={floor.limits?.killed === true}
+          offline={offline}
           onView={(v) => {
             if (v === "compare") setView((old) => (old === "compare" ? "floor" : "compare"));
             else setView(v);
           }}
           onReplayMenu={() => {
             void getIndex();
-            setSheet({ kind: "none" });
             setReplayMenuOpen(true);
           }}
-          onAbout={() => setSheet({ kind: "about" })}
+          onAbout={() => openSheet({ kind: "about" })}
           onNeeds={openNeeds}
           onOwner={() => {
-            if (!replay) setSheet({ kind: "owner" });
+            if (!replay) openSheet({ kind: "owner" });
           }}
           onKill={() => {
-            if (floor.limits?.killed === true) {
-              void allowAgents().then((ok) => {
-                if (!ok) toast(errorSentence(null));
-              });
-            } else {
-              setSheet({ kind: "kill" });
-            }
+            if (floor.limits?.killed === true) allow();
+            else openSheet({ kind: "kill" });
           }}
         />
+        <Strip cells={cells} stale={replay || session.connection !== "lost" ? null : session.staleFor} />
         <Banners rows={banners} onAction={onBannerAction} />
-        <Strip cells={cells} stale={replay ? null : session.staleFor} />
-        {body}
+        {/* Sheets live inside .floor-main so the header, banners and strip stay visible
+            and usable above them (LY4); on the narrow layout they are full-screen (2.9). */}
+        <div className="floor-main">
+          {body}
+          {sheets}
+          <Toasts toasts={toasts} onDrop={dropToast} />
+          <Announcer lines={session.effects.announces} toasts={toasts} />
+        </div>
         {replay && session.player !== null && (
           <ReplayBar player={session.player} onClose={() => navigate(poolRoute(pool, settings.default_pool))} />
-        )}
-        <Toasts toasts={toasts} onDrop={dropToast} />
-        <Announcer lines={session.effects.announces} />
-        {sheet.kind === "about" && (
-          <AboutSheet
-            floor={floor}
-            shortcuts={shortcuts}
-            onShortcuts={setShortcuts}
-            onClose={() => setSheet({ kind: "none" })}
-          />
-        )}
-        {sheet.kind === "owner" && (
-          <OwnerDialog
-            onDone={(next) => {
-              setOwner(next);
-              setSheet({ kind: "none" });
-              if (!next) toast(shell.t("owner.locked_toast"));
-            }}
-            onClose={() => setSheet({ kind: "none" })}
-          />
-        )}
-        {sheet.kind === "kill" && <KillDialog onClose={() => setSheet({ kind: "none" })} />}
-        {sheet.kind === "shortcuts" && (
-          <AboutSheet
-            floor={floor}
-            shortcuts={shortcuts}
-            onShortcuts={setShortcuts}
-            onClose={() => setSheet({ kind: "none" })}
-          />
-        )}
-        {replayMenuOpen && (
-          <ReplayMenu
-            index={replayIndex}
-            owner={owner && !replay}
-            pool={pool}
-            onPick={(id) => {
-              setReplayMenuOpen(false);
-              openRecording(id);
-            }}
-            onClose={() => setReplayMenuOpen(false)}
-          />
         )}
       </div>
     </ShellContext.Provider>

@@ -111,7 +111,14 @@ export type StripCell = {
   id: string; // the label's copy id
   label: string;
   value: string;
+  /** The value is a sentence, not a number: it draws at status size so a long string
+   * keeps the strip's fixed height instead of overflowing the counter cell (3.8). */
+  text?: boolean;
   sub?: string;
+  /** 3.18 spend indicator: the bar's fill, 0..1 of the cap. */
+  bar?: number;
+  /** Hover or focus lists these lines (the `spend.model_line` of each model). */
+  tip?: string[];
   tone: "neutral" | "confirm" | "changed" | "holds" | "checking" | "synthetic";
   title?: string;
 };
@@ -119,6 +126,7 @@ export type StripCell = {
 import { STRINGS, text } from "../../copy/strings.ts";
 import { fill } from "../../copy/fill.ts";
 import { money, clock as clockText, duration } from "../../copy/format.ts";
+import { modelName } from "../../copy/names.ts";
 
 /** The `alt` form of a copy id (5.11), or its `text` when it has none. */
 export function altText(id: string, vars: Parameters<typeof text>[1] = {}): string {
@@ -161,6 +169,7 @@ export function stripCells(
     id: "strip.agents",
     label: text("strip.agents"),
     value: state.n === 0 ? dash : agentsValue,
+    text: state.pool.synthetic && realInFlight === 0 && state.n !== 0,
     sub: state.pool.synthetic && realInFlight === 0 ? undefined : text("strip.agents.limit"),
     tone: "neutral",
   });
@@ -193,12 +202,19 @@ export function stripCells(
   const green = state.green;
   let greenCell: StripCell;
   if (opts.greenFeature === "none") {
-    greenCell = { id: "strip.green", label: text("strip.green"), value: text("green.none"), tone: "neutral" };
+    greenCell = {
+      id: "strip.green",
+      label: text("strip.green"),
+      value: text("green.none"),
+      text: true,
+      tone: "neutral",
+    };
   } else if (greenRed(state)) {
     greenCell = {
       id: "strip.green",
       label: text("strip.green"),
       value: text("green.red", { seq: green.last!.seq }),
+      text: true,
       tone: "changed",
     };
   } else if (green.last !== null && !green.last.ok && !green.last.confirmed) {
@@ -206,6 +222,7 @@ export function stripCells(
       id: "strip.green",
       label: text("strip.green"),
       value: text("green.checking", { seq: green.last.seq }),
+      text: true,
       tone: "checking",
     };
   } else if (green.seq === null) {
@@ -215,6 +232,7 @@ export function stripCells(
       id: "strip.green",
       label: text("strip.green"),
       value: text("green.static", { seq: green.seq }),
+      text: true,
       tone: "holds",
     };
   } else {
@@ -222,18 +240,23 @@ export function stripCells(
       id: "strip.green",
       label: text("strip.green"),
       value: text("green.at", { seq: green.seq }),
+      text: true,
       tone: "holds",
     };
   }
   cells.push(greenCell);
 
-  // 3.18: the spend indicator.
+  // 3.18: the spend indicator - `spend.value` over a bar whose fill is the share of the
+  // cap; near the cap the pair reads in the confirm tone and `spend.near` shows, at the
+  // cap they are `changed` with `spend.reached` (FR7, FR8). Hover or focus on the cell
+  // lists each model's use (`spend.model_line`).
   const limits = state.limits;
   if (limits === null) {
     cells.push({
       id: "strip.spend",
       label: text("strip.spend"),
       value: text("spend.unknown"),
+      text: true,
       tone: "neutral",
     });
   } else {
@@ -244,9 +267,20 @@ export function stripCells(
       id: "strip.spend",
       label: text("strip.spend"),
       value: text("spend.value", { spent: money(limits.spend_usd), cap: money(limits.cap_usd) }),
+      text: true,
       sub: reached ? text("spend.reached") : near ? text("spend.near") : undefined,
+      bar: Math.min(1, Math.max(0, share)),
+      tip:
+        limits.models.length === 0
+          ? undefined
+          : limits.models.map((m) =>
+              text("spend.model_line", {
+                model: modelName(m.model),
+                used: m.used_last_minute,
+                limit: m.per_minute,
+              }),
+            ),
       tone: reached ? "changed" : near ? "confirm" : "neutral",
-      title: `${Math.round(share * 100)}%`,
     });
   }
 
@@ -258,7 +292,13 @@ export type BannerRow = {
   id: string; // the copy id the sentence comes from
   word: string; // the capitals word (5.11)
   sentence: string;
-  button?: { id: string; label: string; action: "kill.allow" | "pool.rebuild" };
+  button?: {
+    id: string;
+    label: string;
+    action: "kill.allow" | "pool.rebuild";
+    /** FR10/CO3: an owner action is off while the connection is lost. */
+    disabled?: boolean;
+  };
   tone: "synthetic" | "replay" | "changed" | "confirm";
 };
 
@@ -279,6 +319,8 @@ export function bannerList(
     connectionTries: number;
     staleFor: number | null; // ms since the newest applied event's ts (banner.offline)
     owner: boolean;
+    /** FR10/CO3: connection lost - owner controls of a banner are off. */
+    offline?: boolean;
   },
 ): BannerRow[] {
   const rows: BannerRow[] = [];
@@ -308,7 +350,9 @@ export function bannerList(
       id,
       word: bannerWord(id),
       sentence: text(id),
-      button: opts.owner ? { id: "kill.allow", label: text("kill.allow"), action: "kill.allow" } : undefined,
+      button: opts.owner
+        ? { id: "kill.allow", label: text("kill.allow"), action: "kill.allow", disabled: opts.offline === true }
+        : undefined,
       tone: "changed",
     });
   }
@@ -321,9 +365,9 @@ export function bannerList(
       sentence: text(id),
       button:
         opts.owner && (reason === "diverged" || reason === "push_rejected")
-          ? { id: "pool.rebuild", label: text("pool.rebuild"), action: "pool.rebuild" }
+          ? { id: "pool.rebuild", label: text("pool.rebuild"), action: "pool.rebuild", disabled: opts.offline === true }
           : opts.owner && reason === "owner"
-            ? { id: "kill.allow", label: text("kill.allow"), action: "kill.allow" }
+            ? { id: "kill.allow", label: text("kill.allow"), action: "kill.allow", disabled: opts.offline === true }
             : undefined,
       tone: "changed",
     });

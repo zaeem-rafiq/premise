@@ -45,7 +45,12 @@ function Banner({ row, onAction }: { row: BannerRow; onAction: (action: string) 
       <span className="banner-word">{row.word}</span>
       <span className="banner-sentence">{row.sentence}</span>
       {row.button !== undefined && (
-        <button type="button" className="banner-button" onClick={() => onAction(row.button!.action)}>
+        <button
+          type="button"
+          className="banner-button"
+          disabled={row.button.disabled === true}
+          onClick={() => onAction(row.button!.action)}
+        >
           {row.button.label}
         </button>
       )}

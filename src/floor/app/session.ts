@@ -228,14 +228,19 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
       },
     );
 
-    return () => handle.close();
+    // VD4: the run clock and the stall/idle timers of 4.4 tick between events.
+    const ticker = window.setInterval(tick, 1_000);
+    return () => {
+      window.clearInterval(ticker);
+      handle.close();
+    };
   }, [key, settings, reducedMotion, route]);
 
   // Keep the snapshot view fresh: the player's subscribe bumps, but the fields below must
   // always read the newest values.
   const player = session.player;
-  const floor = floorRef.current;
   const snap = player === null ? null : player.snapshot();
+  const floor = snap === null ? floorRef.current : snap.floor;
   const staleFor = floor.ts === 0 ? null : Math.max(0, session.clock.time() - floor.ts);
   return { ...session, floor, snap, staleFor, effects: effectsRef.current };
 }

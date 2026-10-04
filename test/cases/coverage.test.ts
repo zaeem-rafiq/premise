@@ -24,7 +24,10 @@ const EVENTS: Record<string, { src: "trunk" | "agent" | "gate" | "swarm" | "floo
   "pool.state": { src: "trunk" },
   "pool.files": { src: "trunk" },
   "pool.paused": { src: "trunk" },
-  "trunk.error": { src: "trunk", open: "worker request shell (src/worker/trunk/after-commit.ts); outside the pure core" },
+  "trunk.error": {
+    src: "trunk",
+    open: "worker request shell (src/worker/trunk/after-commit.ts); outside the pure core",
+  },
   "intent.created": { src: "trunk" },
   "intent.state": { src: "trunk" },
   "attempt.opened": { src: "trunk" },

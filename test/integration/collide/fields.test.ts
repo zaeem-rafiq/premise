@@ -75,7 +75,10 @@ describe("event fields of 12.1, worked by hand (BP1)", () => {
       attempt_id: a.id,
       call_id: "c1",
       tool: "write",
-      args: { path: "creatures/x.js", content: 'import { ENERGY_MAX } from "../world/energy.js";\nexport const x = ENERGY_MAX;\n' },
+      args: {
+        path: "creatures/x.js",
+        content: 'import { ENERGY_MAX } from "../world/energy.js";\nexport const x = ENERGY_MAX;\n',
+      },
       ack: 0,
     });
     // Write 2 drops the import: the flag no longer applies; a premise with no flags is

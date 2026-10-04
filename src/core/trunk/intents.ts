@@ -5,7 +5,7 @@
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
 import { CARD_TEMPLATES, type CardTemplateId } from "../../copy/cards.ts";
-import type { Attempt, CardRec, Pool, Premise } from "./sets.ts";
+import type { Attempt, CardRec, IntentRec, Pool, Premise } from "./sets.ts";
 import { event, emitPoolState } from "./events.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
@@ -200,6 +200,15 @@ export type OpenArgs = {
   truth?: string[] | null;
   requester?: string;
 };
+
+/** Set an intent's state and emit `intent.state` once per transition (12.1). */
+export function setIntentState(pool: Pool, intent_id: string, state: IntentRec["state"]): void {
+  const i = pool.intents.get(intent_id);
+  if (i === undefined || i.state === state) return;
+  i.state = state;
+  pool.dirtyIntents.add(intent_id);
+  event(pool, "intent.state", { intent_id, state });
+}
 
 /** Create the intent (if new) and the attempt in state `opened` (9.2 T1); emits the events. */
 export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {

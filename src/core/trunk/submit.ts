@@ -74,7 +74,6 @@ export function submitCall(
   ack: number,
 ): SubmitInner {
   const checks: Check[] = [];
-  a.checks = checks;
   const okCheck = (name: string): void => {
     checks.push({ name, ok: true });
   };
@@ -131,7 +130,9 @@ export function submitCall(
       hn: n,
       result: h.result,
       go_around: h.body.go_around,
-      changed: a.opCount !== h.op_mark,
+      // HU12: `changed` — an operation was recorded since `op_mark`, or a heads-up created
+      // since this one dropped operations.
+      changed: a.opCount > h.op_mark || a.heads.some((x) => x.hn > n && x.body.dropped_ops.length > 0),
       statement: args.statement ?? "",
     });
   }
@@ -279,6 +280,9 @@ export function submitCall(
   a.summary = args.summary ?? null;
   a.submitted_at = pool.now();
   okCheck("policy");
+  a.checks = checks;
+  // The check list is the note's `checks` (3.5); meta persists it so a pool reopen keeps it.
+  pool.meta.set(`checks:${a.id}`, JSON.stringify(checks));
   const waiting = [...a.premises.values()].some((p) => p.status === "pending_triage");
   if (a.tier === "held") {
     setState(pool, a, "held", "T4");
@@ -290,7 +294,7 @@ export function submitCall(
     return result({ status: "held", submit_id: a.submit_id, card_id: card.card_id, tier: "held" }, premises);
   }
   if (waiting) {
-    setState(pool, a, "submitted", "T6");
+    setState(pool, a, "submitted", "T3");
     return result({ status: "submitted", submit_id: a.submit_id, waiting_for: ["triage"], tier: "auto" }, premises);
   }
   if (a.race) {
@@ -308,7 +312,7 @@ export function submitCall(
     }
     return result({ status: "held", submit_id: a.submit_id, card_id: card?.card_id ?? null, tier: a.tier }, premises);
   }
-  setState(pool, a, "validated", "T8");
+  setState(pool, a, "validated", "T2");
   a.validated_at = ++pool.order;
   return result({ status: "validated", submit_id: a.submit_id, tier: "auto" }, premises);
 }

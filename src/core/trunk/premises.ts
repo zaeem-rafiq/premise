@@ -128,7 +128,12 @@ export function syncPremises(pool: Pool, a: Attempt): Premise[] {
     if (!p.read && !p.edit && !p.derived) {
       a.premises.delete(id);
       changed.delete(p);
-      pool.event("premise.removed", { attempt_id: a.id, kind: p.kind, key: p.key, rule: "flags_cleared" });
+      pool.event("premise.removed", {
+        attempt_id: a.id,
+        kind: p.kind,
+        key: p.key,
+        rule: p.kind === "query" ? "D2" : "R5",
+      });
       pool.dropPendingItem(a, p);
     }
   }

@@ -316,6 +316,8 @@ export type Pool = {
   dirtyIntents: Set<string>;
   pendingTriage: PendingTriage[];
   judgments: Map<number, Judgment>;
+  /** EV3: while non-null, `event()` buffers {type, fields, opts} here; `flushEvents` emits them. */
+  eventBuffer: Array<{ type: string; fields: Record<string, unknown>; opts?: { headsup?: boolean } }> | null;
   headSeq(): number;
   setHead(seq: number, files: FileMap): void;
   event(type: string, fields: Record<string, unknown>): void;

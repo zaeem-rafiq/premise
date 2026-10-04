@@ -29,7 +29,7 @@ import { makeTreeFromFiles } from "../git/tree-files.ts";
 import { notesTree } from "../git/notes-tree.ts";
 import { makeBlob, makeCommit, type GitObject } from "../git/objects.ts";
 import { canonicalJson, noteBytes } from "../git/note.ts";
-import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { event, emitPoolFiles, emitPoolState, flushEvents } from "./events.ts";
 import { buildPack } from "../git/pack.ts";
 import {
   closeCard,
@@ -43,8 +43,9 @@ import {
   sentBack,
   setState,
   unvalidate,
+  setIntentState,
 } from "./intents.ts";
-import { applyClassification, blast, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { applyClassification, blast, emitSent, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
 import { classify } from "../classify/table.ts";
 import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
@@ -570,6 +571,7 @@ export function tick(pool: Pool): void {
       if (a === null || a === undefined) continue;
       if (s === u.target_seq) {
         setState(pool, a, "stopped", "T18", "undone");
+        setIntentState(pool, a.intent_id, "undone");
       } else {
         // T19: a dependent landing's attempt is reopened with its frozen state.
         a.go_arounds += 1;
@@ -618,6 +620,7 @@ export function tick(pool: Pool): void {
     );
   const inBatch = new Set<Attempt>();
   const members: Array<{ premises: Premise[] }> = [];
+  pool.eventBuffer = [];
   for (const c of cands) {
     if (batch.length >= pool.K.MAX_BATCH) break;
     const after = replayOps(curOps(c), running);
@@ -706,6 +709,7 @@ export function tick(pool: Pool): void {
     for (const it of cl.items) {
       if (it.result === "delete") {
         c.premises.delete(`${it.p.kind}|${it.p.key}`);
+        event(pool, "premise.removed", { attempt_id: c.id, kind: it.p.kind, key: it.p.key, rule: it.rule ?? "" });
         continue;
       }
       const cur = keyHash(running, it.p.kind, it.p.key);
@@ -747,6 +751,7 @@ export function tick(pool: Pool): void {
   }
   if (batch.length === 0) {
     pool.out.waiting = cands.filter((c) => pool.out.skipped[c.id] === "right_of_way").length;
+    flushEvents(pool);
     return;
   }
 
@@ -772,11 +777,13 @@ export function tick(pool: Pool): void {
     if (l.attempt_id !== null) {
       const a = pool.attempts.get(l.attempt_id);
       if (a !== undefined) {
-        setState(pool, a, "accepted", "T17");
+        setState(pool, a, "accepted", "T15");
         a.landed_seq = l.seq;
       }
     }
   }
+  // EV3: the candidate phase's skipped/judged/removed events follow every landing.accepted.
+  flushEvents(pool);
   for (const p of changedPaths(pre, running)) pool.filesChanged.add(p);
   pool.setHead(seq, running);
   // The notes tree and the batch's notes commit (9.5).
@@ -862,7 +869,9 @@ export function tick(pool: Pool): void {
       p.members = cur.members;
       p.seq = seq;
     }
-    pushHeadsUp(pool, r.a, "repair", items, [], batchCause(batch, "undo"));
+    const uh = pushHeadsUp(pool, r.a, "repair", items, [], batchCause(batch, "undo"));
+    uh.body.go_around = r.a.go_arounds;
+    emitSent(pool, r.a, uh, items);
   }
 
   // Every other in-flight or parked attempt is classified against the batch (9.4 step 6).
@@ -889,7 +898,7 @@ export function tick(pool: Pool): void {
 // The push lifecycle (9.6 to 9.8) — in this build the driver's push steps stand in for the remote.
 
 /** Mark the outbox's landings as on-main: `landing.landed` events and the T17a states. */
-export function markLanded(pool: Pool): void {
+export function markLanded(pool: Pool, transition: "T16" | "T17a" = "T16"): void {
   const outbox = pool.outbox;
   if (outbox === null) return;
   let changed = false;
@@ -911,7 +920,10 @@ export function markLanded(pool: Pool): void {
     if (l.attempt_id !== null) {
       const a = pool.attempts.get(l.attempt_id);
       if (a !== undefined) {
-        if (a.state === "accepted") setState(pool, a, "landed", "T17a");
+        if (a.state === "accepted") {
+          setState(pool, a, "landed", transition);
+          setIntentState(pool, a.intent_id, "landed"); // T16/T17a effect: intent -> landed
+        }
         a.right_of_way_at = null;
         pool.dirtyAttempts.add(a.id);
       }
@@ -999,7 +1011,7 @@ export function reconcile(
     pushOk(pool);
     return "mark_pushed";
   }
-  markLanded(pool);
+  markLanded(pool, outbox.state === "diverged" ? "T17a" : "T16");
   if (remote_notes === "old") {
     // LP5: `notes_pending` — the next request carries the notes command only.
     outbox.main = true;
@@ -1108,7 +1120,7 @@ export function triage(
     });
   }
   if (a.state === "submitted" && [...a.premises.values()].every((q) => q.status === "holds")) {
-    setState(pool, a, "validated", "T8");
+    setState(pool, a, "validated", "T12");
     a.validated_at = ++pool.order;
   }
   pool.dirtyAttempts.add(a.id);
@@ -1260,10 +1272,14 @@ export function owner(
           agent_kind: a.agent_kind,
           race: a.race,
         });
+        setIntentState(pool, a.intent_id, "open");
       }
       // GL3a: a card that closes with any option other than `retry` deletes the parked
       // attempt's premises and operations; the intent stops when no other attempt of it is in
       // flight or landed (CD4).
+      for (const pr of a.premises.values()) {
+        event(pool, "premise.removed", { attempt_id: a.id, kind: pr.kind, key: pr.key, rule: "GL3a" });
+      }
       a.premises.clear();
       a.ops.length = 0;
       pool.dirtyAttempts.add(a.id);
@@ -1272,8 +1288,7 @@ export function owner(
         intent !== undefined &&
         ![...pool.attempts.values()].some((x) => x.intent_id === a.intent_id && x !== a && x.state !== "stopped")
       ) {
-        intent.state = "stopped";
-        pool.dirtyIntents.add(a.intent_id);
+        setIntentState(pool, a.intent_id, "stopped");
       }
       return {};
     }

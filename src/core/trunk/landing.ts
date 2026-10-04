@@ -6,6 +6,7 @@
 // Everything is pure and synchronous: the head file map is `pool.files`; a classification takes
 // `before` and `after` file maps and never awaits.
 
+import type { Operation } from "../../protocol/operations.ts";
 import type { PremiseKind } from "../../protocol/premise.ts";
 import type { HeadsUp, HeadsUpItem } from "../../protocol/headsup.ts";
 import type { Attempt, ClassifyItem, FileMap, PendingTriage, Pool, Premise, Sets } from "./sets.ts";
@@ -213,18 +214,27 @@ export function pushHeadsUp(
     items: items.map((x) => x.trace),
     dropped_ops: dropped,
   });
+  return h;
+}
+
+/** `headsup.sent` (12.1): emitted once per heads-up, with the body's final `go_around`. */
+export function emitSent(
+  pool: Pool,
+  a: Attempt,
+  h: { hn: number; body: HeadsUp },
+  items: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }>,
+): void {
   event(pool, "headsup.sent", {
     attempt_id: a.id,
-    hn,
-    result,
-    wake,
-    cause: body.cause,
+    hn: h.hn,
+    result: h.body.result,
+    wake: h.body.wake,
+    cause: h.body.cause,
     keys: items.map((x) => ({ kind: x.item.premise.kind, key: x.item.premise.key, rule: x.item.rule })),
-    items: body.items,
-    dropped_ops: body.dropped_ops,
-    go_around: null,
+    items: h.body.items,
+    dropped_ops: h.body.dropped_ops,
+    go_around: h.body.go_around,
   });
-  return h;
 }
 
 export function sendHeadsUp(
@@ -238,21 +248,27 @@ export function sendHeadsUp(
   causeAttempt: Attempt | null = null,
 ): void {
   const h = pushHeadsUp(pool, a, result, items, dropped, cause);
+  const sent = (): void => {
+    if (h.body.go_around === null) h.body.go_around = a.go_arounds;
+    emitSent(pool, a, h, items);
+  };
   if (result === "repair") {
-    enterRepair(pool, a, h, e1keys, causeAttempt);
-    h.body.go_around = a.go_arounds;
-  } else if (result === "confirm" && isWaiting(a)) {
-    // T11: a confirm heads-up to a queued attempt pulls it back.
-    closeCard(pool, a, "stale");
-    if (sentBack(a) >= pool.K.GO_AROUND_LIMIT) {
-      setState(pool, a, "stopped", "T11", "go_around_limit");
-      openCard(pool, "choice", "go_around_limit", [a.id]);
-      return;
+    enterRepair(pool, a, h, e1keys, causeAttempt, sent);
+  } else {
+    emitSent(pool, a, h, items);
+    if (result === "confirm" && isWaiting(a)) {
+      // T11: a confirm heads-up to a queued attempt pulls it back.
+      closeCard(pool, a, "stale");
+      if (sentBack(a) >= pool.K.GO_AROUND_LIMIT) {
+        setState(pool, a, "stopped", "T11s", "go_around_limit");
+        openCard(pool, "choice", "go_around_limit", [a.id]);
+        return;
+      }
+      a.pull_backs += 1;
+      if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
+      setState(pool, a, "needs_confirm", "T11");
+      unvalidate(pool, a);
     }
-    a.pull_backs += 1;
-    if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
-    setState(pool, a, "needs_confirm", "T11");
-    unvalidate(pool, a);
   }
 }
 
@@ -263,14 +279,28 @@ export function enterRepair(
   h: { hn: number },
   e1keys: string[],
   causeAttempt: Attempt | null,
+  sent: () => void,
 ): void {
   if (a.state === "stopped") {
+    sent();
     for (const k of e1keys) a.e1.add(k);
     return;
   }
   if (a.state === "going_around") {
     const earlier = a.heads.filter((x) => x.hn !== h.hn && x.result === "repair" && x.resolved_at === null);
     if (earlier.some((x) => x.delivered_at === null)) {
+      // T10 joins this go-around without incrementing; ST1 still emits the transition.
+      sent();
+      event(pool, "attempt.state", {
+        attempt_id: a.id,
+        from: "going_around",
+        to: "going_around",
+        transition: "T10",
+        reason: null,
+        go_arounds: a.go_arounds,
+        pull_backs: a.pull_backs,
+        right_of_way: a.right_of_way_at !== null,
+      });
       for (const k of e1keys) a.e1.add(k);
       return; // GA1: joins this go-around only when every earlier repair heads-up was delivered
     }
@@ -280,19 +310,22 @@ export function enterRepair(
   for (const k of e1keys) a.e1.add(k);
   closeCard(pool, a, "stale");
   if (contradiction) {
-    setState(pool, a, "stopped", "T16", "contradiction");
+    sent();
+    setState(pool, a, "stopped", "T9c", "contradiction");
     openCard(pool, "choice", "contradiction", [a.id, causeAttempt.id]);
     return;
   }
   if (sentBack(a) >= pool.K.GO_AROUND_LIMIT) {
-    setState(pool, a, "stopped", "T15", "go_around_limit");
+    sent();
+    setState(pool, a, "stopped", "T9", "go_around_limit");
     openCard(pool, "choice", "go_around_limit", [a.id]);
     return;
   }
   a.go_arounds += 1;
   a.op_mark = a.opCount; // HU12: where this go-around started
   if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
-  if (a.state !== "going_around") setState(pool, a, "going_around", "T9");
+  sent();
+  if (a.state !== "going_around") setState(pool, a, "going_around", "T8");
   else
     event(pool, "attempt.state", {
       attempt_id: a.id,
@@ -539,7 +572,7 @@ export function lateSweep(pool: Pool, a: Attempt): void {
 }
 
 /** W5/R5: after a recorded operation — T22, sync, re-evaluate pending triage, late sweep. */
-export function afterOp(pool: Pool, a: Attempt): Premise[] {
+export function afterOp(pool: Pool, a: Attempt, op: Operation, pre: FileMap): Premise[] {
   if (isWaiting(a)) {
     closeCard(pool, a, "stale");
     unvalidate(pool, a);
@@ -547,16 +580,28 @@ export function afterOp(pool: Pool, a: Attempt): Premise[] {
     setState(pool, a, "working", "T22");
   }
   const premises = syncPremisesImpl(pool, a);
+  // op.recorded (12.1): `targets` is a replace's touched keys, else the path's post-op keys;
+  // `added`/`removed` are the op's own delta on the attempt view; `altered` is a key that was at
+  // head and whose content this op changed.
+  const head = pool.files;
+  const post = replayOps(curOps(a), head).files;
+  const keysOf = (m: FileMap): string[] => entityKeysOf(m, op.path) ?? (m.has(op.path) ? [op.path] : []);
+  const preKeys = keysOf(pre);
+  const postKeys = keysOf(post);
+  const preSet = new Set(preKeys);
+  const postSet = new Set(postKeys);
+  const atHead = (k: string): boolean => (k.includes("#") ? entityAt(head, k) !== null : head.has(k));
+  const hashOf = (m: FileMap, k: string): string =>
+    k.includes("#") ? (entityAt(m, k)?.hash ?? "") : blobId(utf8(m.get(k) ?? ""));
   event(pool, "op.recorded", {
     attempt_id: a.id,
-    op_seq: a.opCount,
-    op: a.ops[a.ops.length - 1]?.op ?? "write",
-    path: a.ops[a.ops.length - 1]?.path ?? "",
-    targets:
-      a.ops[a.ops.length - 1]?.op === "replace" ? (a.ops[a.ops.length - 1] as { targets: string[] }).targets : [],
-    altered: [],
-    added: [],
-    removed: [],
+    op_seq: op.op_seq,
+    op: op.op,
+    path: op.path,
+    targets: op.op === "replace" ? op.targets : postKeys,
+    altered: postKeys.filter((k) => preSet.has(k) && atHead(k) && hashOf(pre, k) !== hashOf(post, k)),
+    added: postKeys.filter((k) => !preSet.has(k)),
+    removed: preKeys.filter((k) => !postSet.has(k)),
   });
   reevaluate(pool, a);
   lateSweep(pool, a);

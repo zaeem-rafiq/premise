@@ -40,17 +40,6 @@ export function gateDurableObjectTransport(ns: DurableObjectNamespace): GateTran
   };
 }
 
-export function gateUrlTransport(base: string): GateTransport {
-  return {
-    post: (path, body) =>
-      fetch(base + path, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
-  };
-}
-
 /** A transport-level failure: HTTP error or an unparseable answer. Mapped to a gate wait (SE8). */
 export class GateTransportError extends Error {}
 

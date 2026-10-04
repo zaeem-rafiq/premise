@@ -197,9 +197,9 @@ export function buildNote(
             repo: a.attempt_repo,
             opened_seq: a.opened_seq,
             steps: pool.steps.get(a.id) ?? a.opCount,
-            model_calls: a.model_calls,
-            tokens_in: a.tokens_in,
-            tokens_out: a.tokens_out,
+            model_calls: a.model_calls ?? 0,
+            tokens_in: a.tokens_in ?? 0,
+            tokens_out: a.tokens_out ?? 0,
           },
     summary: a?.summary ?? "",
     premises: l.premises.map((p) => ({

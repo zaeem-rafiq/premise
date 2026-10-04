@@ -89,8 +89,7 @@ import { PatternDriver } from "./pattern-driver.ts";
 import { patternById } from "../../swarm/pattern.ts";
 import { sqlOver } from "../sql-port.ts";
 import { ModelDriver, budgetExtension, loadLoopState } from "./model-driver.ts";
-import { urlModel } from "../adapters/model/workers-ai.ts";
-import { GateCalls, gateDurableObjectTransport, gateUrlTransport } from "./gate-client.ts";
+import { GateCalls, gateDurableObjectTransport } from "./gate-client.ts";
 import { appendEvent, deliverEvents, ensureEventsSchema, pendingEvents } from "./events.ts";
 import { MODEL_PLAN } from "../../config/model-plan.ts";
 import { RESUME_MESSAGE } from "../../protocol/agent-prompt.ts";
@@ -100,8 +99,9 @@ import { callTarget, headsUpUserMessage, messageForResponse, writeToolRow } from
 // What a pool's launcher POSTs to the Agent's /open is `AgentOpenRequest` of
 // src/protocol/internal.ts (SW4; the swarm lane's launch call carries the same
 // fields). `trunk_url` points the Trunk client at an HTTP endpoint instead of
-// the Trunk Durable Object; tests use it for a local fake that follows
-// src/protocol/tools.ts.
+// the Trunk Durable Object; the Agent's own DO-level tests use it for a local
+// fake that follows src/protocol/tools.ts. The model and the gate have no such
+// hook: they are the `AI` binding and the `GATE` object, in every deployment.
 type PushRequest = AgentPushRequest;
 
 type JournalRequest =
@@ -176,24 +176,18 @@ export class Agent extends DurableObject<Env> {
         ? durableObjectTransport(this.env.TRUNK, this.#meta("pool_id") ?? "")
         : urlTransport(trunk_url);
     this.#trunk = new TrunkCalls(transport, attempt_id);
-    // The model path: gate and AI join the pump below (05-agent). `model_url`
-    // points the model client at a test's fake over HTTP; absent it, the
-    // Workers AI binding answers — and when the binding is absent the adapter's
-    // failures classify as `model_unavailable`, never silent success.
-    const gate_url = this.#meta("gate_url");
-    if (this.env.GATE !== undefined || gate_url !== null) {
-      this.#gate = new GateCalls(
-        gate_url === null ? gateDurableObjectTransport(this.env.GATE) : gateUrlTransport(gate_url),
-      );
+    // The model path: gate and AI join the pump below (05-agent). Both are the
+    // deployment's own bindings — the `GATE` object and the `AI` binding; a
+    // request that names a URL is ignored (the test hooks are gone). When the
+    // `AI` binding is absent the adapter's failures classify as
+    // `model_unavailable`, never silent success.
+    if (this.env.GATE !== undefined) {
+      this.#gate = new GateCalls(gateDurableObjectTransport(this.env.GATE));
     }
     if (this.#meta("driver") === "model") {
-      const model_url = this.#meta("model_url");
-      const ai =
-        model_url !== null
-          ? urlModel(model_url)
-          : (this.env.AI as unknown as {
-              run(model: string, request: Record<string, unknown>): Promise<unknown>;
-            });
+      const ai = this.env.AI as unknown as {
+        run(model: string, request: Record<string, unknown>): Promise<unknown>;
+      };
       this.#model = new ModelDriver({
         sql: this.#sql,
         ai,
@@ -203,6 +197,7 @@ export class Agent extends DurableObject<Env> {
         attemptId: attempt_id,
         secrets: () => this.#secrets(),
         releaseSlot: () => this.#releaseGateSlot(),
+        kickEvents: () => this.ctx.waitUntil(this.#deliverEvents()),
       });
       this.#driver = this.#model;
       return;
@@ -231,16 +226,45 @@ export class Agent extends DurableObject<Env> {
     return this.env.OWNER_KEY === undefined ? [] : [this.env.OWNER_KEY];
   }
 
-  /** EV2a: deliver the agent outbox to the pool's Floor; the `events` timer retries. */
+  /** EV2a: deliver the agent outbox to the pool's Floor; the `events` timer
+   * retries. One send is in flight at a time — a second caller (the `events`
+   * timer while the pump is posting) only marks another pass, so the Floor
+   * never sees the same rows in two races. */
+  #delivering = false;
+  #deliverAgain = false;
   async #deliverEvents(): Promise<void> {
     if (this.env.FLOOR === undefined) return;
     const pool = this.#meta("pool_id");
     const attempt_id = this.#meta("attempt_id");
     if (pool === null || attempt_id === null) return;
-    await deliverEvents(this.#sql, durableObjectTransport(this.env.FLOOR, pool), attempt_id);
+    if (this.#delivering) {
+      this.#deliverAgain = true;
+      return;
+    }
+    this.#delivering = true;
+    try {
+      do {
+        this.#deliverAgain = false;
+        await deliverEvents(this.#sql, durableObjectTransport(this.env.FLOOR, pool), attempt_id);
+      } while (this.#deliverAgain);
+    } finally {
+      this.#delivering = false;
+    }
   }
 
-  /** `attempt.step` inside the caller's transaction (EV2's "same transaction"). */
+  /** EV6: the pool's `summary_only` flag, learned once from Trunk's own
+   * `/internal/state` answer — the swarm route is not the flag's door. */
+  async #learnPoolFlags(): Promise<void> {
+    if (this.#meta("summary_only") !== null || this.#trunk === null) return;
+    const flag = await this.#trunk.summaryOnly();
+    if (flag !== null) this.#set("summary_only", flag ? "1" : "0");
+  }
+
+  /** `attempt.step` inside the caller's transaction (EV2's "same transaction").
+   * The event's `step` is the transcript's row number (05-agent's "Row" line:
+   * "the step of the event attempt.step ... are row numbers"), so a `user` row
+   * — a nudge, a heads-up run, the resume message — takes a number and leaves
+   * no step of the event stream. EV6: a `summary_only` pool emits none. */
   #emitStep(fields: {
     step: number;
     tool: string | null;
@@ -249,6 +273,7 @@ export class Agent extends DurableObject<Env> {
     error: string | null;
     ms: number;
   }): void {
+    if (this.#meta("summary_only") === "1") return;
     const pool = this.#meta("pool_id");
     const attempt_id = this.#meta("attempt_id");
     if (pool === null || attempt_id === null) return;
@@ -580,6 +605,7 @@ export class Agent extends DurableObject<Env> {
     this.#open_attempt();
     if (this.#trunk === null || this.#driver === null) return;
     this.#running = true;
+    await this.#learnPoolFlags();
     try {
       for (;;) {
         const pending = this.#meta("pending_stop");
@@ -824,6 +850,18 @@ export class Agent extends DurableObject<Env> {
       // A real submit already carries the `acknowledge` the loop computed
       // (TD6); the scripted `#submitArgs` adds it for the canned drivers.
       args: tool === "submit" && !isReal ? this.#submitArgs(args) : args,
+      // TA10: a real agent's running totals at the moment of the call; Trunk
+      // keeps the last reading and freezes it into the landing note. A
+      // synthetic attempt sends no usage, and its note keeps zeros.
+      ...(isReal
+        ? {
+            usage: {
+              model_calls: this.#int("model_calls"),
+              tokens_in: this.#int("tokens_in"),
+              tokens_out: this.#int("tokens_out"),
+            },
+          }
+        : {}),
     };
     const now = Date.now();
     beginCall(this.#sql, {
@@ -856,6 +894,9 @@ export class Agent extends DurableObject<Env> {
     } catch (e) {
       this.#callFailed(journal, e);
     }
+    // EV2: the step just committed is on its way to the Floor now — not at the
+    // end of the pump's run.
+    await this.#deliverEvents();
   }
 
   // The model driver's serve: `applied` means the assistant row landed and the
@@ -968,6 +1009,16 @@ export class Agent extends DurableObject<Env> {
           inbox.prune(this.#sql, request.ack);
         }
       }
+      // EV2a: a scripted or pattern agent's tool call is a step too — only a
+      // real agent adds the model turns in between.
+      this.#emitStep({
+        step,
+        tool: request.tool,
+        target: callTarget(request.tool, request.args as Record<string, unknown>),
+        ok: response.ok,
+        error: response.ok ? null : (response.error?.code ?? "timeout"),
+        ms: now - journal.started_at,
+      });
       this.#set("driver_last", JSON.stringify(msg));
     });
   }
@@ -1140,6 +1191,14 @@ export class Agent extends DurableObject<Env> {
           tokens_out: null,
           started_at: journal.started_at,
           ended_at: now,
+        });
+        this.#emitStep({
+          step,
+          tool: request.tool,
+          target: callTarget(request.tool, request.args as Record<string, unknown>),
+          ok: false,
+          error: "timeout",
+          ms: now - journal.started_at,
         });
         this.#set("step", step);
         this.#set("pending_stop", "tool_timeout");

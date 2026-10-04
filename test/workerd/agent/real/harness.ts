@@ -4,9 +4,10 @@
 // recorded and the answer comes from a script) and, for DO-level tests, a
 // fake Trunk like the scripted-lane's.
 //
-// `MODEL_URL` reaches the intents route and is handed to the Agent's open as
-// `model_url`; `SPEND_CAP_USD` is the gate's cap binding (absent = cap 0 =
-// fail closed, so every worker here sets it).
+// The `AI` binding is a service binding to `fake-ai.mjs`, which forwards each
+// `run` to the scripted FakeModel — the same shape a deployment binds. The
+// gate is the real `ModelGate` object; `SPEND_CAP_USD` is its cap binding
+// (absent = cap 0 = fail closed, so every worker here sets it).
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -18,6 +19,7 @@ import { DURABLE_OBJECTS, type DurableObjectBinding } from "../../../support/wor
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
+const FAKE_AI = join(REPO_ROOT, "test/workerd/agent/real/fake-ai.mjs");
 const ORIGIN = "http://premise.test";
 
 // Workerd honours the proxy variables of the environment; the only remotes of
@@ -40,6 +42,7 @@ export type RealWorker = {
 
 export type RealWorkerOptions = {
   ownerKey?: string;
+  /** The fake model's loopback URL, bound as the fake-AI worker's upstream. */
   modelUrl?: string;
   spendCapUsd?: string;
   /** Extra service bindings (the landing harness's fake Artifacts worker). */
@@ -54,7 +57,6 @@ export async function startRealWorker(options: RealWorkerOptions): Promise<RealW
   }
   const bindings: Record<string, string> = { SPEND_CAP_USD: options.spendCapUsd ?? "30" };
   if (options.ownerKey !== undefined) bindings.OWNER_KEY = options.ownerKey;
-  if (options.modelUrl !== undefined) bindings.MODEL_URL = options.modelUrl;
   const miniflare = new Miniflare(
     convertV4MiniflareOptions({
       cf: false,
@@ -69,7 +71,12 @@ export async function startRealWorker(options: RealWorkerOptions): Promise<RealW
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [binding, { className, useSQLite: true }]),
           ),
-          serviceBindings: options.serviceBindings ?? {},
+          serviceBindings: {
+            // The deployment's own `AI` binding — an entrypoint of the fake-ai
+            // worker, bound exactly where wrangler binds Workers AI.
+            ...(options.modelUrl === undefined ? {} : { AI: { name: "fake-ai", entrypoint: "AiBinding" } }),
+            ...options.serviceBindings,
+          },
           assets: {
             directory: CLIENT,
             binding: "ASSETS",
@@ -77,6 +84,17 @@ export async function startRealWorker(options: RealWorkerOptions): Promise<RealW
             assetConfig: { not_found_handling: "single-page-application" },
           },
         },
+        ...(options.modelUrl === undefined
+          ? []
+          : [
+              {
+                name: "fake-ai",
+                modules: [{ type: "ESModule", path: FAKE_AI }],
+                compatibilityDate: "2026-10-01",
+                compatibilityFlags: ["nodejs_compat"],
+                bindings: { MODEL_UPSTREAM: options.modelUrl },
+              },
+            ]),
         ...(options.extraWorkers ?? []),
       ] as never,
     }),
@@ -252,8 +270,30 @@ export class FakeTrunk {
   state: AttemptState = "working";
   syncHeadsUps: HeadsUp[] = [];
 
+  /** EV6: answered on `GET /internal/state` — the Agent learns the flag from
+   * Trunk's own answer, the way it does against the real object. */
+  summaryOnly = false;
+
   async listen(): Promise<void> {
     this.#server = createServer((req, res) => {
+      if (req.method === "GET") {
+        if (req.url === "/internal/state") {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              pool: "test",
+              meta: { summary_only: this.summaryOnly ? "1" : "0" },
+              events_out: [],
+              timers: [],
+              outbox: null,
+              served: {},
+            }),
+          );
+        } else {
+          res.writeHead(404).end();
+        }
+        return;
+      }
       let body = "";
       req.on("data", (c: Buffer) => (body += c));
       req.on("end", () => {
@@ -324,6 +364,10 @@ export class FakeTrunk {
 
   async #execute(req: ToolRequest): Promise<ToolResponse> {
     const state = req.tool === "submit" ? "validated" : this.state;
+    // The attempt's state persists: a later /sync must answer the same state
+    // the tool response just carried, or the Agent's mirror falls back to
+    // `working` and the loop restarts under it (TL11).
+    this.state = state;
     const args = req.args as { path?: string; content?: string };
     let result: object;
     switch (req.tool) {
@@ -484,13 +528,15 @@ export async function startRealLandingWorker(options: {
           compatibilityFlags: ["nodejs_compat"],
           bindings: {
             OWNER_KEY: options.ownerKey,
-            MODEL_URL: options.modelUrl,
             SPEND_CAP_USD: options.spendCapUsd ?? "30",
+          },
+          serviceBindings: {
+            AI: { name: "fake-ai", entrypoint: "AiBinding" },
+            POOLS: { name: "fake-artifacts" },
           },
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [binding, { className, useSQLite: true }]),
           ),
-          serviceBindings: { POOLS: { name: "fake-artifacts" } },
           assets: {
             directory: CLIENT,
             binding: "ASSETS",
@@ -504,6 +550,13 @@ export async function startRealLandingWorker(options: {
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
+        },
+        {
+          name: "fake-ai",
+          modules: [{ type: "ESModule", path: FAKE_AI }],
+          compatibilityDate: "2026-10-01",
+          compatibilityFlags: ["nodejs_compat"],
+          bindings: { MODEL_UPSTREAM: options.modelUrl },
         },
       ] as never,
     }),

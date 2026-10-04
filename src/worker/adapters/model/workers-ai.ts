@@ -1,7 +1,6 @@
 // The model adapter: sends an MP1 request to the Workers AI binding and classifies
 // the outcome by TL12's table. The binding comes in as an argument so a test hands
-// a fake; `urlModel` builds the same shape over HTTP for tests that run the real
-// Durable Object against a stand-in model service.
+// a fake with the same surface (a service binding's `run`, for the workerd tests).
 // Source: 05-agent MP1, TL12 to TL14; 01-core SE8.
 
 export const MODEL_TIMEOUT_MS = 60_000;
@@ -20,21 +19,6 @@ export type ModelOutcome =
   | { kind: "rejected" }
   | { kind: "unavailable" }
   | { kind: "timeout" };
-
-/** An HTTP-shaped transport failure, raised by `urlModel` and matched by Workers
- * AI's own error surface (the binding throws with `code`/`status`). */
-export class ModelHttpError extends Error {
-  readonly status: number;
-  readonly code: number | null;
-  readonly retryAfterMs: number | null;
-
-  constructor(status: number, code: number | null, retryAfterMs: number | null, detail: string) {
-    super(`model http ${status}${code === null ? "" : ` code ${code}`}: ${detail}`);
-    this.status = status;
-    this.code = code;
-    this.retryAfterMs = retryAfterMs;
-  }
-}
 
 /** Classify a thrown value by TL12's table: HTTP 429 or code 3040 is a rate
  * limit; 5xx, 3007 or 3008, and transport failures are `unavailable`; any other
@@ -84,42 +68,4 @@ export async function callModel(
   } finally {
     if (timer !== null) clearTimeout(timer);
   }
-}
-
-/**
- * A stand-in binding over HTTP for workerd tests: `POST {base}/run` with
- * `{model, request}`, the response body is the raw provider answer. Non-2xx
- * answers carry `{code?, retry_after_ms?}` and throw `ModelHttpError`, which
- * `classifyModelError` maps the same way the real binding's errors map.
- */
-export function urlModel(base: string): AiBinding {
-  const root = base.endsWith("/") ? base.slice(0, -1) : base;
-  return {
-    async run(model: string, request: Record<string, unknown>): Promise<unknown> {
-      const res = await fetch(`${root}/run`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model, request }),
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        let code: number | null = null;
-        let retry: number | null = null;
-        try {
-          const j = JSON.parse(text) as { code?: number; retry_after_ms?: number };
-          code = typeof j.code === "number" ? j.code : null;
-          retry = typeof j.retry_after_ms === "number" ? j.retry_after_ms : null;
-        } catch {
-          // a plain body is fine
-        }
-        const header = res.headers.get("retry-after");
-        if (retry === null && header !== null) {
-          const secs = Number(header);
-          if (Number.isFinite(secs)) retry = Math.ceil(secs * 1000);
-        }
-        throw new ModelHttpError(res.status, code, retry, text.slice(0, 200));
-      }
-      return JSON.parse(text);
-    },
-  };
 }

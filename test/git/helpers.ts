@@ -134,11 +134,32 @@ export function createServerRepo(prefix: string): ScratchRepo {
   return repo;
 }
 
+/** One request the test server saw, in the order it arrived. */
+export type RecordedRequest = {
+  method: string;
+  /** Pathname and query, for example `/repo/info/refs?service=git-receive-pack`. */
+  path: string;
+  authorization: string | null;
+};
+
+/**
+ * A gate in front of `git http-backend` standing in for Artifacts' token check: every
+ * request whose Authorization header is not `Bearer <expectedToken>` is answered with
+ * `status` (default 401) before git runs. `expectedToken` is read per request, so a test
+ * may change which token the gate accepts mid-test. Null or undefined means no check.
+ */
+export type GitGate = {
+  expectedToken?: string | null;
+  status?: number;
+};
+
 export type GitHttpServer = {
   /** `http://127.0.0.1:<port>` */
   readonly origin: string;
   /** The remote URL a stock git client uses for `repo` (its directory's base name). */
   remoteFor(repo: ScratchRepo): string;
+  /** Every request the server saw, in order. */
+  readonly requests: RecordedRequest[];
   close(): Promise<void>;
 };
 
@@ -197,10 +218,23 @@ function runBackend(
  * Serves every directory under `projectRoot` (a directory's base name is its URL path) with real
  * `git http-backend`, with `GIT_HTTP_EXPORT_ALL` so no git-daemon-export-ok file is needed.
  */
-export async function startGitServer(projectRoot: string): Promise<GitHttpServer> {
+export async function startGitServer(projectRoot: string, options?: { gate?: GitGate }): Promise<GitHttpServer> {
+  const requests: RecordedRequest[] = [];
   const server: Server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      const authorization = req.headers.authorization ?? null;
+      requests.push({ method: req.method ?? "GET", path: `${url.pathname}${url.search}`, authorization });
+      const gate = options?.gate;
+      if (
+        gate?.expectedToken !== undefined &&
+        gate.expectedToken !== null &&
+        authorization !== `Bearer ${gate.expectedToken}`
+      ) {
+        res.statusCode = gate.status ?? 401;
+        res.end();
+        return;
+      }
       const body = await readBody(req);
       const result = await runBackend(
         {
@@ -231,6 +265,7 @@ export async function startGitServer(projectRoot: string): Promise<GitHttpServer
   return {
     origin: `http://127.0.0.1:${port}`,
     remoteFor: (repo: ScratchRepo) => `http://127.0.0.1:${port}/${basename(repo.directory)}`,
+    requests,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.closeAllConnections();

@@ -1,7 +1,7 @@
 // The Floor app: `render(FloorState, ViewState, clock)` (FL1). Live mode, a snapshot and
-// Replay draw the same components of the same `FloorState` (FE4). The body comes from the
-// registry seam: `view.pool-area` and `view.rail` are the other two lanes' entries; while
-// they are not registered the shell's fallbacks hold the layout.
+// Replay draw the same components of the same `FloorState` (FE4). The pool area and the rail are
+// regions of the view, imported directly; named views and sheets resolve through the registry's
+// tags (the contract of `registry.ts`, the merge of `bindings.tsx`).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FloorJson } from "../../protocol/floor-json.ts";
@@ -34,9 +34,9 @@ import { errorSentence } from "../../copy/errors.ts";
 import { sessionPath } from "../stream/urls.ts";
 import { duration } from "../../copy/format.ts";
 
-/** Calls the registered component, or null when the entry is missing or unbound (the app draws
- * its fallback then). A `value` may be the component itself or its entry's tag, which the merged
- * records of `bindings.tsx` resolve — the one place tags meet components (see `registry.ts`). */
+/** Calls the registered component, or null when the entry is missing or unbound. A `value` may be
+ * the component itself or its entry's tag, which the merged records of `bindings.tsx` resolve —
+ * the one place tags meet components (see `registry.ts`). */
 function call(entry: RegistryEntry | undefined, props: Record<string, unknown>): React.ReactNode {
   if (entry === undefined) return null;
   const Component =

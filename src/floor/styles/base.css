@@ -553,7 +553,6 @@ a {
 .rail-empty {
   color: var(--muted);
 }
-.attempt-row,
 .landed-row {
   display: block;
   width: 100%;
@@ -566,37 +565,10 @@ a {
 .landed-pending {
   opacity: 0.85;
 }
-.attempt-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-}
-.attempt-name {
-  font-size: var(--size-intent);
-}
 .attempt-status {
   font-size: var(--size-status);
   font-weight: 600;
   flex: none;
-}
-.attempt-sub {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: var(--size-small);
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-.tag {
-  border: var(--border) solid var(--control);
-  border-radius: var(--radius);
-  padding: 0 6px;
-  font-size: var(--size-small);
-}
-.tag-synthetic {
-  color: var(--synthetic);
-  border-color: var(--synthetic);
 }
 .landed-row {
   display: flex;

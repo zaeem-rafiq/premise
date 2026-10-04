@@ -3,9 +3,8 @@
 //
 // What the shell registers: `view.swarm` (the Swarm view of 3.15), the sheet entries it owns
 // (`sheet.about`, `sheet.owner`, `sheet.kill`) and one `key.<name>` entry per keybinding of
-// `keys/keys.ts`. `view.pool-area` and `view.rail` belong to floor-pool and floor-rail; the app
-// reads them from this same table and falls back to the shell's placeholders while they are not
-// registered.
+// `keys/keys.ts`. The pool area and the rail are regions the app imports directly, not registry
+// entries.
 //
 // A view or sheet's `value` is the entry's own name, a tag `app.tsx` binds to the component.
 // This module cannot import the `.tsx` files themselves: `test/arch/seams.test.ts` imports the

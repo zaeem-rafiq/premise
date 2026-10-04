@@ -18,13 +18,11 @@
 // it; retries ride the alarm). `pause_pool`/`resume_pool` go to `effects.ts` — Trunk answers no
 // entry for an owner pause today, so they deliberately deliver nothing.
 //
-// The spend cap is the environment's `SPEND_CAP_USD` (a string, parsed once at init and stored
-// with the state — a later change needs a redeploy). A deployment always sets it; a local one
-// that does not falls back to the starting cap of `protocol/constants.ts` — the named starting
-// value, exactly as `MODEL_PLAN` is the starting plan — rather than failing closed, since the
-// launcher's `/killed` already treats a gate that cannot answer as not-killed and a half-dead
-// gate is worse than a working one. `GET /killed` reads the stored state only, so the kill
-// switch answers even while `SPEND_CAP_USD` is unconfigured: an uninitialized gate is not killed.
+// The spend cap is the environment's `SPEND_CAP_USD`, read on every load: the stored state keeps
+// what was spent and reserved, never the cap, so a deployment that lowers the cap is bound by it
+// at once. A variable that is absent, not a number or negative gives a cap of 0: every model call
+// is refused with `spend_cap` (SE7). The gate guards the owner's budget, so it fails closed.
+// `GET /killed` reads the stored state only: an uninitialized gate is not killed (SE10).
 
 import { DurableObject } from "cloudflare:workers";
 import { apply, initialState, nextWakeup } from "../../core/gate/index.ts";
@@ -40,7 +38,6 @@ import type {
   GateState,
 } from "../../core/gate/index.ts";
 import { MODEL_PLAN } from "../../config/model-plan.ts";
-import { SPEND_CAP_USD } from "../../protocol/constants.ts";
 import type { KillRequest } from "../../protocol/routes.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
@@ -122,17 +119,19 @@ export class ModelGate extends DurableObject<Env> {
     applyGateSchema(this.#sql);
   }
 
-  /**
-   * The stored state, or a fresh `initialState` carrying the environment's spend cap — or the
-   * starting cap of `protocol/constants.ts` when the variable is absent or not a number (see this
-   * file's head). The cap is parsed only here, once: a stored state wins, so `GET /killed` and
-   * the sweep never depend on the variable being present.
-   */
+  /** The deployment's cap: `SPEND_CAP_USD`, or 0 when it is absent, not a number or negative. */
+  #cap(): number {
+    const raw = this.env.SPEND_CAP_USD as unknown;
+    const cap = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : typeof raw === "number" ? raw : Number.NaN;
+    return Number.isFinite(cap) && cap >= 0 ? cap : 0;
+  }
+
+  /** The stored state under the deployment's present cap, or a fresh `initialState` (see this
+   * file's head). */
   #loadState(): GateState {
     const raw = gateMetaGet(this.#sql, "state");
-    if (raw !== null) return JSON.parse(raw) as GateState;
-    const cap = Number(this.env.SPEND_CAP_USD);
-    return initialState(Number.isFinite(cap) ? cap : SPEND_CAP_USD);
+    if (raw === null) return initialState(this.#cap());
+    return { ...(JSON.parse(raw) as GateState), cap_usd: this.#cap() };
   }
 
   /** `killed` without touching the cap: an uninitialized gate is not killed (SE10). */

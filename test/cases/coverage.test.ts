@@ -75,7 +75,8 @@ describe("event coverage (12.1, EV2a): every trunk type the engine can emit is e
     expect([...declared].sort()).toEqual(Object.keys(EVENTS).sort());
   });
 
-  it("collects types over every vector and the collide scenarios", () => {
+  // Every vector and several collide scenarios in one test: about ten seconds on a busy machine.
+  it("collects types over every vector and the collide scenarios", { timeout: 60_000 }, () => {
     const emitted = new Set<string>();
 
     // Every vector of the case file, required or not: coverage collects what the engine

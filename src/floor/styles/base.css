@@ -526,6 +526,47 @@ a {
 .strip-cell:focus .strip-tip {
   display: block;
 }
+/* 2.2: at stage width every cell reads label over value - the label on one line, the
+ * value and its sub-line on the next. Every cell starts at the same height, so the labels
+ * line up, and the value line's strut is the counter's, so a sentence sits on the
+ * baseline a number would. The spend bar is drawn at the cell's foot, clear of the
+ * descenders. The seven cells fit 1920 with room. Below about 1710 the longest values may
+ * not; then only the agents cell gives way, and its limit line ends in an ellipsis. */
+@media (min-width: 1600px) {
+  .strip-cell {
+    flex: 1 0 auto;
+    justify-content: flex-start;
+    padding-top: 6px;
+  }
+  .strip-cell[data-cell="strip.agents"] {
+    flex-shrink: 1;
+  }
+  .strip .strip-main {
+    font-size: var(--size-counter);
+    line-height: 0.8;
+    white-space: nowrap;
+  }
+  .strip-cell[data-cell="strip.agents"] .strip-main {
+    padding-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .strip .strip-label {
+    display: block;
+    margin-bottom: 5px;
+    line-height: 1;
+  }
+  .strip .strip-value--text {
+    white-space: nowrap;
+  }
+  .strip .strip-bar {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 4px;
+    margin: 0;
+  }
+}
 .strip-stale {
   flex: none;
   align-self: center;

@@ -6,7 +6,7 @@
 // Expected sizes are the spec's own numbers (2.1, 6.2), not the page's output (BP1).
 
 import { expect, test } from "@playwright/test";
-import { serveStream, poolState, intentCreated, attemptOpened } from "./stream.ts";
+import { serveStream, poolState, intentCreated, attemptOpened, limits, metrics } from "./stream.ts";
 
 async function box(locator: ReturnType<import("@playwright/test").Page["locator"]>) {
   const b = await locator.boundingBox();
@@ -141,6 +141,53 @@ test.describe("defect regressions", () => {
       .locator(".strip-value")
       .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
     expect(fontSize).toBe(18); // laptop status size (6.2)
+  });
+
+  test("at stage width every strip cell reads label over value, labels in one row (2.2)", async ({ page }) => {
+    // The defect: at 1920 the strip mixed two layouts - "REAL AGENTS 0 of 6" on one line,
+    // "LANDED" above "1", "SPEND $0.07 of" wrapping - so the labels sat at different
+    // heights. 2.2 draws each cell as its label above its value.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await serveStream(page, [
+      poolState(1),
+      intentCreated(2),
+      attemptOpened(3),
+      limits(4, { spend: 3.12, cap: 40 }),
+      metrics(5, { waiting_behind: 2 }),
+    ]);
+    await page.goto(`/p/testpool`);
+    await expect(page.locator(".strip-cell", { hasText: "Spend" })).toContainText("$3.12 of $40.00");
+    const cells = await page.locator(".strip-cell").evaluateAll((els) =>
+      els.map((el) => {
+        const label = el.querySelector(".strip-label")!.getBoundingClientRect();
+        const value = el.querySelector(".strip-value")!.getBoundingClientRect();
+        return {
+          name: el.querySelector(".strip-label")!.textContent,
+          labelTop: label.top,
+          labelHeight: label.height,
+          labelBottom: label.bottom,
+          // An inline box's rectangle is its font's whole content area, taller than the
+          // digits, so its middle - not its top - says which line it is on.
+          valueMiddle: value.top + value.height / 2,
+          valueLeft: value.left,
+          labelLeft: label.left,
+          clipped: el.scrollWidth > el.clientWidth,
+        };
+      }),
+    );
+    expect(cells).toHaveLength(7);
+    for (const cell of cells) {
+      // One line of label (small type 16, 6.2), then the value on the line below it,
+      // starting at the same left edge.
+      expect(cell.labelHeight, cell.name!).toBeLessThan(16 * 1.5);
+      expect(cell.valueMiddle, cell.name!).toBeGreaterThan(cell.labelBottom);
+      expect(Math.abs(cell.valueLeft - cell.labelLeft), cell.name!).toBeLessThanOrEqual(1);
+      expect(cell.clipped, cell.name!).toBe(false);
+    }
+    const tops = cells.map((c) => c.labelTop);
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
+    const strip = await box(page.locator(".strip"));
+    expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
   });
 });
 

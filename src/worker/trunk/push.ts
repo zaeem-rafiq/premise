@@ -176,12 +176,7 @@ export async function pushOutbox(
   }
 }
 
-async function pushOutboxInner(
-  env: Env,
-  ctx: DurableObjectState,
-  apply: ApplyPush,
-  deps: PushDeps,
-): Promise<void> {
+async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPush, deps: PushDeps): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
   if (outbox.next_try !== null && outbox.next_try > Date.now()) return;

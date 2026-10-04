@@ -134,15 +134,21 @@ export function FileTiles(props: FileTilesProps) {
       const gap = parseFloat(gs.getPropertyValue("--tile-gap")) || 8;
       const cap = parseFloat(gs.getPropertyValue("--tile-rows")) || 2;
       const cols = Math.max(1, Math.floor((el.clientWidth + gap) / (tw + gap)));
-      const rowsFit = Math.max(1, Math.floor((el.clientHeight + gap) / (th + gap)));
+      const rowsFit = el.clientHeight <= 0 ? cap : Math.max(1, Math.floor((el.clientHeight + gap) / (th + gap)));
       const rows = Math.min(cap, rowsFit);
       setCapacity(cols * rows);
     };
-    measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    (el as unknown as { __measure: () => void }).__measure = measure;
     return () => ro.disconnect();
   }, []);
+  // The scroll box is content-sized unless an outer bound caps it: re-measure after every
+  // render so capacity follows the real box as cells arrive and the region settles.
+  useEffect(() => {
+    const el = scrollRef.current;
+    (el as unknown as { __measure?: () => void } | null)?.__measure?.();
+  });
 
   // CO28: `tiles.more` clips the grid and opens the full list. While open the same cell (kept
   // last, same label, aria-expanded) closes it — the pattern `banner.more` uses.
@@ -165,7 +171,7 @@ export function FileTiles(props: FileTilesProps) {
       const marks = tileMarks(cell.readers, []);
       return (
         <div key={`label-${cell.dir}`} className="tile tile-label" aria-hidden={cell.dir === ""}>
-          <span className="tile-name">{cell.dir === "" ? "/" : cell.dir.replace(/\/$/, "")}</span>
+          <span className="tile-name">{cell.dir === "" ? "/" : cell.dir}</span>
           {marks.readers > 0 && (
             <span className="tile-marks">
               {Array.from({ length: marks.readers }, (_, k) => (
@@ -241,7 +247,10 @@ export function FileTiles(props: FileTilesProps) {
                   path: file.path,
                   seq: file.last_landed_seq,
                   left: Math.max(4, Math.min(r.left, window.innerWidth - 220)),
-                  top: r.bottom + 4,
+                  top:
+                    r.bottom + 4 + 110 > window.innerHeight
+                      ? Math.max(4, r.top - 110)
+                      : r.bottom + 4,
                 },
           );
         }}
@@ -266,8 +275,8 @@ export function FileTiles(props: FileTilesProps) {
       <div ref={scrollRef} className="tiles-scroll">
         {empty ? (
           <>
-            <div className="tiles-grid" aria-hidden>
-              {Array.from({ length: 8 }, (_, i) => (
+            <div className="tiles-grid tiles-grid-loading" aria-hidden>
+              {Array.from({ length: 24 }, (_, i) => (
                 <div key={i} className="tile tile-ghost" />
               ))}
             </div>

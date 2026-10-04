@@ -189,14 +189,26 @@ test.describe("the file tiles (3.7)", () => {
     const more = page.locator(`${TILES} .tile-more`);
     await expect(more).toBeVisible();
     await expect(more).toContainText("more");
-    const shownCount = await page.locator(`${TILES} .tile`).count();
+    // the measured capacity settles as the scroll box reports its real size — sample until stable
+    const tileCount = () => page.locator(`${TILES} .tile`).count();
+    const stableCount = async () => {
+      let a = -1;
+      let b = await tileCount();
+      while (a !== b) {
+        await page.waitForTimeout(150);
+        a = b;
+        b = await tileCount();
+      }
+      return b;
+    };
+    const shownCount = await stableCount();
     expect(shownCount).toBeLessThan(33);
     await more.click();
     await expect(more).toHaveAttribute("aria-expanded", "true");
     // the full list: 31 tiles + 2 labels + the toggle cell
     await expect(page.locator(`${TILES} .tile`)).toHaveCount(34);
     await more.click();
-    await expect(page.locator(`${TILES} .tile`)).toHaveCount(shownCount);
+    expect(await stableCount()).toBe(shownCount);
   });
 
   test("CO27/3.9/3.11: a tile's menu offers Who relies and Why, reporting through the region", async ({ page }) => {

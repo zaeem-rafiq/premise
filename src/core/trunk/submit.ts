@@ -284,7 +284,7 @@ export function submitCall(
     setState(pool, a, "held", "T4");
     a.approved_by = null;
     const card = openCard(pool, "held", "held_path", [a.id], {
-      blast_radius: { [a.id]: { ...blast(pool, a), right_of_way: [] } },
+      blast_radius: { [a.id]: blast(pool, a) },
       submit_ids: { [a.id]: a.submit_id },
     });
     return result({ status: "held", submit_id: a.submit_id, card_id: card.card_id, tier: "held" }, premises);
@@ -302,7 +302,7 @@ export function submitCall(
       card.body.candidates ??= {};
       card.body.candidates[a.id] = { state: "held", can_choose: true, seconds: null, cost_usd: null };
       card.body.submit_ids[a.id] = a.submit_id;
-      card.body.blast_radius[a.id] = { ...blast(pool, a), right_of_way: [] };
+      card.body.blast_radius[a.id] = blast(pool, a);
       pool.dirtyCards.add(card.card_id);
       event(pool, "card.updated", { card: card.body });
     }

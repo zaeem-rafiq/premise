@@ -253,13 +253,12 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(other.trunk.pool.landings).toEqual([]);
   });
 
-  it.fails(
+  it(
     "item 7 (HD1, CD4): the minimal held card offers land+decline, an empty blast radius, and refuses other options",
     () => {
       // HD1: `card.opened` of kind `held` with `preview: null`, an EMPTY blast radius and
-      // exactly the options `land` and `decline`. The engine opens the card with `options: []`
-      // and a blast radius filled with the attempt's entry. CD4: an option the card does not
-      // offer answers `invalid_args`; `trunk.owner` answers `{}` for an unknown action.
+      // exactly the options `land` and `decline` while `features.held` is off. CD4: an option
+      // the card does not offer answers `invalid_args`, and so does an unknown owner action.
       const sim = new SwarmSim(tidepoolFiles(), { seed: 7 });
       const rescale = sim.open("rescale-energy");
       drive(sim, rescale);

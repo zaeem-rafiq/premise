@@ -164,6 +164,9 @@ export function runCase(vector: Vector, pools: Pools): string[] {
   let trunk = Trunk.create(sql, seed, {
     constants: top.constants,
     switches: { CLEF_TRIAGE: top.switches?.CLEF_TRIAGE === "off" ? "off" : "on" },
+    // The cases run on the engine in Node, where every engine part is present: the full held
+    // form shows the blast radius and offers `land_now` (C49, C55).
+    features: { held: true },
   });
   // PL1: the seed's batch 0 is on Artifacts before any attempt works — the vectors predate the
   // seed push, so the driver replays it here (the `batch.pushed` it emits only adds to the trace;

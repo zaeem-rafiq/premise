@@ -37,6 +37,7 @@ export type PoolOptions = {
   pool_id?: string;
   constants?: Partial<Pool["K"]>;
   switches?: { CLEF_TRIAGE?: "on" | "off" };
+  features?: { held?: boolean };
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -298,6 +299,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       })(),
     K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
     clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    featuresHeld: opts.features?.held === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     files: new Map<string, string>(),
     modes: new Map<string, string>(),

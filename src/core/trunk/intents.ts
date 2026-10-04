@@ -4,6 +4,7 @@
 
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
+import { CARD_TEMPLATES, type CardTemplateId } from "../../copy/cards.ts";
 import type { Attempt, CardRec, Pool, Premise } from "./sets.ts";
 import { event, emitPoolState } from "./events.ts";
 
@@ -75,7 +76,7 @@ export function unvalidate(pool: Pool, a: Attempt): void {
 }
 
 /** Close the attempt's open non-choice card (T22, heads-up effects); emits `card.closed`. */
-export function closeCard(pool: Pool, a: Attempt, action: string): void {
+export function closeCard(pool: Pool, a: Attempt, action: string, by: "owner" | "system" = "system"): void {
   for (const c of pool.cards) {
     if (c.open && c.attempt_ids.includes(a.id) && c.kind === "race") {
       c.body.candidates ??= {};
@@ -109,7 +110,7 @@ export function closeCard(pool: Pool, a: Attempt, action: string): void {
       c.open = false;
       c.closed_at = pool.now();
       pool.dirtyCards.add(c.card_id);
-      event(pool, "card.closed", { card_id: c.card_id, action, by: "system", attempt_id: null, reason: null });
+      event(pool, "card.closed", { card_id: c.card_id, action, by, attempt_id: null, reason: null });
     }
   }
   a.approved_by = null;
@@ -125,6 +126,20 @@ export function openCard(
   extra: { body?: Partial<Card>; blast_radius?: Card["blast_radius"]; submit_ids?: Record<string, string> } = {},
 ): CardRec {
   const card_id = `k_${String(pool.cardCounter++).padStart(4, "0")}`;
+  // CD4: the options of the card, in the table's order. `land_now` joins the held card only on
+  // the full form (features.held) while the case of 10.2 step 4 holds: the blast radius lists an
+  // attempt with right of way under `repair` or `confirm`.
+  const fullHeld = kind === "held" && pool.featuresHeld;
+  const landNow =
+    fullHeld &&
+    Object.values(extra.blast_radius ?? {}).some(
+      (b) =>
+        b.right_of_way.some((id) => b.repair.includes(id) || b.confirm.includes(id)),
+    );
+  const template = CARD_TEMPLATES[`${kind}:${reason}` as CardTemplateId];
+  const options = (template?.options ?? [])
+    .filter((o) => o.id !== "land_now" || landNow)
+    .map((o) => ({ id: o.id, label: o.label }));
   const body: Card = {
     card_id,
     kind,
@@ -133,9 +148,11 @@ export function openCard(
     submit_ids: extra.submit_ids ?? {},
     title: reason,
     body: [],
-    options: [],
+    options,
     paths: [],
-    blast_radius: extra.blast_radius ?? {},
+    // HD1: on the minimal held form `card.opened` carries an empty blast radius; the callers
+    // still compute it, because the `land_now` check of 10.2 step 4 reads it.
+    blast_radius: kind === "held" && !pool.featuresHeld ? {} : (extra.blast_radius ?? {}),
     preview: null,
     candidates: null,
     risk: null,

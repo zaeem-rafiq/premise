@@ -814,5 +814,10 @@ export function blast(
     const res = worst(classify(pool, o, pool.files, after, null, [frozen(a)]));
     if (res !== null) out[res].push(o.id);
   }
+  // 10.2 step 4: the entries that hold right of way — `land_now` joins the card's options
+  // while one of them sits under `repair` or `confirm`.
+  out.right_of_way = [...out.repair, ...out.confirm, ...out.triage].filter(
+    (id) => (pool.attempts.get(id)?.right_of_way_at ?? null) !== null,
+  );
   return out;
 }

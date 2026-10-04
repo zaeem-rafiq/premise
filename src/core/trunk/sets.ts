@@ -284,6 +284,7 @@ export type Pool = {
   ids: { next(kind: string): string };
   K: { GO_AROUND_LIMIT: number; STARVATION_AFTER: number; MAX_BATCH: number; T_REPAIR: number; T_CONFIRM: number };
   clefOn: boolean; // switches.CLEF_TRIAGE === "on"
+  featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   meta: Map<string, string>;
   files: FileMap; // head: path -> content
   modes: Map<string, string>; // head: path -> mode

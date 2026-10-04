@@ -61,6 +61,9 @@ export class SwarmSim {
     this.trunk = Trunk.create(sqlOver(this.db), files, {
       summary_only: opts.summary_only === true,
     });
+    // PL1: the seed is batch 0 of the outbox and nothing lands before it is on Artifacts. This
+    // harness has no remote, so it confirms the seed push here, as `test/cases/driver.ts` does.
+    this.trunk.pushOk();
     this.seed = opts.seed;
   }
 

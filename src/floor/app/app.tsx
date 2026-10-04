@@ -299,7 +299,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           openSheet({ kind: "about" });
           break;
         case "view-compare":
-          setView((v) => (v === "compare" ? "floor" : "compare"));
+          // 2.3: Compare exists only for a pool with a plain-merge pool beside it.
+          if (session.floor.pool.plain_remote !== null) setView((v) => (v === "compare" ? "floor" : "compare"));
           break;
         case "needs-you":
           openNeeds();
@@ -359,6 +360,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     },
     [
       session.player,
+      session.floor.pool.plain_remote,
       sheet.kind,
       view,
       owner,
@@ -500,6 +502,21 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         {call(swarmEntry, { floor, owner: owner && !replay && !offline, pool: settings.swarm_pool }) ?? (
           <SwarmView floor={floor} owner={owner && !replay && !offline} pool={settings.swarm_pool} />
         )}
+      </main>
+    );
+  } else if (view === "compare" && floor.pool.plain_remote !== null && table.entries.has("view.compare")) {
+    // 2.3: the Compare view - the main pool and the plain-merge pool side by side. The pool area
+    // lane registers it; the shell owns the view state, the frames' pause and the way back.
+    body = (
+      <main className="floor-body floor-compare" data-view="compare">
+        {call(table.entries.get("view.compare"), {
+          pool,
+          floor,
+          mode: replay ? "replay" : "live",
+          paused: framesPaused,
+          onPausedChange: setFramesPaused,
+          onBack: () => setView("floor"),
+        })}
       </main>
     );
   } else {

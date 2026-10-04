@@ -190,11 +190,11 @@ export class FrameDriver {
   onStats(stats: FrameStats): void {
     this.lastStatsVersion = stats.version;
     this.lastStats = stats;
-    this.askSelftest(stats);
     if (this.phase === "loading" || this.phase === "error" || this.phase === "stalled") {
       this.phase = "live";
       this.sink.cancel("load");
     }
+    this.askSelftest(stats);
     if (this.expecting !== null && stats.version === this.expecting) {
       this.expecting = null;
       this.probeRetried = false;

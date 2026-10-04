@@ -1,0 +1,275 @@
+/* The attempt card (03-floor 3.2, 3.3) and its lights (CO14–CO16). The colour and type tokens are
+   the page's (6.2, 6.3); the fallbacks are the dark theme values so the card is never unstyled. */
+
+.attempt-card {
+  background: var(--surface, #13242f);
+  border: 1px solid var(--line, #3a5669);
+  border-radius: 8px;
+  color: var(--text, #eaf2f4);
+  min-height: 132px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Line 1: requester, tags, model and elapsed time (03 3.2). */
+.attempt-card__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--type-small, 16px);
+  color: var(--muted, #a8bcc6);
+}
+
+.attempt-card__requester {
+  font-weight: 600;
+}
+
+.attempt-card__tag {
+  border: 1px solid var(--line, #3a5669);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: var(--type-small, 16px);
+  color: var(--muted, #a8bcc6);
+  white-space: nowrap;
+}
+
+.attempt-card__meta {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #a8bcc6);
+}
+
+.attempt-card__model + .attempt-card__elapsed::before {
+  content: "· ";
+}
+
+/* Line 2: the intent text, at most two lines (03 3.2). Text from outside is quoted (CP6). */
+.attempt-card__intent {
+  margin: 0;
+  font-size: var(--type-intent, 24px);
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Line 3: status shape and word, `sent back n of 3`, then the lights (03 3.2). */
+.attempt-card__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--type-status, 22px);
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+
+.attempt-card__glyph {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.attempt-card__status--muted {
+  color: var(--muted, #a8bcc6);
+}
+.attempt-card__status--accent {
+  color: var(--accent, #6fd6cc);
+}
+.attempt-card__status--changed {
+  color: var(--changed, #ff7a6b);
+}
+.attempt-card__status--confirm {
+  color: var(--confirm, #ffc857);
+}
+.attempt-card__status--checking {
+  color: var(--checking, #9db8ff);
+}
+.attempt-card__status--holds {
+  color: var(--holds, #5bd68f);
+}
+
+.attempt-card__sent-back {
+  color: var(--text, #eaf2f4);
+  font-weight: 400;
+}
+
+.attempt-card__lights {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+}
+
+.attempt-card__relies {
+  font-size: var(--type-small, 16px);
+  color: var(--muted, #a8bcc6);
+  margin-right: 2px;
+}
+
+.attempt-card__more {
+  font-size: var(--type-small, 16px);
+  color: var(--muted, #a8bcc6);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Line 4: the activity, heads-up, submit or stop sentence (03 3.2); the warning colour is
+   `confirm` (7, rows FR1–FR3). */
+.attempt-card__line4 {
+  margin: 0;
+  font-size: var(--type-body, 20px);
+  line-height: 1.3;
+  color: var(--text, #eaf2f4);
+}
+
+.attempt-card__line4--warning {
+  color: var(--confirm, #ffc857);
+}
+
+.attempt-card__open {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #6fd6cc);
+  text-decoration: underline;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  text-align: left;
+}
+
+/* CO13: the same-agent / model-changed note of a reopened attempt. */
+.attempt-card__note {
+  margin: 0;
+  font-size: var(--type-small, 16px);
+  color: var(--muted, #a8bcc6);
+}
+
+/* CO10: the compact card (72 high: intent on one line; status, lights and model on the second). */
+.attempt-card--compact {
+  min-height: 72px;
+  padding: 8px 12px;
+}
+
+.attempt-card--compact .attempt-card__intent {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: var(--type-body, 20px);
+}
+
+.attempt-card--compact .attempt-card__status {
+  font-size: var(--type-small, 16px);
+}
+
+.attempt-card--compact .attempt-card__glyph {
+  width: 18px;
+  height: 18px;
+}
+
+.attempt-card--compact .attempt-card__line4 {
+  font-size: var(--type-small, 16px);
+}
+
+/* A premise light (03 3.3): 28 across on a card, 20 on a compact card (CO15). The shape carries
+   the state with the colour (VD10); `title` and `aria-label` carry the same sentence (CO16, AX7). */
+.light {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 4px;
+}
+
+.light svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.attempt-card--compact .light,
+.attempt-card--compact .light svg {
+  width: 20px;
+  height: 20px;
+}
+
+.light--holds {
+  color: var(--holds, #5bd68f);
+}
+.light--changed {
+  color: var(--changed, #ff7a6b);
+}
+.light--confirm {
+  color: var(--confirm, #ffc857);
+}
+.light--blind_spot {
+  color: var(--confirm, #ffc857);
+}
+.light--checking {
+  color: var(--checking, #9db8ff);
+}
+
+/* A premise with `edit` true has a short bar under its light (03 3.3). */
+.light__edit {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 3px;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+/* FR1: the working pulse is a 2.4 s opacity cycle on the small filled circle (03 6.4). */
+.attempt-card__pulse {
+  animation: attempt-card-pulse 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+@keyframes attempt-card-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Focus is always visible (AX3): a 3-wide ring, 2 away, in the `focus` token. */
+.attempt-card :focus-visible,
+.light:focus-visible {
+  outline: 3px solid var(--focus, #ffe08a);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attempt-card__pulse {
+    animation: none;
+  }
+}
+
+/* Forced colours: borders and outlines stay visible (AX9); light colours are signal, kept. */
+@media (forced-colors: active) {
+  .attempt-card {
+    border: 1px solid CanvasText;
+  }
+  .attempt-card__tag {
+    border: 1px solid CanvasText;
+  }
+  .light svg,
+  .attempt-card__glyph {
+    forced-color-adjust: none;
+  }
+}

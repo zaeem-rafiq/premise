@@ -23,6 +23,18 @@ const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><scri
   setInterval(beat, 200);
 </script>`;
 
+/** Dismisses the start card if it is on screen. The card mounts and unmounts as the
+ * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
+ * click goes through evaluate on the DOM as it stands. */
+async function dismissStart(page: Page): Promise<void> {
+  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
+      if (/look/i.test(b.textContent ?? "")) b.click();
+    }
+  });
+}
+
 const REGION = [
   ".header",
   ".strip",
@@ -63,8 +75,9 @@ test("keyboard focus order crosses every region in order (AC10)", async ({ page 
     await page.keyboard.press("Tab");
     const f = await focused(page);
     if (f.rank === -2) break;
+    // Wrapped around: focus came back to the element it started on.
+    if (seen.length > 0 && f.tag === seen[0]!.tag && f.cls === seen[0]!.cls) break;
     seen.push(f);
-    if (seen.length > 3 && f.rank === 0) break; // wrapped around to the header
   }
 
   // Every focused element shows the focus ring, and every one sits in a known region.
@@ -111,8 +124,7 @@ test("a card sheet opens and closes from the keyboard", async ({ page }) => {
   ]);
   await serveSession(page, true);
   await page.goto("/");
-  const start = page.locator(".start-card");
-  if (await start.isVisible()) await page.locator(".start-card button", { hasText: /look/i }).click();
+  await dismissStart(page);
   await expect(page.locator(".tray")).toContainText("Land the change?");
   await page.locator("body").click({ position: { x: 1, y: 1 } }); // drop focus off buttons
   await page.keyboard.press("n");

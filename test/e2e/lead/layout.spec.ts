@@ -36,6 +36,18 @@ async function servePoolHost(page: Page): Promise<void> {
   );
 }
 
+/** Dismisses the start card if it is on screen. The card mounts and unmounts as the
+ * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
+ * click goes through evaluate on the DOM as it stands. */
+async function dismissStart(page: Page): Promise<void> {
+  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
+      if (/look/i.test(b.textContent ?? "")) b.click();
+    }
+  });
+}
+
 async function box(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
   const b = await locator.boundingBox();
   if (b === null) throw new Error(`no box for ${locator}`);
@@ -101,10 +113,7 @@ for (const size of SIZES) {
     await page.goto("/");
     await expect(page.locator(".rail")).toBeVisible();
     // Dismiss the start card so it does not sit over the pool area.
-    const startCard = page.locator(".start-card");
-    if (await startCard.isVisible()) {
-      await page.locator(".start-card button", { hasText: /look/i }).click();
-    }
+    await dismissStart(page);
     await expect(page.locator(".pf-body iframe")).toBeVisible();
     const body = await box(page.locator(".pf-body"));
     expect(Math.abs(body.width - size.poolW)).toBeLessThanOrEqual(1);
@@ -168,12 +177,9 @@ for (const size of SIZES) {
     ]);
     await serveSession(page, false);
     await page.goto("/");
-    const startCard = page.locator(".start-card");
-    if (await startCard.isVisible()) {
-      await page.locator(".start-card button", { hasText: /look/i }).click();
-    }
-    const energy = page.locator(".tiles-grid .tile:not(.tile-label)", { hasText: "energy" });
-    const crab = page.locator(".tiles-grid .tile:not(.tile-label)", { hasText: "crab" });
+    await dismissStart(page);
+    const energy = page.locator('.tiles-grid .tile[title="world/energy.js"]');
+    const crab = page.locator('.tiles-grid .tile[title="creatures/crab.js"]');
     await expect(energy.locator(".tile-mark-r")).toHaveCount(1);
     await expect(crab.locator(".tile-mark-w")).toHaveCount(1);
   });

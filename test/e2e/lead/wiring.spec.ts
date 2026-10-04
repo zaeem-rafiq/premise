@@ -5,7 +5,7 @@
 //  - the self-test badge shows on the main frame;
 //  - `intent.queue` fills its `{max}` from `pool.max_real_agents` (FR26).
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   serveStream,
   serveSession,
@@ -51,6 +51,18 @@ for (const size of [
       );
     });
 
+/** Dismisses the start card if it is on screen. The card mounts and unmounts as the
+ * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
+ * click goes through evaluate on the DOM as it stands. */
+async function dismissStart(page: Page): Promise<void> {
+  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
+      if (/look/i.test(b.textContent ?? "")) b.click();
+    }
+  });
+}
+
     // (b) One place draws the card sheet: the shell's SheetTarget -> the registry's
     // sheet.card binding. A tap on the tray's Open button or key N opens it; Esc closes.
     test("the card sheet draws once, through sheet.card", async ({ page }) => {
@@ -63,10 +75,7 @@ for (const size of [
       ]);
       await serveSession(page, false);
       await page.goto("/");
-      const startCard = page.locator(".start-card");
-      if (await startCard.isVisible()) {
-        await page.locator(".start-card button", { hasText: /look/i }).click();
-      }
+      await dismissStart(page);
       await expect(page.locator(".tray")).toContainText("Land the change?");
       await page.locator(".tray-row button", { hasText: "Open" }).click();
       const sheet = page.locator(".card-sheet");
@@ -82,7 +91,7 @@ for (const size of [
       await page.goto("/replay/hero-c04");
       await expect(page.locator(".tiles-grid .tile").first()).toBeVisible();
       expect(await page.locator(".tiles-grid button.tile").count()).toBe(0);
-      await page.locator(".tiles-grid .tile", { hasText: "energy.js" }).click({ force: true });
+      await page.locator('.tiles-grid .tile[title="world/energy.js"]').click({ force: true });
       await expect(page.locator(".tile-menu")).toHaveCount(0);
       await expect(page.locator(".card-sheet")).toHaveCount(0);
     });
@@ -106,10 +115,7 @@ for (const size of [
       ]);
       await serveSession(page, true);
       await page.goto("/");
-      const startCard = page.locator(".start-card");
-      if (await startCard.isVisible()) {
-        await page.locator(".start-card button", { hasText: /look/i }).click();
-      }
+      await dismissStart(page);
       await expect(page.locator(".intent-note")).toContainText("All 6 agent slots are busy");
     });
   });

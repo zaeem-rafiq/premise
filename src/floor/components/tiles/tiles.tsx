@@ -152,10 +152,12 @@ export function FileTiles(props: FileTilesProps) {
 
   // CO28: `tiles.more` clips the grid and opens the full list. While open the same cell (kept
   // last, same label, aria-expanded) closes it — the pattern `banner.more` uses.
-  const allCells = useMemo(() => tileCells(state, { removedPaths: gone, glowPaths: glow }), [state, gone, glow]);
+  // `reduce` mutates `FloorState` in place: `state.n` in the deps stands for "the stream
+  // moved" the way the rail's `[floor, floor.n]` does — a bare `[state]` never recomputes.
+  const allCells = useMemo(() => tileCells(state, { removedPaths: gone, glowPaths: glow }), [state, state.n, gone, glow]);
   const clipped = useMemo(
     () => tileCells(state, { capacity, removedPaths: gone, glowPaths: glow }),
-    [state, capacity, gone, glow],
+    [state, state.n, capacity, gone, glow],
   );
   const tail = clipped[clipped.length - 1];
   const hidden = tail?.kind === "more" ? tail.hidden : 0;

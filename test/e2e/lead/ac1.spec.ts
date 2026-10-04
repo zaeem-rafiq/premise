@@ -33,6 +33,18 @@ const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><scri
   setInterval(beat, 200);
 </script>`;
 
+/** Dismisses the start card if it is on screen. The card mounts and unmounts as the
+ * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
+ * click goes through evaluate on the DOM as it stands. */
+async function dismissStart(page: Page): Promise<void> {
+  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
+      if (/look/i.test(b.textContent ?? "")) b.click();
+    }
+  });
+}
+
 async function serveLive(page: Page, frames: object[]): Promise<void> {
   await page.route("**/floor.json", (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(FLOOR) }),
@@ -98,8 +110,7 @@ test("AC1: live, snapshot-join and Replay draw the same page", async ({ browser 
     await serveLive(page, [{ events: EVENTS }]);
     await page.goto("/");
     await expect(page.locator(".rail")).toBeVisible();
-    const start = page.locator(".start-card");
-    if (await start.isVisible()) await page.locator(".start-card button", { hasText: /look/i }).click();
+    await dismissStart(page);
     await expect(page.locator(".tabs button", { hasText: "Landed 2" })).toBeVisible();
     pictures.push(await picture(page));
     await page.close();
@@ -116,8 +127,7 @@ test("AC1: live, snapshot-join and Replay draw the same page", async ({ browser 
     ]);
     await page.goto("/");
     await expect(page.locator(".rail")).toBeVisible();
-    const start = page.locator(".start-card");
-    if (await start.isVisible()) await page.locator(".start-card button", { hasText: /look/i }).click();
+    await dismissStart(page);
     await expect(page.locator(".tabs button", { hasText: "Landed 2" })).toBeVisible();
     pictures.push(await picture(page));
     await page.close();

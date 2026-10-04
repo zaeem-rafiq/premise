@@ -22,7 +22,8 @@ test("a scripted agent lands and the page shows it, with no reload", async ({ pa
   await page.evaluate(() => ((window as { __tracer?: boolean }).__tracer = true));
 
   const landedCell = page.locator(".strip-cell", { hasText: "Landed" }).first();
-  await expect(landedCell.locator(".strip-value")).toBeVisible();
+  // The counter is a number once the stream's snapshot has arrived; before that it is a dash.
+  await expect(landedCell.locator(".strip-value")).toHaveText(/^\d+$/, { timeout: 30_000 });
   const landedBefore = Number(await landedCell.locator(".strip-value").innerText());
 
   const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
@@ -35,6 +36,13 @@ test("a scripted agent lands and the page shows it, with no reload", async ({ pa
       pool: POOL,
       running: true,
       patterns: ["add-plain"],
+      // SWR1: a request that starts agents carries all of `SwarmConfig`.
+      seed: 1,
+      agents: 1,
+      launch_per_second: 1,
+      collision_dial: 0,
+      think_ms: [0, 0],
+      rescale_every_s: 0,
       request_id: `tracer-${Date.now()}`,
     },
   });
@@ -51,6 +59,9 @@ test("a scripted agent lands and the page shows it, with no reload", async ({ pa
     timeout: 180_000,
   });
   await expect.poll(async () => Number(await landedCell.locator(".strip-value").innerText())).toBe(landedBefore + 1);
+
+  // CO21: the frame's caption names the new landing once the frame runs it.
+  await expect(page.locator(".pf-caption")).toContainText(`landing ${landedBefore + 1}`, { timeout: 30_000 });
 
   // SE16a: a live frame moves by probe — the address stays on `main` and nothing reloaded.
   await expect(iframe).toHaveAttribute("src", frameSrc);

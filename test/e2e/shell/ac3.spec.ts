@@ -14,7 +14,7 @@ test("AC3 / FL3: accepted is not landed", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Speed 0.5×" })).toBeVisible();
 
   // The attempt goes "Landing…" (status.accepted) while the landing is accepted.
-  const row = page.locator(".attempt-row", { hasText: "draw tracer fish" });
+  const row = page.locator(".attempt-card", { hasText: "draw tracer fish" });
   await expect(row).toContainText("Landing…", { timeout: 30_000 });
 
   // In that window the Landed counter has not moved and no landing row offers a Why card.

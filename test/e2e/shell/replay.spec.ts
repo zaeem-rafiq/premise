@@ -49,6 +49,6 @@ test.describe("/replay/tracer with no Worker running", () => {
   test("AC11: with reduced motion the recording starts paused", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/replay/tracer");
-    await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(page.locator(".replay-bar").getByRole("button", { name: "Play", exact: true })).toBeVisible();
   });
 });

@@ -33,14 +33,23 @@ type Namespace = {
 
 export type LocalWorker = {
   /** A request to the Worker, as a browser or `curl` would send it. */
-  fetch(path: string, init?: { method: string }): Promise<WorkerResponse>;
+  fetch(
+    path: string,
+    init?: { method?: string; headers?: Record<string, string>; body?: string },
+  ): Promise<WorkerResponse>;
   /** A request to one Durable Object, as the Worker would send it through its binding. */
   fetchDurableObject(binding: DurableObjectBinding, name: string, path: string): Promise<WorkerResponse>;
   dispose(): Promise<void>;
 };
 
+/** What a test configures on the deployment. */
+export type WorkerOptions = {
+  /** SE1: the deployment's owner key. Absent, the mutating routes fail closed with 503. */
+  ownerKey?: string;
+};
+
 /** Starts the bundle that `npm run build` wrote. Call `dispose()` when the tests are done. */
-export async function startWorker(): Promise<LocalWorker> {
+export async function startWorker(options?: WorkerOptions): Promise<LocalWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
   }
@@ -54,6 +63,7 @@ export async function startWorker(): Promise<LocalWorker> {
           modules: [{ type: "ESModule", path: BUNDLE }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
+          bindings: options?.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [binding, { className, useSQLite: true }]),
           ),

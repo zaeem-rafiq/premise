@@ -9,7 +9,9 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-const FIXTURE_PORT = 4173;
+// One fixed port by default. `PREMISE_E2E_PORT` moves it, so that two checkouts on one machine can
+// run their fixture projects at the same time without one reusing the other's server.
+const FIXTURE_PORT = Number(process.env.PREMISE_E2E_PORT ?? 4173);
 const PROJECTS_VARIABLE = "PREMISE_E2E_PROJECTS";
 
 /** The project names that follow `--project` on a command line. */

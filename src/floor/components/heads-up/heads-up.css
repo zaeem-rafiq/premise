@@ -1,0 +1,148 @@
+/* The heads-up panel inside an attempt card (03 3.4): the edge is the state's colour —
+   repair `changed`, confirm `confirm`, info neutral, resolved `holds`. */
+
+.headsup {
+  border: var(--border, 1px) solid var(--line, #3a5669);
+  border-left: 4px solid var(--control, #7c98a8);
+  border-radius: calc(var(--radius, 8px) / 2);
+  background: var(--raised, #1c3342);
+  margin-top: 4px;
+}
+
+.headsup--changed {
+  border-left-color: var(--changed, #ff7a6b);
+}
+.headsup--confirm {
+  border-left-color: var(--confirm, #ffc857);
+}
+.headsup--holds {
+  border-left-color: var(--holds, #5bd68f);
+}
+
+.headsup__head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--text, #eaf2f4);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--size-small, 14px);
+  padding: 8px 10px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.headsup__body {
+  padding: 0 10px 10px;
+  font-size: var(--size-body, 16px);
+}
+
+.headsup__cause {
+  margin: 0 0 6px;
+  color: var(--muted, #a8bcc6);
+  font-size: var(--size-small, 14px);
+}
+
+.headsup-item {
+  margin-top: 8px;
+}
+
+.headsup-item__sentence {
+  margin: 0 0 4px;
+}
+
+.headsup-diff {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
+.headsup-code {
+  flex: 1 1 16em;
+  min-width: 0;
+}
+
+.headsup-code__label {
+  display: block;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+  margin-bottom: 2px;
+}
+
+/* CO19: code in the code type, at most 12 lines before `headsup.show_all`. */
+.headsup-code__text {
+  margin: 0;
+  padding: 8px;
+  background: var(--bg, #0b1720);
+  border: var(--border, 1px) solid var(--line, #3a5669);
+  border-radius: calc(var(--radius, 8px) / 2);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--size-small, 14px);
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+}
+
+.headsup-code__more,
+.headsup-uses__text {
+  font-family: var(--font-mono, monospace);
+}
+
+.headsup-code__more {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent, #6fd6cc);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: var(--size-small, 14px);
+  min-height: 44px;
+}
+
+.headsup-uses__list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.headsup-uses__ref {
+  color: var(--muted, #a8bcc6);
+  font-size: var(--size-small, 14px);
+}
+
+.headsup-uses__text {
+  display: block;
+  background: var(--bg, #0b1720);
+  border-radius: calc(var(--radius, 8px) / 2);
+  padding: 4px 8px;
+  margin: 2px 0 6px;
+  font-size: var(--size-small, 14px);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.headsup-context ul {
+  margin: 2px 0;
+  padding-left: 18px;
+}
+
+.headsup-note {
+  margin: 4px 0;
+  color: var(--muted, #a8bcc6);
+  font-size: var(--size-small, 14px);
+}
+
+.headsup__tail {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+.headsup :focus-visible {
+  outline: 3px solid var(--focus, #ffe08a);
+  outline-offset: 2px;
+}

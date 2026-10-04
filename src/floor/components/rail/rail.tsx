@@ -21,7 +21,9 @@ import { landingConfirmed } from "../attempt-card/model.ts";
 import { AttemptCard } from "../attempt-card/attempt-card.tsx";
 import { changeName } from "../../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../../copy/format.ts";
-import { MAX_INTENT_CHARS } from "../../../protocol/constants.ts";
+import { IntentBox } from "../intent-box/intent-box.tsx";
+import { Tray } from "../tray/tray.tsx";
+import { CardSheet } from "../card-sheet/card-sheet.tsx";
 
 export type RailProps = {
   floor: FloorState;
@@ -38,18 +40,6 @@ export type RailProps = {
   /** Opens the attempt's card sheet (`attempt.open_card` on a held card). */
   onOpenCard: (cardId: string) => void;
 };
-
-function intentBlocker(floor: FloorState, mode: string, owner: boolean, cap: boolean): string | null {
-  if (mode === "replay") return "intent.replay";
-  if (!owner) return "intent.visitor";
-  if (floor.limits?.killed === true) return "intent.killed";
-  if (floor.pool.state === "paused") return "intent.paused";
-  if (floor.pool.state === "rebuilding") return "intent.rebuilding";
-  if (cap) return "intent.cap";
-  const queued = Object.values(floor.attempts).some((a) => a.state === "opened");
-  if (queued) return "intent.queue";
-  return null;
-}
 
 /** An attempt that still belongs to the Working tab: in flight (which counts `accepted`),
  * or `landed` while its `landing.landed` has not arrived — it reads "Landing…" too (FL3). */
@@ -77,18 +67,53 @@ export function workingOrder(floor: FloorState): AttemptView[] {
   return [...top, ...rest];
 }
 
+/**
+ * One Working-tab row (3.14): a single attempt, or one race group — the intent text and
+ * `race.group` over a compact row per candidate. Stopped candidates of reason `not_chosen`
+ * stay in the group while a candidate still works (CO40).
+ */
+type WorkingItem =
+  { kind: "attempt"; attempt: AttemptView } | { kind: "race"; intentId: string; members: AttemptView[] };
+
+function workingItems(floor: FloorState, ordered: AttemptView[]): WorkingItem[] {
+  const items: WorkingItem[] = [];
+  const grouped = new Set<string>();
+  for (const attempt of ordered) {
+    if (!attempt.race) {
+      items.push({ kind: "attempt", attempt });
+      continue;
+    }
+    if (grouped.has(attempt.intent_id)) continue;
+    grouped.add(attempt.intent_id);
+    const members = ordered.filter((a) => a.intent_id === attempt.intent_id);
+    const notChosen = Object.values(floor.attempts).filter(
+      (a) => a.intent_id === attempt.intent_id && a.state === "stopped" && a.stop_reason === "not_chosen",
+    );
+    items.push({ kind: "race", intentId: attempt.intent_id, members: [...members, ...notChosen] });
+  }
+  return items;
+}
+
+/** A stopped `not_chosen` candidate belongs to its race group (CO40), not the Stopped tab. */
+function inRaceGroup(floor: FloorState, attempt: AttemptView): boolean {
+  return (
+    attempt.stop_reason === "not_chosen" &&
+    Object.values(floor.attempts).some((a) => a.intent_id === attempt.intent_id && a.race)
+  );
+}
+
 export function Rail(props: RailProps) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const { floor } = props;
   const [tab, setTab] = useState<"working" | "landed" | "stopped">("working");
-  const [draft, setDraft] = useState("");
-
-  const blocker = intentBlocker(floor, props.mode, props.owner, props.capReached);
+  // The card sheet opens in the rail itself: `onOpenCard` stays the prop contract, but the rail
+  // renders the `sheet.card` component so the sheet works before the shell's branch exists and
+  // stays single-rendered when it does.
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
-  const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped");
-  const tray = floor.open_cards.map((id) => floor.cards[id]).filter((c) => c !== undefined && c.open);
+  const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped" && !inRaceGroup(floor, a));
 
   // The 3.2 dwell: a card whose `landing.landed` arrived keeps its place for `dwellMs`
   // before it moves to the Landed tab, so the "Landed" state reads in place.
@@ -123,53 +148,15 @@ export function Rail(props: RailProps) {
   }, [floor.n, now, props.dwellMs]);
 
   const workingTab = [...working, ...dwelling];
+  const items = workingItems(floor, workingTab);
   // CO10: the compact card form when more than five cards are on the rail.
   const compact = workingTab.length > 5;
 
   return (
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
-      <div className="intent-box">
-        <textarea
-          className="intent-field"
-          placeholder={t("intent.placeholder")}
-          maxLength={MAX_INTENT_CHARS}
-          value={draft}
-          disabled={blocker !== null}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-label={t("intent.placeholder")}
-        />
-        {blocker !== null ? (
-          <p className="intent-note">{t(blocker)}</p>
-        ) : (
-          <div className="intent-row">
-            <span className="intent-count">{t("intent.count", { n: draft.length, max: MAX_INTENT_CHARS })}</span>
-            <button
-              type="button"
-              className="primary"
-              disabled={draft.trim() === ""}
-              onClick={() => {
-                props.onSend(draft);
-                setDraft("");
-              }}
-            >
-              {t("intent.send")}
-            </button>
-          </div>
-        )}
-      </div>
+      <IntentBox floor={floor} mode={props.mode} owner={props.owner} capReached={props.capReached} />
 
-      {tray.length > 0 && (
-        <div className="tray" role="list">
-          {tray.map((view) => (
-            <div className="tray-row" role="listitem" key={view!.card.card_id}>
-              <span className="tray-title">{view!.card.title}</span>
-              <button type="button" onClick={() => props.onOpenCard(view!.card.card_id)}>
-                {t("card.open")}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <Tray floor={floor} onOpenCard={setOpenCardId} />
 
       <div className="tabs" role="tablist">
         {(
@@ -197,23 +184,70 @@ export function Rail(props: RailProps) {
           (workingTab.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.working", { visitor: !props.owner })}</p>
           ) : (
-            workingTab.map((attempt) => (
-              <AttemptCard
-                key={attempt.id}
-                attempt={attempt}
-                state={floor}
-                clock={props.clock}
-                visitor={props.visitor}
-                compact={compact}
-                onOpenCard={props.onOpenCard}
-              />
-            ))
+            <>
+              {items.map((item) =>
+                item.kind === "attempt" ? (
+                  <AttemptCard
+                    key={item.attempt.id}
+                    attempt={item.attempt}
+                    state={floor}
+                    clock={props.clock}
+                    visitor={props.visitor}
+                    compact={compact}
+                    onOpenCard={setOpenCardId}
+                  />
+                ) : (
+                  <section className="race-group" key={item.intentId}>
+                    <p className="race-group__intent" dir="auto">
+                      &ldquo;{floor.intents[item.intentId]?.text ?? ""}&rdquo;
+                    </p>
+                    <p className="race-group__label">{t("race.group", { n: item.members.length })}</p>
+                    {item.members.map((attempt) => (
+                      <AttemptCard
+                        key={attempt.id}
+                        attempt={attempt}
+                        state={floor}
+                        clock={props.clock}
+                        visitor={props.visitor}
+                        compact
+                        onOpenCard={setOpenCardId}
+                      />
+                    ))}
+                  </section>
+                ),
+              )}
+              {/* CO10: past nine cards the list scrolls and the footer counts the rest. */}
+              {workingTab.length > 9 && <p className="rail-more">{t("rail.more", { n: workingTab.length - 9 })}</p>}
+            </>
           ))}
+        {tab === "working" && floor.pool.summary_only && <p className="rail-summary">{t("rail.summary_only")}</p>}
         {tab === "landed" &&
           (landed.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.landed")}</p>
           ) : (
-            landed.map((landing) => <LandedRow key={landing.seq} landing={landing} floor={floor} />)
+            landed.map((landing) => (
+              <div key={landing.seq}>
+                <LandedRow landing={landing} floor={floor} />
+                {Object.values(floor.attempts)
+                  .filter(
+                    (a) =>
+                      a.intent_id === landing.intent_id &&
+                      landing.intent_id !== null &&
+                      a.state === "stopped" &&
+                      a.stop_reason === "not_chosen",
+                  )
+                  .map((attempt) => (
+                    <AttemptCard
+                      key={attempt.id}
+                      attempt={attempt}
+                      state={floor}
+                      clock={props.clock}
+                      visitor={props.visitor}
+                      compact
+                    />
+                  ))}
+              </div>
+            ))
           ))}
         {tab === "stopped" &&
           (stopped.length === 0 ? (
@@ -227,11 +261,12 @@ export function Rail(props: RailProps) {
                 clock={props.clock}
                 visitor={props.visitor}
                 compact={compact}
-                onOpenCard={props.onOpenCard}
+                onOpenCard={setOpenCardId}
               />
             ))
           ))}
       </div>
+      {openCardId !== null && <CardSheet floor={floor} cardId={openCardId} onClose={() => setOpenCardId(null)} />}
     </aside>
   );
 }

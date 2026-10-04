@@ -1,0 +1,41 @@
+/* The intent box (03 3.1). The field, row and note styles are the page's (.intent-* in
+   base.css); this file adds only what the state table needs beyond them. */
+
+/* The failed request's sentence, in the warning colour (5.9, 7 FR1). */
+.intent-error {
+  margin: 8px 0 0;
+  color: var(--confirm, #ffc857);
+  font-size: var(--size-small, 14px);
+}
+
+/* CO4: at MAX_INTENT_CHARS the count turns to the warning colour. */
+.intent-count--limit {
+  color: var(--confirm, #ffc857);
+}
+
+/* Replay replaces the field with `intent.replay`; it keeps the box's padding. */
+.intent-note--solo {
+  margin-top: 0;
+}
+
+.intent-prewritten {
+  background: var(--raised, #1c3342);
+  border: var(--border, 1px) solid var(--control, #7c98a8);
+  border-radius: var(--radius, 8px);
+  color: var(--text, #eaf2f4);
+  font-size: var(--size-small, 14px);
+  max-width: 12em;
+  padding: 6px 8px;
+  text-overflow: ellipsis;
+}
+
+.intent-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.intent-box :focus-visible {
+  outline: 3px solid var(--focus, #ffe08a);
+  outline-offset: 2px;
+}

@@ -273,3 +273,110 @@
     forced-color-adjust: none;
   }
 }
+
+/* ---- The expanded card (03 3.2): panels, "Relies on", "What it changes", checks, stop ---- */
+
+.attempt-card__detail {
+  border-top: var(--border, 1px) solid var(--line, #3a5669);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.attempt-card__section {
+  margin-top: 8px;
+}
+
+.attempt-card__heading {
+  margin: 0 0 4px;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+  font-weight: 600;
+}
+
+.attempt-card__earlier {
+  margin: 8px 0 0;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+  font-weight: 600;
+}
+
+.attempt-card__premises,
+.attempt-card__ops,
+.attempt-card__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attempt-card__ops li {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--size-small, 14px);
+  padding: 2px 0;
+}
+
+.attempt-card__op-path {
+  font-family: var(--font-mono, monospace);
+  color: var(--text, #eaf2f4);
+}
+
+.attempt-card__op-entities {
+  color: var(--muted, #a8bcc6);
+}
+
+.attempt-card__op--dropped {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.attempt-card__checks-summary {
+  margin: 0 0 4px;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+}
+
+.attempt-card__checks li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: var(--size-small, 14px);
+  padding: 2px 0;
+}
+
+.attempt-card__check-mark {
+  font-weight: 700;
+}
+
+.attempt-card__checks li[data-ok="true"] .attempt-card__check-mark {
+  color: var(--holds, #5bd68f);
+}
+
+.attempt-card__checks li[data-ok="false"] .attempt-card__check-mark,
+.attempt-card__checks li[data-ok="false"] .attempt-card__check-label {
+  color: var(--changed, #ff7a6b);
+}
+
+.attempt-card__check-error {
+  color: var(--confirm, #ffc857);
+}
+
+.attempt-card__stop {
+  margin-top: 10px;
+}
+
+.attempt-card__error {
+  margin: 6px 0 0;
+  color: var(--confirm, #ffc857);
+  font-size: var(--size-small, 14px);
+}
+
+/* Expansion affordance: the whole card is a toggle (03 3.2 "tap or Enter"). */
+.attempt-card {
+  cursor: pointer;
+}
+
+.attempt-card:focus-visible {
+  outline: 3px solid var(--focus, #ffe08a);
+  outline-offset: 2px;
+}

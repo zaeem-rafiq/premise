@@ -18,10 +18,11 @@ export type AlarmDeps = {
   /** Runs the engine entry registered under a timer's kind. Resolves false when no entry is
    * registered; rejects when the entry itself threw (its transaction already rolled back). */
   runEntry: (kind: string, input: { timer: TimerRow }) => Promise<boolean>;
-  /** The `push` timer's work (9.6): the outbox's due push and its LP5 apply. */
-  push?: () => Promise<void>;
+  /** The `push` timer's work (9.6): the outbox's due push and its LP5 apply. The due-check's
+   * time is handed through so the `?now=` test path drives a retry without the real backoff. */
+  push?: (now: number) => Promise<void>;
   /** The `repush` timer's work (HU5b): heads-up delivery to the attempt's Agent. */
-  repush?: () => Promise<void>;
+  repush?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -75,7 +76,7 @@ export async function runAlarm({ env, ctx, sql, runEntry, push, repush, now: at 
       // due again at once, and the alarm then fires without end on a pool that has nothing to do.
       sql.transaction(() => timerDelete(sql, timer.kind, timer.key));
       try {
-        await shellWork();
+        await shellWork(now);
       } catch {
         rescheduleTimer(sql, timer);
         recordTrunkError(ctx, `timer:${timer.kind}`, "timer_failed");

@@ -279,7 +279,7 @@ export class Trunk extends DurableObject<Env> {
 
   /** One `pushOutbox`. True when the push's answer was applied to the engine, which is when the
    * pipeline has new work. */
-  async #pushOnce(): Promise<boolean> {
+  async #pushOnce(now?: number): Promise<boolean> {
     let applied = false;
     try {
       await pushOutbox(this.env, this.ctx, async (name, input) => {
@@ -287,7 +287,7 @@ export class Trunk extends DurableObject<Env> {
         if ("error" in r) throw new Error(`push apply ${name} failed`);
         applied = true;
         return r.result;
-      });
+      }, undefined, now);
     } catch {
       recordTrunkError(this.ctx, "push", "transport");
     }
@@ -366,7 +366,9 @@ export class Trunk extends DurableObject<Env> {
       meta: metaAll(this.#sql),
       events_out: pendingEvents(this.#sql).map((row) => ({ ...row, body: JSON.parse(row.body) as unknown })),
       timers: timerList(this.#sql),
-      outbox: outboxRow(this.ctx),
+      // The engine's `outbox` table exists only once `pool_create` ran (shell objects can be
+      // named anything — a state read must not 500 before the pool exists).
+      outbox: metaGet(this.#sql, "pool_id") === null ? null : outboxRow(this.ctx),
       served: Object.fromEntries(this.#served),
     });
   }
@@ -416,8 +418,8 @@ export class Trunk extends DurableObject<Env> {
       sql: this.#sql,
       now,
       runEntry: (kind) => this.#runTimerEntry(kind),
-      push: async () => {
-        if (await this.#pushOnce()) await this.#postCommit();
+      push: async (now) => {
+        if (await this.#pushOnce(now)) await this.#postCommit();
       },
       repush: async () => {
         try {

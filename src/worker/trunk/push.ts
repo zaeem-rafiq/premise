@@ -179,20 +179,29 @@ export async function pushOutbox(
   ctx: DurableObjectState,
   apply: ApplyPush,
   deps: PushDeps = defaultDeps(env),
+  /** The time the due-check reads; absent, the wall clock. The alarm's `?now=` test path hands
+   * its override through so a retry is drivable without sleeping for the real backoff. */
+  now?: number,
 ): Promise<void> {
   if (pushing.has(ctx)) return;
   pushing.add(ctx);
   try {
-    await pushOutboxInner(env, ctx, apply, deps);
+    await pushOutboxInner(env, ctx, apply, deps, now ?? Date.now());
   } finally {
     pushing.delete(ctx);
   }
 }
 
-async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPush, deps: PushDeps): Promise<void> {
+async function pushOutboxInner(
+  env: Env,
+  ctx: DurableObjectState,
+  apply: ApplyPush,
+  deps: PushDeps,
+  now: number,
+): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
-  if (outbox.next_try !== null && outbox.next_try > Date.now()) return;
+  if (outbox.next_try !== null && outbox.next_try > now) return;
   // LP5b, LP8: a pool paused for a refused or diverged push does not push again; the owner
   // rebuilds it. A pause by the owner does not stop an accepted batch (SE11).
   if (pushHalted(ctx)) return;

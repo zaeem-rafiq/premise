@@ -149,13 +149,17 @@ export async function startLandingWorker(options: {
   }
   const projectRoot = mkdtempSync(join(tmpdir(), "premise-landing-repos-"));
   const directories = new Map(options.repos.map((name) => [name, createNamedRepo(projectRoot, name)]));
-  // A refusal by real git: the hook declines the request before a command is checked.
+  // A refusal by real git: the hook declines the request before a command is checked. Hooks live
+  // beside `.git` on `core.hooksPath` — this sandbox denies direct writes under any `.git/` path.
   for (const name of options.refuseRepos ?? []) {
     const dir = directories.get(name);
     if (dir === undefined) throw new Error(`refuseRepos names ${name}, which is not in repos`);
-    const hookPath = join(dir, ".git", "hooks", "pre-receive");
-    writeFileSync(hookPath, "#!/bin/sh\nexit 1\n");
-    chmodSync(hookPath, 0o755);
+    const hooks = join(dir, "hooks");
+    mkdirSync(hooks, { recursive: true });
+    writeFileSync(join(hooks, "pre-receive"), "#!/bin/sh\nexit 1\n");
+    chmodSync(join(hooks, "pre-receive"), 0o755);
+    // Absolute: a relative hooksPath resolves against the receive-pack cwd, not the worktree.
+    git(dir, ["config", "core.hooksPath", hooks]);
   }
   const gitServer: GitHttpServer = await startGitServer(projectRoot, {
     gate: options.expectedToken === undefined ? {} : { expectedToken: options.expectedToken },

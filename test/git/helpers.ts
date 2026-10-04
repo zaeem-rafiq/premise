@@ -3,7 +3,7 @@
 // receive-pack request is answered by real git (docs/spec/04-build-plan.md 1.4).
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { basename, dirname, join } from "node:path";
@@ -25,11 +25,15 @@ function ensureGitWrapper(): void {
   const real = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
   mkdirSync(GIT_BIN_DIR, { recursive: true });
   const wrapper = join(GIT_BIN_DIR, "git");
+  // Test files run in parallel processes and each installs the wrapper. It is written aside and
+  // renamed into place, so no process ever executes a half-written file (`spawnSync git ENOEXEC`).
+  const staged = `${wrapper}.${process.pid}`;
   writeFileSync(
-    wrapper,
+    staged,
     `#!/bin/sh\nif [ "$1" = "init" ]; then\n  shift\n  exec "${real}" init --template= "$@"\nfi\nexec "${real}" "$@"\n`,
   );
-  chmodSync(wrapper, 0o755);
+  chmodSync(staged, 0o755);
+  renameSync(staged, wrapper);
   process.env.PATH = `${GIT_BIN_DIR}:${process.env.PATH ?? ""}`;
 }
 

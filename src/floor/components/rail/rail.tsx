@@ -22,6 +22,8 @@ import { AttemptCard } from "../attempt-card/attempt-card.tsx";
 import { changeName } from "../../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../../copy/format.ts";
 import { IntentBox } from "../intent-box/intent-box.tsx";
+import { Tray } from "../tray/tray.tsx";
+import { CardSheet } from "../card-sheet/card-sheet.tsx";
 
 export type RailProps = {
   floor: FloorState;
@@ -70,10 +72,13 @@ export function Rail(props: RailProps) {
   const t = shell.t;
   const { floor } = props;
   const [tab, setTab] = useState<"working" | "landed" | "stopped">("working");
+  // The card sheet opens in the rail itself: `onOpenCard` stays the prop contract, but the rail
+  // renders the `sheet.card` component so the sheet works before the shell's branch exists and
+  // stays single-rendered when it does.
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
   const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped");
-  const tray = floor.open_cards.map((id) => floor.cards[id]).filter((c) => c !== undefined && c.open);
 
   // The 3.2 dwell: a card whose `landing.landed` arrived keeps its place for `dwellMs`
   // before it moves to the Landed tab, so the "Landed" state reads in place.
@@ -115,18 +120,7 @@ export function Rail(props: RailProps) {
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
       <IntentBox floor={floor} mode={props.mode} owner={props.owner} capReached={props.capReached} />
 
-      {tray.length > 0 && (
-        <div className="tray" role="list">
-          {tray.map((view) => (
-            <div className="tray-row" role="listitem" key={view!.card.card_id}>
-              <span className="tray-title">{view!.card.title}</span>
-              <button type="button" onClick={() => props.onOpenCard(view!.card.card_id)}>
-                {t("card.open")}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <Tray floor={floor} onOpenCard={setOpenCardId} />
 
       <div className="tabs" role="tablist">
         {(
@@ -162,7 +156,7 @@ export function Rail(props: RailProps) {
                 clock={props.clock}
                 visitor={props.visitor}
                 compact={compact}
-                onOpenCard={props.onOpenCard}
+                onOpenCard={setOpenCardId}
               />
             ))
           ))}
@@ -184,11 +178,14 @@ export function Rail(props: RailProps) {
                 clock={props.clock}
                 visitor={props.visitor}
                 compact={compact}
-                onOpenCard={props.onOpenCard}
+                onOpenCard={setOpenCardId}
               />
             ))
           ))}
       </div>
+      {openCardId !== null && (
+        <CardSheet floor={floor} cardId={openCardId} onClose={() => setOpenCardId(null)} />
+      )}
     </aside>
   );
 }

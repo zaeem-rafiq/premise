@@ -1,0 +1,28 @@
+/* The tray (03 2.10): open cards asking for a decision, above the tabs. */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tray-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: var(--border, 1px) solid var(--confirm, #ffc857);
+  border-radius: var(--radius, 10px);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--confirm, #ffc857) 8%, transparent);
+}
+
+.tray-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

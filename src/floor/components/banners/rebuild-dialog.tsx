@@ -71,7 +71,13 @@ export function RebuildDialog({
         <p>{t("pool.rebuild.body")}</p>
         {error !== null && <p className="field-error">{error}</p>}
         <div className="sheet-actions">
-          <button type="button" className="danger" disabled={saving || offline === true} onClick={() => void rebuild()} autoFocus>
+          <button
+            type="button"
+            className="danger"
+            disabled={saving || offline === true}
+            onClick={() => void rebuild()}
+            autoFocus
+          >
             {t("pool.rebuild.confirm")}
           </button>
           <button type="button" onClick={onClose}>

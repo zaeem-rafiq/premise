@@ -7,15 +7,7 @@
 // control is enabled again).
 
 import { expect, test } from "@playwright/test";
-import {
-  POOL,
-  attemptOpened,
-  intentCreated,
-  limits,
-  poolState,
-  serveSession,
-  serveStream,
-} from "./stream.ts";
+import { POOL, attemptOpened, intentCreated, limits, poolState, serveSession, serveStream } from "./stream.ts";
 
 const OWNER_KEY = "owner-key-test-only";
 
@@ -57,13 +49,12 @@ test.describe("AC16 / CO45: the key stays inside POST /api/session", () => {
     expect(page.url()).not.toContain(OWNER_KEY);
 
     // Not in storage, not in the console.
-    const stored = await page.evaluate(
-      () =>
-        JSON.stringify({
-          local: Object.entries(localStorage),
-          session: Object.entries(sessionStorage),
-          cookies: document.cookie,
-        }),
+    const stored = await page.evaluate(() =>
+      JSON.stringify({
+        local: Object.entries(localStorage),
+        session: Object.entries(sessionStorage),
+        cookies: document.cookie,
+      }),
     );
     expect(stored).not.toContain(OWNER_KEY);
     for (const line of consoleLines) expect(line, `console: ${line}`).not.toContain(OWNER_KEY);
@@ -81,16 +72,18 @@ test.describe("AC5 / FL7: visitors and Replay hold no owner control", () => {
     // The header button reads the visitor form and opens the dialog only.
     await page.getByRole("button", { name: "Visitor" }).click();
     await expect(page.locator(".owner-sheet")).toBeVisible();
-    // Inside it there is no Lock (the session is not the owner's).
-    await expect(page.getByRole("button", { name: "Lock" })).toHaveCount(0);
+    // Inside it there is no Lock (the session is not the owner's) - exact: "Unlock" is.
+    await expect(page.getByRole("button", { name: "Lock", exact: true })).toHaveCount(0);
   });
 
   test("Replay holds no owner control (CO46)", async ({ page }) => {
     await page.goto("/replay/tracer");
     await expect(page.locator(".replay-bar")).toBeVisible();
     await expect(page.getByRole("button", { name: "Stop all agents" })).toHaveCount(0);
-    const owner = page.getByRole("button", { name: "Replay" });
-    await expect(owner).toBeVisible();
+    // The header's owner control reads owner.replay; the nav item of the same name is
+    // a different button, so this is scoped by class.
+    const owner = page.locator("button.owner-button");
+    await expect(owner).toHaveText("Replay");
     await expect(owner).toBeDisabled();
     // Swarm inside Replay: no owner controls either (FL7).
     await page.keyboard.press("s");
@@ -114,8 +107,9 @@ test.describe("the kill switch (3.18, AC17/CO2, CO47, FR21, FR22)", () => {
     await page.getByRole("button", { name: "Stop all agents" }).click();
     const dialog = page.locator(".kill-sheet");
     await expect(dialog).toBeVisible();
-    const confirm = dialog.getByRole("button", { name: "Stop all agents" });
-    // Two fast taps.
+    // The confirm button renames to "Stopping…" while in flight; the second tap is a
+    // real tap on the same (now disabled) control.
+    const confirm = dialog.locator("button.danger");
     await confirm.click();
     await confirm.click({ force: true });
     await expect(dialog).toHaveCount(0);
@@ -132,6 +126,8 @@ test.describe("the kill switch (3.18, AC17/CO2, CO47, FR21, FR22)", () => {
       await route.fulfill({ status: 200, body: "{}" });
     });
     await page.goto(`/p/${POOL}`);
+    // Wait until the owner session resolved - key K is off for a visitor (3.19).
+    await expect(page.getByRole("button", { name: "Stop all agents" })).toBeVisible();
     await page.keyboard.press("k");
     const dialog = page.locator(".kill-sheet");
     await expect(dialog).toBeVisible();
@@ -152,9 +148,7 @@ test.describe("the kill switch (3.18, AC17/CO2, CO47, FR21, FR22)", () => {
     await expect(page.getByRole("button", { name: "Visitor" })).toBeVisible();
   });
 
-  test("FR22: a failed request shows the 5.9 sentence and the control is enabled again", async ({
-    page,
-  }) => {
+  test("FR22: a failed request shows the 5.9 sentence and the control is enabled again", async ({ page }) => {
     await serveStream(page, FRAMES);
     await serveSession(page, true);
     await page.route("**/api/kill", (route) => route.fulfill({ status: 500, body: "{}" }));

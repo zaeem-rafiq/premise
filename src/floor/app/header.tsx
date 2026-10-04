@@ -64,9 +64,7 @@ export function Header(props: HeaderProps) {
         {items}
       </nav>
       <details className="nav-menu" ref={menu}>
-        <summary className="nav-menu-summary">
-          {props.view === "swarm" ? t("nav.swarm") : t("nav.floor")}
-        </summary>
+        <summary className="nav-menu-summary">{props.view === "swarm" ? t("nav.swarm") : t("nav.floor")}</summary>
         <nav className="nav-menu-list" aria-label="views" onClick={() => menu.current?.removeAttribute("open")}>
           {items}
         </nav>

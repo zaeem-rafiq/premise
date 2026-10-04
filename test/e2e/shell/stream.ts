@@ -73,13 +73,7 @@ export function attemptOpened(n: number, attemptId = "a_1", intentId = "i_1", ex
   });
 }
 
-export function attemptState(
-  n: number,
-  attemptId: string,
-  from: string,
-  to: string,
-  extra: Frame = {},
-): Frame {
+export function attemptState(n: number, attemptId: string, from: string, to: string, extra: Frame = {}): Frame {
   return ev(n, {
     type: "attempt.state",
     attempt_id: attemptId,

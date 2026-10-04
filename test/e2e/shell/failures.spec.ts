@@ -97,8 +97,10 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
   test("FR6: a stalled push draws banner.push and the backlog sub-line", async ({ page }) => {
     await serveStream(page, [
       ...BASE,
-      ev(4, { type: "push.retry", batch_id: 1, tries: 2, error: "timeout", next_try_ms: 1000 }),
-      metrics(5, { waiting_behind: 2, push_backlog: 3 }),
+      // A stalled push needs the retry older than PUSH_STALL_MS (5 s) on the stream
+      // clock: the retry carries an old ts, the metrics event a new one (4.4).
+      ev(4, { type: "push.retry", batch_id: 1, tries: 2, error: "timeout", next_try_ms: 1000, ts: 2_000, t: 2_000 }),
+      metrics(5, { waiting_behind: 2, push_backlog: 3, ts: 8_000, t: 8_000 }),
     ]);
     await page.goto(`/p/${POOL}`);
     const banner = page.locator(".banner[data-tone='confirm']").first();
@@ -137,9 +139,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await shoot(page, "ac15-fr09");
   });
 
-  test("FR10: the connection is lost - banner.offline, dimmed, owner controls off", async ({
-    page,
-  }) => {
+  test("FR10: the connection is lost - banner.offline, dimmed, owner controls off", async ({ page }) => {
     let first = true;
     await page.route("**/floor.json", (route) =>
       route.fulfill({ contentType: "application/json", body: JSON.stringify(FLOOR_JSON) }),
@@ -213,9 +213,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
       poolState(4, { state: "rebuilding", rebuild: { done: 3, total: 9 } }),
     ]);
     await page.goto(`/p/${POOL}`);
-    await expect(page.locator(".banner[data-tone='confirm']")).toContainText(
-      "Trunk is rebuilding its index (3 of 9).",
-    );
+    await expect(page.locator(".banner[data-tone='confirm']")).toContainText("Trunk is rebuilding its index (3 of 9).");
     await shoot(page, "ac15-fr14");
   });
 
@@ -243,9 +241,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await shoot(page, "ac15-fr17");
   });
 
-  test("FR21: the owner session ended - owner.expired toast, Visitor header, dialog opens", async ({
-    page,
-  }) => {
+  test("FR21: the owner session ended - owner.expired toast, Visitor header, dialog opens", async ({ page }) => {
     await serveStream(page, BASE);
     await serveSession(page, true);
     await page.route("**/api/kill", (route) => route.fulfill({ status: 401, body: "{}" }));
@@ -258,9 +254,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await shoot(page, "ac15-fr21");
   });
 
-  test("FR22: a refused request shows the 5.9 sentence next to the control and as a toast", async ({
-    page,
-  }) => {
+  test("FR22: a refused request shows the 5.9 sentence next to the control and as a toast", async ({ page }) => {
     await serveStream(page, BASE);
     await serveSession(page, true);
     await page.route("**/api/kill", (route) => route.fulfill({ status: 429, body: "{}" }));
@@ -268,16 +262,12 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await page.getByRole("button", { name: "Stop all agents" }).click();
     const dialog = page.locator(".kill-sheet");
     await dialog.getByRole("button", { name: "Stop all agents" }).click();
-    await expect(dialog.locator(".field-error")).toContainText(
-      "Too many requests. Wait a moment, then try again.",
-    );
+    await expect(dialog.locator(".field-error")).toContainText("Too many requests. Wait a moment, then try again.");
     await expect(page.locator(".toast")).toContainText("Too many requests.");
     await shoot(page, "ac15-fr22");
   });
 
-  test("FR26: all slots busy - the strip reads the limit and the intent box explains", async ({
-    page,
-  }) => {
+  test("FR26: all slots busy - the strip reads the limit and the intent box explains", async ({ page }) => {
     await serveStream(page, [
       poolState(1, { real_agents: 6, max_real_agents: 6 }),
       intentCreated(2),
@@ -293,10 +283,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
   });
 
   test("FR27: an unknown event is counted in About and nothing else changes", async ({ page }) => {
-    await serveStream(page, [
-      ...BASE,
-      ev(4, { type: "future.invented", anything: "goes" }),
-    ]);
+    await serveStream(page, [...BASE, ev(4, { type: "future.invented", anything: "goes" })]);
     await page.goto(`/p/${POOL}`);
     await page.getByRole("button", { name: "About" }).click();
     await expect(page.locator(".sheet")).toContainText(
@@ -306,9 +293,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await shoot(page, "ac15-fr27");
   });
 
-  test("FR30: an unknown pool shows pool.missing with the way to the default pool", async ({
-    page,
-  }) => {
+  test("FR30: an unknown pool shows pool.missing with the way to the default pool", async ({ page }) => {
     await page.route("**/api/pools/ghost/stream", (route) =>
       route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"not_found"}' }),
     );

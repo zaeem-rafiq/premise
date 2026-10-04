@@ -47,11 +47,10 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
     await expect(page.locator("html")).toHaveAttribute("data-size", "stage");
 
     const sizes = await page.evaluate(() => {
-      const px = (el: Element | null) =>
-        el === null ? null : Number.parseFloat(getComputedStyle(el).fontSize);
+      const px = (el: Element | null) => (el === null ? null : Number.parseFloat(getComputedStyle(el).fontSize));
       const pick = (sel: string) => px(document.querySelector(sel));
       return {
-        counter: px(document.querySelector(".strip-cell", )?.querySelector(".strip-value") ?? null),
+        counter: px(document.querySelector(".strip-cell")?.querySelector(".strip-value") ?? null),
         stripLabel: pick(".strip-label"),
         bannerWord: pick(".banner-word"),
         appName: pick(".app-name"),
@@ -132,9 +131,7 @@ test.describe("defect regressions", () => {
     await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
     await page.goto(`/p/testpool`);
     await expect(page.locator(".strip")).toBeVisible();
-    await expect(page.locator(".strip-cell", { hasText: "Green line" })).toContainText(
-      "not running in this build",
-    );
+    await expect(page.locator(".strip-cell", { hasText: "Green line" })).toContainText("not running in this build");
     await expect(page.locator(".strip-cell", { hasText: "Spend" })).toContainText("not reported yet");
     const strip = await box(page.locator(".strip"));
     expect(Math.abs(strip.height - 60)).toBeLessThanOrEqual(1);
@@ -148,16 +145,12 @@ test.describe("defect regressions", () => {
 });
 
 test.describe("AC11 / 6.4: reduced motion", () => {
-  test("nothing moves: banners and sheets appear at once, frames and Replay start paused", async ({
-    page,
-  }) => {
+  test("nothing moves: banners and sheets appear at once, frames and Replay start paused", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/replay/tracer");
 
     // Replay starts paused (RY18 + 6.4: the bar offers Play, not Pause).
-    await expect(
-      page.locator(".replay-bar").getByRole("button", { name: "Play", exact: true }),
-    ).toBeVisible();
+    await expect(page.locator(".replay-bar").getByRole("button", { name: "Play", exact: true })).toBeVisible();
 
     // A banner appears at once - no slide animation.
     const bannerMotion = await page
@@ -168,9 +161,7 @@ test.describe("AC11 / 6.4: reduced motion", () => {
     // A sheet appears at once.
     await page.keyboard.press("a");
     await expect(page.locator(".sheet")).toBeVisible();
-    const sheetMotion = await page
-      .locator(".sheet-backdrop")
-      .evaluate((el) => getComputedStyle(el).animationName);
+    const sheetMotion = await page.locator(".sheet-backdrop").evaluate((el) => getComputedStyle(el).animationName);
     expect(sheetMotion).toBe("none");
   });
 
@@ -179,9 +170,7 @@ test.describe("AC11 / 6.4: reduced motion", () => {
     await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
     await page.goto(`/p/testpool`);
     // The frame is paused and the caption bar offers Play (frame.play).
-    await expect(page.locator(".pf")).toContainText(
-      "Paused. The code still lands; only the picture is still.",
-    );
+    await expect(page.locator(".pf")).toContainText("Paused. The code still lands; only the picture is still.");
     await expect(page.locator(".pf").getByRole("button", { name: "Play" })).toBeVisible();
   });
 });

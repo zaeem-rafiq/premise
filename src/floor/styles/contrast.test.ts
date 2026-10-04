@@ -13,10 +13,10 @@ const CSS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "base.css
 
 function themeTokens(blockRe: RegExp): Record<string, string> {
   const match = CSS.match(blockRe);
-  if (match === null) throw new Error(`no theme block for ${blockRe}`);
+  if (match === null || match[1] === undefined) throw new Error(`no theme block for ${blockRe}`);
   const tokens: Record<string, string> = {};
   for (const pair of match[1].matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{6})/g)) {
-    tokens[pair[1]] = pair[2].toLowerCase();
+    if (pair[1] !== undefined && pair[2] !== undefined) tokens[pair[1]] = pair[2].toLowerCase();
   }
   return tokens;
 }
@@ -32,12 +32,22 @@ function luminance(hex: string): number {
 
 function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  if (hi === undefined || lo === undefined) throw new Error("unreachable");
   return (hi + 0.05) / (lo + 0.05);
 }
 
 /** A token's worst ratio over the three background tones (6.3 "lowest contrast"). */
 function lowest(tokens: Record<string, string>, token: string): number {
-  return Math.min(contrast(tokens[token], tokens["bg"]), contrast(tokens[token], tokens["surface"]), contrast(tokens[token], tokens["raised"]));
+  const read = (name: string): string => {
+    const value = tokens[name];
+    if (value === undefined) throw new Error(`token --${name} is missing`);
+    return value;
+  };
+  return Math.min(
+    contrast(read(token), read("bg")),
+    contrast(read(token), read("surface")),
+    contrast(read(token), read("raised")),
+  );
 }
 
 const TEXT_TOKENS = ["muted", "accent", "holds", "changed", "confirm", "checking", "synthetic"];
@@ -65,7 +75,10 @@ describe.each([
   });
   it("on-fill reads at least 4.5 on every filled signal colour", () => {
     for (const fill of FILLS) {
-      expect(contrast(tokens["on-fill"], tokens[fill]), `on-fill on ${fill}`).toBeGreaterThanOrEqual(4.5);
+      const onFill = tokens["on-fill"];
+      const on = tokens[fill];
+      if (onFill === undefined || on === undefined) throw new Error(`token --${fill} or --on-fill is missing`);
+      expect(contrast(onFill, on), `on-fill on ${fill}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 });

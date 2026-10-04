@@ -90,8 +90,10 @@ test.describe("the fixed order and count (3.18, CO50)", () => {
       attemptOpened(3),
       poolPaused(4, "owner"),
       limits(5, { spend: 50, cap: 40, killed: true, refusing: true }),
-      ev(6, { type: "push.retry", batch_id: 1, tries: 2, error: "timeout", next_try_ms: 1000 }),
-      metrics(7, { waiting_behind: 2, push_backlog: 3 }),
+      // 4.4 pushStalled: the banner waits until the push is older than PUSH_STALL_MS (5 s)
+      // on the stream clock - the retry carries an old ts, the last event a new one.
+      ev(6, { type: "push.retry", batch_id: 1, tries: 2, error: "timeout", next_try_ms: 1000, ts: 2_000, t: 2_000 }),
+      metrics(7, { waiting_behind: 2, push_backlog: 3, ts: 8_000, t: 8_000 }),
     ]);
     await page.goto(`/p/${POOL}`);
 
@@ -101,12 +103,10 @@ test.describe("the fixed order and count (3.18, CO50)", () => {
     await expect(words.nth(0)).toHaveText("AGENTS STOPPED");
     await expect(words.nth(1)).toHaveText("POOL PAUSED");
     await expect(words.nth(2)).toHaveText("SPEND CAP");
-    await expect(page.locator(".banners")).toContainText(
-      "The kill switch is on and landings are paused.",
-    );
+    await expect(page.locator(".banners")).toContainText("The kill switch is on and landings are paused.");
     // The fourth (PUSH PENDING) sits behind banner.more (CO50).
     const more = page.locator(".banner-more-button");
-    await expect(more).toHaveText("1 more notice");
+    await expect(more).toHaveText("1 more notices");
     await more.click();
     await expect(page.locator(".banner-more-list")).toContainText("PUSH PENDING");
     await expect(page.locator(".banner-more-list")).toContainText("has not been confirmed yet");
@@ -165,9 +165,7 @@ test.describe("FR9: the killed banner and allow", () => {
     await expect(page.getByRole("button", { name: "Stop all agents" })).toHaveCount(0);
   });
 
-  test("owner sees kill.allow; the banner leaves only when limits.killed ends (CO48)", async ({
-    page,
-  }) => {
+  test("owner sees kill.allow; the banner leaves only when limits.killed ends (CO48)", async ({ page }) => {
     const kills: string[] = [];
     await serveStream(page, frames);
     await serveSession(page, true);
@@ -212,26 +210,30 @@ test.describe("the strip (3.8, 3.18)", () => {
     // Spend: "$10.00 of $40.00" and the bar at 25% (3.18).
     const spend = page.locator(".strip-cell", { hasText: "Spend" });
     await expect(spend).toContainText("$10.00 of $40.00");
-    await expect(spend.locator(".strip-bar-fill")).toHaveCSS("width", /%/);
     const width = await spend.locator(".strip-bar-fill").evaluate((el) => (el as HTMLElement).style.width);
     expect(width).toBe("25%");
+    const [fillBox, barBox] = await Promise.all([
+      spend.locator(".strip-bar-fill").boundingBox(),
+      spend.locator(".strip-bar").boundingBox(),
+    ]);
+    expect(fillBox!.width / barBox!.width).toBeCloseTo(0.25, 1);
     // Hover lists the model's use (spend.model_line).
     await spend.hover();
     await expect(spend.locator(".strip-tip")).toContainText("model-a: 12 of 60 requests in the last minute.");
   });
 
   test("empty cells read the dash (3.8 loading/empty)", async ({ page }) => {
-    await serveStream(page, [poolState(1)]);
+    // No event applied yet: every counter cell reads the dash of `strip.dash`.
+    await serveStream(page, []);
     await page.goto(`/p/${POOL}`);
-    await expect(page.locator(".strip-cell", { hasText: "Landed" })).toContainText("—");
+    for (const label of ["Run clock", "Real agents", "Landed", "Go-arounds"]) {
+      await expect(page.locator(".strip-cell", { hasText: label })).toContainText("–");
+    }
+    await expect(page.locator(".strip-cell", { hasText: "Waiting" })).toContainText("–");
   });
 
   test("FR7: near the cap the spend cell reads in the confirm tone", async ({ page }) => {
-    await serveStream(page, [
-      poolState(1),
-      intentCreated(2),
-      limits(3, { spend: 33, cap: 40 }),
-    ]);
+    await serveStream(page, [poolState(1), intentCreated(2), limits(3, { spend: 33, cap: 40 })]);
     await page.goto(`/p/${POOL}`);
     const spend = page.locator(".strip-cell[data-tone='confirm']", { hasText: "Spend" });
     await expect(spend).toContainText("Spend is near the cap.");

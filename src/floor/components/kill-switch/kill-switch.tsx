@@ -74,7 +74,13 @@ export function KillDialog({
         </label>
         {error !== null && <p className="field-error">{error}</p>}
         <div className="sheet-actions">
-          <button type="button" className="danger" disabled={saving || offline === true} onClick={() => void kill()} autoFocus>
+          <button
+            type="button"
+            className="danger"
+            disabled={saving || offline === true}
+            onClick={() => void kill()}
+            autoFocus
+          >
             {saving ? t("kill.stopping") : t("kill.confirm")}
           </button>
           <button type="button" onClick={onClose}>

@@ -114,7 +114,12 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   // FR10/CO3: while the connection is lost every owner control is off and the last
   // content keeps, dimmed. Replay never is "offline" - it plays a file, not a socket.
   const offline = !replay && session.connection === "lost";
-  const shell = useMemo(() => makeShell(settings, owner, replay), [settings, owner, replay]);
+  const floorRef = useRef(session.floor);
+  floorRef.current = session.floor;
+  const shell = useMemo(
+    () => makeShell(settings, owner, replay, () => floorRef.current.pool.max_real_agents),
+    [settings, owner, replay],
+  );
 
   // ---- routing (client routes of 4.5; the page never reloads) ----
   const navigate = useCallback((path: string) => {
@@ -165,7 +170,10 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     }
   }, [session.effects, session.floor.n]);
   const dropToast = useCallback((id: number) => setToasts((old) => old.filter((t) => t.id !== id)), []);
-  const toast = useCallback((line: string) => setToasts((old) => [...old, { id: ++toastSeq, text: line }].slice(-3)), []);
+  const toast = useCallback(
+    (line: string) => setToasts((old) => [...old, { id: ++toastSeq, text: line }].slice(-3)),
+    [],
+  );
 
   // ---- sheets: openers are remembered so focus returns to them on close (AX4) ----
   const sheetOpener = useRef<HTMLElement | null>(null);

@@ -14,14 +14,14 @@
 // place for the beat of 3.2 (1.2 s; 2 s with reduced motion) before it moves to Landed.
 
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { FloorState, AttemptView, LandingEntry } from "../../protocol/reducer/state.ts";
-import { ShellContext } from "./context.ts";
-import { inFlight, whyOffered } from "../state/derive.ts";
-import { landingConfirmed } from "../components/attempt-card/model.ts";
-import { AttemptCard } from "../components/attempt-card/attempt-card.tsx";
-import { changeName } from "../../copy/names.ts";
-import { landingLabel, timeOfDay } from "../../copy/format.ts";
-import { MAX_INTENT_CHARS } from "../../protocol/constants.ts";
+import type { FloorState, AttemptView, LandingEntry } from "../../../protocol/reducer/state.ts";
+import { ShellContext } from "../../app/context.ts";
+import { inFlight, whyOffered } from "../../state/derive.ts";
+import { landingConfirmed } from "../attempt-card/model.ts";
+import { AttemptCard } from "../attempt-card/attempt-card.tsx";
+import { changeName } from "../../../copy/names.ts";
+import { landingLabel, timeOfDay } from "../../../copy/format.ts";
+import { MAX_INTENT_CHARS } from "../../../protocol/constants.ts";
 
 export type RailProps = {
   floor: FloorState;

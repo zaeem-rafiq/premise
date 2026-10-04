@@ -24,7 +24,7 @@ import { KillDialog, allowAgents } from "../components/kill-switch/kill-switch.t
 import { SwarmView } from "../components/swarm/swarm.tsx";
 import { GreenLine } from "../components/green/green.tsx";
 import { PoolArea } from "../components/pool-frame/pool-area.tsx";
-import { Rail } from "./rail.tsx";
+import { Rail } from "../components/rail/rail.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
 import { ReplayMenu } from "../replay/replay-menu.tsx";

@@ -179,6 +179,7 @@
       "lane": "floor-rail",
       "paths": [
         "src/floor/app/wiring/rail.*",
+        "src/floor/components/rail/**",
         "src/floor/components/intent-box/**",
         "src/floor/components/attempt-card/**",
         "src/floor/components/lights/**",

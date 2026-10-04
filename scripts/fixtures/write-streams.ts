@@ -33,6 +33,39 @@ const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../test/fixtur
 
 /** The pool id every fixture stream serves. */
 const POOL = "tidepool";
+
+/** The from/to of every id of the table of 9.2 ("same" resolved; "unchanged" means to = from). */
+const TRANSITIONS: Record<string, { from: AttemptState[]; to: AttemptState[] | "unchanged" }> = {
+  T1: { from: ["opened"], to: ["working"] },
+  T2: { from: ["working", "going_around", "needs_confirm"], to: ["validated"] },
+  T3: { from: ["working", "going_around", "needs_confirm"], to: ["submitted"] },
+  T4: { from: ["working", "going_around", "needs_confirm"], to: ["held"] },
+  T5: { from: ["working", "going_around", "needs_confirm"], to: ["needs_confirm"] },
+  T6: { from: ["working", "going_around", "needs_confirm"], to: ["going_around"] },
+  T7: { from: ["working", "going_around", "needs_confirm"], to: "unchanged" },
+  T8: { from: ["working", "needs_confirm", "submitted", "validated", "held"], to: ["going_around"] },
+  T9: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
+  T9c: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
+  T10: { from: ["going_around"], to: ["going_around"] },
+  T10a: { from: ["going_around"], to: ["going_around"] },
+  T11: { from: ["submitted", "validated", "held"], to: ["needs_confirm"] },
+  T11s: { from: ["submitted", "validated", "held"], to: ["stopped"] },
+  T12: { from: ["submitted"], to: ["validated", "held"] },
+  T13: { from: ["held"], to: ["validated"] },
+  T14: { from: ["held"], to: ["stopped"] },
+  T15: { from: ["validated"], to: ["accepted"] },
+  T16: { from: ["accepted"], to: ["landed"] },
+  T17: { from: ["accepted"], to: ["going_around"] },
+  T17a: { from: ["accepted"], to: ["landed"] },
+  T18: { from: ["landed"], to: ["stopped"] },
+  T19: { from: ["landed"], to: ["going_around"] },
+  T19s: { from: ["landed"], to: ["stopped"] },
+  T20: { from: ["opened", "working", "going_around", "needs_confirm", "submitted", "validated", "held"], to: ["stopped"] },
+  T20r: { from: ["going_around", "needs_confirm", "working"], to: ["stopped"] },
+  T21: { from: ["stopped"], to: ["going_around", "needs_confirm", "working"] },
+  T22: { from: ["submitted", "validated", "held"], to: ["working"] },
+};
+
 /** Streams start at this fixed instant so the files are byte-stable. */
 const T0 = Date.UTC(2024, 0, 1, 0, 0, 0);
 
@@ -1315,6 +1348,8 @@ function tracer(): ReplayEvent[] {
     attempt_id: null,
     reason: null,
   });
+  // T13: the owner's land resolves the held submit (9.2); the attempt is a candidate next tick.
+  aState(push, T0 + 4_050, "a_T", "held", "validated", "T13");
   accepted(
     push,
     T0 + 4_100,
@@ -1392,11 +1427,12 @@ function tracer(): ReplayEvent[] {
     cause: "undo",
     target_seq: 1,
     reverted: [1],
-    reopened: ["a_T"],
+    reopened: [],
     kept_readers: [],
   });
-  // EV3: landing.accepted first, then the undo's effects — the reopened attempt, the undone
-  // intent, then the classification effects in the order EV3 names them (premise.judged, op.dropped).
+  // EV3: landing.accepted first, then the undo landing's own transaction — the target's
+  // attempt stops (T18, UN5a) and its intent goes to undone — then the classification effects
+  // (the reader's premise.judged). A reopened attempt would be T19; the undo's target is not reopened.
   push({
     ts: T0 + 9_200,
     src: "trunk",
@@ -1411,15 +1447,7 @@ function tracer(): ReplayEvent[] {
     paths: ["creatures/fish.js"],
     writes: [{ kind: "entity", key: "creatures/fish.js#spawn", old: "h-fish-1", new: "h-fish-0" }],
   });
-  push({
-    ts: T0 + 9_210,
-    src: "trunk",
-    type: "attempt.reopened",
-    attempt_id: "a_T",
-    cause: "undo",
-    revision: 2,
-    model_changed: false,
-  });
+  aState(push, T0 + 9_210, "a_T", "landed", "stopped", "T18", 0, 0, false, "undone");
   push({ ts: T0 + 9_220, src: "trunk", type: "intent.state", intent_id: "i_T", state: "undone" });
   push({
     ts: T0 + 9_230,
@@ -1437,15 +1465,6 @@ function tracer(): ReplayEvent[] {
     result: "holds",
     reason: "reverted to the read text",
     clef: null,
-  });
-  push({
-    ts: T0 + 9_240,
-    src: "trunk",
-    type: "op.dropped",
-    attempt_id: "a_T",
-    op_seqs: [1],
-    path: "creatures/fish.js",
-    rule: "OP5",
   });
   push({
     ts: T0 + 9_400,
@@ -1587,38 +1606,6 @@ function aOp(
     removed,
   });
 }
-
-/** The from/to of every id of the table of 9.2 ("same" resolved; "unchanged" means to = from). */
-const TRANSITIONS: Record<string, { from: AttemptState[]; to: AttemptState[] | "unchanged" }> = {
-  T1: { from: ["opened"], to: ["working"] },
-  T2: { from: ["working", "going_around", "needs_confirm"], to: ["validated"] },
-  T3: { from: ["working", "going_around", "needs_confirm"], to: ["submitted"] },
-  T4: { from: ["working", "going_around", "needs_confirm"], to: ["held"] },
-  T5: { from: ["working", "going_around", "needs_confirm"], to: ["needs_confirm"] },
-  T6: { from: ["working", "going_around", "needs_confirm"], to: ["going_around"] },
-  T7: { from: ["working", "going_around", "needs_confirm"], to: "unchanged" },
-  T8: { from: ["working", "needs_confirm", "submitted", "validated", "held"], to: ["going_around"] },
-  T9: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
-  T9c: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
-  T10: { from: ["going_around"], to: ["going_around"] },
-  T10a: { from: ["going_around"], to: ["going_around"] },
-  T11: { from: ["submitted", "validated", "held"], to: ["needs_confirm"] },
-  T11s: { from: ["submitted", "validated", "held"], to: ["stopped"] },
-  T12: { from: ["submitted"], to: ["validated", "held"] },
-  T13: { from: ["held"], to: ["validated"] },
-  T14: { from: ["held"], to: ["stopped"] },
-  T15: { from: ["validated"], to: ["accepted"] },
-  T16: { from: ["accepted"], to: ["landed"] },
-  T17: { from: ["accepted"], to: ["going_around"] },
-  T17a: { from: ["accepted"], to: ["landed"] },
-  T18: { from: ["landed"], to: ["stopped"] },
-  T19: { from: ["landed"], to: ["going_around"] },
-  T19s: { from: ["landed"], to: ["stopped"] },
-  T20: { from: ["opened", "working", "going_around", "needs_confirm", "submitted", "validated", "held"], to: ["stopped"] },
-  T20r: { from: ["going_around", "needs_confirm", "working"], to: ["stopped"] },
-  T21: { from: ["stopped"], to: ["going_around", "needs_confirm", "working"] },
-  T22: { from: ["submitted", "validated", "held"], to: ["working"] },
-};
 
 function aState(
   push: Push,
@@ -3351,44 +3338,11 @@ function cardChoiceReopenFailed(): ReplayEvent[] {
     reopened: ["a_A"],
     kept_readers: [],
   });
-  push({
-    ts: T0 + 6_010,
-    src: "trunk",
-    type: "attempt.reopened",
-    attempt_id: "a_A",
-    cause: "revert",
-    revision: 2,
-    model_changed: false,
-  });
-  aState(push, T0 + 6_020, "a_A", "landed", "going_around", "T19", 1);
-  aHeadsUp(
-    push,
-    T0 + 6_030,
-    "a_A",
-    1,
-    "repair",
-    true,
-    [1],
-    { seq: 1, change_id: "c-a_A", intent_text: "a crab that hides when its energy is low" },
-    [{ kind: "check", key: "visible", rule: "GR3" }],
-    [
-      {
-        premise: { kind: "check", key: "visible" },
-        rule: "GR3",
-        result: "repair",
-        reason: "the green line failed twice on this landing",
-        old_hash: "h-crab-spawn",
-        new_hash: "absent",
-        cause_seq: 1,
-        diff: { kind: "check", check: "visible", code: "visible:failed" },
-        uses: [],
-      },
-    ],
-    1,
-  );
+  // EV3: landing.accepted first, then the revert landing's own transaction — the attempt
+  // reopens with T19 (GR3 reopens every attempt in R) — then its repair heads-up.
   landAccepted(
     push,
-    T0 + 6_500,
+    T0 + 6_100,
     2,
     "revert",
     null,
@@ -3398,17 +3352,50 @@ function cardChoiceReopenFailed(): ReplayEvent[] {
     ["creatures/crab.js"],
     [{ kind: "entity", key: "creatures/crab.js#spawn", old: "h-crab-spawn", new: "absent" }],
   );
-  seqLanded(
+  aState(push, T0 + 6_110, "a_A", "landed", "going_around", "T19", 1);
+  push({
+    ts: T0 + 6_120,
+    src: "trunk",
+    type: "attempt.reopened",
+    attempt_id: "a_A",
+    cause: "revert",
+    revision: 2,
+    model_changed: false,
+  });
+  push({
+    ts: T0 + 6_130,
+    src: "trunk",
+    type: "headsup.sent",
+    attempt_id: "a_A",
+    hn: 1,
+    result: "repair",
+    wake: true,
+    cause: { type: "revert", seqs: [2], changes: [] },
+    keys: [{ kind: "check", key: "visible", rule: "GR3" }],
+    items: [
+      {
+        premise: { kind: "check", key: "visible" },
+        rule: "GR3",
+        result: "repair",
+        reason: "the green line failed twice on this landing",
+        old_hash: "h-crab-spawn",
+        new_hash: "absent",
+        cause_seq: 2,
+        diff: { kind: "check", check: "visible", code: "visible:failed" },
+        uses: [],
+      },
+    ],
+    dropped_ops: [],
+    go_around: 1,
+  });
+  landLanded(
     push,
-    T0 + 7_000,
+    T0 + 6_400,
     2,
-    "a_A",
-    "i_A",
-    1,
-    0,
     commitOf("rf-", 2),
     JSON.stringify({ v: 1, seq: 2, kind: "revert", request_id: "r_rev" }),
   );
+  batchPush(push, T0 + 6_410, 2, commitOf("rf-", 2));
   aState(push, T0 + 8_000, "a_A", "going_around", "stopped", "T20r", 1, 0, false, "reopen_failed");
   cardOpened(push, T0 + 8_010, {
     card_id: "k_R1",
@@ -3946,9 +3933,13 @@ function fr16GoAroundLimit(): ReplayEvent[] {
     const base = T0 + 4_000 + i * 3_000;
     openAttempt(push, base, `i_B${seq}`, bId, `lower the energy cap to ${cap}`);
     bReplaceCap(push, base + 400, bId, cap + 10, cap);
-    aResolved(push, base + 1_390, "a_A", seq, "repair", seq, true, "The crab still wants the threshold 30.");
-    aSubmit(push, base + 1_400, "a_A", `s_A${seq + 1}`, "validated");
-    aState(push, base + 1_410, "a_A", "going_around", "validated", "T2", seq);
+    // a_A resolves the heads-up the previous landing sent (hn i), resubmits and revalidates.
+    // Before landing 1 there is no heads-up yet: a_A simply sits validated.
+    if (i > 0) {
+      aResolved(push, base + 1_390, "a_A", i, "repair", i, true, "The crab still wants the threshold 30.");
+      aSubmit(push, base + 1_400, "a_A", `s_A${seq}`, "validated");
+      aState(push, base + 1_410, "a_A", "going_around", "validated", "T2", i);
+    }
     landAccepted(
       push,
       base + 2_000,

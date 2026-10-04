@@ -21,6 +21,8 @@ export type WhyItem = {
   reason: string | null;
   causeSeq: number | null; // the landing that changed this key, when the item says so
   scripted: boolean; // judgmentSentence's `scripted` flag (TR8)
+  /** Entity keys of a query diff's `added` (QR sentences name them); [] when the item has none. */
+  added: string[];
 };
 
 /** A resolved heads-up the landing went through: repair (a go-around) or confirm. */
@@ -173,6 +175,7 @@ function itemsOf(headsUp: HeadsUpView, scripted: boolean): WhyItem[] {
       reason: item?.reason ?? null,
       causeSeq: item?.cause_seq ?? firstLandedSeq(headsUp.cause.seqs),
       scripted,
+      added: item?.diff.kind === "query" ? item.diff.added.map((entry) => entry.key) : [],
     };
   });
 }
@@ -227,6 +230,7 @@ function underOfNote(note: Note, scripted: boolean): WhyUnder[] {
         reason: reasonOf(key.kind, key.key),
         causeSeq,
         scripted: scripted || clefOf(key.kind, key.key),
+        added: [],
       })),
       causeType: goAround.cause,
       causeSeq,
@@ -245,6 +249,7 @@ function underOfNote(note: Note, scripted: boolean): WhyUnder[] {
         reason: reasonOf(key.kind, key.key),
         causeSeq: null,
         scripted: scripted || clefOf(key.kind, key.key),
+        added: [],
       })),
       causeType: null,
       causeSeq: null,
@@ -393,9 +398,10 @@ export function whyCard(state: FloorState, seq: number, fetched?: Note | null): 
     if (card.model === null) card.model = landing.note.attempt?.model ?? null;
     return card;
   }
-  // The stream has no note_json (a summary_only pool, EV6). In a full pool the
-  // note route may still answer; the component fetches it.
-  card.needsNote = true;
+  // The stream has no note_json (a summary_only pool, EV6, whose note route
+  // answers 404). Elsewhere the component fetches the note route; while it is
+  // in flight the card shows the stream fields, on failure `why.partial`.
+  card.needsNote = !state.pool.summary_only;
   if (fetched !== undefined && fetched !== null) {
     fillFromNote(card, fetched);
   } else if (fetched === null || state.pool.summary_only) {

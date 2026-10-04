@@ -84,6 +84,7 @@ describe("whyCard, hero-c04", () => {
         reason: "ENERGY_MAX is now 1, a fraction scale",
         causeSeq: 1,
         scripted: false,
+        added: [],
       },
     ]);
     expect(card.checks).toEqual([]);

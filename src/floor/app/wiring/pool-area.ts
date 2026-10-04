@@ -3,7 +3,7 @@
 
 import type { RegistryTable } from "../registry.ts";
 
-export function wire(_table: RegistryTable): void {
+export function wire(table: RegistryTable): void {
   // Slice 1 registers nothing. The registry's entries are views, sheets and keys, and this slice
   // gives the lane none of those: the pool area (`../components/pool-frame/`, exported as PoolArea
   // from `pool-area.tsx`) is a region component the Floor view renders — it is the live pool frame
@@ -22,4 +22,8 @@ export function wire(_table: RegistryTable): void {
   // Note the Slice-0 check `registry().entries.size === 0` of test/arch/seams.test.ts also pins
   // this table empty until the first lane registers; registering before then needs the lead to
   // update that check.
+  // Slice 7: the Why card of 03-floor 3.9 and the Who relies panel of 3.11. The git drawer is a
+  // part of the Why sheet (2.5), not a sheet of its own; the `git-drawer` key is the shell's.
+  table.entries.set("sheet.why", { kind: "sheet", name: "sheet.why", value: "sheet.why" });
+  table.entries.set("sheet.who", { kind: "sheet", name: "sheet.who", value: "sheet.who" });
 }

@@ -1,0 +1,3 @@
+# Creature guide
+
+placeholder

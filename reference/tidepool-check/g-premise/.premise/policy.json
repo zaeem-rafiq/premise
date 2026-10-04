@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "default": "held",
+  "tiers": [
+    { "paths": ["creatures/*.js"], "tier": "auto" },
+    { "paths": ["world/**", "main.js", "pen.js", "index.html", "selftest/**", "creatures/README.md", "README.md"], "tier": "held" }
+  ],
+  "globals": ["Math", "Number", "String", "Boolean", "Array", "Object", "JSON", "Map", "Set", "Infinity", "NaN", "undefined", "isFinite", "isNaN", "parseInt", "parseFloat"],
+  "limits": { "max_paths": 12, "max_change_bytes": 32768 }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "artifacts-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // No account_id on purpose: the runner passes CLOUDFLARE_ACCOUNT_ID in the environment.
+
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // Artifacts binding. Every repo this harness creates lives in the "spike" namespace
+  // and is named "spike-<something>" so the cleanup route can find it.
+  "artifacts": [
+    {
+      "binding": "ARTIFACTS",
+      "namespace": "spike"
+    }
+  ],
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  // One SQLite-backed Durable Object class does all the git work.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SPIKE_DO",
+        "class_name": "SpikeDO"
+      }
+    ]
+  },
+  "exports": {
+    "SpikeDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+
+  // Fail-closed auth: the Worker cannot be deployed without this secret
+  // (wrangler validates secrets.required), and the code also rejects every
+  // request when the secret is missing at runtime.
+  "secrets": {
+    "required": ["SPIKE_KEY"]
+  },
+
+  // The soak experiment runs up to 500 commit+push cycles in one request.
+  "limits": {
+    "cpu_ms": 300000
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

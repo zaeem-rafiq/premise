@@ -1,0 +1,11 @@
+{
+  "name": "premise-spike2",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "ai": { "binding": "AI" },
+  "worker_loaders": [{ "binding": "LOADER" }],
+  "secrets": { "required": ["SPIKE_KEY"] },
+  "observability": { "enabled": true }
+}

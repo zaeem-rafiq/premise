@@ -8,7 +8,7 @@ import type { AttemptState } from "../../../protocol/attempt.ts";
 import type { AttemptView, FloorState, HeadsUpView, PremiseView } from "../../../protocol/reducer/state.ts";
 import { premiseId } from "../../../protocol/reducer/state.ts";
 import { activityError, activityLine, quietSuffix } from "../../../copy/activity.ts";
-import { submitErrorSentence, submitResultLine } from "../../../copy/checks.ts";
+import { submitCheckLabel, submitErrorSentence, submitResultLine } from "../../../copy/checks.ts";
 import { duration } from "../../../copy/format.ts";
 import { changeName, keyLabel, keyShort, modelName } from "../../../copy/names.ts";
 import { headsupOneLine, tickSkipped } from "../../../copy/sentences.ts";
@@ -386,4 +386,38 @@ export function cardModel(state: FloorState, attempt: AttemptView, clock: number
     cardId: attempt.card_id,
     note: reopenedNote(attempt),
   };
+}
+
+// ---- The expanded card (03 3.2: heads-up panels, "Relies on" list, "What it changes", checks) ----
+
+/** One operation row of "What it changes" (03 3.2): the path and the entities it touches. */
+export type OpRow = { path: string; entities: string[]; dropped: boolean };
+
+/** The attempt's `ops` as display rows: path, then the `keyLabel` of each entity it records. */
+export function opRows(attempt: AttemptView): OpRow[] {
+  return attempt.ops.map((op) => ({
+    path: op.path,
+    entities: [...op.altered, ...op.added, ...op.removed].map((key) => keyLabel("entity", key)),
+    dropped: op.dropped,
+  }));
+}
+
+/** One check row of "What was checked" (5.7): the check's label and the failed one's sentence. */
+export type CheckRow = { label: string; ok: boolean; error: string | null };
+
+/** The attempt's submit checks (5.7), or null while it has none. */
+export function checkRows(attempt: AttemptView): CheckRow[] | null {
+  if (attempt.submit === null || attempt.submit.checks.length === 0) return null;
+  return attempt.submit.checks.map((check) => ({
+    label: submitCheckLabel(check.name, check.detail),
+    ok: check.ok,
+    error: check.ok ? null : submitErrorSentence(check),
+  }));
+}
+
+/** The `why.checked.count` summary of the checks block (5.7), or null. */
+export function checksSummary(attempt: AttemptView): string | null {
+  if (attempt.submit === null || attempt.submit.checks.length === 0) return null;
+  const checks = attempt.submit.checks;
+  return text("why.checked.count", { ok: checks.filter((check) => check.ok).length, all: checks.length });
 }

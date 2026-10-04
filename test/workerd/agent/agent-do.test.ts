@@ -372,6 +372,23 @@ describe("the Agent Durable Object in workerd", () => {
     expect(s.meta.stop_reason).toBe("cancelled");
   });
 
+  it("AG8: a stopped attempt keeps no timer and never calls Trunk again", async () => {
+    await openAttempt("a_quiet", { pattern: "t", truth: [], steps: [{ tool: "list", args: { path: "creatures/" } }] });
+    await waitFor(async () => (await inspect("a_quiet")).transcript.length === 1);
+    await worker.fetchDurableObject("AGENT", "a_quiet", "/api/pools/p_t/attempts/a_quiet/stop");
+    await waitFor(async () => (await inspect("a_quiet")).meta.state === "stopped");
+    // The attempt is closed: its next run retires the watchdog, time-out, sync and call timers.
+    await worker.fetchDurableObject("AGENT", "a_quiet", "/internal/alarm");
+    const s = await inspect("a_quiet");
+    expect(s.timers.filter((timer) => timer.kind !== "events" && timer.kind !== "release")).toEqual([]);
+    // And later alarm runs send Trunk nothing: a finished Agent is quiet.
+    const sent = () => fake.requests.filter((r) => r.body.attempt_id === "a_quiet").length;
+    const before = sent();
+    await worker.fetchDurableObject("AGENT", "a_quiet", "/internal/alarm");
+    await worker.fetchDurableObject("AGENT", "a_quiet", "/internal/alarm");
+    expect(sent()).toBe(before);
+  });
+
   it("HU6a: an out-of-order push is answered by a sync before anything is shown", async () => {
     await openAttempt("a_gap", { pattern: "t", truth: [], steps: [{ tool: "list", args: { path: "creatures/" } }] });
     await waitFor(async () => (await inspect("a_gap")).transcript.length === 1);

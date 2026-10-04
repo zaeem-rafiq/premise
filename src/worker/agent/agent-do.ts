@@ -593,6 +593,7 @@ export class Agent extends DurableObject<Env> {
         const reopening = this.#meta("sync_needed") === "1" || this.#meta("resume_show") === "1";
         if (TERMINAL_STATES.has(this.#meta("state") as AttemptState) && !reopening) {
           await this.#releaseGateSlot(); // MG5: a landed or stopped attempt frees its slot
+          this.#retireTimers();
           return;
         }
 
@@ -697,6 +698,21 @@ export class Agent extends DurableObject<Env> {
       await this.#deliverEvents();
       await this.#armAlarm();
     }
+  }
+
+  /**
+   * AG8: a landed or stopped attempt has nothing left to wait for. Its watchdog, time-out, sync
+   * and call timers are deleted here, or the alarm wakes a finished Agent for ever (seen on the
+   * test deployment: every landed Agent synced with Trunk every five seconds). Work that still
+   * owes something keeps its timer: `events` (the outbox to the Floor) and `release` (the gate
+   * slot). A resume puts the attempt's timers back itself (RS2).
+   */
+  #retireTimers(): void {
+    this.#sql.transaction(() => {
+      for (const timer of timerList(this.#sql)) {
+        if (timer.kind !== "events" && timer.kind !== "release") timerDelete(this.#sql, timer.kind, timer.key);
+      }
+    });
   }
 
   #driverLast(): ModelToolMessage | null {

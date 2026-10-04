@@ -81,7 +81,7 @@ const FRAME_CSS = `
   border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   overflow: hidden; background: var(--bg, #0b1720); }
 .pf-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-.pf-body iframe:focus { outline: 3px solid var(--focus, #ffe08a); outline-offset: -3px; }
+.pf-body--framefocus { outline: 3px solid var(--focus, #ffe08a); outline-offset: -3px; border-radius: 8px; }
 .pf-overlay { position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 16px;
   background: var(--bg, #0b1720); color: var(--muted, #a8bcc6);
@@ -222,6 +222,17 @@ export function PoolFrame(props: PoolFrameProps) {
     });
   }, [driver, paused, props.highlight, props.selftest, state.pool.landed_commit, state.green.commit, state.green.seq]);
 
+  useEffect(() => {
+    const onBlur = () => setFrameFocus(document.activeElement === iframeRef.current);
+    const onFocus = () => setFrameFocus(false);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
   // CO22/SE16: accept messages only from our own iframe, only of the channel's shape.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -259,6 +270,10 @@ export function PoolFrame(props: PoolFrameProps) {
   // 2 s under reduced motion.
   const seenLanded = useRef<number | null>(null);
   const [edgeGlow, setEdgeGlow] = useState(false);
+  // Focus that moves into the frame's document matches no parent-document pseudo and fires
+  // no element event: the page window blurs instead, with the iframe as `activeElement`.
+  // `frameFocus` follows that so the ring draws on `.pf-body` (AX2).
+  const [frameFocus, setFrameFocus] = useState(false);
   useEffect(() => {
     const seq = state.pool.landed_seq;
     const prev = seenLanded.current;
@@ -313,7 +328,7 @@ export function PoolFrame(props: PoolFrameProps) {
           {paused ? text("frame.play") : text("frame.pause")}
         </button>
       </div>
-      <div className={`pf-body${edgeGlow ? " pf-glow" : ""}`}>
+      <div className={`pf-body${edgeGlow ? " pf-glow" : ""}${frameFocus ? " pf-body--framefocus" : ""}`}>
         {frame.src !== "" && (
           <iframe
             key={frame.seq}

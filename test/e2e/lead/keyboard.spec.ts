@@ -46,17 +46,42 @@ const REGION = [
 
 async function focused(page: Page): Promise<{ rank: number; tag: string; cls: string; ring: boolean }> {
   return page.evaluate((regions) => {
-    const el = document.activeElement as HTMLElement | null;
+    let el = document.activeElement as HTMLElement | null;
     if (el === null) return { rank: -2, tag: "", cls: "", ring: false };
+    // Focus inside a frame's document leaves the page's activeElement on <body>: find the
+    // same-origin frame that holds focus and count focus as being on that frame.
+    let body = false;
+    if (el.tagName === "BODY") {
+      for (const frame of Array.from(document.querySelectorAll("iframe"))) {
+        try {
+          if (frame.contentDocument !== null && frame.contentDocument.hasFocus()) {
+            el = frame;
+            break;
+          }
+        } catch {
+          /* cross-origin frame: not ours */
+        }
+      }
+      body = el.tagName === "BODY"; // the document's rest state at the end of the tab order
+    }
     let rank = -1;
     regions.forEach((sel, i) => {
       if (el.closest(sel) !== null) rank = i;
     });
-    const cs = getComputedStyle(el);
-    const ring =
-      (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) ||
-      cs.boxShadow !== "none";
-    return { rank, tag: el.tagName, cls: String(el.className).slice(0, 60), ring };
+    const ringOn = (node: Element | null) => {
+      if (node === null) return false;
+      const cs = getComputedStyle(node);
+      return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) || cs.boxShadow !== "none";
+    };
+    // An iframe's box is painted by its document: its focus ring lives on .pf-body.
+    const ring = ringOn(el) || (el.tagName === "IFRAME" && ringOn(el.parentElement));
+    return {
+      rank, body, tag: el.tagName, cls: String(el.className).slice(0, 60), ring,
+      src: el.tagName === "IFRAME" ? String((el as HTMLIFrameElement).src).slice(-40) : "",
+      matchesFocus: el.matches(":focus"),
+      parentWithin: el.parentElement?.matches(":focus-within") ?? false,
+      parentCls: String(el.parentElement?.className ?? "").slice(0, 40),
+    };
   }, REGION as unknown as string[]);
 }
 
@@ -74,7 +99,7 @@ test("keyboard focus order crosses every region in order (AC10)", async ({ page 
   for (let i = 0; i < 80; i++) {
     await page.keyboard.press("Tab");
     const f = await focused(page);
-    if (f.rank === -2) break;
+    if (f.rank === -2 || (f as unknown as { body?: boolean }).body === true) continue;
     // Wrapped around: focus came back to the element it started on.
     if (seen.length > 0 && f.tag === seen[0]!.tag && f.cls === seen[0]!.cls) break;
     seen.push(f);

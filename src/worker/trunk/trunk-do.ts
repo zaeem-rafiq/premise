@@ -18,7 +18,7 @@ import { notBuilt } from "../not-built.ts";
 import { deliverEvents, recordTrunkError, runEffects, type EffectRef } from "./after-commit.ts";
 import { deliverHeadsUps, pushOutbox, reconcileOnStart } from "./push.ts";
 import { armAlarm, runAlarm } from "./alarm.ts";
-import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList } from "./sql.ts";
+import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -34,6 +34,11 @@ export type EntryContext = {
 type EntryResult = { response?: unknown; status?: number; effects?: EffectRef[] };
 
 const BAD_JSON = Symbol("bad_json");
+
+/** How many times one request runs the after-commit pipeline before the `push` timer takes over.
+ * One landing needs two passes (the push, then the events of `push_ok`); the bound only keeps a
+ * long outbox from holding one request open. */
+const POST_COMMIT_PASSES = 4;
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
@@ -247,28 +252,46 @@ export class Trunk extends DurableObject<Env> {
    * 9.4 step 6: after every commit, in this order and none awaited by the next — the events to
    * the Floor (EV2), the push (9.6), the heads-up delivery (HU5b). Each step's failure is a
    * `trunk.error`, not a lost transaction: the timers they arm retry them.
+   *
+   * A push whose answer was applied (`push_ok`, `push_result`) leaves new work: its events, and
+   * perhaps the next batch. The pipeline therefore runs again after it — as a loop with a bound,
+   * never from inside the push. A pass that started inside the push's own `apply` would push the
+   * same batch again before its retry was scheduled, and would never return.
    */
   async #postCommit(): Promise<void> {
-    try {
-      await deliverEvents(this.env, this.ctx);
-    } catch {
-      recordTrunkError(this.ctx, "events", "transport");
+    for (let pass = 0; pass < POST_COMMIT_PASSES; pass += 1) {
+      try {
+        await deliverEvents(this.env, this.ctx);
+      } catch {
+        recordTrunkError(this.ctx, "events", "transport");
+      }
+      const applied = await this.#pushOnce();
+      try {
+        await deliverHeadsUps(this.env, this.ctx);
+      } catch {
+        recordTrunkError(this.ctx, "heads_up", "transport");
+      }
+      if (!applied) return;
     }
+    // The bound was reached with work still to do: the `push` timer continues it (AL1).
+    this.#sql.transaction(() => timerPut(this.#sql, "push", "", Date.now()));
+  }
+
+  /** One `pushOutbox`. True when the push's answer was applied to the engine, which is when the
+   * pipeline has new work. */
+  async #pushOnce(): Promise<boolean> {
+    let applied = false;
     try {
       await pushOutbox(this.env, this.ctx, async (name, input) => {
         const r = await this.#callEngineEntry(name, input);
         if ("error" in r) throw new Error(`push apply ${name} failed`);
-        await this.#postCommit();
+        applied = true;
         return r.result;
       });
     } catch {
       recordTrunkError(this.ctx, "push", "transport");
     }
-    try {
-      await deliverHeadsUps(this.env, this.ctx);
-    } catch {
-      recordTrunkError(this.ctx, "heads_up", "transport");
-    }
+    return applied;
   }
 
   /** Entry calls answered since the object started — the app-server acceptance's proof that no
@@ -385,16 +408,7 @@ export class Trunk extends DurableObject<Env> {
       sql: this.#sql,
       runEntry: (kind) => this.#runTimerEntry(kind),
       push: async () => {
-        try {
-          await pushOutbox(this.env, this.ctx, async (name, input) => {
-            const r = await this.#callEngineEntry(name, input);
-            if ("error" in r) throw new Error(`push apply ${name} failed`);
-            await this.#postCommit();
-            return r.result;
-          });
-        } catch {
-          recordTrunkError(this.ctx, "push", "transport");
-        }
+        if (await this.#pushOnce()) await this.#postCommit();
       },
       repush: async () => {
         try {

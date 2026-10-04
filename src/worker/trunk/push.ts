@@ -12,7 +12,7 @@ import { HEADS_UP_REPUSH_MS, PUSH_BACKOFF_BASE_MS, PUSH_BACKOFF_MAX_MS } from ".
 import type { PushResult, RefUpdate } from "../../protocol/ports.ts";
 import type { ErrCode } from "../../protocol/events.ts";
 import type { Env } from "../env.ts";
-import { appendEvent, sqlOf, timerPut } from "./sql.ts";
+import { appendEvent, metaGet, sqlOf, timerPut } from "./sql.ts";
 import { recordTrunkError } from "./after-commit.ts";
 import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
@@ -139,6 +139,14 @@ function scheduleRetry(
   });
 }
 
+/** True while the pool is paused with a reason only "Rebuild from Artifacts" resolves (LP8). */
+function pushHalted(ctx: DurableObjectState): boolean {
+  const sql = sqlOf(ctx);
+  if (metaGet(sql, "pool_state") !== "paused") return false;
+  const reason = metaGet(sql, "pause_reason");
+  return reason === "push_rejected" || reason === "diverged";
+}
+
 /** Counts an LP5b poison candidate: a rejection after which both refs still had their old values. */
 function countReject(ctx: DurableObjectState, outbox: OutboxState): void {
   sqlOf(ctx).transaction(() => {
@@ -164,6 +172,9 @@ export async function pushOutbox(
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
   if (outbox.next_try !== null && outbox.next_try > Date.now()) return;
+  // LP5b, LP8: a pool paused for a refused or diverged push does not push again; the owner
+  // rebuilds it. A pause by the owner does not stop an accepted batch (SE11).
+  if (pushHalted(ctx)) return;
 
   let target;
   try {

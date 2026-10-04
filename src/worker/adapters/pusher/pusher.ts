@@ -141,6 +141,12 @@ export function receivePackPusher(): Pusher {
       if (report.unpackOk && Object.values(refs).every((status) => status === "ok")) {
         return { ok: true, refs: refs as Record<string, "ok"> };
       }
+      // LP5 decides from the remote's ref values, never from this text. The text is for the
+      // operator's log only: it names why the server refused (no request data, no token).
+      console.warn("git-receive-pack refused the push", {
+        unpack: report.unpackError,
+        refs: report.results.map((result) => (result.ok ? `ok ${result.ref}` : `ng ${result.ref} ${result.error}`)),
+      });
       return { ok: false, kind: "rejected", refs };
     },
 

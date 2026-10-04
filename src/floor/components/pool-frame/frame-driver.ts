@@ -157,16 +157,11 @@ export class FrameDriver {
     if (base !== this.base) this.loadNow(base);
   }
 
-  /** The iframe's `load` event: the page is up. A late load also rescues an `error` phase — the
-   * frame did load, so the honest state is live (FL10). */
-  onLoad(): void {
-    if (this.phase === "loading" || this.phase === "error") {
-      this.phase = "live";
-      this.sink.cancel("load");
-      this.armStall();
-      this.sink.changed();
-    }
-  }
+  /** The iframe's `load` event: a document arrived — which is not yet the pool page (FR20).
+   * An error document, an aborted navigation's error page or a server's fallback fires `load`
+   * just the same, so `load` alone cannot make the frame live: the first `stats` message can.
+   * The `load` timer keeps running; a document that never speaks hits `error` (FR20/RY22). */
+  onLoad(): void {}
 
   /** The iframe's `error` event — FR20's "reports an error" half of the load failure. */
   onLoadError(): void {

@@ -108,7 +108,9 @@ export async function loadRecordingText(id: string, get: typeof fetch): Promise<
   if (file !== undefined) {
     try {
       const response = await get(file);
-      if (response.ok) return await response.text();
+      if (response.ok && !(response.headers.get("content-type") ?? "").includes("text/html")) {
+        return await response.text();
+      }
     } catch {
       // fall through to the embedded copy and the canonical path
     }
@@ -117,7 +119,11 @@ export async function loadRecordingText(id: string, get: typeof fetch): Promise<
   if (embedded !== undefined) return embedded;
   try {
     const response = await get(recordingFileUrl(id));
-    if (response.ok) return await response.text();
+    // A static server answers an unknown path with the page itself (the SPA fallback,
+    // `text/html`): the recording did not arrive, which is the `download` check of 8.3.
+    if (response.ok && !(response.headers.get("content-type") ?? "").includes("text/html")) {
+      return await response.text();
+    }
   } catch {
     // fall through
   }

@@ -193,7 +193,7 @@ describe("load failure and stalls (FR20, FR28)", () => {
   it("a first stall with a green commit reloads on source green (FR28)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1, greenCommit: "g1", greenSeq: 3 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     expect(h.armed("stall")).toBe(POOL_STALL_MS);
     h.fire("stall");
     expect(h.loads.at(-1)).toBe(`/pool/tidepool/green/?seed=${HOST_SEED}`);
@@ -206,11 +206,11 @@ describe("load failure and stalls (FR20, FR28)", () => {
   it("a first stall without green reloads main once; a second shows frame.stalled", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
     expect(h.loads.at(-1)).toBe(`/pool/tidepool/main/?seed=${HOST_SEED}`);
     expect(h.driver.stalledCaption?.id).toBe("frame.stalled.reloaded");
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
     expect(h.driver.phase).toBe("stalled");
     expect(h.driver.stalledCaption?.id).toBe("frame.stalled");
@@ -220,9 +220,9 @@ describe("load failure and stalls (FR20, FR28)", () => {
   it("a frame on green gets probe when green.advanced arrives (FR28)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1, greenCommit: "g1", greenSeq: 3 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
-    h.driver.onLoad();
+    h.driver.onStats(stats("c-g1"));
     h.target({ landedCommit: C1, greenCommit: "g2", greenSeq: 4 });
     expect(h.armed("probe")).toBe(FRAME_ADVANCE_DEBOUNCE_MS);
     h.fire("probe");
@@ -232,10 +232,10 @@ describe("load failure and stalls (FR20, FR28)", () => {
   it("a replay frame reloads once at its own address, then shows frame.stalled", () => {
     const h = new Harness({ pool: POOL, mode: "replay" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
     expect(h.loads.at(-1)).toBe(`/pool/tidepool/${C1}/?seed=${HOST_SEED}`);
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
     expect(h.driver.phase).toBe("stalled");
     expect(h.loads).toHaveLength(2);
@@ -244,7 +244,7 @@ describe("load failure and stalls (FR20, FR28)", () => {
   it("frame.reload goes back to main and clears the stall bookkeeping", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1, greenCommit: "g1", greenSeq: 3 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.fire("stall");
     h.driver.reload();
     expect(h.loads.at(-1)).toBe(`/pool/tidepool/main/?seed=${HOST_SEED}`);
@@ -256,7 +256,7 @@ describe("pause, visibility and highlight (CO23a, AS14, CO23b)", () => {
   it("posts pause then resume, once each", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.driver.setUserPaused(true);
     h.driver.setUserPaused(true); // no second post
     h.driver.setUserPaused(false);
@@ -266,7 +266,7 @@ describe("pause, visibility and highlight (CO23a, AS14, CO23b)", () => {
   it("pauses a frame that is not visible and resumes it when it returns (AS14)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.driver.setVisible(false);
     h.driver.setVisible(true);
     expect(h.posts).toEqual([{ type: "pause" }, { type: "resume" }]);
@@ -282,7 +282,7 @@ describe("pause, visibility and highlight (CO23a, AS14, CO23b)", () => {
   it("a paused frame is never counted stalled (FR28: visible and not paused)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.driver.setUserPaused(true);
     expect(h.armed("stall")).toBeUndefined();
   });
@@ -290,7 +290,7 @@ describe("pause, visibility and highlight (CO23a, AS14, CO23b)", () => {
   it("posts highlight on set and again on the first stats of a new page (CO23b)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
-    h.driver.onLoad();
+    h.driver.onStats(stats(`c-${C1}`));
     h.driver.setHighlight(["ring-a"]);
     h.driver.reload();
     h.driver.onStats(stats(`c-${C1}`));

@@ -50,7 +50,7 @@ function Harness() {
   const [mode, setMode] = useState<"live" | "replay">("live");
   const [paused, setPaused] = useState(false);
   window.harness = {
-    event: (e: unknown) => setState((s) => reduce(s, e as never)),
+    event: (e: unknown) => setState((s) => ({ ...reduce(s, e as never) })),
     mode: setMode,
     paused: setPaused,
     compareTapped: () => window.compareTapped === true,
@@ -224,11 +224,11 @@ test.describe("the pool frame component", () => {
     await page.getByRole("button", { name: "Pause" }).click();
     await expect(page.locator(".pf-caption")).toContainText("Paused.");
     await page.getByRole("button", { name: "Play" }).click();
-    const types = await frame!.evaluate(() =>
-      (window as never as { __log: { type: string }[] }).__log.map((m) => m.type),
-    );
-    expect(types).toContain("pause");
-    expect(types).toContain("resume");
+    await expect
+      .poll(async () =>
+        frame?.evaluate(() => (window as never as { __log: { type: string }[] }).__log.map((m) => m.type)),
+      )
+      .toEqual(expect.arrayContaining(["pause", "resume"]));
   });
 
   test("FR28: a stalled main frame falls back to the green source, captioned stalled.green", async ({ page }) => {
@@ -278,19 +278,9 @@ test.describe("the pool frame component", () => {
 
 const FRAME_IFRAME = 'iframe[title="The live pool, running the code on main"]';
 
-/** The Slice 0 stub still ships on this branch; the merged-app checks run at IP1. */
-async function appIsStub(page: Page, path: string): Promise<boolean> {
-  await page.goto(path);
-  return page
-    .getByText("not built")
-    .first()
-    .isVisible()
-    .catch(() => false);
-}
-
 test.describe("the built Floor", () => {
   test("track 1F (AC25/FE7): /p/<pool> shows that pool as the main pool", async ({ page }) => {
-    test.skip(await appIsStub(page, "/p/tidepool"), "floor-shell's page is not on this branch");
+    await page.goto("/p/tidepool");
     const iframe = page.locator(FRAME_IFRAME);
     await expect(iframe).toHaveAttribute("src", /\/pool\/tidepool\/main\/\?seed=\d+/);
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
@@ -299,7 +289,7 @@ test.describe("the built Floor", () => {
   test("track 1F (13.6): / shows the default pool of /floor.json", async ({ page, request }) => {
     const floorJson = await request.get("/floor.json");
     const defaultPool = (await floorJson.json()) as { default_pool?: string };
-    test.skip(await appIsStub(page, "/"), "floor-shell's page is not on this branch");
+    await page.goto("/");
     await expect(page.locator(FRAME_IFRAME)).toHaveAttribute(
       "src",
       new RegExp(`/pool/${defaultPool.default_pool}/main/`),
@@ -307,7 +297,7 @@ test.describe("the built Floor", () => {
   });
 
   test("track 1F (8.6/RY17): /replay/tracer plays the fixture under REPLAY with a commit frame", async ({ page }) => {
-    test.skip(await appIsStub(page, "/replay/tracer"), "floor-shell's page is not on this branch");
+    await page.goto("/replay/tracer");
     // The banner is the shell's; the frame's rules are mine: a fixed commit address, never
     // the moving source, ending at the recording's last landed commit.
     await expect(page.locator("text=/^REPLAY$/").first()).toBeVisible();

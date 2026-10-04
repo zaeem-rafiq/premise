@@ -16,6 +16,7 @@
       "src/worker/adapters/index.ts",
       "src/worker/adapters/not-built.ts",
       "src/floor/app/registry.ts",
+      "src/floor/app/bindings.tsx",
       "scripts/build/**",
       "scripts/ops/**",
       "scripts/submission/**",
@@ -167,7 +168,12 @@
         "src/floor/components/green/**",
         "test/e2e/shell/**"
       ],
-      "except": ["src/floor/app/registry.ts", "src/floor/app/wiring/rail.*", "src/floor/app/wiring/pool-area.*"]
+      "except": [
+        "src/floor/app/registry.ts",
+        "src/floor/app/bindings.tsx",
+        "src/floor/app/wiring/rail.*",
+        "src/floor/app/wiring/pool-area.*"
+      ]
     },
     {
       "lane": "floor-rail",

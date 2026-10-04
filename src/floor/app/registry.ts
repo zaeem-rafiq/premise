@@ -1,7 +1,12 @@
 // The registry seam (04-build-plan 3.2): the table the Floor's views, sheets and keys register in.
-// A view is what the body shows (Floor, Compare, Swarm, Replay); a sheet opens over it (a card, a Why
-// card, About); a key is a keybinding. floor-shell wires `wiring/shell.ts`, floor-rail
-// `wiring/rail.ts`, floor-pool `wiring/pool-area.ts`.
+// The contract, for the lanes that wire it:
+// - A view is what the body shows (Floor, Compare, Swarm, Replay); a sheet opens over it; a key is
+//   a keybinding. A lane adds an entry in its own `wiring/*.ts` module, never here.
+// - An entry's `value` is its own name, a tag. The wiring module cannot import `.tsx`: this seam is
+//   loaded by the Node test program, which has no JSX.
+// - Each lane binds its tags to components in `wiring/<lane>.views.tsx`, which exports `views`, a
+//   record from tag to component. `bindings.tsx` merges the three records; `app.tsx` resolves a
+//   tag only through it.
 
 import { wire as wireShell } from "./wiring/shell.ts";
 import { wire as wireRail } from "./wiring/rail.ts";

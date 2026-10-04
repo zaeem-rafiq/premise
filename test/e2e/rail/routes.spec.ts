@@ -83,12 +83,9 @@ async function servePools(page: Page): Promise<void> {
     const match = /\/api\/pools\/([^/]+)\/stream/.exec(ws.url());
     const pool = match?.[1] ?? "unknown";
     ws.onMessage((message) => {
-      const request = JSON.parse(message.toString()) as { type?: string };
-      if (request.type !== "hello") return;
-      ws.send(JSON.stringify({ type: "snapshot", head_seq: 0, events: [] }));
-      for (const event of frames(pool, `${pool} intent`)) {
-        ws.send(JSON.stringify({ type: "event", event }));
-      }
+      const request = JSON.parse(message.toString()) as { hello?: number };
+      if (request.hello !== 1) return;
+      ws.send(JSON.stringify({ events: frames(pool, `${pool} intent`) }));
     });
   });
 }

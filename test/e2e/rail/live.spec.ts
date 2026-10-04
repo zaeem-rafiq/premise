@@ -111,13 +111,12 @@ async function serveStream(page: Page, frames: Frame[], delayed: Frame[] = []): 
   );
   await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {
     ws.onMessage((message) => {
-      const request = JSON.parse(message.toString()) as { type?: string };
-      if (request.type !== "hello") return;
-      ws.send(JSON.stringify({ type: "snapshot", head_seq: 0, events: [] }));
-      for (const event of frames) ws.send(JSON.stringify({ type: "event", event }));
+      const request = JSON.parse(message.toString()) as { hello?: number };
+      if (request.hello !== 1) return;
+      ws.send(JSON.stringify({ events: frames }));
       if (delayed.length > 0) {
         setTimeout(() => {
-          for (const event of delayed) ws.send(JSON.stringify({ type: "event", event }));
+          ws.send(JSON.stringify({ events: delayed }));
         }, 3_000);
       }
     });

@@ -399,50 +399,27 @@ a {
   padding: 16px;
   gap: 8px;
 }
-.pool-area {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.frame-bar {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  font-size: var(--size-body);
-}
-.frame-caption {
-  font-weight: 600;
-}
-.frame-landing {
-  color: var(--confirm);
-}
-/* VD12: a 1-wide control border around every pool frame. */
-.pool-frame {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  border: var(--border) solid var(--control);
-  border-radius: var(--radius);
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pool-frame[data-paused="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
-  border-radius: var(--radius);
-}
-.frame-note {
-  color: var(--muted);
-  z-index: 1;
-}
 .frame-under {
   display: flex;
   gap: 16px;
   align-items: center;
   min-height: 24px;
+}
+/* The start card overlays the pool area (RY23); `.pool-stage` is its positioned box. */
+.pool-stage {
+  position: relative;
+}
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.start-overlay .start-card {
+  position: absolute;
+  inset: auto;
+  pointer-events: auto;
 }
 .green-line {
   display: inline-flex;
@@ -576,7 +553,6 @@ a {
 .rail-empty {
   color: var(--muted);
 }
-.attempt-row,
 .landed-row {
   display: block;
   width: 100%;
@@ -589,37 +565,10 @@ a {
 .landed-pending {
   opacity: 0.85;
 }
-.attempt-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-}
-.attempt-name {
-  font-size: var(--size-intent);
-}
 .attempt-status {
   font-size: var(--size-status);
   font-weight: 600;
   flex: none;
-}
-.attempt-sub {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: var(--size-small);
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-.tag {
-  border: var(--border) solid var(--control);
-  border-radius: var(--radius);
-  padding: 0 6px;
-  font-size: var(--size-small);
-}
-.tag-synthetic {
-  color: var(--synthetic);
-  border-color: var(--synthetic);
 }
 .landed-row {
   display: flex;

@@ -1,7 +1,7 @@
 // The Floor app: `render(FloorState, ViewState, clock)` (FL1). Live mode, a snapshot and
-// Replay draw the same components of the same `FloorState` (FE4). The body comes from the
-// registry seam: `view.pool-area` and `view.rail` are the other two lanes' entries; while
-// they are not registered the shell's fallbacks hold the layout.
+// Replay draw the same components of the same `FloorState` (FE4). The pool area and the rail are
+// regions of the view, imported directly; named views and sheets resolve through the registry's
+// tags (the contract of `registry.ts`, the merge of `bindings.tsx`).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FloorJson } from "../../protocol/floor-json.ts";
@@ -23,8 +23,9 @@ import { OwnerDialog } from "../components/owner-key/owner-key.tsx";
 import { KillDialog, allowAgents } from "../components/kill-switch/kill-switch.tsx";
 import { SwarmView } from "../components/swarm/swarm.tsx";
 import { GreenLine } from "../components/green/green.tsx";
-import { PoolAreaFallback } from "./pool-area-fallback.tsx";
-import { RailFallback } from "./rail-fallback.tsx";
+import { PoolArea } from "../components/pool-frame/pool-area.tsx";
+import { Rail } from "./rail.tsx";
+import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
 import { ReplayMenu } from "../replay/replay-menu.tsx";
 import { loadRecordingIndex, recordingFileUrl, type RecordingIndex } from "../replay/player.ts";
@@ -33,26 +34,16 @@ import { errorSentence } from "../../copy/errors.ts";
 import { sessionPath } from "../stream/urls.ts";
 import { duration } from "../../copy/format.ts";
 
-type RegistryComponent = (props: Record<string, unknown>) => React.ReactNode;
-
-// The components a registry entry's string `value` names. A wiring module cannot import these
-// `.tsx` files (test/arch/seams.test.ts compiles every wiring module in the Node program, which
-// has no JSX), so a lane registers the entry's name and the app binds the name here.
-const SHELL_COMPONENTS: Record<string, RegistryComponent> = {
-  "view.swarm": (props) => (
-    <SwarmView floor={props.floor as FloorState} owner={props.owner === true} pool={String(props.pool)} />
-  ),
-};
-
-/** Calls the registered component, or null when the entry is missing or unbound (the app draws
- * its fallback then). A `value` may be the component itself or its entry's name. */
+/** Calls the registered component, or null when the entry is missing or unbound. A `value` may be
+ * the component itself or its entry's tag, which the merged records of `bindings.tsx` resolve —
+ * the one place tags meet components (see `registry.ts`). */
 function call(entry: RegistryEntry | undefined, props: Record<string, unknown>): React.ReactNode {
   if (entry === undefined) return null;
   const Component =
     typeof entry.value === "function"
       ? (entry.value as RegistryComponent)
       : typeof entry.value === "string"
-        ? SHELL_COMPONENTS[entry.value]
+        ? COMPONENTS[entry.value]
         : undefined;
   if (Component === undefined) return null;
   return <Component {...props} />;
@@ -300,9 +291,16 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   const bannerOpts = {
     replay: {
-      active: replay && session.replay.phase !== "error",
+      // RY3: from the moment a recording starts loading until Replay is closed — an id that
+      // never loads keeps the banner too, on the error's own page.
+      active: replay,
       synthetic: session.replay.phase === "ready" && session.replay.recording.header.synthetic,
-      title: session.replay.phase === "ready" ? (session.replay.recording.header.label ?? pool) : "",
+      title:
+        session.replay.phase === "ready"
+          ? (session.replay.recording.header.label ?? pool)
+          : route.kind === "replay"
+            ? route.id
+            : "",
       date: session.replay.phase === "ready" ? session.replay.recording.header.recorded_at.slice(0, 10) : "",
     },
     view,
@@ -313,34 +311,6 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   };
   const banners = bannerList(floor, clock, bannerOpts);
   const cells = stripCells(floor, clock, { greenFeature: settings.features.green });
-  const landingCount =
-    floor.push === null
-      ? 0
-      : floor.landed_order.filter((seq) => {
-          const landing = floor.landings[seq];
-          return (
-            landing !== undefined &&
-            landing.batch_id === floor.push!.batch_id &&
-            (landing.digest === true ? landing.landed_ts === null : landing.landed === null)
-          );
-        }).length;
-
-  const viewProps: Record<string, unknown> = {
-    floor,
-    view,
-    clock,
-    mode: replay ? "replay" : "live",
-    owner,
-    settings,
-    shell,
-    sheet,
-    setSheet,
-    sendIntent,
-    toast,
-    framesPaused,
-    navigate,
-  };
-
   let body: React.ReactNode;
   if (replay && session.replay.phase === "loading") {
     body = (
@@ -387,38 +357,52 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
       </main>
     );
   } else {
-    const poolAreaEntry = table.entries.get("view.pool-area");
-    const railEntry = table.entries.get("view.rail");
+    // The two regions of the Floor view, imported directly (the pool area is the pool-frame
+    // lane's `PoolArea`, the rail the shell's container over the rail lane's `AttemptCard`).
     body = (
       <main className="floor-body" data-view={view}>
         <div className="pool-column">
-          {call(poolAreaEntry, viewProps) ?? (
-            <>
-              <PoolAreaFallback
-                floor={floor}
-                mode={replay ? "replay" : "live"}
-                quiet={quietPool(floor, clock) && !startDismissed}
-                start={{ duration: defaultRecordingDuration() }}
-                paused={floor.pool.state === "paused" || framesPaused}
-                landing={landingCount}
-                onStartPlay={openDefaultRecording}
-                onStartDismiss={() => setStartDismissed(true)}
-              />
-              <div className="frame-under">
-                <GreenLine floor={floor} />
+          <div className="pool-stage">
+            <PoolArea
+              pool={pool}
+              state={floor}
+              mode={replay ? "replay" : "live"}
+              paused={framesPaused}
+              onPausedChange={setFramesPaused}
+              onCompare={floor.pool.plain_remote !== null ? () => setView("compare") : undefined}
+            />
+            {!replay && quietPool(floor, clock) && !startDismissed && (
+              <div className="start-overlay">
+                <div className="start-card" role="group" aria-label={shell.t("start.title")}>
+                  <h3>{shell.t("start.title")}</h3>
+                  <p>{shell.t("start.body")}</p>
+                  <div className="start-actions">
+                    <button type="button" className="primary" onClick={openDefaultRecording}>
+                      {shell.t("start.play", { duration: defaultRecordingDuration() })}
+                    </button>
+                    <button type="button" onClick={() => setStartDismissed(true)}>
+                      {shell.t("start.look")}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
+          <div className="frame-under">
+            <GreenLine floor={floor} />
+          </div>
         </div>
-        {call(railEntry, viewProps) ?? (
-          <RailFallback
-            floor={floor}
-            mode={replay ? "replay" : "live"}
-            owner={owner}
-            capReached={capReached(floor)}
-            onSend={(t) => void sendIntent(t)}
-          />
-        )}
+        <Rail
+          floor={floor}
+          mode={replay ? "replay" : "live"}
+          owner={owner}
+          visitor={shell.visitor}
+          clock={clock}
+          dwellMs={reducedMotion ? 2000 : 1200}
+          capReached={capReached(floor)}
+          onSend={(t) => void sendIntent(t)}
+          onOpenCard={(cardId) => setSheet({ kind: "card", card_id: cardId })}
+        />
       </main>
     );
   }

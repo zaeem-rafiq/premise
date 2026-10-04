@@ -122,10 +122,10 @@ export function Compare(props: CompareProps) {
         {state.plain === null ? (
           // 3.6's loading row: the plain-merge pool has not reported yet — the frame shows
           // plain.loading and the list has nothing to say about a pool still being built.
-          <p className="cmp-line">{text("plain.loading")}</p>
+          <p className="cmp-note">{text("plain.loading")}</p>
         ) : lines.length === 0 ? (
           // 3.6's empty row: the list says plain.same where the per-change lines would be.
-          <p className="cmp-line">{text("plain.same")}</p>
+          <p className="cmp-note">{text("plain.same")}</p>
         ) : (
           <ul>
             {lines.map((line: { seq: number; id: string; vars: CopyVars }) => (
@@ -135,10 +135,10 @@ export function Compare(props: CompareProps) {
             ))}
           </ul>
         )}
-        {sameAsLanded && <p className="cmp-line cmp-no-diff">{text("plain.no_difference")}</p>}
+        {sameAsLanded && <p className="cmp-note cmp-no-diff">{text("plain.no_difference")}</p>}
         <div className="cmp-diff-tail">
           {conflicts !== null && (
-            <p className="cmp-line cmp-conflicts" title={text("plain.conflicts.tip")}>
+            <p className="cmp-note cmp-conflicts" title={text("plain.conflicts.tip")}>
               {text("plain.conflicts", { n: conflicts })}
             </p>
           )}

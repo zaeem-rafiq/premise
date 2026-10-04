@@ -123,6 +123,7 @@ export function PlainFrame(props: PlainFrameProps) {
   const { pool, state, mode = "live", name = "plain" } = props;
   const [innerPaused, setInnerPaused] = useState(() => props.defaultPaused ?? prefersReducedMotion());
   const paused = props.paused ?? innerPaused;
+  const [frameFocus, setFrameFocus] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const driverRef = useRef<PlainFrameDriver | null>(null);
   const timersRef = useRef(new Map<TimerKey, number>());
@@ -228,8 +229,6 @@ export function PlainFrame(props: PlainFrameProps) {
   }, []);
 
   useEffect(() => () => driverRef.current?.dispose(), []);
-
-  const [frameFocus, setFrameFocus] = useState(false);
 
   const phase = driver.phase;
   const stalled = driver.stalledCaption;

@@ -189,6 +189,21 @@ test.describe("defect regressions", () => {
     const strip = await box(page.locator(".strip"));
     expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
   });
+
+  test("the run clock is never underlined; a counter is (CO29)", async ({ page }) => {
+    // The defect: the clock changes every second, so the 1 s underline of CO29 never
+    // left it. CO29 is for counters, and 3.8 names the strip "run clock and six counters".
+    await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
+    await page.goto(`/p/testpool`);
+    const motion = (label: string) =>
+      page
+        .locator(".strip-cell", { hasText: label })
+        .locator(".strip-value")
+        .evaluate((el) => getComputedStyle(el).animationName);
+    await expect(page.locator(".strip-cell", { hasText: "Landed" }).locator(".strip-value")).toHaveText("0");
+    expect(await motion("Run clock")).toBe("none");
+    expect(await motion("Landed")).toBe("counter-flash");
+  });
 });
 
 test.describe("AC11 / 6.4: reduced motion", () => {

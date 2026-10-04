@@ -68,8 +68,15 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
     const state = (await worker.trunk(REFUSE).state()) as {
       meta: Record<string, string>;
       timers: Array<{ kind: string; key: string; due_at: number }>;
+      outbox: unknown;
     };
-    expect(state.meta.pool_state).toBe("paused");
+    // This assertion failed once under a loaded full suite and has not been reproduced since:
+    // on a failure, name what the pool did so the cause can be read off the report.
+    const seen = (await worker.events(REFUSE))
+      .filter((e) => e.type === "push.retry" || e.type === "pool.paused" || e.type === "trunk.error")
+      .map((e) => JSON.stringify(e));
+    const why = `events: ${seen.join(" ")} | outbox: ${JSON.stringify(state.outbox)} | timers: ${JSON.stringify(state.timers)}`;
+    expect(state.meta.pool_state, why).toBe("paused");
     expect(state.meta.pause_reason).toBe("push_rejected");
 
     const events = await worker.events(REFUSE);

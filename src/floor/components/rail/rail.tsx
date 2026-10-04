@@ -72,7 +72,8 @@ export function workingOrder(floor: FloorState): AttemptView[] {
  * `race.group` over a compact row per candidate. Stopped candidates of reason `not_chosen`
  * stay in the group while a candidate still works (CO40).
  */
-type WorkingItem = { kind: "attempt"; attempt: AttemptView } | { kind: "race"; intentId: string; members: AttemptView[] };
+type WorkingItem =
+  { kind: "attempt"; attempt: AttemptView } | { kind: "race"; intentId: string; members: AttemptView[] };
 
 function workingItems(floor: FloorState, ordered: AttemptView[]): WorkingItem[] {
   const items: WorkingItem[] = [];
@@ -95,7 +96,10 @@ function workingItems(floor: FloorState, ordered: AttemptView[]): WorkingItem[] 
 
 /** A stopped `not_chosen` candidate belongs to its race group (CO40), not the Stopped tab. */
 function inRaceGroup(floor: FloorState, attempt: AttemptView): boolean {
-  return attempt.stop_reason === "not_chosen" && Object.values(floor.attempts).some((a) => a.intent_id === attempt.intent_id && a.race);
+  return (
+    attempt.stop_reason === "not_chosen" &&
+    Object.values(floor.attempts).some((a) => a.intent_id === attempt.intent_id && a.race)
+  );
 }
 
 export function Rail(props: RailProps) {
@@ -213,14 +217,10 @@ export function Rail(props: RailProps) {
                 ),
               )}
               {/* CO10: past nine cards the list scrolls and the footer counts the rest. */}
-              {workingTab.length > 9 && (
-                <p className="rail-more">{t("rail.more", { n: workingTab.length - 9 })}</p>
-              )}
+              {workingTab.length > 9 && <p className="rail-more">{t("rail.more", { n: workingTab.length - 9 })}</p>}
             </>
           ))}
-        {tab === "working" && floor.pool.summary_only && (
-          <p className="rail-summary">{t("rail.summary_only")}</p>
-        )}
+        {tab === "working" && floor.pool.summary_only && <p className="rail-summary">{t("rail.summary_only")}</p>}
         {tab === "landed" &&
           (landed.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.landed")}</p>
@@ -266,9 +266,7 @@ export function Rail(props: RailProps) {
             ))
           ))}
       </div>
-      {openCardId !== null && (
-        <CardSheet floor={floor} cardId={openCardId} onClose={() => setOpenCardId(null)} />
-      )}
+      {openCardId !== null && <CardSheet floor={floor} cardId={openCardId} onClose={() => setOpenCardId(null)} />}
     </aside>
   );
 }

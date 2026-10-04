@@ -49,8 +49,6 @@ export function intentBoxState(inputs: IntentBoxInputs): IntentBoxState {
 /** CO6: every agent slot is busy — the box stays enabled and carries the `intent.queue` note. */
 export function queueNote(floor: FloorState, state: IntentBoxState): boolean {
   return (
-    state.kind === "live" &&
-    floor.pool.max_real_agents > 0 &&
-    floor.pool.real_agents >= floor.pool.max_real_agents
+    state.kind === "live" && floor.pool.max_real_agents > 0 && floor.pool.real_agents >= floor.pool.max_real_agents
   );
 }

@@ -122,9 +122,7 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
 
   /** CO7: the starter set — one request per `group: "starter"` item, in `/floor.json` order. */
   const starters = shell.settings.prewritten.filter((item) => item.group === "starter");
-  const starterSeen = starters.some((item) =>
-    Object.values(floor.intents).some((intent) => intent.text === item.text),
-  );
+  const starterSeen = starters.some((item) => Object.values(floor.intents).some((intent) => intent.text === item.text));
   async function sendStarterSet(): Promise<void> {
     for (const item of starters) {
       const ok = await sendOne(item.text, item.race, true);
@@ -165,9 +163,7 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
       )}
 
       {state.kind === "blocked" && <p className="intent-note">{t(state.id)}</p>}
-      {(state.kind === "sending" || state.kind === "sent") && (
-        <p className="intent-note">{t("intent.sending")}</p>
-      )}
+      {(state.kind === "sending" || state.kind === "sent") && <p className="intent-note">{t("intent.sending")}</p>}
       {state.kind === "waiting" && <p className="intent-note">{t("intent.sent_waiting")}</p>}
       {state.kind === "error" && <p className="intent-error">{state.sentence}</p>}
       {queueNote(floor, state) && (
@@ -201,11 +197,7 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
             </select>
           )}
           {starters.length > 0 && !starterSeen && (
-            <button
-              type="button"
-              disabled={!interactive}
-              onClick={() => void sendStarterSet()}
-            >
+            <button type="button" disabled={!interactive} onClick={() => void sendStarterSet()}>
               {t("intent.starter", { n: starters.length })}
             </button>
           )}

@@ -127,8 +127,7 @@ function itemBlock(item: HeadsUpItem, scripted: boolean): ItemBlock {
       diff.kind === "query"
         ? diff.context.map((entry) => `${keyLabel("entity", entry.key)}${source(entry.source)}`)
         : [],
-    checkLabel:
-      diff.kind === "check" ? greenCheckLabel(diff.check, diff.code) : null,
+    checkLabel: diff.kind === "check" ? greenCheckLabel(diff.check, diff.code) : null,
     uses: item.uses.map((use) => ({ path: use.path, line: use.line, text: use.text })),
     truncated: item.truncated === true,
   };

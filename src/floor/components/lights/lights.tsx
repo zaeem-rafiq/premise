@@ -41,23 +41,24 @@ export function PremiseLight({ light, size = "card" }: { light: LightView; size?
 
 /** One premise row of the expanded card (CO17): the light at list size, its keyLabel, word,
  * flags, the newest judgment sentence and the `who.open` link. */
-export function PremiseRowItem({
-  row,
-  onWho,
-}: {
-  row: PremiseRow;
-  onWho?: (kind: string, key: string) => void;
-}) {
+export function PremiseRowItem({ row, onWho }: { row: PremiseRow; onWho?: (kind: string, key: string) => void }) {
   return (
     <li className="premise-row" data-light={row.light}>
-      <PremiseLight light={{ id: row.id, light: row.light, edit: row.edit, tip: `${row.label}: ${row.word}.` }} size="list" />
+      <PremiseLight
+        light={{ id: row.id, light: row.light, edit: row.edit, tip: `${row.label}: ${row.word}.` }}
+        size="list"
+      />
       <span className="premise-row__label" dir="auto">
         {row.label}
       </span>
       <span className="premise-row__word">{row.word}</span>
       {row.flags !== "" && <span className="premise-row__flags">({row.flags})</span>}
       {row.sentence !== null && <span className="premise-row__sentence">{row.sentence}</span>}
-      <button type="button" className="premise-row__who" onClick={() => onWho?.(row.id.split(" ")[0] ?? "", row.id.split(" ").slice(1).join(" "))}>
+      <button
+        type="button"
+        className="premise-row__who"
+        onClick={() => onWho?.(row.id.split(" ")[0] ?? "", row.id.split(" ").slice(1).join(" "))}
+      >
         {text("who.open")}
       </button>
     </li>

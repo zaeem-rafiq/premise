@@ -13,12 +13,31 @@ function attemptView(state: AttemptView["state"] = "working", agent: "real" | "s
   const floor = emptyFloorState();
   floor.pool.id = "pool";
   reduce(floor, {
-    n: 1, t: 1, ts: 1, src: "trunk", pool: "pool", type: "intent.created",
-    intent_id: "i_1", text: "a crab", requester: "owner", race: false, prewritten: false,
+    n: 1,
+    t: 1,
+    ts: 1,
+    src: "trunk",
+    pool: "pool",
+    type: "intent.created",
+    intent_id: "i_1",
+    text: "a crab",
+    requester: "owner",
+    race: false,
+    prewritten: false,
   });
   reduce(floor, {
-    n: 2, t: 2, ts: 2, src: "trunk", pool: "pool", type: "attempt.opened",
-    attempt_id: "a_1", intent_id: "i_1", change_id: "c_1", agent, model: "model-a", race: false,
+    n: 2,
+    t: 2,
+    ts: 2,
+    src: "trunk",
+    pool: "pool",
+    type: "attempt.opened",
+    attempt_id: "a_1",
+    intent_id: "i_1",
+    change_id: "c_1",
+    agent,
+    model: "model-a",
+    race: false,
   });
   const attempt = floor.attempts["a_1"]!;
   attempt.state = state;
@@ -55,7 +74,14 @@ function entityItem(over: Partial<HeadsUpItem> = {}): HeadsUpItem {
     new_hash: "h1",
     cause_seq: 9,
     diff: { kind: "entity", before: "export const ENERGY_MAX = 100;", after: "export const ENERGY_MAX = 1;" },
-    uses: [{ path: "creatures/crab.js", entity: "world/energy.js#ENERGY_MAX", line: 1, text: 'import { ENERGY_MAX } from "../world/energy.js";' }],
+    uses: [
+      {
+        path: "creatures/crab.js",
+        entity: "world/energy.js#ENERGY_MAX",
+        line: 1,
+        text: 'import { ENERGY_MAX } from "../world/energy.js";',
+      },
+    ],
     ...over,
   };
 }
@@ -69,9 +95,7 @@ describe("headsUpModel (03 3.4)", () => {
     expect(headsUpModel(headsupView({ result: "confirm", go_around: null }), attempt).title).toBe(
       "Heads-up 1 · one confirm needed",
     );
-    expect(headsUpModel(headsupView({ result: "info" }), attempt).title).toBe(
-      "Heads-up 1 · for information",
-    );
+    expect(headsUpModel(headsupView({ result: "info" }), attempt).title).toBe("Heads-up 1 · for information");
   });
 
   it("the edge is red for repair, amber for confirm, neutral for info, holds once resolved", () => {
@@ -79,18 +103,13 @@ describe("headsUpModel (03 3.4)", () => {
     expect(headsUpModel(headsupView({ result: "repair" }), attempt).tone).toBe("changed");
     expect(headsUpModel(headsupView({ result: "confirm" }), attempt).tone).toBe("confirm");
     expect(headsUpModel(headsupView({ result: "info" }), attempt).tone).toBe("neutral");
-    expect(
-      headsUpModel(
-        headsupView({ resolved: { statement: "done", changed: true, ts: 20 } }),
-        attempt,
-      ).tone,
-    ).toBe("holds");
+    expect(headsUpModel(headsupView({ resolved: { statement: "done", changed: true, ts: 20 } }), attempt).tone).toBe(
+      "holds",
+    );
   });
 
   it("the cause line names the landing's intent text and seq", () => {
-    expect(headsUpModel(headsupView(), attemptView()).cause).toBe(
-      'Changed by: "make energy a fraction" (landing 9)',
-    );
+    expect(headsUpModel(headsupView(), attemptView()).cause).toBe('Changed by: "make energy a fraction" (landing 9)');
   });
   it("cause undo and revert name the landings they came from", () => {
     const undo = headsupView({ cause: { type: "undo", seqs: [9], changes: [] } });
@@ -163,9 +182,7 @@ describe("headsUpModel (03 3.4)", () => {
       "The agent stopped before it answered this.",
     );
     const info = headsupView({ result: "info" });
-    expect(headsUpModel(info, attemptView()).tail?.sentence).toBe(
-      "The agent was told. Nothing has to change.",
-    );
+    expect(headsUpModel(info, attemptView()).tail?.sentence).toBe("The agent was told. Nothing has to change.");
   });
 
   it("items null (summary_only) reduces to the rule sentences of the keys plus no_diff (AC26)", () => {

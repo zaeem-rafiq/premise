@@ -162,8 +162,7 @@ export function AttemptCard({
   // auto-opened closes first past AUTO_EXPAND_MAX. A panel the owner touched is left alone.
   useEffect(() => {
     const fresh = Object.values(attempt.heads_ups).filter(
-      (headsup) =>
-        (headsup.result === "repair" || headsup.result === "confirm") && !seenHns.current.has(headsup.hn),
+      (headsup) => (headsup.result === "repair" || headsup.result === "confirm") && !seenHns.current.has(headsup.hn),
     );
     for (const hn of Object.keys(attempt.heads_ups)) seenHns.current.add(Number(hn));
     if (fresh.length === 0) return;
@@ -337,17 +336,13 @@ export function AttemptCard({
                       {check.ok ? "\u2713" : "\u2717"}
                     </span>
                     <span className="attempt-card__check-label">{check.label}</span>
-                    {check.error !== null && (
-                      <span className="attempt-card__check-error">{check.error}</span>
-                    )}
+                    {check.error !== null && <span className="attempt-card__check-error">{check.error}</span>}
                   </li>
                 ))}
               </ul>
             </section>
           )}
-          {!visitor && inFlight(attempt) && (
-            <StopControl attempt={attempt} pool={state.pool.id} onStop={onStop} />
-          )}
+          {!visitor && inFlight(attempt) && <StopControl attempt={attempt} pool={state.pool.id} onStop={onStop} />}
         </div>
       )}
     </article>

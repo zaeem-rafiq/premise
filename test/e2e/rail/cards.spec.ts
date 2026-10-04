@@ -185,7 +185,15 @@ test.describe("the tray and the card sheet", () => {
     const sent: CapturedRequest[] = [];
     await serve(
       page,
-      [POOL_STATE, INTENT, OPENED, state(4, "opened", "working"), submit(5), state(6, "working", "held"), cardOpened(7, HELD_CARD)],
+      [
+        POOL_STATE,
+        INTENT,
+        OPENED,
+        state(4, "opened", "working"),
+        submit(5),
+        state(6, "working", "held"),
+        cardOpened(7, HELD_CARD),
+      ],
       { owner: true, floorJson: FLOOR_JSON_MINIMAL, sent },
     );
     await page.goto(`/p/${POOL}`);
@@ -224,11 +232,10 @@ test.describe("the tray and the card sheet", () => {
     page,
   }) => {
     const sent: CapturedRequest[] = [];
-    await serve(
-      page,
-      [POOL_STATE, INTENT, OPENED, state(4, "opened", "working"), cardOpened(5, CHOICE_CARD)],
-      { owner: true, sent },
-    );
+    await serve(page, [POOL_STATE, INTENT, OPENED, state(4, "opened", "working"), cardOpened(5, CHOICE_CARD)], {
+      owner: true,
+      sent,
+    });
     await page.goto(`/p/${POOL}`);
     await page.locator(".tray").getByRole("button", { name: "Open" }).click();
     const sheet = page.locator(".card-sheet");
@@ -247,7 +254,15 @@ test.describe("the tray and the card sheet", () => {
     const sent: CapturedRequest[] = [];
     await serve(
       page,
-      [POOL_STATE, INTENT, OPENED, state(4, "opened", "working"), submit(5), state(6, "working", "held"), cardOpened(7, HELD_CARD)],
+      [
+        POOL_STATE,
+        INTENT,
+        OPENED,
+        state(4, "opened", "working"),
+        submit(5),
+        state(6, "working", "held"),
+        cardOpened(7, HELD_CARD),
+      ],
       { owner: true, sent, holdMs: 400 },
     );
     await page.goto(`/p/${POOL}`);
@@ -283,11 +298,7 @@ test.describe("the tray and the card sheet", () => {
 
   test("AC26: a summary_only pool ends the working list with rail.summary_only", async ({ page }) => {
     const summaryPool = { ...POOL_STATE, summary_only: true };
-    await serve(
-      page,
-      [summaryPool, INTENT, OPENED, state(4, "opened", "working")],
-      {},
-    );
+    await serve(page, [summaryPool, INTENT, OPENED, state(4, "opened", "working")], {});
     await page.goto(`/p/${POOL}`);
     await expect(page.locator('.attempt-card[data-attempt-id="a_1"]')).toBeVisible();
     await expect(
@@ -298,20 +309,31 @@ test.describe("the tray and the card sheet", () => {
   test("AC27: the card shows attempt.sent_back_n as go_arounds + pull_backs (GA3)", async ({ page }) => {
     await serve(
       page,
-      [POOL_STATE, INTENT, OPENED, state(4, "opened", "working"), state(5, "working", "working", { go_arounds: 1, pull_backs: 1 })],
+      [
+        POOL_STATE,
+        INTENT,
+        OPENED,
+        state(4, "opened", "working"),
+        state(5, "working", "working", { go_arounds: 1, pull_backs: 1 }),
+      ],
       {},
     );
     await page.goto(`/p/${POOL}`);
-    await expect(
-      page.locator('.attempt-card[data-attempt-id="a_1"]').getByText("sent back 2 of 3"),
-    ).toBeVisible();
+    await expect(page.locator('.attempt-card[data-attempt-id="a_1"]').getByText("sent back 2 of 3")).toBeVisible();
   });
 
   test("AC8: markup in intent text, a statement and a path is shown as text (FL8)", async ({ page }) => {
     const evil = '<img src=x onerror="window.__pwned=1">';
     const frames = [
       POOL_STATE,
-      ev(2, { type: "intent.created", intent_id: "i_1", text: evil, requester: "owner", race: false, prewritten: false }),
+      ev(2, {
+        type: "intent.created",
+        intent_id: "i_1",
+        text: evil,
+        requester: "owner",
+        race: false,
+        prewritten: false,
+      }),
       OPENED,
       state(4, "opened", "working"),
       ev(5, {

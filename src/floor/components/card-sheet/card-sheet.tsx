@@ -66,12 +66,7 @@ function RaceColumnView({
       {column.stopped !== null && <p className="card-sheet__state">{column.stopped}</p>}
       {column.noPreview && <p className="card-sheet__state">{t("held.no_preview")}</p>}
       {column.canChoose && (
-        <button
-          type="button"
-          className="primary"
-          disabled={busy}
-          onClick={() => onChoose(column.attemptId)}
-        >
+        <button type="button" className="primary" disabled={busy} onClick={() => onChoose(column.attemptId)}>
           {chooseLabel}
         </button>
       )}
@@ -88,7 +83,9 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
   const t = shell.t;
   const view = floor.cards[cardId];
   const model: CardSheetModel | null =
-    view === undefined ? null : cardSheetModel(floor, view, { features: shell.settings.features, visitor: shell.visitor });
+    view === undefined
+      ? null
+      : cardSheetModel(floor, view, { features: shell.settings.features, visitor: shell.visitor });
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlightRef = useRef(false);
@@ -202,9 +199,7 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
                           <span className="card-sheet__path" dir="auto">
                             {row.path}
                           </span>
-                          {row.tierLabel !== null && (
-                            <span className="card-sheet__tier">{row.tierLabel}</span>
-                          )}
+                          {row.tierLabel !== null && <span className="card-sheet__tier">{row.tierLabel}</span>}
                           {row.entities.length > 0 && (
                             <span className="card-sheet__entities" dir="auto">
                               {row.entities.join(", ")}
@@ -247,9 +242,7 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
                         ))}
                       </ul>
                     )}
-                    {model.checked.blind !== null && (
-                      <p className="card-sheet__blind">{model.checked.blind}</p>
-                    )}
+                    {model.checked.blind !== null && <p className="card-sheet__blind">{model.checked.blind}</p>}
                     {model.risk !== null && (
                       <div className="card-sheet__risk">
                         {model.risk.kind === "lines" ? (
@@ -272,12 +265,7 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
             {model.reasonLabel !== null && (
               <label className="card-sheet__reason">
                 <span>{model.reasonLabel}</span>
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  disabled={busy}
-                />
+                <input type="text" value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
               </label>
             )}
 

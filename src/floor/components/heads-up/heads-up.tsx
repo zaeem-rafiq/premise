@@ -120,23 +120,10 @@ function ItemView({ item }: { item: ItemBlock }) {
 }
 
 /** The panel itself: its edge is the state's colour (3.4 state table), its header toggles it. */
-export function HeadsUpPanel({
-  model,
-  open,
-  onToggle,
-}: {
-  model: HeadsUpModel;
-  open: boolean;
-  onToggle: () => void;
-}) {
+export function HeadsUpPanel({ model, open, onToggle }: { model: HeadsUpModel; open: boolean; onToggle: () => void }) {
   return (
     <section className={`headsup headsup--${model.tone}`} data-hn={model.hn}>
-      <button
-        type="button"
-        className="headsup__head"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
+      <button type="button" className="headsup__head" aria-expanded={open} onClick={onToggle}>
         <span className="headsup__title">{model.title}</span>
       </button>
       {open && (

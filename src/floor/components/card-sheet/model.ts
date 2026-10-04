@@ -64,7 +64,12 @@ export type CardSheetModel = {
   /** `held.affects` lines: the blast sentence, then `held.relied_inflight`, `held.relied_landed`. */
   affects: string[] | null;
   /** `held.checked`: summary, the attempt's lights, `held.blind` when blind spots confirmed. */
-  checked: { summary: string | null; checks: { label: string; ok: boolean; error: string | null }[] | null; lights: LightView[]; blind: string | null } | null;
+  checked: {
+    summary: string | null;
+    checks: { label: string; ok: boolean; error: string | null }[] | null;
+    lights: LightView[];
+    blind: string | null;
+  } | null;
   /** The risk block: three `RISK_LINES` and `RISK_FOOTER`, or the waiting/unavailable sentence. */
   risk: { kind: "lines"; lines: string[]; footer: string } | { kind: "note"; note: string } | null;
   race: RaceColumn[] | null;
@@ -326,7 +331,10 @@ export function cardSheetModel(
     const id = card.attempt_ids[0];
     if (card.preview === null) {
       previewNote = opts.features.held ? text("held.preview_building") : null;
-    } else if (card.preview.error !== null || (card.kind === "held" && id !== undefined && card.preview.after[id] === undefined)) {
+    } else if (
+      card.preview.error !== null ||
+      (card.kind === "held" && id !== undefined && card.preview.after[id] === undefined)
+    ) {
       previewNote = text("held.no_preview");
     }
   }
@@ -344,8 +352,7 @@ export function cardSheetModel(
     affects: minimal || card.kind === "race" ? null : affectsRows(state, view),
     checked: card.kind === "race" ? null : checkedBlock(state, view),
     risk: minimal || card.kind === "race" ? null : riskBlock(view, opts.features.clef),
-    race:
-      card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id)) : null,
+    race: card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id)) : null,
     reasonLabel: opts.visitor ? null : text("held.reason"),
     options: card.options.map((option) => ({
       id: option.id,

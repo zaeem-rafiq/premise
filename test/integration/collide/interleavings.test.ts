@@ -13,9 +13,6 @@
 //   - B, which lands while A is parked, is never disturbed (no heads-up is ever sent to it);
 //   - the final `world/energy.js` holds exactly one `const ENERGY_MAX =` line.
 //
-// `it.fails` marks the cases the engine cannot answer by rule — each is commented with the
-// quoted rule and the answer the engine gave.
-
 import { describe, expect, it } from "vitest";
 import { sw2Escapes } from "../../../src/swarm/sw2.ts";
 import { SwarmSim, swarmFiles, type AgentHandle } from "./harness.ts";
@@ -33,12 +30,14 @@ function sentTo(sim: SwarmSim, agent: AgentHandle): Array<Record<string, unknown
   return sim.eventsOf("headsup.sent").filter((e) => e.attempt_id === agent.id);
 }
 
-/** The tool-call count of each pattern's script (the calls its row lists). */
+/** The tool-call count of each pattern's script on the swarm seed (the calls its row lists).
+ * `rescale-energy`'s `replace` names fish, minnow and turtle in `relied_on_by` (D2), so the
+ * seed row is `read`, `replace`, one `update` read per referrer, `submit` — six calls. */
 const SCRIPT_LEN: Record<string, number> = {
   "add-plain": 7,
   "add-energy": 7,
   "add-relative": 7,
-  "rescale-energy": 3,
+  "rescale-energy": 6,
   cosmetic: 3,
 };
 
@@ -91,7 +90,8 @@ function aDisturbance(pa: string, pb: string, k: number): Disturbance {
   }
   if (pb === "add-energy" || pb === "add-relative") {
     // The `refs:` premise exists only once the replace is recorded (D2): QR1 `repair`.
-    // Before that nothing can catch a referrer that landed first — see the it.fails.
+    // A referrer that landed before the replace is caught without a heads-up: the
+    // `replace` result's `relied_on_by` names it and the row repairs it (D2, SW2).
     return k <= 1 ? "none" : "repair";
   }
   return "none"; // add-plain lands no referrer (QR0); cosmetic alters no entity (A22)
@@ -101,21 +101,6 @@ function aDisturbance(pa: string, pb: string, k: number): Disturbance {
 function aEnd(pa: string, pb: string, k: number): "landed" | "withdrawn" {
   if (pa === "rescale-energy" && pb === "rescale-energy" && k >= 2) return "withdrawn";
   return "landed";
-}
-
-/**
- * The one interleaving the engine answers with an escape by construction: `add-energy`
- * lands before `rescale-energy` has recorded its `replace`, so no `refs:` premise exists
- * (D2 pins it at the operation) and QR1 can never name the file the rescale then strands.
- *
- * The `it.fails` mark carries the rule and the engine's answer: SW2 says "the threshold
- * number divided by ENERGY_MAX at head MUST be 0.3 … the expected count of escapes is 0"
- * (02-tidepool.md 10.1), while D2 (01-core.md 6.5) pins the `refs:` premise when the
- * operation is recorded — so no row gives this rescale a heads-up and `sw2Escapes`
- * returns ["creatures/s0004.js"].
- */
-function isSpecGap(pa: string, pb: string, k: number): boolean {
-  return pa === "rescale-energy" && pb === "add-energy" && k <= 1;
 }
 
 function runInterleaving(
@@ -211,15 +196,9 @@ describe("interleavings (02-tidepool 10.3): a heads-up at every point of every s
         const holds = k === len ? [true, false] : [true];
         for (const hold of holds) {
           const name = `a=${pa} b=${pb} k=${k} ${hold ? "held" : "running"}`;
-          if (isSpecGap(pa, pb, k)) {
-            it.fails(name, () => {
-              checkInterleaving(pa, pb, k, hold);
-            });
-          } else {
-            it(name, () => {
-              checkInterleaving(pa, pb, k, hold);
-            });
-          }
+          it(name, () => {
+            checkInterleaving(pa, pb, k, hold);
+          });
         }
       }
     }

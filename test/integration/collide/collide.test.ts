@@ -374,4 +374,56 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
+
+  it("10.3 (D2, SW2): a rescale after the landing repairs the stranded threshold, no heads-up", () => {
+    // The plain sequential case: the creature lands first and parks `creature.energy < 30`
+    // under ENERGY_MAX = 100. A rescale that starts afterwards finds the module in the
+    // `relied_on_by` list of its own `replace` result (D2) — no heads-up is sent — reads its
+    // `update` entity and lands the file with `0.3 x new V`.
+    const sim = new SwarmSim(swarmFiles(), { seed: 7 });
+    const ae = sim.open("add-energy");
+    drive(sim, ae);
+    sim.land();
+    expect(sim.state(ae)).toBe("landed");
+    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 30");
+
+    const rescale = sim.open("rescale-energy");
+    drive(sim, rescale);
+    sim.land();
+    expect(sim.state(rescale)).toBe("landed");
+    expect(sentTo(sim, ae)).toEqual([]);
+
+    expect(sim.files().get("world/energy.js")).toContain("ENERGY_MAX = 1");
+    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sw2Escapes(sim.files())).toEqual([]);
+  });
+
+  it("10.3 (D2, SW2): a rescale repairs every absolute referrer and leaves the relative one alone", () => {
+    // Two landed `add-energy` creatures hold `creature.energy < 30`; the landed
+    // `add-relative` holds `creature.energy < ENERGY_MAX * 0.3`. The rescale lands
+    // ENERGY_MAX = 1 and rewrites only the numbered lines: both absolutes become 0.3 and
+    // the relative one is untouched.
+    const sim = new SwarmSim(swarmFiles(), { seed: 7 });
+    const first = sim.open("add-energy");
+    drive(sim, first);
+    sim.land();
+    const second = sim.open("add-energy");
+    drive(sim, second);
+    sim.land();
+    const rel = sim.open("add-relative");
+    drive(sim, rel);
+    sim.land();
+    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 30");
+    expect(sim.files().get("creatures/s0005.js")).toContain("creature.energy < 30");
+
+    const rescale = sim.open("rescale-energy");
+    drive(sim, rescale);
+    sim.land();
+    expect(sim.state(rescale)).toBe("landed");
+
+    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s0005.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s0006.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
+    expect(sw2Escapes(sim.files())).toEqual([]);
+  });
 });

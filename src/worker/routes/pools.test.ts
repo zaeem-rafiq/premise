@@ -55,9 +55,9 @@ function fakeEnv(over: {
   if (over.repoToken !== undefined) {
     env.POOLS = {
       get: async () => ({
-        createToken: async (scope: string, ttl: number) => {
-          calls.push({ kind: "token", opts: { scope, ttl } });
-          return { id: "t1", plaintext: over.repoToken, scope, expiresAt: "" };
+        createToken: async (...args: unknown[]) => {
+          calls.push({ kind: "token", opts: { args } });
+          return { id: "t1", plaintext: over.repoToken, scope: args[0], expiresAt: "" };
         },
         [Symbol.dispose]: () => {},
       }),
@@ -183,7 +183,9 @@ describe("POST /api/pools/{pool}/read-token (SE5c)", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ token: "read-tok-0123456789abcdef" });
-    expect(calls.find((c) => c.kind === "token")?.opts).toEqual({ scope: "read", ttl: READ_TOKEN_TTL_S });
+    // `args` is the recorded argument list verbatim: ["read", ttl] proves the scope was passed
+    // explicitly — a scope-less call records fewer arguments and fails this (SE5c).
+    expect(calls.find((c) => c.kind === "token")?.opts).toEqual({ args: ["read", READ_TOKEN_TTL_S] });
   });
 
   it("answers not_built while no Artifacts binding exists, and invalid_args for a bad name", async () => {

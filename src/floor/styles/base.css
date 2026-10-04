@@ -732,6 +732,11 @@ a {
   flex-direction: column;
   gap: 8px;
 }
+/* The list scrolls; its rows keep their own height. A row that may shrink is squeezed by a long
+   expanded card until its clamped lines have no height at all. */
+.rail-list > * {
+  flex: 0 0 auto;
+}
 .rail-empty {
   color: var(--muted);
 }

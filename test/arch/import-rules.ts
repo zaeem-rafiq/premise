@@ -43,7 +43,11 @@ export const ZONES: readonly Zone[] = [
   { files: "src/copy/", allow: { paths: ["src/copy/", "src/protocol/"], packages: [] } },
   { files: "src/config/", allow: { paths: ["src/config/", "src/protocol/"], packages: [] } },
   { files: "src/core/sync/", allow: { paths: ["src/core/sync/"], packages: ["node:crypto", "node:zlib"] } },
-  { files: "src/core/", allow: { paths: ["src/core/", "src/protocol/", "src/copy/"], packages: ["acorn"] } },
+  {
+    files: "src/core/",
+    // `@sveltejs/acorn-typescript`: the TypeScript plugin of acorn (06-repos.md LG1).
+    allow: { paths: ["src/core/", "src/protocol/", "src/copy/"], packages: ["acorn", "@sveltejs/acorn-typescript"] },
+  },
   { files: "src/swarm/", allow: { paths: ["src/swarm/", "src/core/sync/", "src/protocol/"], packages: [] } },
   {
     files: "src/host/",

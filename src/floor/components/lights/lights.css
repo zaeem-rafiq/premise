@@ -1,0 +1,54 @@
+/* The premise rows of the expanded attempt card (03 3.3, CO17) and the list-size light
+   (CO15: 16 across). The light shapes themselves live in attempt-card.css with the card. */
+
+.light--list,
+.light--list svg {
+  width: 16px;
+  height: 16px;
+}
+
+.premise-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--size-small, 14px);
+  padding: 4px 0;
+}
+
+.premise-row__label {
+  font-weight: 600;
+  color: var(--text, #eaf2f4);
+}
+
+.premise-row__word {
+  color: var(--muted, #a8bcc6);
+}
+
+.premise-row__flags {
+  color: var(--muted, #a8bcc6);
+}
+
+.premise-row__sentence {
+  flex-basis: 100%;
+  color: var(--text, #eaf2f4);
+}
+
+.premise-row__who {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--size-small, 14px);
+  color: var(--accent, #6fd6cc);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.premise-row :focus-visible,
+.premise-row__who:focus-visible {
+  outline: 3px solid var(--focus, #ffe08a);
+  outline-offset: 2px;
+}

@@ -350,7 +350,7 @@ test.describe("2.8 item 1 — the Why card (3.9, CO22)", () => {
 
   test("3.9 state: an accepted, not yet landed landing shows why.landing only (FL3)", async ({ page }) => {
     await serveHarness(page);
-    // hero-c04: landing.accepted of seq 1 is index 26; landing.landed is index 30.
+    // hero-c04: landing.accepted of seq 1 is index 25; landing.landed is index 30.
     await sendEvents(page, C04, 29);
     await page.evaluate(() => (window as { harness?: { openWhy: (s: number) => void } }).harness?.openWhy(1));
     const sheet = page.getByRole("dialog", { name: "Why is this here?" });
@@ -430,8 +430,8 @@ test.describe("2.8 item 2 — the git drawer (3.10, CM1-CM5)", () => {
 test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
   test("Who relies on ENERGY_MAX lists in-flight and landed, then clears the outline", async ({ page }) => {
     await serveHarness(page);
-    // hero-c04 past seq 1's landing (index 31) but before a_A submits: seq 1 is
-    // landed, a_A is going around on the ENERGY_MAX premise.
+    // hero-c04 past seq 1's landing (index 30) but before a_A submits (index 37):
+    // seq 1 is landed, a_A is going around on the ENERGY_MAX premise.
     await sendEvents(page, C04, 33);
     await page.evaluate(() =>
       (window as { harness?: { openWho: (k: string, key: string) => void } }).harness?.openWho(
@@ -442,7 +442,7 @@ test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
     const sheet = page.getByRole("dialog", { name: "Who relies on ENERGY_MAX in world/energy.js" });
     await expect(sheet).toBeVisible();
     await expect(sheet.locator('[data-list="in_flight"]')).toContainText("In flight (1)");
-    await expect(sheet.locator('[data-list="in_flight"]')).toContainText("a crab that hides when its energy is low");
+    await expect(sheet.locator('[data-list="in_flight"]')).toContainText('"a crab that hides when its…"');
     await expect(sheet.locator('[data-list="in_flight"]')).toContainText("Going around");
     await expect(sheet.locator('[data-list="landed"]')).toContainText("Landed (1)");
     await expect(sheet.locator('[data-list="landed"]')).toContainText("landing 1");
@@ -494,9 +494,10 @@ test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
     await expect(sheet.locator(".who-pick")).toContainText("update");
     await expect(sheet.locator(".who-pick")).toContainText("crab.js");
     await sheet.locator(".who-pick").getByRole("button", { name: "update" }).click();
-    // landing 2 wrote creatures/crab.js#update.
-    await expect(sheet.locator('[data-list="landed"]')).toContainText("Landed (1)");
-    await expect(sheet.locator('[data-list="landed"]')).toContainText("landing 2");
+    // the panel now names the picked part; landing 2 froze file:creatures/crab.js.
+    const picked = page.getByRole("dialog", { name: "Who relies on update in creatures/crab.js" });
+    await expect(picked.locator('[data-list="landed"]')).toContainText("Landed (1)");
+    await expect(picked.locator('[data-list="landed"]')).toContainText("landing 2");
   });
 
   test("the tile menu's Why entry opens the newest change's card (3.7)", async ({ page }) => {

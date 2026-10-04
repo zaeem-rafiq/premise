@@ -32,7 +32,7 @@ export function whyHeadline(card: WhyCard, modelLabel: (id: string) => string): 
   return text("why.head", {
     changeName: whyName(card, modelLabel),
     landing: landingLabel(card.seq),
-    "time of day": card.landedTs !== null ? timeOfDay(card.landedTs) : DASH,
+    time: card.landedTs !== null ? timeOfDay(card.landedTs) : DASH,
   });
 }
 
@@ -81,7 +81,7 @@ export function saidLine(statement: string): string {
 export function landedLine(card: WhyCard): string | null {
   const how = card.landedHow;
   if (how === null) return null;
-  return text(how.id, { "time of day": how.ts !== null ? timeOfDay(how.ts) : DASH, n: how.n });
+  return text(how.id, { time: how.ts !== null ? timeOfDay(how.ts) : DASH, n: how.n });
 }
 
 /** The change name another landing carries (for the undo lists of CO31). */

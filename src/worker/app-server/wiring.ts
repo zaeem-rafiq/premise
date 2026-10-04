@@ -4,7 +4,7 @@
 
 import type { RouteInput, RouteTable } from "../index.ts";
 import type { Env } from "../env.ts";
-import type { FloorRead } from "../floor/floor-do.ts";
+import type { FloorRead } from "../../protocol/internal.ts";
 import { artifactsPoolSource } from "../adapters/pool-source/artifacts.ts";
 import { createApp, type AppInput } from "./app.ts";
 import { HOST_BUILD, HOST_SOURCE } from "./host-bundle.ts";

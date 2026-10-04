@@ -165,6 +165,10 @@ export function runCase(vector: Vector, pools: Pools): string[] {
     constants: top.constants,
     switches: { CLEF_TRIAGE: top.switches?.CLEF_TRIAGE === "off" ? "off" : "on" },
   });
+  // PL1: the seed's batch 0 is on Artifacts before any attempt works — the vectors predate the
+  // seed push, so the driver replays it here (the `batch.pushed` it emits only adds to the trace;
+  // `events_include` checks are membership, not order).
+  trunk.pushOk();
   let pool = trunk.pool;
 
   // The attempt ids are the vector's letters: "A", "B", ...

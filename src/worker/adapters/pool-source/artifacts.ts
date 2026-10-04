@@ -4,6 +4,7 @@
 
 import type { PoolSource, Version } from "../../../protocol/ports.ts";
 import { blobId } from "../../../core/sync/sha1.ts";
+import { poolRepoName } from "../../repos.ts";
 import { commitOf, repoOf, resolveSource, type PoolFloorRead } from "./resolve.ts";
 
 /** How the adapter reads the pool's Floor state (FS2). Throws propagate to the caller as 503s. */
@@ -27,7 +28,7 @@ export type ArtifactsLike = {
  * grows the remote fields this function should follow them ("the app server follows it", SE19).
  */
 export function repoName(pool: string, version: Version): string {
-  return repoOf(version) === "plain" ? `${pool}-plain` : pool;
+  return poolRepoName(pool, repoOf(version) === "plain" ? "plain" : "main");
 }
 
 function isMissingRepo(error: unknown): boolean {

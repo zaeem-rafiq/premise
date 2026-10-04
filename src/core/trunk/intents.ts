@@ -5,7 +5,7 @@
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
 import type { Attempt, CardRec, Pool, Premise } from "./sets.ts";
-import { event } from "./events.ts";
+import { event, emitPoolState } from "./events.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
 export const IN_FLIGHT: readonly AttemptState[] = [
@@ -55,6 +55,14 @@ export function setState(
   }
   if (reason !== null) a.stop_reason = reason;
   pool.dirtyAttempts.add(a.id);
+  if (to === "validated" && a.state === to) scheduleTick(pool);
+}
+
+/** 9.4: the `tick` timer fires while any attempt is `validated` or any undo request is queued —
+ * armed here at the transition, re-armed by the tick while work remains and by `push_ok` when the
+ * outbox that blocked it clears. `delay` is 0 (fire at the next alarm) or TICK_MS (the cadence). */
+export function scheduleTick(pool: Pool, delay = 0): void {
+  pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('tick', '', ?)", pool.now() + delay);
 }
 
 /** Forget the queued submission (T22, pull-backs, repairs): the next submit recomputes it. */
@@ -158,6 +166,9 @@ export function markDelivered(pool: Pool, a: Attempt, ack: number): void {
   for (const h of a.heads) {
     if (h.hn <= ack && h.delivered_at === null) {
       h.delivered_at = pool.now();
+      // HU5: the carry of a tool or sync response is a second delivery path — a heads-up the
+      // Agent's ack covers was received without the push and needs no re-push.
+      if (h.received_at === null) h.received_at = pool.now();
       pool.dirtyAttempts.add(a.id);
     }
   }
@@ -176,6 +187,10 @@ export type OpenArgs = {
 
 /** Create the intent (if new) and the attempt in state `opened` (9.2 T1); emits the events. */
 export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
+  // An `open_attempt` for an attempt the pool already holds returns it unchanged (the route's
+  // retry is idempotent); nothing is emitted twice.
+  const existing = pool.attempts.get(id);
+  if (existing !== undefined) return existing;
   const intent_id = args.intent_id ?? `i_${id}`;
   if (!pool.intents.has(intent_id)) {
     pool.intents.set(intent_id, {
@@ -241,6 +256,11 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
   };
   pool.attempts.set(id, a);
   pool.dirtyAttempts.add(id);
+  if (a.agent_kind === "synthetic" && pool.meta.get("synthetic") !== "1") {
+    // EM1a: the synthetic flag changes once, when the first synthetic attempt opens.
+    pool.meta.set("synthetic", "1");
+    emitPoolState(pool);
+  }
   event(pool, "attempt.opened", {
     attempt_id: id,
     intent_id,

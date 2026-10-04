@@ -30,3 +30,54 @@ export function metaWrite(pool: Pool, k: string, v: string | number | null): voi
   pool.meta.set(k, v === null ? "" : String(v));
   metaSet(pool.sql, k, v);
 }
+
+// ---------------------------------------------------------------------------
+// EM1/EM1a: `pool.state` and `pool.files`, the stream's first two events and the pair re-emitted
+// whenever one of their fields changes (EM1) or when the visible tree or the synthetic flag does.
+
+import { MAX_REAL_AGENTS } from "../../protocol/constants.ts";
+import { policyOf, changeTier } from "../policy/policy.ts";
+import type { FileMap } from "./sets.ts";
+
+/** `pool.files`' rows at `files`: every path with its tier under the tree's own policy (EM1). */
+export function poolFileRows(files: FileMap): Array<{ path: string; tier: "auto" | "held" }> {
+  const policy = policyOf(files.get(".premise/policy.json") ?? null);
+  return [...files.keys()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((path) => ({ path, tier: changeTier(policy, [path]) }));
+}
+
+/** The `pool.state` body of the pool's `meta` (EM1): every field the Floor and the app server read. */
+export function poolStateBody(pool: Pool): Record<string, unknown> {
+  const meta = pool.meta;
+  const num = (k: string): number => Number(meta.get(k) ?? "0");
+  return {
+    head_seq: num("head_seq"),
+    head_commit: meta.get("head_commit") ?? "",
+    green_seq: num("green_seq"),
+    landed_seq: num("landed_seq"),
+    landed_commit: meta.get("landed_commit") ?? "",
+    state: meta.get("pool_state") ?? "ready",
+    reason: meta.get("pause_reason") === undefined || meta.get("pause_reason") === "" ? null : meta.get("pause_reason"),
+    epoch: num("epoch"),
+    remote: meta.get("remote") ?? "",
+    plain_remote:
+      meta.get("plain_remote") === undefined || meta.get("plain_remote") === "" ? null : meta.get("plain_remote"),
+    rebuild: null,
+    unwitnessed: [],
+    real_agents: num("real_agents"),
+    max_real_agents: MAX_REAL_AGENTS,
+    synthetic: meta.get("synthetic") === "1",
+    summary_only: meta.get("summary_only") === "1",
+  };
+}
+
+/** EM1: emit `pool.state` now (its `ts` is the pool's clock, like every trunk event). */
+export function emitPoolState(pool: Pool): void {
+  event(pool, "pool.state", poolStateBody(pool));
+}
+
+/** EM1: emit `pool.files` with the head tree's rows. */
+export function emitPoolFiles(pool: Pool): void {
+  event(pool, "pool.files", { files: poolFileRows(pool.files) });
+}

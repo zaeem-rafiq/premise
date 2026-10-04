@@ -9,6 +9,7 @@ import { READ_TOKEN_TTL_S } from "../../protocol/constants.ts";
 import { SEEDS } from "../../config/pools.ts";
 import type { CreatePoolRequest, ReadTokenResponse } from "../../protocol/routes.ts";
 import { notBuilt } from "../not-built.ts";
+import { poolRepoName } from "../repos.ts";
 import type { RouteHandler } from "../index.ts";
 import type { Env } from "../env.ts";
 
@@ -187,7 +188,7 @@ export const readToken: RouteHandler = async ({ env, params }) => {
   if (pools === undefined) return notBuilt();
   let repo: ArtifactsRepo;
   try {
-    repo = await pools.get(pool);
+    repo = await pools.get(poolRepoName(pool));
   } catch (cause) {
     return json(
       { error: { code: artifactsCode(cause)?.toLowerCase() ?? "upstream" } },

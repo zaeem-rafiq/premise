@@ -82,16 +82,26 @@ describe("the Trunk Durable Object in workerd", () => {
     expect(await res.json()).toMatchObject({ ok: true, result: { marked: "m2" } });
   });
 
-  it("an unregistered engine entry answers not_built — for tools, calls and owner actions", async () => {
+  it("an unregistered engine entry answers not_built; a registered one on a missing pool answers pool_not_found", async () => {
+    // Slice 0 asserted 503 everywhere — the engine was not wired. Slice 1 wires it, so a real
+    // entry on a pool that was never created answers 404 `pool_not_found`, and only genuinely
+    // unregistered names still fail closed with 503 `not_built`.
     const tool = await worker.trunk("t1").fetch("/tool", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ attempt_id: "a1", call_id: "a1:3", ack: 0, tool: "write", args: {} }),
     });
-    expect(tool.status).toBe(503);
-    expect(await tool.json()).toEqual({ error: { code: "not_built" } });
+    expect(tool.status).toBe(404);
+    expect(await tool.json()).toEqual({ error: { code: "pool_not_found" } });
 
-    for (const path of ["/sync", "/register", "/stop", "/api/pools/t1/intents", "/api/pools/t1/undo"]) {
+    for (const path of ["/sync", "/stop"]) {
+      const res = await worker
+        .trunk("t1")
+        .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: { code: "pool_not_found" } });
+    }
+    for (const path of ["/register", "/api/pools/t1/intents", "/api/pools/t1/undo"]) {
       const res = await worker
         .trunk("t1")
         .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
@@ -116,9 +126,10 @@ describe("the Trunk Durable Object in workerd", () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, pool: "t9" });
-    // The events were flushed: the Floor of t9 holds pool.state + pool.files.
+    // The events were flushed: the Floor of t9 holds pool.state + pool.files (and, with the fake
+    // remote unreachable, the push.retry rows of LP5a — the count is at least the first two).
     const floor = (await worker.floor("t9").state()) as { n: number };
-    expect(floor.n).toBe(2);
+    expect(floor.n).toBeGreaterThanOrEqual(2);
     const bad = await worker.trunk("t9").fetch("/internal/create-pool", {
       method: "POST",
       headers: { "content-type": "application/json" },

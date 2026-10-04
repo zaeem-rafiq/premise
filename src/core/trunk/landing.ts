@@ -607,6 +607,40 @@ export function applyClassification(
       continue;
     }
     if (rowResult === "triage") {
+      // SW5/TR8: a scripted agent's premise never reaches Clef. The row is answered inside this
+      // transaction by the truth list: `repair` when the premise is in the list, `holds`
+      // otherwise. For QR4 the deciding list is the landed change's (the reader), not the
+      // receiving attempt's.
+      const decider = it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a;
+      if (decider.agent_kind === "synthetic") {
+        const truth = decider.truth ?? [];
+        const result = truth.includes(`${p.kind}:${p.key}`) ? "repair" : "holds";
+        p.status = result === "repair" ? "pending_repair" : "holds";
+        j.result = result;
+        j.reason = result === "repair" ? "triage_depends" : "reaffirmed";
+        j.resolved_at = pool.now();
+        j.dirty = true;
+        event(pool, "premise.judged", {
+          attempt_id: a.id,
+          kind: p.kind,
+          key: p.key,
+          old_hash: j.old_hash,
+          new_hash: j.new_hash,
+          cause: j.cause,
+          cause_seq: j.cause_seq,
+          rule: j.rule,
+          class: "triage",
+          result,
+          reason: j.reason,
+          clef: null,
+        });
+        hItems.push(hItem(pool, a, it, result, j.cause_seq));
+        if (result === "repair") {
+          strongest = "repair";
+          if (it.rule === "E1") e1keys.push(p.key);
+        } else if (strongest === null) strongest = "info";
+        continue;
+      }
       p.status = "pending_triage";
       j.asked_op_seq = a.opCount;
       const t: PendingTriage = { a, p, judgment: j, it, cause: cause.type, stamp: a.opCount };

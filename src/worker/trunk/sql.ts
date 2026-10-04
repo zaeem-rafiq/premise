@@ -62,11 +62,15 @@ export function metaAll(sql: Sql): Record<string, string> {
 export type OutboxRow = { n: number; ts: number; body: string; sent: number };
 
 /** Appends one source event (`{ts, pool, src, type, ...}` — no `n`, no `t`; the Floor assigns them)
- * and returns its `source_n`: the next integer of `meta.epoch`'s sequence, so sends stay in order. */
+ * and returns its `source_n`. The engine numbers its own events with `meta.next_event_n`; the
+ * shell's appends (`trunk.error`, `push.retry`) share that counter so the two writers never
+ * collide on the primary key. */
 export function appendEvent(sql: Sql, ts: number, event: Record<string, unknown>): number {
+  const meta = sql.exec("SELECT v FROM meta WHERE k = 'next_event_n'").toArray()[0]?.v;
   const rows = sql.exec("SELECT COALESCE(MAX(n), 0) + 1 AS next FROM events_out").toArray();
-  const n = Number(rows[0]?.next);
+  const n = Math.max(meta === undefined ? 0 : Number(meta), Number(rows[0]?.next));
   sql.exec("INSERT INTO events_out (n, ts, body, sent) VALUES (?, ?, ?, 0)", n, ts, JSON.stringify(event));
+  sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('next_event_n', ?)", String(n + 1));
   return n;
 }
 

@@ -12,6 +12,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { PoolEvent } from "../../protocol/events.ts";
 import type { StreamFrame, StreamHello, StreamSource } from "../../protocol/stream.ts";
 import type { FloorState } from "../../protocol/reducer/index.ts";
+import type { FloorAppendRequest, FloorRead } from "../../protocol/internal.ts";
 import { computeMetrics, emptyFloorState, reduce } from "../../protocol/reducer/index.ts";
 import { redactMatch } from "../../protocol/redact.ts";
 import { REPLAY_FORMAT, type ReplayHeader } from "../../protocol/replay.ts";
@@ -34,31 +35,13 @@ import {
 const STREAM_SOURCES = new Set<string>(["trunk", "gate", "swarm"]);
 const EVICT_CLOSE = { code: 1008, reason: "stream_closed" } as const;
 
-/** The append request a source posts to `/internal/events`. */
-type AppendRequest = {
-  source: StreamSource;
-  epoch: number;
-  events: Array<{ source_n: number; event: Omit<PoolEvent, "n" | "t"> }>;
-};
+/** The append request a source posts to `/internal/events` (defined once in
+ * src/protocol/internal.ts). */
+type AppendRequest = FloorAppendRequest;
 
 /** What the app server reads on `/internal/state` (FS2): everything the routes of 02-tidepool 4.2
- * need from the stream, and nothing they would have asked Trunk for (AS16). */
-export type FloorRead = {
-  n: number;
-  pool: {
-    state: FloorState["pool"]["state"];
-    head_seq: number;
-    head_commit: string | null;
-    landed_seq: number;
-    landed_commit: string | null; // resolves the moving source `main`
-  };
-  green: { seq: number | null; commit: string | null }; // resolves `green`
-  plain: { commit: string; tree: string; through_seq: number } | null; // resolves `plain`
-  /** seq of a landing by its commit, while the state holds it (`<40 hex>` sources, AS11 seq). */
-  landings_by_commit: Record<string, number>;
-  /** seq of the last confirmed landing that changed each path (AS11's "newest paths"). */
-  paths: Record<string, number>;
-};
+ * need from the stream, and nothing they would have asked Trunk for (AS16). The wire shape lives
+ * in src/protocol/internal.ts; this builds it. */
 
 export function floorRead(n: number, state: FloorState): FloorRead {
   const paths: Record<string, number> = {};

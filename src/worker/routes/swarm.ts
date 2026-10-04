@@ -11,33 +11,25 @@ import type { Env } from "../env.ts";
 import type { RouteInput, RouteTable } from "../index.ts";
 import { ROUTES } from "../../protocol/routes.ts";
 import type { SwarmRequest } from "../../protocol/swarm.ts";
+import type {
+  AgentOpenRequest,
+  AgentOpenResponse,
+  TrunkOpenAttemptRequest,
+  TrunkOpenAttemptResponse,
+} from "../../protocol/internal.ts";
 import { patternById } from "../../swarm/pattern.ts";
 import { H } from "../../core/sync/h.ts";
 
-/** The launch call to a scripted Agent Durable Object (contract to be confirmed with the agent
- * lane; `truth` is the list TR8 requires at open). */
-export type AgentOpenRequest = {
-  pool: string;
-  attempt_id: string;
-  intent_id: string;
-  intent_text: string;
-  requester: string;
-  driver: "scripted";
-  pattern: string;
-  seed: number;
-  agent_n: number;
-  truth: string[];
-  hold: boolean;
-  think_ms: [number, number];
-};
-
-export type AgentOpenResponse = { ok: true; attempt_id: string; already?: boolean } | { ok: false; error: string };
+/** The launch call's contract lives in `src/protocol/internal.ts`; the local aliases stay so the
+ * lane's test keeps its import shape (gap 1's one-definition rule). */
+export type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/internal.ts";
 
 /** The requester recorded on a synthetic attempt's intent (CM1's author `SYNTHETIC swarm`). */
 const REQUESTER = "swarm";
 
 const AGENT_OPEN_URL = "https://agent/open";
 const AGENT_RELEASE_URL = "https://agent/release";
+const TRUNK_OPEN_ATTEMPT_URL = "https://trunk/internal/open-attempt";
 
 /** ULID's Crockford base32 alphabet, in order. */
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -174,10 +166,39 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
       const pattern = patternById(id);
       if (pattern === undefined) return badRequest("unknown_pattern");
       const attemptId = launchAttemptId(request.request_id, n);
+      const intentId = launchId("i_", request.request_id, n);
+      // SWR2/9.2 T1: the attempt opens in the pool's Trunk first — `attempt.opened` (and EM1a's
+      // `pool.state` on the first synthetic) precede everything the agent does.
+      const openAttempt: TrunkOpenAttemptRequest = {
+        attempt_id: attemptId,
+        intent_id: intentId,
+        intent: pattern.intent,
+        agent_kind: "synthetic",
+        truth: [...pattern.truth],
+        requester: REQUESTER,
+      };
+      let trunkAnswer: TrunkOpenAttemptResponse;
+      try {
+        const response = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
+          TRUNK_OPEN_ATTEMPT_URL,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(openAttempt),
+          },
+        );
+        trunkAnswer = (await response.json()) as TrunkOpenAttemptResponse;
+      } catch {
+        return Response.json({ error: { code: "trunk_open_failed" } }, { status: 502 });
+      }
+      if (!trunkAnswer.ok) {
+        return Response.json({ error: { code: "trunk_open_failed", detail: trunkAnswer.error } }, { status: 502 });
+      }
       const open: AgentOpenRequest = {
         pool: request.pool,
         attempt_id: attemptId,
-        intent_id: launchId("i_", request.request_id, n),
+        intent_id: intentId,
+        change_id: trunkAnswer.change_id,
         intent_text: pattern.intent,
         requester: REQUESTER,
         driver: "scripted",

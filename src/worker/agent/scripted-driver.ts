@@ -17,23 +17,13 @@
 // give up after a number of repairs (SW7's sweep gives up at its second).
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";
+import type { Script, ScriptStep } from "../../protocol/internal.ts";
 import type { Driver } from "../../protocol/ports.ts";
 import type { HeadsUpForModel, ModelToolMessage, ToolName } from "../../protocol/tools.ts";
 
-export type ScriptStep = { tool: ToolName; args: Record<string, unknown>; reapply?: boolean };
-
-export type Script = {
-  pattern: string;
-  truth: string[]; // "<kind>:<key>" strings (10.3, TR8)
-  steps: ScriptStep[];
-  repair?: {
-    reread?: boolean; // re-read each truth premise the heads-up named before answering
-    statement?: string; // the repair answer's statement (SW6)
-    give_up_after?: number; // withdraw after this many repairs (SW7: sweeps use 2)
-  };
-  confirm_statement?: string; // the confirm answer's statement; default "not affected" (SW6)
-  think_ms?: number; // the wait before answering a heads-up (SW6); default 0
-};
+// The Script/ScriptStep contract lives in `src/protocol/internal.ts` (gap 1); re-exported here
+// for this file's existing importers.
+export type { Script, ScriptStep } from "../../protocol/internal.ts";
 
 export type ScriptState = {
   queue: ScriptStep[];

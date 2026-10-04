@@ -34,8 +34,8 @@ const toRun = cases.cases.filter(
 );
 
 describe("premise case vectors through the Trunk engine", () => {
-  it("runs the Track-1C cases C01, C23 and C28", () => {
-    expect(toRun.map((c) => idPrefix(c.id)).sort()).toEqual(["C01", "C23", "C28"]);
+  it("runs every case that required.json lists (Slice 1 requires all of them)", () => {
+    expect(toRun.map((c) => idPrefix(c.id)).sort()).toEqual([...requiredByLead].sort());
   });
 
   for (const vector of toRun) {

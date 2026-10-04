@@ -4,10 +4,10 @@ import { artifactsTokenSource } from "../../adapters/token-source/token-source.t
 import { runPush, type PushBatch } from "../push-runner.ts";
 
 /**
- * The git lane's handlers. "push" sends one batch's receive-pack request: its payload is a
- * `PushBatch` ({pool_id, updates, pack}). Applying the result to the outbox — the LP5 ref
- * read and the landing state changes — lands with the outbox work of Slice 3; until then
- * the handler performs the push and the engine's effect completes with it.
+ * The git lane's handler. "push" performs one batch's receive-pack request — the raw request
+ * the payload describes. The LP5 ref read and the landing state changes live in
+ * `src/worker/trunk/push.ts`, which the Durable Object runs after every commit and on the
+ * `push` timer; this handler stays for an explicit `push` effect a lane may emit.
  */
 export function wire(table: EffectTable): void {
   table.handlers.set("push", async ({ payload, env }) => {

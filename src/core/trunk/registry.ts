@@ -366,6 +366,8 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         result: Judgment["result"];
         reason: string;
         asked_op_seq?: number | null;
+        heads_up?: boolean; // EV6: a heads-up item carries this judgment
+        clef?: { model: string; p: number | null; error: string | null };
       },
     ): Judgment {
       const record: Judgment = {
@@ -384,10 +386,10 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         asked_at: j.klass === "triage" ? pool.now() : null,
         tries: 0,
         reason: j.reason,
-        clef_model: null,
-        clef_p: null,
+        clef_model: j.clef?.model ?? null,
+        clef_p: j.clef?.p ?? null,
         clef_ms: null,
-        clef_error: null,
+        clef_error: j.clef?.error ?? null,
         t_repair: null,
         t_confirm: null,
         created_at: pool.now(),
@@ -408,8 +410,8 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         class: j.klass,
         result: j.result,
         reason: j.reason,
-        clef: null,
-      });
+        clef: j.clef ?? null,
+      }, { headsup: j.heads_up === true });
       return record;
     },
     fileMapAt(seq: number): FileMap {

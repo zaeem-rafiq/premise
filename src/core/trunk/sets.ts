@@ -331,6 +331,8 @@ export type Pool = {
       result: Judgment["result"];
       reason: string;
       asked_op_seq?: number | null;
+      heads_up?: boolean; // EV6: a heads-up item carries this judgment
+      clef?: { model: string; p: number | null; error: string | null };
     },
   ): Judgment;
   fileMapAt(seq: number): FileMap;

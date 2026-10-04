@@ -600,6 +600,7 @@ export function applyClassification(
       klass: rowResult === "triage" ? "triage" : "rule",
       result: rowResult === "triage" ? null : rowResult === "info" ? "holds" : rowResult,
       reason: it.reason ?? "",
+      heads_up: it.folded !== true && rowResult !== "holds",
     });
     pool.out.judgments.push(j);
     if (it.folded === true) {
@@ -633,7 +634,7 @@ export function applyClassification(
           result,
           reason: j.reason,
           clef: null,
-        });
+        }, { headsup: true });
         hItems.push(hItem(pool, a, it, result, j.cause_seq));
         if (result === "repair") {
           strongest = "repair";

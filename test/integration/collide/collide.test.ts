@@ -198,12 +198,11 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
-  it.fails("item 6 (EV6, HU12): a summary_only pool strips the stream detail", () => {
+  it("item 6 (EV6, HU12): a summary_only pool strips the stream detail", () => {
     // 01-core EV6 and plan item 6: on a `summary_only` pool `headsup.sent` keeps the keys with
     // `items: null`, `landing.landed` carries `note_json: null`, and the stream holds no
-    // `premise.recorded`, `op.recorded` or `attempt.step`. The engine records every event body
-    // whole (meta summary_only is stored, never consulted): `items` is the full array,
-    // `note_json` is the note, and all three event types are emitted.
+    // `premise.recorded`, `op.recorded` or `attempt.step`. event() consults the pool's
+    // summary_only meta: it drops the detailed records and rewrites the two detail bodies.
     const sim = new SwarmSim(swarmFiles(), { seed: 7, summary_only: true });
     const { held } = order1(sim, ["add-energy"]);
     const ae = held[0] as AgentHandle;

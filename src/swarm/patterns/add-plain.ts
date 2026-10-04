@@ -6,6 +6,8 @@
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
 import type { Pattern, PatternStep, PatternTurn } from "../pattern.ts";
+import { fileNamesOf, freshName, readArgsOf, submitFields, submitStatus } from "../scripted.ts";
+import { PALETTE, SPEEDS, tPlain } from "../templates.ts";
 
 /** The truth list of `add-plain` (02 10.3; the row's `bounce`, `step`, `wander` expanded per the
  * section's note on `entity:<path>#<name>` form). */
@@ -16,28 +18,6 @@ const TRUTH = [
 ] as const;
 
 const TRUTH_KEYS = new Set<string>(TRUTH);
-
-/** The colour names of `PALETTE` (02 3.1), in spec order. One draw chooses the creature's colour. */
-const PALETTE = [
-  "white",
-  "black",
-  "grey",
-  "silver",
-  "red",
-  "orange",
-  "yellow",
-  "gold",
-  "green",
-  "teal",
-  "blue",
-  "purple",
-  "pink",
-  "brown",
-  "sand",
-] as const;
-
-/** The speeds the scripted creatures of the seed use (02 10.1): the cycle `edit-creature` steps. */
-const SPEEDS = [1, 1.5, 2, 2.5] as const;
 
 /** The entity a scripted `read` names (`world/bounds.js#bounce` -> `{ path, entity }`). */
 const READ_ENTITIES: ReadonlyArray<{ path: string; entity: string }> = [
@@ -86,81 +66,6 @@ function initialState(): AddPlainState {
     withdrawn: false,
     done: false,
   };
-}
-
-/** T-plain of `02` 10.2 with `{colour}` and `{speed}` filled in. */
-function tPlain(colour: string, speed: number): string {
-  return `import { bounce } from "../world/bounds.js";
-import { step, wander } from "../world/movement.js";
-
-const BODY = "${colour}";
-const SPEED = ${speed};
-
-export function spawn() {
-  return { vx: SPEED, vy: SPEED / 2 };
-}
-
-export function update(creature) {
-  wander(creature, 0.05);
-  step(creature);
-  bounce(creature);
-}
-
-export function draw(creature, pen) {
-  pen.fill(BODY);
-  pen.circle(0, 0, 9);
-}
-`;
-}
-
-/** The first free `creatures/s<number>.js` name in the listing, number zero-padded to at least 4
- * digits (02 10.2). */
-function freshName(entries: readonly string[]): string {
-  const used = new Set<number>();
-  for (const entry of entries) {
-    const match = /^s(\d+)\.js$/.exec(entry);
-    if (match !== null) used.add(Number(match[1]));
-  }
-  let n = 0;
-  while (used.has(n)) n += 1;
-  return `creatures/s${String(n).padStart(4, "0")}.js`;
-}
-
-function fileNamesOf(result: object | undefined): string[] {
-  if (result === undefined || !("entries" in result)) return [];
-  const { entries } = result as { entries: unknown };
-  if (!Array.isArray(entries)) return [];
-  return entries
-    .filter(
-      (entry): entry is { name: string; type: string } =>
-        typeof entry === "object" &&
-        entry !== null &&
-        typeof (entry as { name?: unknown }).name === "string" &&
-        (entry as { type?: unknown }).type === "file",
-    )
-    .map((entry) => entry.name);
-}
-
-function submitStatus(result: object | undefined): string | null {
-  const status = (result as { status?: unknown } | undefined)?.status;
-  return typeof status === "string" ? status : null;
-}
-
-/** The `acknowledge` and `statement` fields the next `submit` carries (01-core 4.9, CK1). */
-function submitFields(acks: ReadonlyArray<{ hn: number; statement: string }>): {
-  acknowledge?: number[];
-  statement?: string;
-} {
-  if (acks.length === 0) return {};
-  const hns = [...new Set(acks.map((ack) => ack.hn))].sort((a, b) => a - b);
-  const statements = [...new Set(acks.map((ack) => ack.statement))];
-  return { acknowledge: hns, statement: statements.join("; ") };
-}
-
-/** The entity key `world/bounds.js#bounce` as `read` arguments. */
-function readArgsOf(key: string): { path: string; entity: string } {
-  const cut = key.lastIndexOf("#");
-  return { path: key.slice(0, cut), entity: key.slice(cut + 1) };
 }
 
 /**

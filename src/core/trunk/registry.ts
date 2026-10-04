@@ -23,7 +23,7 @@ import type {
   UndoRequest,
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
-import { applySchema, metaAll, metaSet, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
+import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
 import { buildPack } from "../git/pack.ts";
 import { openAttempt, type OpenArgs } from "./intents.ts";
@@ -136,6 +136,7 @@ export function createPool(
 
 /** Rebuild the working Pool from the schema (3.6): everything the tables hold, in memory. */
 export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
+  migrateSchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
   pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");
@@ -648,6 +649,9 @@ function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
     validated_at: row.validated_at === null ? null : num(row.validated_at),
     landed_seq: row.landed_seq === null ? null : num(row.landed_seq),
     attempt_repo: row.attempt_repo === null ? null : str(row.attempt_repo),
+    model_calls: num(row.model_calls ?? 0),
+    tokens_in: num(row.tokens_in ?? 0),
+    tokens_out: num(row.tokens_out ?? 0),
     last_call_id: row.last_call_id === null ? null : str(row.last_call_id),
     last_response: row.last_response === null ? null : (JSON.parse(str(row.last_response)) as Record<string, unknown>),
     ack: num(row.ack),
@@ -682,8 +686,8 @@ function persistAttempt(pool: Pool, a: Attempt): void {
       attempt_id, intent_id, change_id, agent_kind, model, race, truth, resumes, state, stop_reason,
       go_arounds, pull_backs, revision, right_of_way_at, opened_seq, submit_id, summary, tier,
       approved_by, bypass_row, sets, submitted_at, validated_at, landed_seq, attempt_repo,
-      last_call_id, last_response, ack, next_hn, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      model_calls, tokens_in, tokens_out, last_call_id, last_response, ack, next_hn, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     a.id,
     a.intent_id,
     a.change_id,
@@ -709,6 +713,9 @@ function persistAttempt(pool: Pool, a: Attempt): void {
     a.validated_at,
     a.landed_seq,
     a.attempt_repo,
+    a.model_calls,
+    a.tokens_in,
+    a.tokens_out,
     a.last_call_id,
     a.last_response === null ? null : JSON.stringify(a.last_response),
     a.ack,

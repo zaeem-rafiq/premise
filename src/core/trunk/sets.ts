@@ -123,6 +123,11 @@ export type Attempt = {
   validated_at: number | null;
   landed_seq: number | null;
   attempt_repo: string | null;
+  // TA10: the last usage block a real Agent's ToolRequest carried — running totals at the
+  // moment of that call; a synthetic attempt's stay 0. Frozen into the note at landing.
+  model_calls: number;
+  tokens_in: number;
+  tokens_out: number;
   last_call_id: string | null;
   last_response: Record<string, unknown> | null; // stored response, without heads_ups (TA2)
   ack: number;

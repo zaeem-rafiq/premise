@@ -47,17 +47,17 @@ describe("the Worker bundle in workerd, deployed with no OWNER_KEY", () => {
     expect(await response.json()).toEqual(NOT_CONFIGURED_BODY);
   });
 
-  // The Floor Durable Object is built since track 1E: its routes (`/api/pools/{pool}/stream`,
-  // `/api/pools/{pool}/landings/{seq}/note`) are tested under test/workerd/floor/ and no longer answer
-  // not_built. So are the session and pool routes since track 1D (test/workerd/trunk/). A route leaves
-  // this list when its lane lands.
+  // Every route of this table has been built since Slice 0: the Floor routes (track 1E, tested under
+  // test/workerd/floor/), the session and pool routes (track 1D, test/workerd/trunk/) and the app
+  // server (track 1G, test/tidepool/host/app-server.test.ts). What stays here is the one property
+  // this file is about: an address under /pool/ never answers with the Floor page.
   it.each([
-    ["GET", "/pool/x/main/"], // the app server
+    ["GET", "/pool/x/main/"], // the app server, a pool that does not exist
     ["GET", "/pool/x/main/world/energy.js"], // a pool file
-  ])("%s %s is not built: 503 with the code not_built, never the page", async (method, path) => {
+  ])("%s %s is answered by the app server, never by the Floor page", async (method, path) => {
     const response = await worker.fetch(path, { method });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual(NOT_BUILT_BODY);
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await response.text()).not.toContain('<div id="root"');
   });
 
   it.each([

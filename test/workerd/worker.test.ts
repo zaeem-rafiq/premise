@@ -47,12 +47,13 @@ describe("the Worker bundle in workerd, deployed with no OWNER_KEY", () => {
     expect(await response.json()).toEqual(NOT_CONFIGURED_BODY);
   });
 
+  // The Floor Durable Object is built since track 1E: its routes (`/api/pools/{pool}/stream`,
+  // `/api/pools/{pool}/landings/{seq}/note`) are tested under test/workerd/floor/ and no longer answer
+  // not_built. A route leaves this list when its lane lands.
   it.each([
-    ["GET", "/api/pools/x/stream"], // the Floor Durable Object stub
     ["GET", "/api/session"], // the Worker route, unregistered
     ["GET", "/pool/x/main/"], // the app server
     ["GET", "/pool/x/main/world/energy.js"], // a pool file
-    ["GET", "/api/pools/x/landings/1/note"], // the Floor Durable Object stub
   ])("%s %s is not built: 503 with the code not_built, never the page", async (method, path) => {
     const response = await worker.fetch(path, { method });
     expect(response.status).toBe(503);

@@ -75,48 +75,52 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
   });
 
   describe(`hero conflict, landing order 2 (7.6, 7.11) on ${seed}`, () => {
-    it("A4/A7/A11: creatures land while S waits; QR1 sends S around; stale card; same tree", { timeout: 30_000 }, () => {
-      const s = sim(seed);
-      const { agents, conductor } = conduct(s, 2, seed);
-      const S = agents.get("hero-s")!;
-      const C = agents.get("hero-c")!;
-      const H = agents.get("hero-h")!;
-      const J = agents.get("hero-j")!;
-      expect(conductor.done).toBe(true);
+    it(
+      "A4/A7/A11: creatures land while S waits; QR1 sends S around; stale card; same tree",
+      { timeout: 30_000 },
+      () => {
+        const s = sim(seed);
+        const { agents, conductor } = conduct(s, 2, seed);
+        const S = agents.get("hero-s")!;
+        const C = agents.get("hero-c")!;
+        const H = agents.get("hero-h")!;
+        const J = agents.get("hero-j")!;
+        expect(conductor.done).toBe(true);
 
-      for (const a of [S, C, H, J]) expect(s.state(a)).toBe("landed");
-      // 7.6 end state: C and H landed with 0 go-arounds; S landed with 1.
-      expect(goArounds(s, C)).toBe(0);
-      expect(goArounds(s, H)).toBe(0);
-      expect(goArounds(s, J)).toBe(0);
-      expect(goArounds(s, S)).toBe(1);
+        for (const a of [S, C, H, J]) expect(s.state(a)).toBe("landed");
+        // 7.6 end state: C and H landed with 0 go-arounds; S landed with 1.
+        expect(goArounds(s, C)).toBe(0);
+        expect(goArounds(s, H)).toBe(0);
+        expect(goArounds(s, J)).toBe(0);
+        expect(goArounds(s, S)).toBe(1);
 
-      // S received `repair` with rule QR1 naming the new referrers (7.6 step 4).
-      const qr1 = s.headsUps(S).find((h) => h.result === "repair" && h.items.some((i) => i.rule === "QR1"));
-      expect(qr1).toBeDefined();
-      const added = qr1!.items.flatMap((i) => (i.diff.kind === "query" ? i.diff.added.map((a) => a.key) : []));
-      expect(added).toContain("creatures/crab.js#(import ../world/energy.js)");
-      expect(added).toContain("creatures/shrimp.js#(import ../world/energy.js)");
+        // S received `repair` with rule QR1 naming the new referrers (7.6 step 4).
+        const qr1 = s.headsUps(S).find((h) => h.result === "repair" && h.items.some((i) => i.rule === "QR1"));
+        expect(qr1).toBeDefined();
+        const added = qr1!.items.flatMap((i) => (i.diff.kind === "query" ? i.diff.added.map((a) => a.key) : []));
+        expect(added).toContain("creatures/crab.js#(import ../world/energy.js)");
+        expect(added).toContain("creatures/shrimp.js#(import ../world/energy.js)");
 
-      // 7.6 step 6: S's resubmit acknowledges the heads-up with the statement of the section,
-      // and its one landing alters `world/energy.js` and both creature modules (D1/D2).
-      const resolved = s.eventsOf("headsup.resolved").find((e) => e.attempt_id === S.id);
-      expect(resolved?.statement).toBe(
-        "Two new creatures used point values. Changed the crab's 30 to 0.3 and the shrimp's 5 to 0.05 in the same change.",
-      );
-      const sLanding = s.eventsOf("landing.accepted").find((e) => e.attempt_id === S.id);
-      expect(new Set(sLanding?.paths as string[])).toEqual(
-        new Set(["world/energy.js", "creatures/crab.js", "creatures/shrimp.js"]),
-      );
+        // 7.6 step 6: S's resubmit acknowledges the heads-up with the statement of the section,
+        // and its one landing alters `world/energy.js` and both creature modules (D1/D2).
+        const resolved = s.eventsOf("headsup.resolved").find((e) => e.attempt_id === S.id);
+        expect(resolved?.statement).toBe(
+          "Two new creatures used point values. Changed the crab's 30 to 0.3 and the shrimp's 5 to 0.05 in the same change.",
+        );
+        const sLanding = s.eventsOf("landing.accepted").find((e) => e.attempt_id === S.id);
+        expect(new Set(sLanding?.paths as string[])).toEqual(
+          new Set(["world/energy.js", "creatures/crab.js", "creatures/shrimp.js"]),
+        );
 
-      if (seed === "tidepool") {
-        // The first card closed as `stale`; a second `held` card opened for the resubmit (T8).
-        const stale = s.eventsOf("card.closed").filter((e) => e.action === "stale");
-        expect(stale.length).toBe(1);
-        expect(s.eventsOf("card.opened").length).toBe(2);
-      }
+        if (seed === "tidepool") {
+          // The first card closed as `stale`; a second `held` card opened for the resubmit (T8).
+          const stale = s.eventsOf("card.closed").filter((e) => e.action === "stale");
+          expect(stale.length).toBe(1);
+          expect(s.eventsOf("card.opened").length).toBe(2);
+        }
 
-      expectHeroTree(mainTree(s));
-    });
+        expectHeroTree(mainTree(s));
+      },
+    );
   });
 }

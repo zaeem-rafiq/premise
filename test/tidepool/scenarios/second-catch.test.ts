@@ -76,28 +76,32 @@ describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", 
     expect(files.get("creatures/seahorse.js")).toContain('const BODY = "gold";');
   });
 
-  it("order 2 (8.4): the repaint lands first; the seahorse hears an info and needs no edit", { timeout: 30_000 }, () => {
-    const s = sim();
-    const a = s.open("gold-a");
-    const b = s.open("gold-b", { hold: true });
-    drive(s, b); // B has read fish.js and written seahorse.js (F4 row of 8.4)
-    landNow(s, a);
-    expect(s.state(a)).toBe("landed");
+  it(
+    "order 2 (8.4): the repaint lands first; the seahorse hears an info and needs no edit",
+    { timeout: 30_000 },
+    () => {
+      const s = sim();
+      const a = s.open("gold-a");
+      const b = s.open("gold-b", { hold: true });
+      drive(s, b); // B has read fish.js and written seahorse.js (F4 row of 8.4)
+      landNow(s, a);
+      expect(s.state(a)).toBe("landed");
 
-    // B receives an `info` heads-up — its `file:creatures/fish.js` premise judged by F4,
-    // answered `holds` under scripted triage — and no go-around, no repair.
-    const hus = s.headsUps(b);
-    expect(hus).toHaveLength(1);
-    expect(hus[0]!.result).toBe("info");
-    expect(s.attempt(b)?.go_arounds).toBe(0);
+      // B receives an `info` heads-up — its `file:creatures/fish.js` premise judged by F4,
+      // answered `holds` under scripted triage — and no go-around, no repair.
+      const hus = s.headsUps(b);
+      expect(hus).toHaveLength(1);
+      expect(hus[0]!.result).toBe("info");
+      expect(s.attempt(b)?.go_arounds).toBe(0);
 
-    s.release(b);
-    landNow(s, b);
-    expect(s.state(b)).toBe("landed");
-    // B is not forced to be gold (8.4): the seahorse lands pink.
-    expect(s.files().get("creatures/seahorse.js")).toContain('const BODY = "pink";');
-    expect(s.files().get("creatures/fish.js")).toContain('const BODY = "gold";');
-  });
+      s.release(b);
+      landNow(s, b);
+      expect(s.state(b)).toBe("landed");
+      // B is not forced to be gold (8.4): the seahorse lands pink.
+      expect(s.files().get("creatures/seahorse.js")).toContain('const BODY = "pink";');
+      expect(s.files().get("creatures/fish.js")).toContain('const BODY = "gold";');
+    },
+  );
 });
 
 describe("the same catch through a search (8.6; A15)", () => {

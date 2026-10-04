@@ -83,15 +83,15 @@ describe("3.7 the cells (CO26)", () => {
   it("the last cell is tiles.more when there are more files than cells (CO28)", () => {
     const state = withFiles(emptyFloorState(), Array.from({ length: 10 }, (_, i) => [`d/f${i}.js`, "auto"]));
     const cells = tileCells(state, { capacity: 6 });
-    const last = cells[cells.length - 1];
+    const last = cells[cells.length - 1]!;
     expect(cells).toHaveLength(6);
     expect(last.kind).toBe("more");
-    expect(last.kind === "more" && last.hidden).toBe(6); // 10 files; label + 4 tiles shown
+    expect(last.kind === "more" ? last.hidden : 0).toBe(6); // 10 files; label + 4 tiles shown
   });
 
   it("a landing's removed file keeps its cell as removed while its peers stay", () => {
     const state = withFiles(emptyFloorState(), [["a/x.js", "auto"], ["a/y.js", "auto"]]);
-    const files = { ...state.files, "a/y.js": { ...state.files["a/y.js"], exists: false, last_landed_seq: 3 } };
+    const files = { ...state.files, "a/y.js": { ...state.files["a/y.js"]!, exists: false, last_landed_seq: 3 } };
     const cells = tileCells({ ...state, files }, { removedPaths: new Set(["a/y.js"]) });
     const removed = cells.find((c) => c.kind === "file" && c.removed);
     expect(removed?.kind === "file" && removed.file.path).toBe("a/y.js");
@@ -102,7 +102,8 @@ describe("3.7 the cells (CO26)", () => {
   it("the newest landed landing glows: glowPaths flags the file cells", () => {
     const state = withFiles(emptyFloorState(), [["a/x.js", "auto"]], { last_landed_seq: 2 });
     const cells = tileCells(state, { glowPaths: new Set(["a/x.js"]) });
-    expect(cells.find((c) => c.kind === "file")?.kind === "file" && cells[1].kind === "file" && cells[1].glow).toBe(true);
+    const tile = cells[1]!;
+    expect(tile.kind === "file" && tile.glow).toBe(true);
   });
 });
 

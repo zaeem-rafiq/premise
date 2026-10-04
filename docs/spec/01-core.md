@@ -1,8 +1,8 @@
 # Premise core specification (01-core)
 
-Status: binding for implementation. Revision 2 (after review; the last section lists what changed). Sources: the architecture brief (decisions), the design brief (platform limits), the concept panel (the `stage-first` proposal and the three judges' must-fix lists).
+Status: binding for implementation. Revision 2 (after review), reconciled on 2026-10-04 with `02-tidepool.md`, `03-floor.md`, `04-build-plan.md` and the platform measurements. The last two sections list what changed: "Changes after review" and "Changes in reconciliation (2026-10-04)". Sources: the architecture brief (decisions), the design brief (platform limits), the concept panel (the `stage-first` proposal and the three judges' must-fix lists), the lead's reconciliation decisions.
 
-Scope: the rules and protocols of the pure core and the three Durable Objects. The Floor UI layout, the tide pool codebase and the Swarm scripts are specified elsewhere and consume the types defined here.
+Scope: the rules and protocols of the pure core and the three Durable Objects. The Floor UI layout (`03-floor.md`), the tide pool codebase and the Swarm scripts (`02-tidepool.md`) and the build plan (`04-build-plan.md`) are specified elsewhere and consume the types defined here. The agent's system prompt, the tool definitions exactly as a model receives them, how a heads-up is shown to a model, the context budgets and the seeded-intent measurement protocol are in `05-agent.md` (4.11). Where this file and another specification file disagree, this file wins.
 
 Conventions used in this file:
 
@@ -13,6 +13,7 @@ Conventions used in this file:
 - JSON in hashes is serialized with no insignificant whitespace. "Sorted" means ascending by UTF-16 code unit.
 - Constants are written `LIKE_THIS`. Their values are in Appendix C. A constant marked *calibrated* MUST be set from a measurement, and the measurement MUST be recorded next to the value.
 - Test vectors live in `docs/spec/premise-cases.json`. Their format is Appendix A. A vector cites rules by section number and rule id.
+- The **platform record** is `docs/measurements/spikes/2026-10-04-platform.md`: the measurements on the real Cloudflare service that decide section 15. The record numbers its experiments E1 to E9. They are not the decision-table rows E0 to E4 of section 7.2. This file and the other specification files therefore cite them as **X1 to X9**: X*n* is experiment E*n* of the platform record.
 - Related prior work: STORM (arXiv 2605.20563), CoAgent (arXiv 2606.15376) and the competition entry "dibs" also validate what agents relied on. This specification makes no priority claim. What Premise does differently is listed in section 1.
 
 ---
@@ -37,17 +38,23 @@ One name per thing. These words are used with exactly these meanings in code, ev
 | Why card | The record of one landing, as shown to a person. |
 | Who relies | Reverse lookup: which attempts and landings hold a premise on an entity. |
 | Swarm | Scripted (synthetic) agents using the same tool path. Always labelled SYNTHETIC. |
+| Synthetic attempt | An attempt whose agent is a script, not a model (`agent: "synthetic"`). This flag alone decides the SYNTHETIC banner and scripted triage (TR8). |
+| Synthetic pool | A pool in which at least one synthetic attempt was opened (`pool.state.synthetic`, EM1a). Its numbers are shown under the SYNTHETIC banner. |
+| Summary-only pool | A pool created with the flag `summary_only: true` (the Swarm pool and the soak pools). Its stream leaves out the per-step and per-premise events (EV6). The flag says nothing about who the agents are. |
 | Replay | A recorded event stream played through the same UI with no credentials. |
 | Entity | A named top-level part of a JavaScript ES module (section 2.3). Key `path#name`. |
 | Head | Trunk's current state of `main`: the last *accepted* landing (section 9.4). |
+| Landed commit | The commit of the last landing *confirmed* on `main` (`pool.state.landed_commit`, LP9). It is what the source `main` means to the app server and to a pool frame. It can be older than head. |
 | Attempt view | Head with the attempt's own edit operations replayed on top (section 5.2). |
 | Blind spot | An entity that an attempt's change adds a reference to and that the agent was never shown (section 6.4). |
 | Right of way | The starvation rule: a bounded priority for an attempt that was sent back twice (section 11.2). |
-| Card | A decision shown to the owner. Kinds: `held`, `choice`, `race`. |
+| Card | A decision shown to the owner. Kinds: `held`, `choice`, `race`. Its options are fixed by rule CD4. (The rail item that shows one attempt on the Floor is the "attempt card" of `03-floor.md`. It is not a Card.) |
 | Shown | What the agent's context actually holds for a premise: the version last returned by a read tool or carried by a heads-up item. Stored next to the pinned hash (3.2). |
 | Sweeping | An attempt is sweeping a directory or a search when its operations cover at least two of the members it found (or the only one) (7.2). |
 | Pull-back | A `confirm` that takes an attempt out of the landing queue (`submitted`, `validated` or `held` → `needs_confirm`). Counted next to go-arounds (GA3). |
-| Parked | A stopped attempt whose choice card is open. It stays classified so that "Try again" resumes on current facts (GL3a). |
+| Parked | A stopped attempt whose open choice card offers `retry`. It stays classified so that "Try again" resumes on current facts (GL3a). |
+| Resume | The call by which Trunk starts a stopped or landed Agent again after "Try again", an undo or a revert (RS1). |
+| Live frame, commit frame | A pool frame that follows a moving source (`main`, `plain`), or one that shows one fixed commit (Replay, card previews) (SE16a). |
 | Plain-merge repository | The second Artifacts repository of a pool: the "same changes, merged by plain git" pool and the preview commits (11.7, PV1). |
 | Preview commit | An immutable commit that holds head plus one attempt's operations, made when a held or race card opens (PV1). |
 | Model gate | The one Durable Object that every model call asks first: rate limits, spend cap, kill switch (13.3). |
@@ -210,6 +217,8 @@ For each entity of a module, one line: `<name>|<kind>|<export names, sorted, joi
 | Transcript, journal, mirror of operations and premises | Agent SQLite, checkpointed to the attempt repo | n/a |
 | Event stream | Floor SQLite | not rebuildable; Replay files are exports of it |
 
+- **RB0 (what "rebuildable from Artifacts" covers).** The brief asks that everything in Trunk's SQLite can be rebuilt from Artifacts. This table narrows that on purpose, and the limit is stated to the reader (README and the limits list of `03-floor.md` 5.12): the landed history is rebuilt in full from `main` and `refs/notes/premise`; after a rebuild from Artifacts, open cards close as `stale`, queued undo requests are gone, and agents in flight register again (3.6 steps 6 to 8).
+
 ### 3.2 Trunk Durable Object SQLite
 
 ```sql
@@ -217,7 +226,8 @@ CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID;
 -- keys: schema_version, hash_version, pool_id, head_seq, head_commit, head_tree,
 --       notes_commit, green_seq, green_commit, pool_state ('ready'|'rebuilding'|'paused'),
 --       pause_reason, next_batch_id, next_event_n, epoch (RB5), rebuild_cursor (RB3),
---       repo, repo_generation (S2), plain_commit, plain_through_seq (11.7)
+--       repo, repo_generation (S2), plain_commit, plain_through_seq (11.7),
+--       summary_only ('0'|'1', fixed at pool creation, PL1), synthetic ('0'|'1', EM1a)
 
 CREATE TABLE files (
   path        TEXT PRIMARY KEY,
@@ -267,6 +277,9 @@ CREATE TABLE attempts (
   change_id       TEXT NOT NULL UNIQUE,
   agent_kind      TEXT NOT NULL,          -- 'real' | 'synthetic'
   model           TEXT,
+  race            INTEGER NOT NULL DEFAULT 0, -- 1 while the attempt is a race candidate (RC1); cleared when it is chosen (RC7)
+  truth           TEXT,                   -- synthetic attempts only: JSON array of "<kind>:<key>" the scripted change truly depends on (TR8)
+  resumes         INTEGER NOT NULL DEFAULT 0, -- counts T19 and T21; sent as resume_n (RS1)
   state           TEXT NOT NULL,          -- section 9.1
   stop_reason     TEXT,
   go_arounds      INTEGER NOT NULL DEFAULT 0,
@@ -342,6 +355,7 @@ CREATE TABLE heads_ups (
   delivered_at INTEGER,                   -- set when a request arrives with ack >= hn (HU8)
   resolved_at  INTEGER,                   -- set when acknowledged in a submit
   statement    TEXT,
+  op_mark      INTEGER NOT NULL DEFAULT 0, -- HU12: the attempt's last op_seq when its go-around started (repair) or when it was created (info, confirm)
   PRIMARY KEY (attempt_id, hn)
 ) WITHOUT ROWID;
 
@@ -492,7 +506,7 @@ The `shown` value of a premise is what the agent's context holds, as opposed to 
 | `entity` | the entity hash the agent was last shown | `read` of the entity; any heads-up item for this premise that carries its source | B1 |
 | `query` | not used | | |
 
-Retention: `blobs` keeps a row while its `seq` is within the last `UNDO_WINDOW` landings or newer than `green_seq`. `outbox_chunks` rows are deleted when their batch is `pushed`. `landing_writes`, `landing_premises` and `landing_ops` may be dropped for landings older than `UNDO_WINDOW` (the note in Artifacts keeps them). `premises`, `ops` and `heads_ups` of an attempt are deleted when it lands (after its note is built) or stops without a card.
+Retention: `blobs` keeps a row while its `seq` is within the last `UNDO_WINDOW` landings or newer than `green_seq`. `outbox_chunks` rows are deleted when their batch is `pushed`. `landing_writes`, `landing_premises` and `landing_ops` may be dropped for landings older than `UNDO_WINDOW` (the note in Artifacts keeps them). `premises`, `ops` and `heads_ups` of an attempt are deleted when it lands (after its note is built), when it stops without becoming parked, or when the card of a parked attempt closes with an option other than `retry` (GL3a).
 
 Trunk keeps no in-memory git client and no state that is not in SQLite. Memory holds only caches that can be dropped.
 
@@ -501,6 +515,7 @@ Trunk keeps no in-memory git client and no state that is not in SQLite. Memory h
 ```sql
 CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID;
 -- keys: attempt_id, intent_id, change_id, pool_id, intent_text, agent_kind, model,
+--       revision, resumed_n (highest resume_n accepted, RS2),
 --       state, step, shown_hn (highest heads-up placed in the model's context),
 --       tokens_in, tokens_out, model_calls, started_at, deadline_at, stop_reason
 
@@ -556,18 +571,19 @@ CREATE TABLE checkpoints (
 Recovery rules (an evicted agent MUST end in a recorded state, never a silent stall):
 
 - **AG1.** Before every model call and every tool call, the agent writes the `journal` row and a `call` timer (AL1) at `deadline_at`. After the call it writes the transcript row and deletes the journal row in one transaction.
-- **AG2.** On start-up or alarm with a `journal` row present: a tool call is retried with the same `call_id` (Trunk returns the stored response, rule TA2); a model call is retried up to `MODEL_RETRIES` times with a new reservation (SE6). When retries are exhausted the attempt stops with `model_error` or `tool_timeout`, and Trunk is told (`attempt.stop`). On start-up with **no** `journal` row and a state of `working`, `going_around` or `needs_confirm`, the agent continues its loop at the next step (a deploy between two steps must not end the attempt).
+- **AG2.** On start-up or alarm with a `journal` row present: a tool call is retried with the same `call_id` (Trunk returns the stored response, rule TA2); a model call is retried up to `MODEL_RETRIES` times with a new reservation (SE6). When retries are exhausted the attempt stops with `model_error` or `tool_timeout`, and Trunk is told with the `stop` call (4.1, TA9). The Agent tells Trunk the same way whenever it ends its own attempt (AG3, AG4, the kill switch, an owner cancel, a scripted withdrawal); it repeats the call until Trunk answers. On start-up with **no** `journal` row and a state of `working`, `going_around` or `needs_confirm`, the agent continues its loop at the next step (a deploy between two steps must not end the attempt).
 - **AG3 (watchdog).** While the state is not `landed` or `stopped`, a `watchdog` timer is always set (`AGENT_WATCHDOG_MS`). The watchdog stops the attempt with `stalled` only when all of these hold: no `journal` row exists whose `deadline_at` is in the future; `step` has not changed since the previous watchdog run; and the agent is not in an **exempt wait**. Exempt waits: waiting for the owner on a card (`held`); waiting for a landing (`submitted`, `validated`, `accepted`); waiting for the model gate (SE8: a `gate` timer exists); `opened` while queued behind `MAX_REAL_AGENTS`.
 - **AG4.** Budgets: `MAX_STEPS`, `MAX_MODEL_CALLS`, `MAX_ATTEMPT_TOKENS`, `MAX_ATTEMPT_USD`, `ATTEMPT_TIMEOUT_MS`. Exceeding any stops the attempt with `budget` or `timeout`. A refusal by the global spend cap stops it with `spend_cap` (SE7), a different reason.
 - **AG5.** Checkpoints to the attempt repo are asynchronous and are never awaited by a tool call or a landing. A failed or missing attempt repo changes nothing on the landing path. Each provisioning result is reported as an `attempt.repo` event.
-- **AG6 (budgets after a reopen or a retry).** On T19 and T21 the step, model-call and time budgets are each extended by a fixed allowance (`RESUME_STEPS`, `RESUME_MODEL_CALLS`, `RESUME_TIMEOUT_MS`) counted from the resume. `MAX_ATTEMPT_TOKENS` and `MAX_ATTEMPT_USD` are never reset, so one attempt's total spend stays bounded whatever happens to it.
+- **AG6 (budgets after a reopen or a retry).** On T19 and T21 the step, model-call and time budgets are each extended by a fixed allowance (`RESUME_STEPS`, `RESUME_MODEL_CALLS`, `RESUME_TIMEOUT_MS`) counted from the resume. `MAX_ATTEMPT_TOKENS` and `MAX_ATTEMPT_USD` are never reset, so one attempt's total spend stays bounded whatever happens to it. The Agent applies the allowance when it accepts the `resume` call (RS2).
 - **AG7 (redaction).** Every string the Agent writes to its transcript, to an event or to the attempt repo passes `redact()` (SE5a) first.
+- **AG8 (an Agent that ended can be started again).** An Agent whose state is `landed` or `stopped` keeps its transcript, its mirrors and its `meta`. It sets no timer and makes no call. Only the `resume` call from Trunk (8.3, RS1 to RS5) starts it again. AG6 and AG8 are needed by "Try again" on the go-around-limit card, so they belong to every build, also one without Undo and without the green line.
 
 Timers (both Durable Objects). A Durable Object has one alarm slot, so several timers share it:
 
 ```sql
 CREATE TABLE timers (                     -- in Trunk and in every Agent
-  kind   TEXT NOT NULL,                   -- Trunk: 'tick' | 'push' | 'repush' | 'triage' | 'right_of_way' | 'rebuild' | 'green' | 'plain' | 'events'
+  kind   TEXT NOT NULL,                   -- Trunk: 'tick' | 'push' | 'repush' | 'resume' | 'triage' | 'right_of_way' | 'rebuild' | 'green' | 'plain' | 'events'
                                           -- Agent: 'call' | 'watchdog' | 'gate' | 'attempt_timeout'
   key    TEXT NOT NULL,                   -- '' when the kind has one instance
   due_at INTEGER NOT NULL,                -- ms since epoch
@@ -591,7 +607,7 @@ CREATE TABLE events (
   body TEXT NOT NULL                      -- JSON of the whole event (section 12)
 );
 CREATE TABLE sources (                    -- de-duplication of at-least-once delivery
-  source TEXT PRIMARY KEY,                -- 'trunk' | 'agent:<attempt_id>' | 'system'
+  source TEXT PRIMARY KEY,                -- 'trunk' | 'agent:<attempt_id>' | 'gate' | 'swarm' (EV2a); the Floor's own events need no row
   epoch  INTEGER NOT NULL DEFAULT 1,      -- RB5
   last_n INTEGER NOT NULL
 ) WITHOUT ROWID;
@@ -604,8 +620,9 @@ CREATE TABLE snapshots (                  -- reducer state for fast joins, in pa
 CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID;
 ```
 
-- **FS1 (bounded state).** The reducer state that is snapshotted holds: every in-flight attempt in full; for landed changes the last `FLOOR_KEEP_LANDINGS` landings in full and older ones as one summary line each; counters. An attempt of a synthetic pool is held as state, counters and its last heads-up only (EV6).
-- **FS2 (public reads).** Why cards, who-relies, metrics, landing notes and the current commit of each ref are answered from this Durable Object's reducer state. A public request never reaches Trunk (SE19).
+- **FS1 (bounded state).** The reducer state that is snapshotted holds: every in-flight attempt in full; for landed changes the last `FLOOR_KEEP_LANDINGS` landings in full and older ones as one summary line each; counters. An attempt of a `summary_only` pool is held as state, counters and its last heads-up only (EV6), whether its agent is real or synthetic.
+- **FS2 (public reads).** Why cards, who-relies, metrics, landing notes and the current commit of each ref are answered from this Durable Object's reducer state. A public request never reaches Trunk (SE19). The same state gives the app server what its generated modules need (`02-tidepool.md` 4.4): the `seq` of the landed commit, and for each path the `seq` of the last confirmed landing that changed it (from `landing.accepted.paths`, counted when its `landing.landed` arrives). Nothing the app server serves is read from Trunk's `files` table.
+- **FS3 (sockets).** Stream sockets are accepted with the WebSocket hibernation API, and the only per-socket state is the socket's attachment (EV7).
 
 ### 3.5 What lives in Artifacts
 
@@ -617,9 +634,9 @@ Pool repo:
 | `refs/heads/green` | The newest verified commit (section 11.5). |
 | `refs/notes/premise` | A notes commit chain. Its tree maps each landing commit id to one note blob, with fan-out `<first 2 hex>/<remaining 38 hex>`. |
 
-Plain-merge repository (one per pool, 11.7): `refs/heads/main` holds the "same changes, merged by plain git" pool; `refs/previews/<submit_id>` holds preview commits (PV1). Nothing on the landing path reads or writes it.
+Plain-merge repository (one per pool, 11.7): `refs/heads/main` holds the "same changes, merged by plain git" pool; `refs/previews/<submit_id>` holds preview commits (PV1; the fallback ref is in PV1a). Nothing on the landing path reads or writes it.
 
-Attempt repo (one per attempt, provisioned asynchronously, in a separate Artifacts namespace, SE22): `refs/heads/attempt` holds checkpoint commits whose tree contains `transcript.jsonl`, `ops.json`, `premises.json` and the attempt view of every touched file.
+Attempt repo (one per attempt, provisioned asynchronously by a fork off the landing path (S3), in a separate Artifacts namespace, SE22): `refs/heads/attempt` holds checkpoint commits whose tree contains `transcript.jsonl`, `ops.json`, `premises.json` and the attempt view of every touched file.
 
 **Commit** (one per landing). The object's bytes are exactly these lines, each ended by one LF, with one empty line before the message:
 
@@ -830,13 +847,13 @@ Rebuild from Artifacts, in order:
 
 - **RB5 (event numbering).** Events carry `(src, epoch, source_n)` (12.2). A rebuild from Artifacts starts `source_n` at 1 under a new `epoch`, which Trunk obtains from the Floor before it emits anything. The Floor accepts a higher epoch as a new sequence, so no event of the rebuilt Trunk is dropped as a duplicate.
 
-The mechanism that reads `refs/notes/premise` (binding read by ref, or a hand-built fetch) is decided by spike (section 15, S1).
+How the rebuild reads Artifacts (decided, section 15 S1 and S7). The binding resolves short branch names (`main`, `green`) and commit ids. It does not resolve `refs/notes/premise` or any full ref name (platform record, X4). So the rebuild takes the notes commit id from the remote's ref advertisement (`Pusher.readRefs`) and reads the notes tree and every note blob through the binding by object id (`NotesReader`). The fallback is a hand-built fetch of the notes ref.
 
 ---
 
 ## 4. Agent tool API
 
-Agents see and change code only through these seven tools. The Agent Durable Object calls Trunk; the model never holds a token and never reaches Artifacts.
+Agents see and change code only through these seven tools. The Agent Durable Object calls Trunk; the model never holds a token and never reaches Artifacts. This section fixes what each tool does and what Trunk answers. The name, description and JSON parameters of each tool exactly as a model receives them, and the system prompt, are in `05-agent.md` (4.11).
 
 ### 4.1 Envelope
 
@@ -885,7 +902,7 @@ Rules:
 - **TA7.** `premises` in the response lists: for a read tool, the premise it pinned (always, even when nothing changed), with its current flags; for `write`, `replace` and `submit`, every premise the call created and every premise on which it set a flag (`read`, `edit`, `derived`). Nothing else. A premise the call deleted is reported by the event `premise.removed`, not in the response.
 - **TA8 (bounded responses).** A response carries at most `MAX_HEADS_UPS_PER_RESPONSE` heads-ups and at most `RESPONSE_HEADS_UP_MAX_BYTES` of them, always the lowest numbers first. `heads_ups_more` tells the Agent to call `sync` before it shows anything beyond them.
 
-Two calls are not model tools. Only the Agent Durable Object makes them, and they record no premise and cost no step:
+Three calls are not model tools: `sync`, `register` and `stop`. Only the Agent Durable Object makes them (a model has no tool that reaches them), and they record no premise and cost no step. A fourth call goes the other way: `resume`, from Trunk to the Agent (8.3, RS1).
 
 ```ts
 type SyncRequest = { attempt_id: string; ack: number };
@@ -897,10 +914,20 @@ type RegisterRequest = {                       // after a rebuild from Artifacts
   agent_kind: "real" | "synthetic"; model: string | null;
   ops: Operation[];                            // current operations, in op_seq order
   read_premises: Array<{ kind: PremiseKind; key: string; hash: string; seq: number }>;
+  truth?: string[];                            // synthetic attempts only (TR8)
 };
 type RegisterResponse = { ok: true; heads_ups: HeadsUp[]; attempt: SyncResponse["attempt"] }
                       | { ok: false; error: "attempt_closed" | "pool_not_ready" | "invalid_args" };
+
+type AgentStopReason = "budget" | "spend_cap" | "timeout" | "model_error" | "tool_timeout"
+                     | "stalled" | "killed" | "cancelled" | "withdrawn";       // the stop reasons an Agent may report (9.1)
+type StopRequest  = { attempt_id: string; reason: AgentStopReason };
+type StopResponse = { ok: true; stop_reason: string; attempt: SyncResponse["attempt"] }
+                  | { ok: false; error: "attempt_unknown" | "attempt_closed" | "invalid_args" };
 ```
+
+- **TA9 (`stop`).** The Agent calls `stop` when it ends its own attempt: a budget or the time limit (AG4), the spend cap (SE7), exhausted retries (AG2), the watchdog (AG3), the kill switch (SE10), the owner's cancel (the route of 13.6 reaches the Agent, which then calls `stop` with `cancelled`), or a scripted withdrawal. Trunk runs transition T20 with that reason, in one transaction: the attempt is `stopped`, an open held card closes as `stale`, a race card is updated, and `attempt.state` is emitted. The call is idempotent: for an attempt that is already `stopped`, Trunk answers `ok: true` with the stored `stop_reason` and changes nothing. For an attempt in `accepted` or `landed` it answers `attempt_closed` (T20 does not apply; the change is landing or has landed), and the Agent takes its state from `sync`. A reason outside `AgentStopReason` is `invalid_args`: the other stop reasons of 9.1 are set by Trunk only.
+- **TA9a (`withdrawn`).** `withdrawn` means the agent itself decided that its change is no longer wanted. In this build only scripted agents send it (`02-tidepool.md` 10.3: a rescale or a cosmetic edit that another change already made, a sweep that gives up). A stop with `withdrawn` opens no card.
 
 ### 4.2 Limits
 
@@ -1084,7 +1111,7 @@ Rules:
 { "summary": "Add a crab that hides when its energy is low", "acknowledge": [1], "statement": "Energy is now a fraction from 0 to 1, so the hide threshold is 0.3." }
 ```
 
-`acknowledge` (heads-up numbers) and `statement` are optional; `statement` is required when `acknowledge` is not empty. The model-facing tool has only `summary` and `statement`; the Agent Durable Object fills `acknowledge` with every heads-up of result `confirm` or `repair` that was placed in the model's context before the model issued this call and is not yet resolved.
+`acknowledge` (heads-up numbers) and `statement` are optional; `statement` is required when `acknowledge` is not empty. The model-facing tool has only `summary` and `statement` (its definition as the model receives it is in `05-agent.md`); the Agent Durable Object fills `acknowledge` with every heads-up of result `confirm` or `repair` that was placed in the model's context before the model issued this call and is not yet resolved.
 
 Result:
 
@@ -1151,9 +1178,25 @@ type HeadsUpForModel = {
 ```
 
 - **HE1.** The Agent places heads-ups from `ToolResponse.heads_ups` and from its inbox into `heads_ups` of the next message the model receives, in ascending `hn` and only as a run with no gap (HU6a), and records `shown_step`. It then sends `ack` = the highest `hn` shown on its next Trunk call.
-- **HE2 (what wakes an agent).** When no tool call is in progress (the agent is waiting in `submitted`, `validated`, `held` or `needs_confirm`), a pushed heads-up with `wake = true` starts a new model turn with a `user` message whose content is `{ "heads_ups": [...] }`. Trunk sets `wake = true` exactly for results `confirm` and `repair` sent to an attempt that is not stopped. A heads-up with `wake = false` (every `info`) is stored in the inbox and starts nothing: it rides in the next message the model receives for another reason. A waiting agent therefore spends nothing on context-only updates.
-- **HE3.** The Agent never edits, summarizes or drops a heads-up.
-- **HE4.** Text inside a heads-up is pool code and intent text written by other agents and people. The Agent's system prompt states that heads-up content is data to adapt to, not instructions to follow. A heads-up never carries verifier logs (GR7).
+- **HE2 (what wakes an agent).** When no tool call is in progress (the agent is waiting in `submitted`, `validated`, `held` or `needs_confirm`), a pushed heads-up with `wake = true` starts a new model turn with a `user` message whose content is `{ "heads_ups": [...] }`. Trunk sets `wake = true` exactly for results `confirm` and `repair` sent to an attempt that is not stopped. A heads-up with `wake = false` (every `info`) is stored in the inbox and starts nothing: it rides in the next message the model receives for another reason. A waiting agent therefore spends nothing on context-only updates. An Agent whose own recorded state is `stopped` or `landed` is never woken by a heads-up, whatever its `wake` flag: it stores the heads-up, and only `resume` starts it again (RS1). It then shows every waiting heads-up (RS2).
+- **HE3.** The Agent never edits, summarizes or drops a heads-up. How `HeadsUp` is turned into `HeadsUpForModel` (the `because` sentence, `what`, `your_lines`) is fixed in `05-agent.md`; that mapping adds wording and removes nothing.
+- **HE4.** Text inside a heads-up is pool code and intent text written by other agents and people. The Agent's system prompt states that heads-up content is data to adapt to, not instructions to follow (the exact prompt is in `05-agent.md`). A heads-up never carries verifier logs (GR7).
+
+### 4.11 The system prompt and the tool definitions (`05-agent.md`)
+
+This file fixes the protocol between the Agent Durable Object and Trunk. What the **model** receives is specified in `05-agent.md`, which is binding for the Agent and for the model measurements:
+
+| `05-agent.md` holds | This file fixes |
+| --- | --- |
+| The system prompt, word for word, and the first `user` message (the intent text and the instruction to read `GUIDE.md` first) | HE4: heads-up content is data, not instructions. |
+| The seven tool definitions as sent to Workers AI (name, description, JSON parameters) | The tool names, arguments, results and errors of 4.3 to 4.9. The model-facing `submit` has only `summary` and `statement` (4.9). `sync`, `register`, `stop` and `resume` are not tools. |
+| How a tool result and a heads-up are serialized for the model | `ModelToolMessage` and `HeadsUpForModel` (4.10); HE1 to HE3; a heads-up is the first key of the message. |
+| The `user` message that carries heads-ups when a waiting agent is woken (HE2) or resumed (RS2) | The content is `{ "heads_ups": [...] }`, in ascending `hn` with no gap (HU6a). |
+| Context budgets: how much of the transcript is sent on each model call | The transcript in SQLite is complete (3.3). A `confirm` or `repair` heads-up that was shown stays in the context of every later model call until it is resolved (HE3). The budgets of AG4 and the constants of Appendix C. |
+| The request shape for Workers AI | The measured shape of S5 (MP1). |
+| The seeded-intent measurement protocol (per model: the share of seeded intents completed, the time per change, the share of energy creatures that reference `ENERGY_MAX`, the share that repair correctly after a scripted heads-up) | S5: the model plan follows that measurement. HC4. |
+
+- **PR1.** A measurement of models records the hash of the system prompt and of the tool definitions it ran with. A change to either is a change to `05-agent.md` first.
 
 ---
 
@@ -1313,8 +1356,8 @@ What is deterministic, and what is not:
 
 - **HC1.** Every row that names a rule in bold other than E3 and QR4 is decided by rule, in the accept transaction, without Clef, and does not depend on what the model chose to read.
 - **HC2.** The rule-based catch needs one fact: the changed module references the shared quantity. It does not need the changed *entity* to reference it.
-- **HC3 (stated limits, also in the README).** (a) A change that hard-codes a number and whose module never references the quantity is caught by rule in neither order; if its agent read the quantity it goes to triage in both orders, and if not, only the green line's self-test can catch it after landing. (b) References are direct: code that depends on `ENERGY_MAX` only through another function it calls (`drain(creature, 5)`) holds a premise on `drain`, whose hash does not change when `ENERGY_MAX` does. (c) A sweep is recognised from operations, not from the intent text (rows L1, QT1).
-- **HC4.** Because of HC3 (a), the tide pool specification requires every energy creature to take its starting energy from `ENERGY_MAX` (`02-tidepool.md`, TP16), and spike S5 measures, per model, the share of creature changes that reference it.
+- **HC3 (stated limits, also in the README).** (a) A change that hard-codes a number and whose module never references the quantity is caught by rule in neither order; if its agent read the quantity it goes to triage in both orders, and if not, only the green line's self-test could catch it after landing. The self-test checks that the pool is healthy, not that a creature does what its intent asked: in the platform record a crab written for the old scale passed every generic invariant after the rescale (it hid for all 3,000 ticks). So this case can go unnoticed, and the README says so. (b) References are direct: code that depends on `ENERGY_MAX` only through another function it calls (`drain(creature, 5)`) holds a premise on `drain`, whose hash does not change when `ENERGY_MAX` does. (c) A sweep is recognised from operations, not from the intent text (rows L1, QT1).
+- **HC4.** Because of HC3 (a), the tide pool specification requires every energy creature to take its starting energy from `ENERGY_MAX` (`02-tidepool.md`, TP16), and the seeded-intent measurement (S5; protocol in `05-agent.md`) reports, per model, the share of creature changes that reference it.
 
 ---
 
@@ -1444,14 +1487,14 @@ Rows E3, F4, F6, QT2 and QR4.
 - **TR2.** Clef is called **after** the transaction commits, outside the landing path. An attempt with a `pending_triage` premise cannot be placed in a batch, and a held card cannot be approved for it (T13).
 - **TR3 (outcome).** When the answer arrives and its `asked_op_seq` is current (V7), the judgment is closed and the premise status set. Results `repair` and `confirm` create a new heads-up of that result. Result `holds` creates no heads-up: the diff was already delivered. Every outcome emits `premise.judged`.
 - **TR4.** An answer whose `asked_op_seq` is not current, or whose judgment is already closed (V7, V7a), is discarded and recorded in `judgments.clef_error` as `stale`.
-- **TR5 (known unavailable).** When triage is known to be unavailable at classification time (`CLEF_TRIAGE = off`, kill switch set, or the attempt's `Triage` implementation answers synchronously), the outcome is decided inside the transaction: `confirm` with reason `triage_unavailable` (or the scripted answer), in the same heads-up, with no `pending` item. This is the behaviour of a build without Clef.
+- **TR5 (decided inside the transaction).** When the attempt's triage is a `SyncTriage` (S6), the outcome is decided inside the transaction, with no `await` (SY2) and no `pending` item. This is the case when triage is known to be unavailable at classification time (`CLEF_TRIAGE = off` or the kill switch is set: `OffTriage`) and for every synthetic attempt (`ScriptedTriage`, TR8). `OffTriage` answers unavailable for every premise: `confirm` with reason `triage_unavailable`, which is the behaviour of a build without Clef. A scripted answer maps through the table below like a Clef answer. The item is in the batch's heads-up with its final result: `repair`, `confirm`, or `holds` (an info-level item with the diff, so a re-affirmation is never silent). No Clef call is made and no `triage` timer is set.
 - **TR6 (no lost question).** `CLEF_TIMEOUT_MS` starts when the request is dispatched. A `triage` timer (AL1) exists while any judgment is pending. A judgment pending past its deadline is unavailable. On start-up, a pending judgment with no request in flight is asked again once (`tries = 1`); if that also passes its deadline it is unavailable (vector `C52`).
 
 Request. One request per attempt per batch carries every pending premise of that attempt, one question each, at most `CLEF_MAX_QUESTIONS` (more than that: the rest are unavailable). Shape from the saved Clef documentation:
 
 ```ts
-const response = await env.AI.run(CLEF_TRIAGE_MODEL_ID, {      // "@cf/cloudflare/clef-flash"
-  model: CLEF_TRIAGE_MODEL,                                    // "clef-flash"
+const response = await env.AI.run(CLEF_TRIAGE_MODEL_ID, {      // "@cf/cloudflare/clef" (S6; the fallback is "@cf/cloudflare/clef-flash")
+  model: CLEF_TRIAGE_MODEL,                                    // "clef" (fallback "clef-flash")
   state: {
     intent: "a crab that hides when its energy is low",
     patch: [                                                   // added and altered entities, as in the attempt view
@@ -1486,7 +1529,13 @@ const p = response.answers.p1.noul;   // probability, 0 to 1
 - For a listing or query premise, `read_then` and `is_now` are the JSON arrays of members, and `added` lists the gained members with their source.
 - For row QR4 the roles are swapped and the same question is asked: `intent` and `patch` are the **landed** change's intent and its added and altered entities; `read_then` is *E* at head (what the landed change's agent read); `is_now` is *E* in the asking attempt's view (what it is being changed to); `changed_by_intent` is the asking attempt's intent.
 - **TR7 (never judge a cut patch).** If the serialized `state` exceeds `CLEF_STATE_MAX_CHARS`, the call is not made and the outcome is unavailable. Nothing is dropped from `patch` to make it fit. If the response reports `usage.input_tokens` at or above `CLEF_INPUT_TOKEN_LIMIT`, the answer is discarded as unavailable (the service may have truncated the state).
-- **TR8 (synthetic attempts).** An attempt with `agent_kind = synthetic` never calls Clef. Its `Triage` implementation is `ScriptedTriage`: it answers synchronously (TR5) from the ground-truth label of the canned change, and the judgment records `clef_model = "scripted"`. Swarm numbers therefore measure the protocol, not Clef, and say so.
+- **TR8 (synthetic attempts).** An attempt with `agent_kind = synthetic` never calls Clef, in any pool. Its triage is `ScriptedTriage`, a `SyncTriage` (S6): it answers inside the transaction (TR5) from the attempt's **truth list**, the premises the canned change truly depends on (`attempts.truth`, a JSON array of `<kind>:<key>` strings, for example `entity:world/energy.js#ENERGY_MAX`; `02-tidepool.md` 10.3 gives the list of each pattern). The list reaches Trunk when the synthetic attempt is opened, and again in `register` after a rebuild. The answer is a pure function `scriptedAnswer(truth, premise, changed)`:
+  - Which list: for rows E3, F4, F6 and QT2 the attempt's own list. For row QR4 the list of the **landed** change (the reader), and the premise is that change's frozen premise on *E*.
+  - No list (in row QR4, a landed change of a real agent; or an attempt that was opened without one): `null`, that is unavailable.
+  - Otherwise `p = 1` when the premise's `<kind>:<key>` is in the list, or, for a `file` premise, when an entity of that file whose hash changed (the set *D* of 7.2) is in the list;
+  - and `p = 0` in every other case.
+
+  With the mapping below, `p = 1` gives `repair` (`triage_depends`), `p = 0` gives `holds` (`reaffirmed`, delivered as an info-level item, never a `confirm`), and `null` gives `confirm` (`triage_unavailable`). The judgment records `class = triage`, `clef_model = "scripted"` and `clef_p`. Swarm numbers therefore measure the protocol, not Clef, and say so.
 - **TR9.** Clef calls go through the model gate (SE6) with their own per-minute bucket. A refusal by the bucket, the spend cap or the kill switch is unavailable.
 
 Mapping (constants `T_REPAIR` and `T_CONFIRM` are *calibrated*, with `T_CONFIRM < T_REPAIR`):
@@ -1512,7 +1561,7 @@ Mapping (constants `T_REPAIR` and `T_CONFIRM` are *calibrated*, with `T_CONFIRM 
 
 One `judgments` row per classified premise: attempt, premise kind and key, old and new hash, cause and `cause_seq`, the row id (`rule`), `class` (`rule` or `triage`), result, reason, and for triage `asked_op_seq`, the Clef model, probability, latency, error and the two thresholds in force. Judgments of an attempt are copied into its note when it lands. Acknowledgement statements are stored with the heads-up and copied to `go_arounds` or `confirms` in the note.
 
-- **JE1 (events).** One `premise.judged` event when the judgment is created (`result: null` for a pending triage) and a second one when a pending triage is closed (TR3, V7, V7a). For attempts of a synthetic pool, judgments whose result is `holds` with no heads-up (F2, L3, QT3, QR2, QO2) are stored but emit no event (EV6).
+- **JE1 (events).** One `premise.judged` event when the judgment is created (`result: null` for a pending triage) and a second one when a pending triage is closed (TR3, V7, V7a). In a `summary_only` pool, judgments whose result is `holds` with no heads-up (F2, L3, QT3, QR2, QO2) are stored but emit no event (EV6).
 - **JE2.** A folded file item (HU2a) is a judgment like any other; it only has no heads-up item of its own.
 
 ---
@@ -1598,6 +1647,23 @@ Three moments are distinguished:
 - **HU7 (consistency).** Because of HU1 and TR1, any tool response with `head_seq >= s` already contains every heads-up caused by landings up to `s`, including an `info` item for each triage that is still pending. An agent can never see post-landing content without the diff for that landing.
 - **HU8 (delivered).** A heads-up is delivered when Trunk receives a request (tool or sync) with `ack >= hn`. `ack` is the Agent's statement that the heads-up is in the model's context (HE1).
 - **HU9 (resolved).** A heads-up of result `confirm` or `repair` is resolved only by a `submit` that lists it in `acknowledge` (CK1). An `info` heads-up needs no resolution and never blocks a landing (9.3).
+- **HU12 (`changed`: did the agent change anything).** When a submit resolves a heads-up, Trunk emits `headsup.resolved` with `result`, `go_around` and `changed`. For a heads-up of result `repair`, `changed` is `false` exactly when the attempt's current operations at the resolving submit are identical to its current operations at the moment its go-around started, before any drop (OP6) by a heads-up of that go-around: no operation was accepted and none was dropped since. Every `repair` heads-up of one go-around that one submit resolves carries the same value. For a heads-up of result `confirm` the comparison is with the operations at the moment the heads-up was created. Trunk decides it from its own tables, with no event from the agent: `heads_ups.op_mark` holds the attempt's last `op_seq` at that moment, and `changed` is true when the attempt's last `op_seq` is now greater, or when a heads-up created since then has a non-empty `dropped_ops`. This field is what lets every pool, also a `summary_only` pool whose stream has no `op.recorded`, compute the false-abort rate (14.4).
+
+**Starting an Agent again (`resume`).** A heads-up push wakes an agent that is waiting. It does not start an Agent whose attempt had ended. Two transitions put an ended attempt back in flight: T19 (a landed change is reopened by an undo or a revert; its Agent is in `landed`) and T21 (the owner taps "Try again" on a parked attempt; its Agent is in `stopped`, and the waiting heads-ups were created with `wake = false`, GL3a). For both, Trunk calls the Agent:
+
+```ts
+// Trunk -> Agent Durable Object. Not a tool. Sent after the transaction of T19 or T21 has committed.
+type ResumeRequest  = { attempt_id: string; revision: number; cause: "retry" | "undo" | "revert";
+                        resume_n: number };              // attempts.resumes after the transition: 1, 2, 3, ...
+type ResumeResponse = { ok: true; resume_n: number }
+                    | { ok: false; error: "model_unavailable" | "budget" | "attempt_unknown" };
+```
+
+- **RS1 (when, and at least once).** In the transaction of T19 or T21 Trunk adds 1 to `attempts.resumes` and emits `attempt.reopened { cause, revision, model_changed }`. After the commit it sends `resume` to the attempt's Agent Durable Object. Like the heads-up push (HU5) the call is repeated every `HEADS_UP_REPUSH_MS` (the `resume` timer, AL1) until the Agent answers, for at most `RESUME_ACK_TIMEOUT_MS` from the first send. Nothing on the landing path waits for it.
+- **RS2 (what the Agent does).** On a `resume` whose `resume_n` is greater than its stored `resumed_n`, the Agent, in one transaction: stores `resumed_n` and `revision`; clears `stop_reason`; extends its budgets (AG6); sets the `watchdog` and `attempt_timeout` timers; and writes the journal row of its next step. It then answers `ok`. Its next step is a `sync` with its current `ack`: the response gives it the state Trunk set (`going_around`, `needs_confirm` or `working`) and every heads-up it has not shown. It places them, in order and without a gap (HU6a), in one `user` message and starts a model turn, **whatever their `wake` flag**. When there is no heads-up to show (T21 into `working`), the `user` message is the resume message of `05-agent.md`. A `resume` with `resume_n <= resumed_n` is answered `ok` and changes nothing.
+- **RS3 (same author, or say so).** The Agent resumes with the model and the transcript recorded for the attempt (UN6). It answers `model_unavailable` when that model is no longer in the model plan (S5), and `budget` when `MAX_ATTEMPT_TOKENS` or `MAX_ATTEMPT_USD` is already used up (AG6: these two are never extended).
+- **RS4 (failure is recorded, never a silent stall).** If the Agent answers `ok: false`, or no `ok` arrived within `RESUME_ACK_TIMEOUT_MS`, Trunk stops the attempt with `reopen_failed` (transition T20r) and opens the `choice` card of UN6 (options `new_attempt` and `stop`). An attempt that was put back in flight therefore either runs or is on a card; it never sits in `going_around` with nobody working on it.
+- **RS5 (scripted agents).** A scripted agent (`02-tidepool.md` section 10) implements `resume` like a real one: it calls `sync` and answers the waiting heads-ups by its pattern.
 
 ### 8.4 What the agent must do
 
@@ -1628,7 +1694,7 @@ No write, replace or submit is accepted until every heads-up is delivered (TA3).
 | `landed` | Its commit is on `main`. |
 | `stopped` | Ended without landing, or undone. `stop_reason` says why. A stopped attempt with an open `choice` card that offers `retry` is **parked** (GL3a). |
 
-Stop reasons: `go_around_limit`, `contradiction`, `revert_limit`, `reopen_failed`, `declined`, `not_chosen`, `undone`, `budget`, `spend_cap`, `timeout`, `model_error`, `tool_timeout`, `stalled`, `killed`, `cancelled` (owner), `lost` (3.6 step 8).
+Stop reasons (17). Set by Trunk only: `go_around_limit`, `contradiction`, `revert_limit`, `reopen_failed`, `declined`, `not_chosen`, `undone`, `lost` (3.6 step 8). Reported by the Agent through the `stop` call (`AgentStopReason`, TA9): `budget`, `spend_cap`, `timeout`, `model_error`, `tool_timeout`, `stalled`, `killed`, `cancelled` (owner), `withdrawn` (the agent ended its own attempt because its change is no longer wanted, TA9a).
 
 ### 9.2 Transitions
 
@@ -1639,7 +1705,7 @@ Stop reasons: `go_around_limit`, `contradiction`, `revert_limit`, `reopen_failed
 | T1 | `opened` | first tool call | | `working` | |
 | T2 | `working`, `going_around`, `needs_confirm` | submit, all checks pass | tier `auto`, nothing awaited | `validated` | `submit_id` and `validated_at` set |
 | T3 | same | submit, all checks pass | a Clef answer is awaited | `submitted` | `submit_id` set |
-| T4 | same | submit, all checks pass | tier `held`, or the attempt is a race candidate | `held` | `submit_id` set; card opened (held) or updated (race) |
+| T4 | same | submit, all checks pass | tier `held`, or the attempt is a race candidate (`attempts.race = 1`; a chosen candidate no longer is one, RC7) | `held` | `submit_id` set; card opened (held) or updated (race). Built in every build (HD1). |
 | T5 | same | submit answers `needs_confirm` | | `needs_confirm` | |
 | T6 | same | submit answers `go_around` | | `going_around` | counted by GA1 through T8 or T10a |
 | T7 | same | submit answers `rejected` | | unchanged | |
@@ -1651,17 +1717,18 @@ Stop reasons: `go_around_limit`, `contradiction`, `revert_limit`, `reopen_failed
 | T11 | `submitted`, `validated`, `held` | a heads-up of result `confirm` is created | `sent_back < GO_AROUND_LIMIT` | `needs_confirm` | a pull-back: `pull_backs += 1`; `submit_id`, `validated_at`, `approved_by` cleared; an open held card is closed as `stale`; right of way checked (RW1) |
 | T11s | same as T11 | same | `sent_back >= GO_AROUND_LIMIT` | `stopped` (`go_around_limit`) | choice card (11.1); parked; the heads-up waits |
 | T12 | `submitted` | awaited answers arrive | all premises hold | `validated` or `held` | `validated_at` set when the target is `validated` |
-| T13 | `held` | owner taps Land or Land now (or chooses this race candidate) | card open; the recomputed `submit_id` equals the card's; all premises hold (none pending, triage included); no unresolved `confirm` or `repair` heads-up | `validated` | `approved_by`, `validated_at` set; Land now also sets `bypass_row` (RW5) |
-| T14 | `held` | owner taps Decline; or another race candidate is chosen | | `stopped` (`declined` / `not_chosen`) | |
+| T13 | `held` | owner taps Land or Land now (or chooses this race candidate) | card open; the recomputed `submit_id` equals the card's; all premises hold (none pending, triage included); no unresolved `confirm` or `repair` heads-up | `validated` | `approved_by`, `validated_at` set; Land now also sets `bypass_row` (RW5); a chosen race candidate's `race` flag is cleared (RC7). Built in every build (HD1). |
+| T14 | `held` | owner taps Decline; or another race candidate is chosen | | `stopped` (`declined` / `not_chosen`) | Built in every build (HD1). |
 | T15 | `validated` | batch tick includes it | 9.4 | `accepted` | |
 | T16 | `accepted` | push confirmed | 9.6 | `landed` | intent → `landed` |
 | T17 | `accepted` | pool rebuilt after divergence, and its change is not on the rebuilt `main` | 3.6 step 7 | `going_around` | counted as a go-around (T8 guards apply); heads-up with cause `landing`, reason `push_lost`, pushed to the Agent |
 | T17a | `accepted` | pool rebuilt after divergence, and its change is on the rebuilt `main` | 3.6 step 7 | `landed` | |
 | T18 | `landed` | this landing is the target of an undo | 11.3 | `stopped` (`undone`) | |
-| T19 | `landed` | this landing is reverted as a dependent, or by the green line | 11.3, 11.5; `revision < MAX_REVISIONS` | `going_around` | `revision += 1`; `go_arounds += 1` (the count continues); premises and operations reloaded from the landing (UN8); budgets extended (AG6); right of way cleared |
-| T19s | `landed` | same | `revision = MAX_REVISIONS` | `stopped` (`revert_limit`) | choice card (11.1); the landing is still reverted |
-| T20 | any state except `accepted`, `landed`, `stopped` | budget, spend cap, time-out, model error, stall, kill switch, owner cancel, lost | | `stopped` (reason) | an open held card is closed as `stale`; a race card is updated |
-| T21 | `stopped` and parked | owner chooses `retry` on the choice card | | `going_around` when a `repair` heads-up is unresolved; else `needs_confirm` when a `confirm` heads-up is unresolved; else `working` | `go_arounds = 0`, `pull_backs = 0`, then GA1 counts the entry into `going_around` (so `go_arounds = 1`); right of way granted; budgets extended (AG6); card closed |
+| T19 | `landed` | this landing is reverted as a dependent, or by the green line | 11.3, 11.5; `revision < MAX_REVISIONS` | `going_around` | `revision += 1`; `go_arounds += 1` (the count continues); premises and operations reloaded from the landing (UN8); budgets extended (AG6); right of way cleared; `resumes += 1` and `resume` sent to the Agent (RS1) |
+| T19s | `landed` | same | `revision >= MAX_REVISIONS` | `stopped` (`revert_limit`) | choice card (11.1, GL6); the landing is still reverted; premises and operations are reloaded from the landing as in T19 (UN8), so the attempt is parked (GL3a); `revision` is not changed |
+| T20 | any state except `accepted`, `landed`, `stopped` | the Agent's `stop` call (TA9): budget, spend cap, time-out, model error, tool time-out, stall, kill switch, owner cancel, withdrawn. Or Trunk finds the Agent lost (3.6 step 8). | | `stopped` (reason) | an open held card is closed as `stale`; a race card is updated |
+| T20r | `going_around`, `needs_confirm`, `working` | the `resume` call of RS1 was refused, or was not answered within `RESUME_ACK_TIMEOUT_MS` (RS4) | the attempt took no step since T19 or T21 | `stopped` (`reopen_failed`) | choice card of UN6 (reason `reopen_failed`, options `new_attempt` and `stop`); the attempt is not parked: its premises and operations are deleted |
+| T21 | `stopped` and parked | owner chooses `retry` on the choice card | | `going_around` when a `repair` heads-up is unresolved; else `needs_confirm` when a `confirm` heads-up is unresolved; else `working` | `go_arounds = 0`, `pull_backs = 0`, then GA1 counts the entry into `going_around` (so `go_arounds = 1`); right of way granted; budgets extended (AG6); card closed; `resumes += 1` and `resume` sent to the Agent (RS1); on a card of reason `revert_limit` also `revision += 1` (GL6) |
 | T22 | `submitted`, `validated`, `held` | a `write` or `replace` is accepted (TA4) | | `working` | `submit_id`, `validated_at`, `tier`, `approved_by` cleared; an open held card is closed as `stale`; a race card is updated |
 
 - **GA0.** For a `repair` heads-up the guards are checked in this order: T10 (join), T9c, T9, then T8 or T10a.
@@ -1718,7 +1785,7 @@ All of this is pure code with no Cloudflare imports. Tests compare every object 
 ### 9.6 Outbox and push
 
 - **LP3.** A landing is durably recorded (step 5) before any network call. The push reads only the outbox.
-- **LP4 (compare-and-swap).** One receive-pack request updates `refs/heads/main` from `old_main` to `new_main` and `refs/notes/premise` from `old_notes` to `new_notes`. The server applies each command only if the ref still has the old value. If the server offers the `atomic` capability it is requested. Whether a two-ref push is atomic on Artifacts is decided by spike (S1); the protocol below is correct either way.
+- **LP4 (compare-and-swap).** One receive-pack request updates `refs/heads/main` from `old_main` to `new_main` and `refs/notes/premise` from `old_notes` to `new_notes`. The server applies each command only if the ref still has the old value. If the server offers the `atomic` capability it is requested. Measured (S1; platform record, X3 and X8): Artifacts does not advertise `atomic`, and with one stale old id it refused **both** commands, in both command orders. So one request lands `main` and the notes together or not at all. Trunk does not rely on that: after any result that is not all-ok it reads both refs and decides by value (LP5), and the `retry_notes` and `retry_main` rows stay in the protocol and in the vectors, so the protocol is correct on a server that applies one command only.
 - **LP5 (result, decided by ref values).** If the server reports both refs `ok`: outbox → `pushed`; `pushed_at` set on the batch's landings; members → `landed` (T16); events `batch.pushed` and one `landing.landed` per landing; `outbox_chunks` of the batch are deleted. After **any other** result (a rejection of either ref for any reason, a transport error, a time-out after `PUSH_TIMEOUT_MS`, a 5xx, a missing report) Trunk reads the current value of both refs from the remote's ref advertisement (`Pusher.readRefs`, never a binding read that may lag) and decides by value. It never interprets the server's rejection text.
 
   | `main` is | notes ref is | Outcome | Vector step action |
@@ -1783,14 +1850,16 @@ Path: `.premise/policy.json` in the pool repo, read from head at each submit. Th
   ],
   "globals": ["Math", "Number", "String", "Boolean", "Array", "Object", "JSON", "Map", "Set",
               "Infinity", "NaN", "undefined", "isFinite", "isNaN", "parseInt", "parseFloat"],
-  "limits": { "max_paths": 16, "max_change_bytes": 65536 }
+  "limits": { "max_paths": 64, "max_change_bytes": 65536 }
 }
 ```
+
+`max_paths` is 64, the cap of 4.2, so that a sweep over every creature is one change while the pool has fewer than 64 kinds. (Reconciliation, finding F31: the file said 16, which undid the raise of `MAX_PATHS` to 64. `02-tidepool.md` section 6 and `seeds/tidepool/.premise/policy.json` MUST carry the same line. A pool whose policy file still says 16 is limited to 16 paths, because the policy file in the pool decides, PO4.)
 
 - **PO1 (globs).** `*` matches within one path segment; `**` matches any number of segments. Rules are tried in order; the first rule with a matching pattern gives the path's tier; no match gives `default`.
 - **PO2.** A change's tier is `held` if any touched path (written, created or deleted) is `held`; otherwise `auto`.
 - **PO3 (fail closed).** A missing, unreadable or invalid policy file makes every path `held`. Unknown keys are an error. `.premise/**` is always `held`, whatever the file says.
-- **PO4.** `globals` is the allow list for CK6. If absent, the list shown above applies. `limits` may only lower the limits of 4.2.
+- **PO4.** `globals` is the allow list for CK6. If absent, the list shown above applies. That list is the constant `DEFAULT_GLOBALS` of the `protocol` module (Appendix C). A part of the system that cannot read the policy file, such as the pool host inside the sandboxed frame (`.premise/` is not served, SE15), uses `DEFAULT_GLOBALS`. `limits` may only lower the limits of 4.2.
 - **PO5.** A change is judged twice, by the same rules: at submit (CK9) with the policy at head, and in the tick (9.4 step 3c) with the policy of the running state, that is after every earlier member of the batch. A change that itself edits the policy is judged by the policy before the change (and is always `held`, PO3).
 
 ### 10.2 Held-change flow
@@ -1805,12 +1874,23 @@ Path: `.premise/policy.json` in the pool repo, read from head at each submit. Th
 
 `policy.approved_by`, `approved_at` and the option chosen go into the note.
 
+- **HD1 (the held tier fails closed in every build).** Transitions T4, T13 and T14 exist in every build, whatever `features.held` says (FJ1). In a build where `features.held` is false they have their **minimal form**: a submit whose tier is `held` puts the attempt in `held` and emits `card.opened` for a card of kind `held` with `preview: null`, `risk: null`, an empty blast radius and the two options `land` and `decline`; nothing lands until the owner taps `land` (T13); `decline` stops the attempt (T14). The card still closes as `stale` by step 3. `features.held = true` adds the rest of this section: what the card shows (step 2: preview commits, blast radius, risk answers), the sentence of step 4 and the option `land_now` (step 5). So there is no build in which a change to a held path lands without the owner's tap or waits with no way to act.
+
 **Previews.**
 
 - **PV1.** When a held or race card opens for a `submit_id`, Trunk builds the attempt's preview tree (head plus the attempt's operations at that moment) as one parentless commit and pushes it to the pool's plain-merge repository (11.7) under `refs/previews/<submit_id>`. This happens after the transaction, off the landing path, with the pack code of 9.5. Trunk then emits `card.updated` with `preview` filled.
 - **PV2.** "Before" is `{ repo: "main", commit: <the last pushed commit of main when the card opened> }`. "After" is `{ repo: "plain", commit: <the preview commit> }`. Both are immutable commit addresses served by the app server from Artifacts, so a preview needs no call to Trunk, can be cached, and plays in Replay.
 - **PV3.** A preview that fails to build or push leaves `preview.after` empty and sets `preview.error` to a code; the card stays usable. A card closed as `stale` keeps its preview commit (the ref is not deleted).
 - **PV4.** There is no route that serves a live attempt view. Unlanded agent code is reachable only as a preview commit of an open or past card, that is only after it passed CK0 to CK8 (parse, imports, allowed globals), and it runs under the same sandbox as landed code (SE13).
+- **PV1a (reading a preview commit; fallback).** The app server reads a preview commit through the binding by commit id (S7). The platform record measured such reads for commits on branches and tags only; a commit reachable only from `refs/previews/*` was not measured. If that read fails (the "after" frame of a held card does not load), Trunk pushes previews to the branch `refs/heads/previews/<submit_id>` of the plain-merge repository instead. The constant `PREVIEW_REF_PREFIX` holds the prefix in use (`refs/previews/`, or `refs/heads/previews/`). Nothing else changes: the address is still the commit id.
+- **PV5 (frame addresses and source segments).** A `FrameAddress` (10.3) names one unchanging tree. The app server (`02-tidepool.md` 4.1, 4.2) serves it under these source segments, which the `protocol` module's `frameUrl` builds:
+
+  | `FrameAddress` | Source segment | Page address | Version token |
+  | --- | --- | --- | --- |
+  | `{ repo: "main", commit }` | `<40 hex>`: that commit of the pool repo | `/pool/<pool>/<40 hex>/` | `c-<40 hex>` |
+  | `{ repo: "plain", commit }` | `p-<40 hex>`: that commit of the pool's plain-merge repository (a plain-merge landing or a preview commit) | `/pool/<pool>/p-<40 hex>/` | `p-<40 hex>` |
+
+  The moving sources are `main`, `green` and `plain` (SE19). There is no source for an attempt (PV4): the segment `a_<ULID>` and the version token `a-…` do not exist.
 
 ### 10.3 Card type
 
@@ -1845,7 +1925,20 @@ type RiskAnswers = {
 };
 ```
 
-- **CD1.** `card.closed.action` is the `CardOption` the owner chose (for `choose`, with the attempt id in `reason`), or `stale` (closed by the system because its attempt changed), or `superseded` (a race card whose last candidate stopped).
+- **CD1.** `card.closed.action` is the `CardOption` the owner chose, or `stale` (closed by the system because its attempt changed), or `superseded` (a race card whose last candidate stopped). `card.closed.attempt_id` is the chosen candidate for `choose` and `null` otherwise. `card.closed.reason` holds only the reason the owner typed (optional, for `decline` and `choose`; at most `MAX_STATEMENT_CHARS`), or `null`.
+- **CD4 (the options of each card).** `CardOption` is the only set of option ids. Trunk fills `Card.options` from this table, in this order, and the card route (13.6) accepts no other id for that card. An id that the card does not offer is refused with `invalid_args`.
+
+  | Kind | Reason | Options, in order | What the option does |
+  | --- | --- | --- | --- |
+  | `held` | `held_path`, `risk` | `land`; `land_now` (only while the case of 10.2 step 4 holds: the blast radius lists an attempt with right of way under `repair` or `confirm`; and only when `features.held` is true); `decline` | T13; T13 with `bypass_row`; T14 (`declined`) |
+  | `race` | `race` | `choose` (the request carries `attempt_id`, a candidate with `can_choose: true`) | T13 for that candidate, T14 (`not_chosen`) for the others (RC4) |
+  | `choice` | `go_around_limit` | `retry`, `stop` | T21; the attempt stays stopped (GL2) |
+  | `choice` | `contradiction` | `keep_landed`, `retry` | the attempt stays stopped; T21 (GL3) |
+  | `choice` | `revert_limit` | `retry`, `stop` | T21 with `revision += 1`; the attempt stays stopped (GL6) |
+  | `choice` | `reopen_failed` | `new_attempt`, `stop` | a new attempt for the same intent; the attempt stays stopped (UN6) |
+
+  `stop` and `keep_landed` change no attempt state: the attempt is already `stopped`. They close the card, delete the attempt's premises and operations (GL3a), and set the intent to `stopped` when it has no other attempt in flight or landed.
+- **CD5 (card texts).** `Card.title`, `Card.body` and `Card.options[].label` are filled by Trunk from the templates of the shared `copy` module (`03-floor.md` 5.10), which is pure and has no Cloudflare import. The Floor shows them as sent. The ids, not the labels, are what the route accepts.
 - **CD2.** `card.updated` is emitted whenever a field of an open card changes: risk answers arrive, a preview arrives, a race candidate changes state, or a batch changes the blast radius (9.4 step 5).
 - **CD3.** In the vectors, `cards[].blast_radius` is the blast radius of the card's first attempt, without `right_of_way`.
 
@@ -1903,7 +1996,8 @@ Answers are read from `response.answers.<id>.noul`.
 - **GL3 (contradiction).** When rule E1 gives `repair` for entity *K* to an attempt that already received an E1 `repair` for the same *K* earlier (found in `judgments`), and the landing that caused the newer one belongs to **an intent other than the attempt's own**, the attempt stops with `contradiction` instead of going around, and a `choice` card with reason `contradiction` opens. A landing of the attempt's own intent (a Race sibling) is an ordinary go-around (vector `C54`). Body: "<requester A> asked: '<intent A>'. <requester B> asked: '<intent B>'. Both change <entity name>." Options: `keep_landed` (the attempt stays stopped), `retry` (T21: the attempt adapts on top of what landed). The card's `attempt_ids` are the stopped attempt followed by the attempt whose landing caused the stop.
 - **GL3a (parked attempts stay classified).** When an attempt stops by GL1, GL3 or T19s, the heads-up that caused the stop is still created (so operations are dropped by OP6 and premises pinned as usual). While its choice card is open the attempt is **parked**: it keeps its premises and operations, it is classified at every batch like an in-flight attempt (7.1), and the resulting heads-ups are created with `wake = false` and wait. No counter changes while it is parked. When the card closes with any option other than `retry`, the attempt's premises and operations are deleted from Trunk.
 - **GL4 (optional, with Clef).** When `CLEF_CONTRADICTION` is `on`, the first E1 `repair` between different intents asks Clef one `noul` question ("Can both `intent_a` and `intent_b` be satisfied by one version of `entity`?", state: the two intent texts and the entity before and after). `p < 1 - T_CONTRADICT` opens the same card at once. Unavailable means no card (the go-around proceeds).
-- **GL5.** "Try again" (T21) resumes the same agent with the same model and transcript (rule UN6). Because of GL3a its premises equal head and every change it missed is waiting as a heads-up: it enters `going_around` and cannot land until its submit has acknowledged each of them (CK8). Vector `C32`.
+- **GL5.** "Try again" (T21) resumes the same agent with the same model and transcript (rule UN6). Because of GL3a its premises equal head and every change it missed is waiting as a heads-up: it enters `going_around` and cannot land until its submit has acknowledged each of them (CK8). Vector `C32`. Trunk starts the stopped Agent with `resume` (RS1, RS2); if the Agent cannot resume, the attempt stops with `reopen_failed` and the card of UN6 opens (RS4).
+- **GL6 (revert limit).** The `choice` card of reason `revert_limit` (T19s) offers `retry` ("Try again", T21) and `stop`. At T19s the landing is reverted, and the attempt's frozen premises and landed operations are reloaded as for T19 (UN8); the heads-up of the revert is created with `wake = false`. The attempt is therefore parked (GL3a), and `retry` resumes it on current facts like any other parked attempt. `retry` on this card also adds 1 to `revision`, because a change lands at most once per revision (9.8). The limit stays in force: `revision` is then at or above `MAX_REVISIONS`, so the next revert of that attempt opens this card again (T19s). Past the limit, every further reopen therefore costs one owner tap. `stop` leaves the landing reverted and the attempt stopped.
 
 ### 11.2 Right of way (starvation rule)
 
@@ -1931,7 +2025,19 @@ Planning is pure and synchronous: it reads only Trunk's SQLite. The `blobs` tabl
 
 **The undo landing.**
 
-- **UN4 (plan first).** Before confirming, the owner's Floor reads the plan (`GET /api/pools/{pool}/undo-plan?seq=`, owner route, answered by Trunk): the landings in *R*, the attempts that reopen, the kept readers, and the in-flight attempts that would receive `repair`.
+- **UN4 (plan first).** Before confirming, the owner's Floor reads the plan (`GET /api/pools/{pool}/undo-plan?seq=`, owner route, answered by Trunk): the landings in *R*, the attempts that reopen, the kept readers, and the in-flight attempts that would receive `repair`. A landing that neither depends on *R* nor read anything *R* wrote is in none of these lists.
+
+  ```ts
+  type UndoRefusal = "not_a_change" | "already_undone" | "too_old" | "too_many" | "plan_changed";
+  type UndoPlan = { target_seq: number;
+                    reverted: number[];        // R, ascending seq
+                    reopened: string[];        // attempt ids (T19, T19s)
+                    kept_readers: number[];    // seqs of landings that only read what R wrote
+                    repairs: string[] };       // in-flight attempt ids that would receive `repair`
+  type UndoPlanResponse = { ok: true; plan: UndoPlan } | { ok: false; reason: UndoRefusal };
+  type UndoResponse     = { ok: true; request_id: string }
+                        | { ok: false; reason: UndoRefusal; plan?: UndoPlan };   // `plan` is the new plan when reason is "plan_changed"
+  ```
 - **UN5 (confirm against the plan).** The confirm request carries `expect_reverted`, the *R* the owner saw. Trunk computes the plan again. If *R* differs, the request is refused with `plan_changed` and the new plan is returned; nothing is queued (vector `C53`). Otherwise the request is queued with its *R* and lands in the next tick as the first batch member (LP2). No landing can be accepted between the queueing and that tick, so the plan cannot drift after the check.
 - **UN5a.** The undo landing is one commit of kind `undo` that sets each path in *P* to the content computed in UN3 (or removes it). Trailers: `Change-Id` (a new id), `Intent-Id` (the intent of *u*), `Undoes:` for each landing in *R*. Note `kind: "undo"` with `undo.undoes`, `undo.reopened`, `undo.kept_readers`. Each landing in *R* gets `undone_by`.
 - It is an ordinary landing: classified attempts are classified against its write set and receive heads-ups with `cause.type = "undo"`.
@@ -1940,18 +2046,20 @@ Planning is pure and synchronous: it reads only Trunk's SQLite. The `blobs` tabl
 **Which attempts reopen.**
 
 - The attempt of *u*: `stopped` (`undone`) (T18). Its intent → `undone`.
-- The attempt of every other landing in *R*: reopened (T19, or T19s at the revision limit). Its frozen premises and landed operations become in-flight again. It receives one heads-up of result `repair` with `cause.type = "undo"`. The items are the premises that made it a dependent (UN2) and whose hash changed, each with the reversed diff and a rule chosen from the frozen flags: `E1` for an entity premise with `edit = 1`, `E2` for an entity premise with `derived = 1` and `edit = 0`, `F1` for a file premise with `edit = 1`. All its premises are then pinned at the new head. Its agent resumes with its transcript and lands again through the normal path. Vector `C19`.
-- **UN6 (same author).** A reopened attempt runs with the model and transcript recorded for it. If that model is unavailable or the Agent Durable Object cannot resume, the attempt stops with `reopen_failed` and a `choice` card (reason `reopen_failed`, options `new_attempt` and `stop`) offers a new attempt. If a different model takes over, `attempt.reopened` carries `model_changed: true` and the UI MUST say so.
+- The attempt of every other landing in *R*: reopened (T19, or T19s at the revision limit). Its frozen premises and landed operations become in-flight again. It receives one heads-up of result `repair` with `cause.type = "undo"`. The items are the premises that made it a dependent (UN2) and whose hash changed, each with the reversed diff and a rule chosen from the frozen flags: `E1` for an entity premise with `edit = 1`, `E2` for an entity premise with `derived = 1` and `edit = 0`, `F1` for a file premise with `edit = 1`. All its premises are then pinned at the new head. Trunk starts its Agent again with `resume` (RS1); the agent resumes with its transcript and lands again through the normal path. Vector `C19`. A reopened attempt that was a chosen race candidate is an ordinary attempt (RC7, vector `C58`).
+- **UN6 (same author).** A reopened attempt runs with the model and transcript recorded for it. If that model is unavailable or the Agent Durable Object cannot resume (RS3, RS4), the attempt stops with `reopen_failed` (T20r) and a `choice` card (reason `reopen_failed`, options `new_attempt` and `stop`) offers a new attempt. If a different model takes over, `attempt.reopened` carries `model_changed: true` and the UI MUST say so.
+- **UN6a (`new_attempt`).** The option `new_attempt` opens a new attempt for the same intent, exactly as creating the intent did: a new `attempt_id` and `change_id`, a real agent on the workhorse model of the model plan, `attempt.opened` emitted, the intent back to `open`. It starts from the intent text, not from the old transcript. The old attempt stays `stopped` (`reopen_failed`). It is not T21: `retry` resumes the same agent, `new_attempt` does not.
 - **UN8 (operations of a reopened attempt).** The reloaded operations keep their `op_seq`. Each `write` gets as `base_oid` the blob id of its path at the head after the undo landing (or `absent`). `shown` is empty for every reloaded premise.
 
 ### 11.4 Race and choose
 
-- **RC1.** The owner taps Race on an intent. Trunk opens `RACE_SIZE` attempts for the same intent with different models (from the model plan, S5), each flagged as a race candidate.
+- **RC1.** The owner taps Race on an intent. Trunk opens `RACE_SIZE` attempts for the same intent with different models (from the model plan, S5), each flagged as a race candidate (`attempts.race = 1`), and opens the intent's one card of kind `race` (`card.opened`, every candidate with `can_choose: false`).
 - **RC2.** A candidate runs like any attempt. When its submit passes, it goes to `held` (T4) on the intent's single card of kind `race`, whatever its path tier. Its premises stay live while it waits.
 - **RC3.** The card shows each candidate side by side: its preview (PV1), premise lights, checks, seconds taken, model cost and its own blast radius (`Card.candidates`, `Card.blast_radius`).
-- **RC4.** The owner chooses one (`choose`): T13 for it (it lands through the same gate; if its tier is `held` this tap is also the approval), T14 `not_chosen` for the others, with an optional typed reason stored on the card. Attempt repos of candidates not chosen are kept.
+- **RC4.** The owner chooses one (`choose`): T13 for it (it lands through the same gate; if its tier is `held` this tap is also the approval), T14 `not_chosen` for the others. The card closes with `card.closed { action: "choose", attempt_id: <the chosen candidate>, reason: <the optional typed reason> }` (CD1). Attempt repos of candidates not chosen are kept.
 - **RC5.** The race card stays open while at least one candidate can still be chosen. A candidate that leaves `held` (a go-around, a pull-back, its own operation, a stop) is shown with its state and `can_choose: false`; the card is updated, not closed. When it submits again and passes, it can be chosen again. When no candidate is in flight any more, the card closes as `superseded`.
 - **RC6 (optional interface).** `fork_from: { attempt_id, step }` on attempt creation starts a candidate from another attempt's transcript and premises up to that step (after it has read, before it writes). Not required for the submission build.
+- **RC7 (a chosen candidate is an ordinary attempt).** When a candidate is chosen (T13 by `choose`), its `race` flag is cleared in the same transaction. From then on its submits follow its path tier only (T2, T3 or T4 by tier). This matters whenever the chosen attempt submits again: after a go-around or a pull-back before it landed, after its own operation (T22), and after it was reopened by an undo or a revert (T19). A passing submit of tier `auto` then goes to `validated` with no card; one of tier `held` opens a card of kind `held`. It never returns to the race card, which is closed. `attempt.opened.race` records how the attempt started and does not change. Vector `C58`.
 
 ### 11.5 Green line protocol (interface only)
 
@@ -1964,7 +2072,7 @@ type VerifyResult = {
   commit: string;
   ok: boolean;
   runtime: "browser" | "isolate" | "container" | "static";
-  checks: Array<{ name: string; ok: boolean; code?: string }>;   // names and codes from a fixed list
+  checks: Array<{ name: string; ok: boolean; code?: string }>;   // names and codes from the fixed list of GR8; `code` only when ok is false
   duration_ms: number;
   log: string;                  // at most GREEN_LOG_MAX_CHARS; shown to the owner only (GR7)
 };
@@ -1972,16 +2080,25 @@ type VerifyResult = {
 
 - **GR1 (one at a time).** At most one verification is in flight. It starts after `batch.pushed` when none is in flight, and verifies the head commit at that moment (`seq` *s*). When it ends and the head has moved, the next one starts for the then-current head, not earlier than `GREEN_MIN_INTERVAL_MS` after the previous start. It never blocks a landing. Under continuous landings the green line therefore advances once per verification time, and never starves.
 - **GR2 (pass).** Trunk (the only token holder) moves `refs/heads/green` from its old value to the verified commit by compare-and-swap and emits `green.advanced`.
-- **GR3 (fail, confirmed).** A failed result is run once more on the same commit. Only if the second run also fails does Trunk queue a request of cause `revert` for every landing in `(green_seq, s]`. It is planned like an undo (11.3) with *R* starting from that whole range (later landings join only through UN2 and UN3), lands as one commit of kind `revert` in the next tick, and reopens the attempt of every landing in *R* (T19, T19s) with a heads-up of `cause.type = "revert"` whose items carry the failing check names and codes. No bisect: every attempt in the range is reopened, and an attempt that had nothing to change acknowledges and lands again.
-- **GR3a (bounded).** `revision` counts reopens and is never reset. At `MAX_REVISIONS` an attempt is not reopened again; it stops with `revert_limit` and a choice card (T19s). The range of a revert is fixed when it is queued and lands within one tick of a free outbox, so it does not grow while it waits. `blobs` keeps everything newer than the green line, so the revert can always be planned.
+- **GR3 (fail, confirmed).** A failed result is run once more on the same commit. `green.verified` is emitted for every run. Its field `confirmed` is `true` for a pass, and for a fail only when it is the second failed run on the same commit. A first failed run (`ok: false`, `confirmed: false`) changes nothing else: no revert is queued, and nothing on screen may say that a change is being taken back; the Floor may only say that the check is being run again. Only if the second run also fails does Trunk queue a request of cause `revert` for every landing in `(green_seq, s]`. It is planned like an undo (11.3) with *R* starting from that whole range (later landings join only through UN2 and UN3), lands as one commit of kind `revert` in the next tick, and reopens the attempt of every landing in *R* (T19, T19s) with a heads-up of `cause.type = "revert"` whose items carry the failing check names and codes. No bisect: every attempt in the range is reopened, and an attempt that had nothing to change acknowledges and lands again.
+- **GR3a (bounded).** `revision` counts reopens and is never reset. At `MAX_REVISIONS` an attempt is not reopened again by itself; it stops with `revert_limit` and a choice card (T19s) on which the owner may tap `retry` or `stop` (GL6). The range of a revert is fixed when it is queued and lands within one tick of a free outbox, so it does not grow while it waits. `blobs` keeps everything newer than the green line, so the revert can always be planned.
 - **GR4.** A result for a commit that is no longer in `main`'s first-parent history, or older than `green_seq`, is discarded.
-- **GR5.** The runtime is decided by spike (S4). With runtime `static` the checks are: every module parses, every import resolves, and policy invariants hold; the Floor then labels the green line "static checks only".
-- **GR6 (isolation, every runtime).** The verifier runs agent-written pool code. It MUST run it with no bindings, no secrets and no credentials in its environment, with no outbound network, and with a wall-time limit (`GREEN_TIMEOUT_MS`): a Dynamic Worker gets an empty environment and no `globalOutbound`; a container fetches the files through the public app server and has egress disabled; a browser loads the app-server page, which carries the sandbox policy of SE14. A verifier never receives a repository token.
+- **GR5.** The runtime is decided (S4): a Dynamic Worker isolate (`runtime: "isolate"`), which runs the pool's headless self-test (`02-tidepool.md` section 5). There is no container and no Browser Run in the build. The fallback is runtime `static`, whose checks are: every module parses, every import resolves, and policy invariants hold; the Floor then labels the green line "static checks only". `features.green` (FJ1) says which of the two the build has, or that it has none.
+- **GR6 (isolation, every runtime).** The verifier runs agent-written pool code. It MUST run it with no bindings, no secrets and no credentials in its environment, with no outbound network, and with a wall-time limit (`GREEN_TIMEOUT_MS`): a Dynamic Worker is loaded through the Worker Loader binding with an empty environment, `globalOutbound: null` and a CPU limit (`limits: { cpuMs: GREEN_CPU_MS }`); a container fetches the files through the public app server and has egress disabled; a browser loads the app-server page, which carries the sandbox policy of SE14. A verifier never receives a repository token. At most four Dynamic Workers may be in flight per Worker request (platform record), so the checks of one verification run in sequence, and GR1 keeps one verification in flight.
 - **GR7 (the log is not model input).** `VerifyResult.log` is never placed in a heads-up, an event or a model context. Heads-ups carry check names and fixed codes only. The log is stored with the result and shown to the owner as escaped text, after `redact()` (SE5a).
+- **GR8 (the fixed list of check names and codes).** `VerifyResult.checks`, the event `green.verified` and the `check` items of a revert heads-up carry only these names and codes. A check with `ok: true` has no `code`. Free text of a check (which may hold kind names and sentences written by agents) goes only into `log`.
+
+  | Check name | Runtime | Code when `ok` is false |
+  | --- | --- | --- |
+  | `selftest_ran` | `isolate` (also `browser`, `container`) | `no_verdict` (no verdict within the time or CPU limit), `bad_verdict` (the verdict is not valid JSON of the verdict type), `harness_error` (the modules did not load or the harness threw) |
+  | `files`, `no_errors`, `in_bounds`, `energy_range`, `population`, `not_exhausted`, `state_is_data`, `pen_rules`, `visible`, `within_reach`, `draw_is_pure`, `deterministic` (the twelve invariants of `02-tidepool.md` 5.2, in that order) | `isolate` (also `browser`, `container`) | the check name followed by `:failed`, for example `not_exhausted:failed` |
+  | `parse`, `imports_resolve`, `policy_invariants` | `static` | the check name followed by `:failed` |
+
+  A result of the self-test is mapped as: `selftest_ran` first, then the twelve checks in order, each `{ name, ok }` or `{ name, ok: false, code }`. The verdict's `detail`, `failed` and `rest_share` are cut to `GREEN_LOG_MAX_CHARS` and go into `log` only. When `selftest_ran` fails it is the only check.
 
 ### 11.6 Who relies, and blast radius
 
-- **Who relies** on entity *K*: in-flight attempts with a premise `entity:K` or `file:<path of K>`, each with its flags; and landed, not undone changes with such a frozen premise. The public page computes it from the Floor's reducer state (FS2), which holds the same premises through `premise.recorded`, `premise.removed` and `landing.accepted`.
+- **Who relies** on entity *K*: in-flight attempts with a premise `entity:K` or `file:<path of K>`, each with its flags; and landed, not undone changes with such a frozen premise. The public page computes it from the Floor's reducer state (FS2), which holds the same premises through `premise.recorded`, `premise.removed` and `landing.accepted`. In a `summary_only` pool those per-premise events are not emitted (EV6), so Who relies shows landed changes only there.
 - **Blast radius** of a change (shown on held, race and undo confirmations): the in-flight attempts that would receive `repair`, `confirm` or triage if it landed now, computed by classifying its write set (and, for row QR4, its premises) against each of them, with rule rows deciding `repair` and `confirm` and triage rows listed as `triage`; and which of them hold right of way. It is computed when the card opens, again at every batch while the card is open (CD2), and again when the owner taps.
 
 ### 11.7 The "same changes, merged by plain git" pool
@@ -1993,7 +2110,8 @@ Neutral label, shown as constructed. It lives in a second Artifacts repository p
 - **PM3 (what counts as a text conflict).** Replay uses 5.3 without OP3. A `replace` that fails OP1, OP2 or OP4, and a `write` whose base changed (OP5: the path was created or changed by an earlier replayed change), is a **text conflict**: the change is skipped and counted. This is an approximation in plain git's favour: a real three-way merge reports a conflict when both sides add the same path or change the same lines, and may merge a whole-file rewrite cleanly where this rule skips it. The Floor says "approximated" next to the count.
 - **PM4 (interrupted).** A landing replayed from an `ops_first` with `submitted = 0` is marked **interrupted**: its agent was sent back in the middle of its work, so the plain-merge pool shows unfinished work for it. The Floor labels it.
 - **PM5.** Undo and revert landings are applied as reverts of the same changes.
-- **PM6.** After each push of the plain-merge repository Trunk emits `plain.updated { commit, through_seq, skipped, interrupted }`. A failed push is retried; it never affects a landing.
+- **PM6.** After each push of the plain-merge repository Trunk emits `plain.updated { commit, tree, through_seq, skipped, interrupted }`: the plain-merge commit and its tree id, the last landing replayed, the `seq`s counted as text conflicts (PM3) and the `seq`s marked interrupted (PM4), both cumulative. A failed push is retried; it never affects a landing. A live frame on the source `plain` is told to look for the new version when this event arrives (SE16a).
+- **PM7 (when the two pools are the same).** The plain-merge pool and the real pool hold the same files exactly when `plain.updated.tree` equals `landing.landed.tree` of the landing `through_seq`. The Floor may say "no visible difference in this run" only on that fact, never on a guess from what the frames draw.
 
 The same repository holds the preview commits of PV1 under `refs/previews/`.
 
@@ -2009,7 +2127,7 @@ type EventBase = {
   t: number;            // ms since epoch: arrival at the Floor (assigned on append)
   ts: number;           // ms since epoch: the source's clock when the state change committed
   pool: string;
-  src: "trunk" | "agent" | "system";
+  src: "trunk" | "agent" | "gate" | "swarm" | "floor";   // who emitted it (EV2a)
   type: string;
 };
 
@@ -2022,7 +2140,9 @@ type PoolEvent = EventBase & (
       epoch: number; remote: string;                         // the pool repo's address, without credentials
       plain_remote: string | null;
       rebuild: { done: number; total: number } | null; unwitnessed: number[];
-      real_agents: number; max_real_agents: number; synthetic: boolean }
+      real_agents: number; max_real_agents: number;
+      synthetic: boolean;                                    // a synthetic attempt was opened in this pool (EM1a): the SYNTHETIC banner
+      summary_only: boolean }                                // the pool's flag, fixed at creation (PL1, EV6)
   | { type: "pool.files"; files: Array<{ path: string; tier: "auto" | "held" }> }
   | { type: "pool.paused"; reason: "diverged" | "push_rejected" | "note_seq_mismatch" | "owner"; detail: ErrCode }
   | { type: "trunk.error"; where: string; code: ErrCode }
@@ -2049,20 +2169,25 @@ type PoolEvent = EventBase & (
   | { type: "op.dropped"; attempt_id: string; op_seqs: number[]; path: string; rule: string }
   | { type: "headsup.sent"; attempt_id: string; hn: number; result: "info" | "confirm" | "repair";
       wake: boolean; cause: HeadsUp["cause"]; keys: Array<{ kind: PremiseKind | "check"; key: string; rule: string }>;
-      items: HeadsUpItem[] | null;                           // real pools: the items as sent (8.2); synthetic pools: null
+      items: HeadsUpItem[] | null;                           // the items as sent (8.2); null in a summary_only pool (EV6)
       dropped_ops: HeadsUp["dropped_ops"]; go_around: number | null }
-  | { type: "headsup.resolved"; attempt_id: string; hn: number; statement: string }
+  | { type: "headsup.resolved"; attempt_id: string; hn: number; result: "confirm" | "repair";
+      go_around: number | null;                              // as in the heads-up
+      changed: boolean;                                      // HU12: the attempt's operations differ from when it was sent back
+      statement: string }
   | { type: "submit.result"; attempt_id: string; submit_id: string | null; status: SubmitResult["status"];
       tier: "auto" | "held" | null; checks: Check[]; duplicate: boolean }
   | { type: "card.opened"; card: Card }
   | { type: "card.updated"; card: Card }
-  | { type: "card.closed"; card_id: string; action: CardOption | "stale" | "superseded"; by: "owner" | "system"; reason: string | null }
+  | { type: "card.closed"; card_id: string; action: CardOption | "stale" | "superseded"; by: "owner" | "system";
+      attempt_id: string | null;                             // the chosen candidate when action is "choose" (CD1)
+      reason: string | null }                                // only the reason the owner typed
   | { type: "landing.accepted"; seq: number; batch_id: number; kind: "change" | "undo" | "revert";
       attempt_id: string | null; change_id: string; intent_id: string | null; request_id: string | null;
       paths: string[]; writes: Note["writes"] }
   | { type: "landing.landed"; seq: number; batch_id: number; commit: string; tree: string;
       note: string;                                          // the note's git blob id
-      note_json: string | null;                              // the note itself (3.5); null in synthetic pools
+      note_json: string | null;                              // the note itself (3.5); null in a summary_only pool (EV6)
       time_to_land_ms: number | null }
   | { type: "batch.pushed"; batch_id: number; first_seq: number; last_seq: number;
       main: string; notes: string; tries: number; ms: number }
@@ -2072,9 +2197,10 @@ type PoolEvent = EventBase & (
       reverted: number[]; reopened: string[]; kept_readers: number[] }
   | { type: "undo.refused"; request_id: string; target_seq: number;
       reason: "not_a_change" | "already_undone" | "too_old" | "too_many" | "plan_changed" }
-  | { type: "plain.updated"; commit: string; through_seq: number; skipped: number[]; interrupted: number[] }
+  | { type: "plain.updated"; commit: string; tree: string; through_seq: number; skipped: number[]; interrupted: number[] }   // PM6, PM7
   | { type: "green.verified"; seq: number; commit: string; ok: boolean; runtime: VerifyResult["runtime"];
-      checks: VerifyResult["checks"]; ms: number; confirmed: boolean }
+      checks: VerifyResult["checks"]; ms: number;
+      confirmed: boolean }                                   // GR3: true for a pass, and for the second failed run on one commit
   | { type: "green.advanced"; seq: number; commit: string }
   | { type: "metrics"; window_ms: number; landings_per_second: number;
       time_to_land_ms: { p50: number | null; p99: number | null };
@@ -2092,21 +2218,36 @@ No event carries a token, a secret, a full transcript, a verifier log, or free t
 When events are emitted:
 
 - **EM1.** `pool.state` is event 1 of every stream (`head_seq = 0` at pool creation) and is emitted again whenever one of its fields changes. `pool.files` follows it and is emitted again after every landing that adds or removes a path or changes the policy.
+- **EM1a (`synthetic` and `summary_only`).** `pool.state.summary_only` is the flag given at pool creation (PL1) and never changes. `pool.state.synthetic` is false at creation and becomes true, for good, when the first attempt with `agent: "synthetic"` is opened in the pool (`pool.state` is emitted again, before that attempt's `attempt.opened`). The two are independent: a canned cast on a pool that is not `summary_only` gives a synthetic pool whose stream holds every event.
 - **EM2.** `premise.recorded` is emitted for every entry of `ToolResponse.premises` (TA7): a new premise, a re-pin by a read, or a flag that was set. `premise.removed` is emitted whenever a premise is deleted (rows E4, F7, QR3; rules D2, D4, R5).
 - **EM3.** `premise.judged` follows JE1: at creation, and again when a pending triage is closed.
 - **EM4.** `landing.accepted` for kind `undo` or `revert` carries the `request_id` of its `undo.planned`.
-- **EM5.** `metrics` is appended by the Floor Durable Object (src `system`) every `METRICS_EVERY_MS`, computed by the shared reducer over the stream (section 14). It is the authoritative value for 14.1 to 14.6 and for "time held"; clients display it and do not recompute it. 14.7 and 14.8 are computed by the reducer from `headsup.sent`, `submit.result` and `attempt.repo`.
-- **EV6 (synthetic pools).** For attempts with `agent = synthetic`, these events are not emitted: `attempt.step`, `premise.recorded`, `premise.removed`, `op.recorded`, and `premise.judged` whose result is `holds` with no heads-up. `headsup.sent` has `items: null`. Everything else is emitted. This bounds the stream and the recording of a Swarm run; the note of every landing still holds the full record.
+- **EM5.** `metrics` is appended by the Floor Durable Object (src `floor`) every `METRICS_EVERY_MS`, computed by the shared reducer over the stream (section 14). It is the authoritative value for 14.1 to 14.6 and for "time held"; clients display it and do not recompute it. 14.7 and 14.8 are computed by the reducer from `headsup.sent`, `submit.result` and `attempt.repo`.
+- **EM6.** `limits` is emitted by the model gate and `swarm.state` by the Swarm launcher. Each reaches the stream of every pool (EV2a), so a page that shows two pools may use the newest `limits` event of either stream.
+- **EV6 (`summary_only` pools).** In a pool created with `summary_only: true` (PL1), for every attempt of that pool, real or synthetic, these events are not emitted: `attempt.step`, `premise.recorded`, `premise.removed`, `op.recorded`, and `premise.judged` whose result is `holds` with no heads-up. `headsup.sent` has `items: null`, `landing.landed` has `note_json: null`, and the note route answers 404 (13.6). Everything else is emitted. This bounds the stream and the recording of a Swarm run; the note of every landing, in Artifacts, still holds the full record. In a pool that is not `summary_only`, every event is emitted for every attempt, also for a synthetic one: a canned cast there shows its premise lights, its operations, its heads-up diff and its Why card, under the SYNTHETIC banner (EM1a). Nothing in this file suppresses an event or a note field because an attempt is synthetic.
 
 ### 12.2 Ordering guarantees
 
 - **EV1.** The Floor Durable Object assigns `n` and `t` on append. `n` is contiguous and total per pool.
 - **EV2 (sources).** Trunk writes its events to `events_out` in the same transaction as the state change they describe, with `ts`, and sends them to the Floor in order with `(source, epoch, source_n)`. The Floor ignores a `source_n` it already has for that epoch, rejects a gap (the source re-sends from the Floor's `last_n + 1`), and treats a higher `epoch` as a new sequence starting at 1 (RB5). So each source's events appear exactly once, in the source's order. Trunk deletes an `events_out` row when the Floor has confirmed it.
+- **EV2a (every source, and the two that serve all pools).** Five kinds of source exist. Each one except the Floor keeps its own outbox and its own `(epoch, source_n)` counter **per pool**, and follows EV2 for that pool: events in order, a re-send from the Floor's `last_n + 1` after a gap, a row deleted only when the Floor confirmed it.
+
+  | `EventBase.src` | Source id at the Floor (`sources.source`) | Emitter | Events | Sent to |
+  | --- | --- | --- | --- | --- |
+  | `trunk` | `trunk` | the pool's Trunk | every type not named below | its pool |
+  | `agent` | `agent:<attempt_id>` | the attempt's Agent Durable Object | `attempt.step`, `attempt.repo` (what only the Agent knows: model turns, tokens, cost, its repo) | its pool |
+  | `gate` | `gate` | the model gate (one per deployment) | `limits` | every registered pool |
+  | `swarm` | `swarm` | the Swarm launcher | `swarm.state` | every registered pool |
+  | `floor` | none | the pool's Floor Durable Object | `metrics` | its own stream; appended directly, so no de-duplication is needed |
+
+  A pool is **registered** with the model gate and with the Swarm launcher when it is created (PL1), in the request that creates it. The gate and the launcher send each of their events to every registered pool, with that pool's counter. A pool's first `limits` event is sent at registration, so a new stream never lacks one. Two emitters never share a source id, so "ignores a `source_n` it already has" stays true.
 - **EV3 (causal order within Trunk).** For one batch: all `landing.accepted`, then `tick.skipped`, `premise.judged`, `premise.removed`, `op.dropped`, `headsup.sent`, `attempt.state`, `card.*` caused by it. `batch.pushed` and `landing.landed` come later and always after the matching `landing.accepted`. Trunk hands the batch's events to the Floor before it starts the push (9.4 step 6), so "landing…" is visible for as long as the push takes. For one attempt, `attempt.state` events form a valid path through 9.2.
 - **EV4.** Events of different sources are ordered by arrival at the Floor. The UI MUST NOT infer causality across sources from order alone; causal links are explicit fields (`cause_seq`, `hn`, `batch_id`, `request_id`).
 - **EV5.** The UI state is a pure function `reduce(state, event)` over the stream from `n = 1` (or from a snapshot). The reducer lives in the shared `protocol` module and is unit-tested with recorded streams. Durations and metrics use `ts`, never `t`.
 
 WebSocket protocol (read-only): the client sends exactly one message, `{ "hello": 1, "after": <n> }`. The Floor answers `{ "snapshot": { "n": <n>, "state": ... } }` when `after` is older than its oldest retained snapshot or 0, then `{ "events": [ ... ] }` frames in `n` order. Any second client message closes the socket. At most `MAX_SOCKETS_PER_ADDR` sockets are open per client address.
+
+- **EV7 (hibernatable sockets).** The Floor Durable Object accepts every stream socket with the WebSocket hibernation API (`ctx.acceptWebSocket`), never with `ws.accept()`, and handles messages in `webSocketMessage`. It keeps no socket and no per-socket state in memory. The only per-socket state is the socket's attachment (`serializeAttachment`): `{ after: number }`, the highest `n` sent on that socket. The client address is the socket's tag, so the per-address limit is counted with `ctx.getWebSockets(tag)`. To fan out an appended event the Floor asks the runtime for its sockets (`ctx.getWebSockets()`) and sends each one the events above its `after`. So an open visitor page does not keep the object in memory, and an event appended after the object was evicted and started again still reaches a socket that was opened before. A test in workerd checks exactly that.
 
 ### 12.3 Replay format
 
@@ -2127,9 +2268,10 @@ Replay feeds the lines through the same reducer and components as the live strea
 
 - **SE1.** One secret, `OWNER_KEY` (Worker secret, at least 32 random bytes, base64url). If it is not configured, every mutating route answers 503 and the Worker logs the reason: fail closed.
 - **SE2.** Mutating routes require `Authorization: Bearer <key>` or the session cookie. `POST /api/session` with the key sets the cookie `premise_owner` (HttpOnly, Secure, SameSite=Strict, HMAC-signed, `SESSION_TTL_S`). Comparison is constant-time.
+- **SE2a (unlock brake).** At most `UNLOCK_FAILS_PER_MIN` failed unlocks (`POST /api/session` with a wrong key) are accepted per client address per minute. Further tries in that minute answer 429 before the key is compared, also for the right key. A successful unlock does not reset the count.
 - **SE3.** Mutating routes are those marked "owner" in 13.6. A cookie-authenticated request MUST carry an `Origin` header equal to the Floor's origin. A Bearer-authenticated request needs no `Origin` (a script or `curl` sends none). Every request with a body MUST have `Content-Type: application/json`; anything else is rejected with 415 before authentication, so an HTML form cannot produce an accepted request.
 - **SE4.** Durable Objects are reachable only through bindings from the Worker. Tool calls come only from Agent Durable Objects. No route lets a browser call a Trunk tool.
-- **SE5.** The write token for a pool repo is used only inside Trunk. It is never logged, never put in an event, an error message, a heads-up or a note, and no route returns it (the pool-create route included). Which token source works is decided by spike (S2).
+- **SE5.** The write token for a pool repo is used only inside Trunk. It is never logged, never put in an event, an error message, a heads-up or a note, and no route returns it (the pool-create route included). Trunk mints it with `createToken()` when it needs one and mints a new one after a 401 or 403 (S2, LP5a). Any write token can force-push and delete branches, the default branch included (platform record, X3), so an Agent, a verifier, the app server and the public never receive a write token for a pool repository or for the plain-merge repository.
 - **SE5a (`redact`).** One function in the `protocol` module replaces every match of the token patterns (Artifacts tokens `art_v\d+_[0-9a-f]+`, the `OWNER_KEY` value, any `Authorization` header value, and credentials inside a URL) by `[redacted]`. It is applied before any write to `outbox.last_error`, an event, a heads-up, a transcript, a note, a verifier log, or a Replay export (RP1).
 - **SE5b (codes, not text).** Every error field in an event or a card is a code from a fixed list plus numbers. Raw error text from a transport, a git server, a runtime or a model provider is stored only in Trunk or Agent SQLite, after `redact()`, and is shown only to the owner.
 - **SE5c (reading the pool with git).** A pool repo token is repo-scoped, not ref-scoped, so a token given to a reader must never be able to write. Read access for a person is an owner action: `POST /api/pools/{pool}/read-token` mints a token with explicit scope `read` and a lifetime of `READ_TOKEN_TTL_S`, and returns it to the owner only. `createToken` is never called without an explicit scope. Without a read token, the "show the git" drawer shows the commit, the trailers and the note from the event stream, and the clone address without credentials (`pool.state.remote`).
@@ -2138,9 +2280,9 @@ Replay feeds the lines through the same reducer and components as the live strea
 
 Without the key a visitor can: load the Floor; open the event stream (WebSocket, read-only); read Why cards, who-relies and metrics; load the pool app by commit; run Replay. Nothing else. Public routes are GET only. No public route starts a model call. There is no crowd input path in the submission build.
 
-- **SE19 (public requests stay off the hot path).** A public request never reaches Trunk and never calls the Artifacts control plane to resolve a ref. Pool facts (Why cards, who-relies, metrics, the commit each ref points to) come from the Floor Durable Object's reducer state (FS2). The app server resolves `main`, `green` and `plain` to commit ids from that state (`landing.landed`, `green.advanced`, `plain.updated`), then serves files by commit id.
+- **SE19 (public requests stay off the hot path).** A public request never reaches Trunk and never calls the Artifacts control plane to resolve a ref. Pool facts (Why cards, who-relies, metrics, the commit each ref points to) come from the Floor Durable Object's reducer state (FS2). The app server resolves `main`, `green` and `plain` to commit ids from that state (`landing.landed`, `green.advanced`, `plain.updated`), then serves files by commit id through the binding (S7). A commit segment (`<40 hex>`, `p-<40 hex>`; PV5) needs no resolution. While no green commit exists (a build without the green line, or before the first verification), `green` resolves to the seed commit (`pool.state.green_seq` is 0; the first `pool.state` event of the stream carries the seed as `landed_commit`).
 - **SE20 (caching).** A response for a commit-addressed file is immutable: it is stored in the Cache API and served with `Cache-Control: public, max-age=31536000, immutable`. Only a cache miss reads Artifacts.
-- **SE21 (rate limits).** Per client address: `PUBLIC_RATE_PER_MIN` for the page, the session read, the stream handshake and ref-following routes; `APP_FILE_RATE_PER_MIN` for commit-addressed files, counted on cache misses only; `MAX_SOCKETS_PER_ADDR` open sockets.
+- **SE21 (rate limits).** Per client address: `PUBLIC_RATE_PER_MIN` for the page, the session read, the stream handshake and ref-following routes; `APP_FILE_RATE_PER_MIN` for commit-addressed files, counted on cache misses only; `MAX_SOCKETS_PER_ADDR` open sockets; `UNLOCK_FAILS_PER_MIN` failed unlocks (SE2a).
 - **SE22 (which repositories).** The app server serves only repositories registered as a pool's `main` or plain-merge repository. Attempt repos (which hold transcripts) are created in a separate Artifacts namespace with its own binding, and no route serves them.
 
 ### 13.3 Spend cap
@@ -2149,11 +2291,11 @@ Without the key a visitor can: load the Floor; open the event stream (WebSocket,
 - **SE6a (no usage, no discount).** A reservation that is not settled by `expires_at` (`MODEL_TIMEOUT_MS` plus `RESERVATION_MARGIN_MS`), or that is settled without a usage report (a time-out, an eviction, an error after the request was sent), is settled at its full reserved amount. Spend can be over-counted, never under-counted.
 - **SE7.** If `spent + reserved + this reservation > SPEND_CAP_USD`, the call is refused with `spend_cap`. The cap is global to the deployment. An agent that is refused stops with `spend_cap` (not `budget`); Clef callers treat it as unavailable (7.3, 10.4). `limits.refusing` is true while the last request was refused for the cap.
 - **SE8 (rate limits).** The gate enforces per-model requests per minute (token bucket from the model plan, S5; Clef has its own bucket) and `MAX_REAL_AGENTS`. A call over the bucket is not refused: the gate answers `{ retry_after_ms }`, and the Agent waits on a `gate` timer. This wait, and a provider's own rate-limit answer (HTTP 429, Workers AI error 3040), does not count toward `MODEL_RETRIES` and is an exempt wait for the watchdog (AG3). Attempts over `MAX_REAL_AGENTS` wait in `opened` and the Floor shows the limit.
-- **SE9.** The gate emits `limits` events. The Floor always shows spend, cap and the real-agent limit.
+- **SE9.** The gate emits `limits` events, to the stream of every registered pool (EV2a, EM6): when a pool registers, whenever `killed` or `refusing` changes, and at most once per `LIMITS_EVERY_MS` while spend or a bucket changes. The Floor always shows spend, cap and the real-agent limit.
 
 ### 13.4 Kill switch
 
-- **SE10.** `POST /api/kill` (owner) with `{ "killed": true }` sets `killed` in the gate. From then on every model call is refused with `killed`; the Swarm Workflow stops launching; attempts stop at their next step with reason `killed`.
+- **SE10.** `POST /api/kill` (owner) with `{ "killed": true }` sets `killed` in the gate. From then on every model call is refused with `killed`; the Swarm launcher stops launching; attempts stop at their next step with reason `killed`.
 - **SE11.** The kill switch does not stop Trunk from pushing an already accepted batch (that would break LP3) and does not block landings of already validated changes, which need no model. `{ "killed": true, "landings": false }` also pauses the pool (`pool_state = paused`, reason `owner`).
 - **SE12.** `killed` survives restarts and is cleared only by the owner: `{ "killed": false }` clears it and resumes a pool that is paused with reason `owner`.
 
@@ -2181,9 +2323,9 @@ The boundary is the browser sandbox, and it is carried by the **response**, so i
   type FloorToPool =
     | { type: "pause" }
     | { type: "resume" }
-    | { type: "probe"; selftest?: boolean }          // look for a new version now; with selftest, also run the in-page self-test
-    | { type: "advance"; version: string }           // Replay and commit frames: load this version without a page reload when only creature files differ
-    | { type: "highlight"; kinds: string[] };        // outline the creatures of these kinds (Who relies); [] clears
+    | { type: "probe"; selftest?: boolean }          // live frames: look for a new version now; with selftest, also run the in-page self-test
+    | { type: "advance"; version: string }           // commit frames only (Replay, card previews): load this version token (PV5) without a page reload
+    | { type: "highlight"; kinds: string[] };        // any frame: outline the creatures of these kinds (Who relies); [] clears
 
   type PoolToFloor =
     | { type: "tapped"; creature: string; path: string }      // the kind name and its file path
@@ -2194,6 +2336,7 @@ The boundary is the browser sandbox, and it is carried by the **response**, so i
         selftest: { version: string; ok: boolean; failed: Array<{ name: string; kind: string | null }> } | null };
   ```
 
+- **SE16a (one mechanism per kind of frame).** A **live frame** follows a moving source: `main` (the pool) or `plain` (the plain-merge pool). Its address is `/pool/<pool>/main/` or `/pool/<pool>/plain/`. It moves to a new landing only by `probe`: the Floor posts `probe` to a frame on `main` when `landing.landed` arrives, and to a frame on `plain` when `plain.updated` arrives; the host then looks for the new version and swaps it in without a page reload (`02-tidepool.md` 4.6, 4.7). A live frame is never addressed by commit and never receives `advance`. A **commit frame** shows one `FrameAddress` (PV5): the frames of Replay and the before and after frames of a card. It never looks for a new version by itself; a `probe` there does nothing except run the in-page self-test when `selftest` is true. Only a commit frame receives `advance { version }`, in Replay, to step to the next recorded commit; what the host does on `advance` and on `highlight` is defined in `02-tidepool.md` 4.5. The self-test badge of any frame comes from `stats.selftest`.
 - **SE17 (content controls, not a boundary).** CK6 rejects code that uses any global outside the policy allow list (so `document`, `window`, `globalThis`, `self`, `fetch`, `eval`, `Function`, `import()` of non-relative paths never land). Creatures draw only through the pen object, which has no text method and no access to the canvas element.
 - **SE18.** Intent text, summaries and statements are untrusted: escaped in the UI, sanitized in commit messages (3.5), and length-limited (`MAX_INTENT_CHARS`, `MAX_STATEMENT_CHARS`).
 
@@ -2204,25 +2347,58 @@ The `protocol` module fixes these paths. "Owner" routes are the mutating routes 
 | Purpose | Method and path | Who | Answered by |
 | --- | --- | --- | --- |
 | The Floor page and assets | `GET /`, static assets | anyone | Worker assets |
-| Static settings | `GET /floor.json` | anyone | Worker |
+| The Floor page for a named pool | `GET /p/{pool}` (a client route of the same page: that pool is the main pool; `/` is the default pool of `/floor.json`) | anyone | Worker assets |
+| Static settings | `GET /floor.json` (FJ1) | anyone | Worker |
 | Event stream | WebSocket `GET /api/pools/{pool}/stream` | anyone | Floor Durable Object |
 | Session state | `GET /api/session` → `{ owner: boolean }` | anyone | Worker |
-| Unlock | `POST /api/session` `{ key }` | key holder | Worker |
+| Unlock | `POST /api/session` `{ key }` (429 after `UNLOCK_FAILS_PER_MIN` failed tries, SE2a) | key holder | Worker |
 | Lock | `DELETE /api/session` | owner | Worker |
 | Create intent | `POST /api/pools/{pool}/intents` `{ text, race, prewritten, request_id }` | owner | Trunk |
-| Card action | `POST /api/pools/{pool}/cards/{card_id}` `{ option, submit_ids, attempt_id?, reason?, request_id }` | owner | Trunk |
-| Undo plan | `GET /api/pools/{pool}/undo-plan?seq={seq}` | owner | Trunk |
-| Undo | `POST /api/pools/{pool}/undo` `{ seq, expect_reverted, request_id }` | owner | Trunk |
-| Stop one attempt | `POST /api/pools/{pool}/attempts/{attempt_id}/stop` `{ request_id }` (stop reason `cancelled`) | owner | Agent, then Trunk |
-| Swarm | `POST /api/swarm` `{ running, agents, collision_dial, request_id }` | owner | Swarm Workflow |
+| Card action | `POST /api/pools/{pool}/cards/{card_id}` `{ option, submit_ids, attempt_id?, reason?, request_id }` (`option` is a `CardOption` that the card offers, CD4; `attempt_id` is required for `choose`; `reason` is the owner's typed text) | owner | Trunk |
+| Undo plan | `GET /api/pools/{pool}/undo-plan?seq={seq}` → `UndoPlanResponse` (UN4) | owner | Trunk |
+| Undo | `POST /api/pools/{pool}/undo` `{ seq, expect_reverted, request_id }` → `UndoResponse` (UN5) | owner | Trunk |
+| Stop one attempt | `POST /api/pools/{pool}/attempts/{attempt_id}/stop` `{ request_id }` (stop reason `cancelled`) | owner | Agent, which calls `stop` on Trunk (TA9) |
+| Swarm | `POST /api/swarm` `SwarmRequest` (SWR1 to SWR4) | owner | Swarm launcher |
 | Kill switch | `POST /api/kill` `{ killed, landings? }` | owner | model gate, Trunk |
 | Rebuild | `POST /api/pools/{pool}/rebuild` `{ request_id }` | owner | Trunk |
-| Create pool | `POST /api/pools` `{ pool, seed, request_id }` (returns no token) | owner | Worker, Trunk |
+| Create pool | `POST /api/pools` `{ pool, seed, summary_only?, request_id }` (PL1; returns no token) | owner | Worker, Trunk |
 | Read token | `POST /api/pools/{pool}/read-token` | owner | Worker |
-| One landing's note | `GET /api/pools/{pool}/landings/{seq}/note` | anyone | Floor Durable Object (from `landing.landed.note_json`; 404 in synthetic pools) |
+| One landing's note | `GET /api/pools/{pool}/landings/{seq}/note` | anyone | Floor Durable Object (from `landing.landed.note_json`; 404 in a `summary_only` pool, EV6) |
 | Recordings | `GET /replay/index.json`, `GET /replay/{id}.ndjson` | anyone | Worker assets |
 | Export a recording | `GET /api/pools/{pool}/replay.ndjson` | owner | Floor Durable Object (RP1) |
-| Pool files | the routes of `02-tidepool.md` 4.2 | anyone | app server (SE13 to SE22) |
+| Pool files | the routes of `02-tidepool.md` 4.2, with the source segments of PV5 | anyone | app server (SE13 to SE22) |
+
+- **PL1 (creating a pool).** `POST /api/pools` takes `{ pool, seed, summary_only?, request_id }`. `seed` names a seed tree built into the deployment: `tidepool` (the seed of `02-tidepool.md` 2.1 with the policy of its section 6), `tidepool-auto` (a generated variant: the same tree with the one-line policy variant of `02-tidepool.md` section 6, under which shared-rule files are `auto`; the main pool is created from it while `features.held` is false), or `tidepool-swarm` (`02-tidepool.md` 10.1). `summary_only` is a boolean, default `false`; it is stored in `meta`, carried by every `pool.state` event, and cannot be changed later (EV6). Only the Swarm pool and the soak pools are created with `summary_only: true`. The request also registers the pool with the model gate and the Swarm launcher (EV2a).
+- **SWR1 (the Swarm route).** `POST /api/swarm` takes:
+
+  ```ts
+  type SwarmRequest = Partial<SwarmConfig> & {   // SwarmConfig: `02-tidepool.md` 10.1; a request that starts agents carries all of it
+    pool: string;            // the pool the scripted agents work in; it must exist
+    running: boolean;        // false: stop launching in this pool; agents in flight finish
+    patterns?: string[];     // launch exactly these pattern ids (`02-tidepool.md` 10.3), one scripted agent each, in this order
+    release?: string[];      // pattern ids named in `hold_before_submit` whose agents may now call `submit`
+    request_id: string;
+  };
+  ```
+
+  The **Swarm launcher** answers it: the Swarm Workflow of the brief for a run, or the Worker itself for a canned cast (SWR2). The agents it launches are synthetic attempts in `pool` and use the same seven tools as a real agent. Each is opened with its truth list (TR8). Opening the first one sets `pool.state.synthetic` (EM1a).
+- **SWR2 (a canned cast).** With `patterns`, the launcher starts one scripted agent per entry, in list order (agent *n* is entry *n*; SW1 of `02-tidepool.md` applies with the request's `seed`). `agents`, `collision_dial`, `launch_per_second` and `rescale_every_s` are not used. This is how the conductor of the hero conflict, the tracer and the integration tests start a named pattern on a named pool.
+- **SWR3 (holding and releasing).** A pattern id listed in `hold_before_submit` makes its agents wait before `submit`. A later request with the same `pool` and `release: [ids]` lets them submit. A request may carry only `pool`, `running: true`, `release` and `request_id`.
+- **SWR4.** A repeated `request_id` is a no-op. The kill switch stops launching (SE10). Every change of what is running is reported by `swarm.state` (EM6).
+- **FJ1 (`/floor.json` and `features`).** `/floor.json` is a static file built with the deployment. Its `features` field says which SHOULD features the build has. These are the only keys, and no other document may add one:
+
+  ```ts
+  type Features = {
+    held: boolean;                       // 10.2 in full: previews, blast radius, risk lines, `land_now`. false: the minimal form (HD1)
+    race: boolean;                       // 11.4
+    undo: boolean;                       // 11.3: the owner's Undo, the undo-plan and undo routes
+    green: "none" | "static" | "full";   // 11.5: no verification | static checks only (GR5) | the isolate self-test
+    clef: boolean;                       // Clef triage and risk questions (7.3, 10.4). false: `CLEF_TRIAGE`, `CLEF_RISK` and `CLEF_CONTRADICTION` are off
+    attempt_repos: boolean;              // S3: attempt repositories are provisioned
+  };
+  ```
+
+  The Worker reads the same values (`src/config/features.ts` in the build plan), so the page and the engine cannot disagree. A request that needs a feature that is off is refused with HTTP 404 and the error code `feature_off` (an intent with `race: true`, the undo-plan and undo routes), and changes nothing. The other fields of `/floor.json` (the default pool id, the Swarm pool id, the pre-written requests, model short names, the limits list, related work) are specified in `03-floor.md` 4.5.
 
 ---
 
@@ -2234,11 +2410,11 @@ All metrics are computed from the event stream by the shared reducer, per pool, 
 | --- | --- | --- |
 | 14.1 | **Landings per second** | Number of `landing.landed` events of kind `change` with `ts` in the window, divided by the window length in seconds. Accepted-but-unpushed landings are not counted. |
 | 14.2 | **Time to land** | For one landing: `ts(landing.landed) − ts(submit.result)` of the last `submit.result` with status `validated`, `submitted` or `held` for that attempt before acceptance. Reported as p50 and p99 over the window's landings. Owner waiting time on a card is included and also reported separately as "time held". "Intent to landed" (`ts(landing.landed) − ts(intent.created)`) is a different, separately labelled number. |
-| 14.3 | **Go-around rate** | Landings of kind `change` in the window whose note has at least one entry in `go_arounds`, divided by all landings of kind `change` in the window. Pull-backs (GA3) are reported next to it as "confirm rate": landings whose note has `pull_backs > 0` or a non-empty `confirms`. |
-| 14.4 | **False-abort rate** | Among go-arounds resolved in the window (GA2): the share where the attempt's operations at the resolving submit are identical to its operations when the go-around started (the agent changed nothing). In Swarm runs with ground truth, the script labels each canned change with the keys it truly depends on; the rate is then the share of `repair` results on keys the change does not depend on. Target: `FALSE_ABORT_TARGET` (*calibrated*). |
-| 14.5 | **Escape rate** | Landings of kind `change` in the window that were later reverted by the green line (11.5), divided by landings of kind `change` in the window. In Swarm runs with ground truth: landings whose change truly depended on a key that changed between its pin and its landing with no `repair` or `confirm` issued, divided by all landings. Target: `ESCAPE_TARGET`. |
+| 14.3 | **Go-around rate** | Landings of kind `change` in the window whose note has at least one entry in `go_arounds`, divided by all landings of kind `change` in the window. Pull-backs (GA3) are reported next to it as "confirm rate": landings whose note has `pull_backs > 0` or a non-empty `confirms`. The reducer decides both from the stream, not from `note_json` (which is `null` in a `summary_only` pool): a landing counts for the go-around rate when its attempt received at least one `headsup.sent` of result `repair` before the landing was accepted, and for the confirm rate when it received at least one of result `confirm`. These are the heads-ups that the note lists. |
+| 14.4 | **False-abort rate** | Among go-arounds resolved in the window (GA2): the share where the attempt's operations at the resolving submit are identical to its operations when the go-around started (the agent was sent back and changed nothing). The reducer takes this from `headsup.resolved` (HU12), in every pool: a go-around is the pair `(attempt_id, go_around)`; it is a false abort when no `headsup.resolved` of result `repair` with that pair has `changed: true`; it is counted once, when `attempt.state` next shows the attempt leaving `going_around` for a state other than `stopped`. No `op.recorded` event is needed, so the rate exists in a `summary_only` pool. Target: `FALSE_ABORT_TARGET` (*calibrated*). The **truth-label rate** of a Swarm run (the share of `repair` results on keys the canned change does not truly depend on, from the truth lists of `02-tidepool.md` 10.3) is a different number. It is not in the stream and not in `metrics`: the soak script computes it from the landed notes and the truth lists and publishes it in `SoakResult` (`04-build-plan.md`, VE6). |
+| 14.5 | **Escape rate** | Landings of kind `change` in the window that were later reverted by the green line (11.5): their `seq` is in `reverted` of an `undo.planned` event with cause `revert`. Divided by landings of kind `change` in the window. `null` when the build has no green line (`features.green` is `"none"`). This is the only escape rate shown on screen, in every pool. The **ground-truth escape count** of a Swarm run (SW2 of `02-tidepool.md` 10.3: a landed file whose number does not fit the scale at head) is computed by the soak script from the final tree and published in `SoakResult`, not in `metrics`. Target: `ESCAPE_TARGET`. |
 | 14.6 | **Changes waiting behind another change** | Gauge, sampled at the end of each tick: the number of attempts in `validated` with all premises holding that the tick did not accept because of `right_of_way` (RW3) or because the batch was full. Attempts on a card are waiting for a person, not for a change, and are not counted. `push_backlog` (attempts in `validated` while an outbox row is pending) and tick CPU time (`tick_cpu_ms`, p50 and p99) are reported next to it. |
-| 14.7 | **Repair latency** (real agents only) | `ts(submit.result with status validated)` − `ts(headsup.sent with result repair)` for the same go-around. Reported as p50 and p99, never mixed with synthetic agents, because scripted agents answer at once. |
+| 14.7 | **Repair latency** (real agents only) | For one go-around: `ts` of the first `submit.result` with status `validated`, `submitted` or `held` after the heads-up, minus `ts` of the `headsup.sent` of result `repair` that started the go-around. (`held` counts: a race candidate and a held change end their repair on a card.) Reported as p50 and p90, never mixed with synthetic agents, because scripted agents answer at once. |
 | 14.8 | **Fork throughput** | Attempt repos provisioned per second and their failure rate, from `attempt.repo` events. Reported separately from 14.1, because no landing waits for a fork. |
 
 The Floor quotes no number that the current stream or a named recorded run did not produce.
@@ -2247,7 +2423,20 @@ The Floor quotes no number that the current stream or a named recorded run did n
 
 ## 15. Decided by spike
 
-Each item is an interface that the rest of the system codes against, the options, and the measurement that chooses. Until a spike is decided, the first option listed is the working assumption.
+Each item is a **port**: an interface that the rest of the system codes against, with one adapter per option. The options were measured on the real Cloudflare service on 2026-10-04. The measurements are in the platform record, `docs/measurements/spikes/2026-10-04-platform.md` (X*n* is its experiment E*n*). For each port this section states the **chosen** option, the **evidence**, the **fallback**, and what is **not yet measured**. The interface stays as it is, so an option can still be swapped: the adapter in use changes only together with a new record under `docs/measurements/spikes/` (question, measurement, choice, date).
+
+Limits of the evidence, as the record states them: every experiment ran once, from one location, on small repositories (a few files). Latency is one sample set, not a benchmark.
+
+| Port | Chosen | Fallback |
+| --- | --- | --- |
+| S1 Push path | Trunk builds the pack by hand and posts `git-receive-pack` itself. One request carries both ref commands. | isomorphic-git inside Trunk, for the push only |
+| S1 Reading notes | The notes commit id from the ref advertisement, then binding reads by object id | A hand-built fetch of the notes ref |
+| S2 Token source | `createToken()` when needed, refreshed on 401 or 403. Only Trunk holds a write token. | The token returned by `create()`, with rotation |
+| S3 Attempt repos | `fork()` off the landing path, at most four in flight, with retry and backoff | `create()` per attempt, or no attempt repo |
+| S4 Green line runtime | A Dynamic Worker isolate, no network, with a CPU limit | Static checks only, stated on screen |
+| S5 Models | Workhorse `@cf/openai/gpt-oss-120b`; Race adds `@cf/moonshotai/kimi-k2.7-code` and `@cf/zai-org/glm-5.3-flash` | The next model of the measured list; the final mix follows the seeded-intent measurement |
+| S6 Clef | `@cf/cloudflare/clef` for triage and for risk | `@cf/cloudflare/clef-flash` when latency matters; off |
+| S7 Reading pool files | `readFile({ ref: <commit id>, path })` through the binding | Binding reads by object id |
 
 ### S1. Push path
 
@@ -2269,13 +2458,32 @@ interface NotesReader {
 }
 ```
 
-| Option | Description |
-| --- | --- |
-| A (preferred) | Hand-built pack and raw receive-pack over smart HTTP v1 from Trunk (pure `rawgit` module). |
-| B | isomorphic-git with an in-memory filesystem inside Trunk, used only for the push. |
-| C | One warm container with the git CLI, called by Trunk. |
+| Option | Description | Status |
+| --- | --- | --- |
+| A | Hand-built pack and raw receive-pack over smart HTTP v1 from Trunk (pure `rawgit` module). | **Chosen** |
+| B | isomorphic-git with an in-memory filesystem inside Trunk, used only for the push. | Fallback |
+| C | One warm container with the git CLI, called by Trunk. | Not built, not measured |
 
-To measure: success over several hundred consecutive pushes; memory against 128 MB; latency p50/p99; whether the server offers `atomic` and whether a two-ref push is all-or-nothing (if not, the `retry_notes` and `retry_main` rows of LP5 are exercised); that a stock git client can clone and read the notes; whether the binding reads `refs/notes/premise` by ref (else `NotesReader` uses a hand-built fetch); how soon after a push the ref advertisement and a binding read show the new value.
+**Chosen: A.** Trunk builds the pack by hand (9.5) and posts `git-receive-pack` itself. No git client library is on the landing path.
+
+Evidence:
+
+- X8 (hand-built pack): the service accepted a hand-built pack in a single-ref request (516 ms) and in a two-ref request (362 ms), one sample each. The binding then read the hand-built objects. An update that needs no new objects works with an empty pack.
+- X3 and X8 (compare-and-swap): the server checks the old object id. An update with a stale old id was refused (`stale ref`); the same update with the correct old id was then applied. Creating a ref that already exists was refused.
+- X8 (landing atomicity): one request carried both commands (`refs/heads/main` and `refs/notes/premise`). With one wrong old id the service refused both commands, in both command orders, with and without the `atomic` capability, which it does not advertise.
+- X4: pushes to `refs/notes/premise` were accepted, listed, and fetched back with matching content. A stock git client can therefore read the notes (3.5).
+- X7: 100 commit-and-push cycles in a row from one Durable Object, 0 failures, p50 128 ms, p95 278 ms, max 449 ms. That run pushed through isomorphic-git. It speaks for the service and for option B. It does not yet speak for a hand-built pack at volume.
+- X1 and X6: after a push, a binding read showed the new head within 28 to 274 ms, with no stale read in 10 rounds.
+
+What follows for the protocol:
+
+- **S1a (one request, two commands).** A landing push is one receive-pack request with both commands (LP4). `atomic` is passed as `true` only when the server advertises it.
+- **S1b (the result is still decided by value).** Trunk does not rely on the measured all-or-nothing behaviour. After any result that is not all-ok it reads the ref advertisement (`Pusher.readRefs`) and decides by the values of both refs (LP5). The rows `retry_notes` and `retry_main` stay.
+- **S1c (`NotesReader`).** Chosen: the notes commit id comes from the ref advertisement (`Pusher.readRefs`), or from `meta.notes_commit` when Trunk already knows it; the notes tree and the note blobs are then read through the binding by object id. Evidence: the binding does not resolve `refs/notes/premise` by name (X4); reads by commit id returned the content for every ref tested (X4, X6). Fallback: a hand-built fetch of the notes ref (`git-upload-pack`) in the `rawgit` module. Not yet measured: a binding read of an object that is reachable only from the notes ref.
+
+**Fallback: B.** X7 shows that option B works on the service. The switch is one adapter (`Pusher`); the outbox, LP5 and the vectors do not change.
+
+Not yet measured (owned by the durable-landing slice of `04-build-plan.md`): several hundred consecutive pushes with the hand-built pack; the largest pack; the size of Trunk's SQLite after 300 batches; memory against the 128 MB limit (that run fails on any memory-limit error).
 
 ### S2. Token source
 
@@ -2286,15 +2494,27 @@ interface TokenSource {
 }
 ```
 
-| Option | Description |
-| --- | --- |
-| A | Token minted with `createToken` from the Durable Object, cached until near expiry. |
-| B | The token returned by `create()` when the pool repo was created, stored encrypted in Trunk storage, rotated by re-creating through `fork()` (rules below). |
-| C | Push from a container, where minted tokens were reported to work. |
+| Option | Description | Status |
+| --- | --- | --- |
+| A | Token minted with `createToken` from the Durable Object, cached until near expiry. | **Chosen** |
+| B | The token returned by `create()` when the pool repo was created, stored encrypted in Trunk storage, rotated by re-creating through `fork()` (rules below). | Fallback |
+| C | Push from a container, where minted tokens were reported to work. | Not built, not measured |
 
-To measure: whether a minted token is accepted for git from a Durable Object (the reported 403); the real lifetime of a token returned by `create()`; whether `fork()` with `defaultBranchOnly: false` copies `refs/heads/green` and `refs/notes/premise`.
+**Chosen: A.** Trunk mints a write token with `createToken()` when it needs one, keeps it until near its expiry, and asks for a new one after a 401 or 403 on a push (LP5a).
 
-Rules for option B, because a rotation changes the pool's repository: rotate only while the outbox is empty and no rebuild runs; fork with `defaultBranchOnly: false` and wait for it off the landing path; before switching, read `main`, `green` and the notes ref on the fork and require them to equal Trunk's values; hold the tick (`pool_state = rebuilding`) during the switch; then increase `meta.repo_generation`, store the new `repo`, and emit `pool.state` with the new `remote` (the app server follows it, SE19). A failed check leaves the old repository in use. A 401 or 403 on a push (LP5a) triggers `writeTarget` again.
+Evidence:
+
+- X2: `createToken()` took 42 to 44 ms from inside a Durable Object. Pushes with a minted write token took 125 to 137 ms. Write and read tokens were accepted with Bearer and with Basic authentication, inside and outside Workers. A read token cannot push. The reported failure of minted tokens (workers-sdk issue 15429) did not reproduce.
+- X3: any write token can force-push, delete a branch and delete the default branch.
+
+What follows:
+
+- **S2a (who may hold a write token).** Only Trunk holds a write token for a pool repository or its plain-merge repository (SE5). Agents, verifiers, the app server and the public never receive one. A person who wants to read the pool with git gets a read token (SE5c).
+- **S2b.** `createToken` is always called with an explicit scope (SE5c).
+
+**Fallback: B**, with these rules, because a rotation changes the pool's repository: rotate only while the outbox is empty and no rebuild runs; fork with `defaultBranchOnly: false` and wait for it off the landing path; before switching, read `main`, `green` and the notes ref on the fork and require them to equal Trunk's values; hold the tick (`pool_state = rebuilding`) during the switch; then increase `meta.repo_generation`, store the new `repo`, and emit `pool.state` with the new `remote` (the app server follows it, SE19). A failed check leaves the old repository in use. A 401 or 403 on a push (LP5a) triggers `writeTarget` again.
+
+Not yet measured (needed only for option B): the real lifetime of a token returned by `create()`; whether `fork()` with `defaultBranchOnly: false` copies `refs/heads/green` and `refs/notes/premise`.
 
 ### S3. Attempt repos
 
@@ -2304,32 +2524,55 @@ interface AttemptRepoProvisioner {
 }
 ```
 
-| Option | Description |
-| --- | --- |
-| A | `create()` an empty repo per attempt and push checkpoints. |
-| B | `fork()` the pool repo per attempt, with retry on `FORK_IN_PROGRESS`. |
-| C | A pre-warmed pool of repos, assigned on demand. |
+| Option | Description | Status |
+| --- | --- | --- |
+| A | `create()` an empty repo per attempt and push checkpoints. | Fallback |
+| B | `fork()` the pool repo per attempt, with retry. | **Chosen** |
+| C | A pre-warmed pool of repos, assigned on demand. | Not built |
 
-To measure: time and failure rate under concurrency. Fixed regardless of the choice: provisioning is asynchronous (AG5); synthetic agents get no repo; fork throughput is reported separately (14.8).
+**Chosen: B**, with these rules:
+
+- **S3a (off the landing path, bounded).** Forks are made off the landing path, at most `MAX_FORKS_IN_FLIGHT` (4) at a time in the deployment. A failed fork is retried up to `FORK_RETRIES` times with a backoff that starts at `FORK_BACKOFF_BASE_MS` and doubles. A fork that still fails is reported as `attempt.repo { ok: false }`, and the attempt runs without a repo (AG5).
+- **S3b (its token).** `fork()` returned no token that works (X5). The token for an attempt repo is minted with `createToken()` for that repository. It is a token for the attempt repo only, in the separate namespace of SE22, never for a pool repository (S2a).
+- **S3c (nothing shown depends on a fork).** Nothing on the landing path, and nothing that the Floor or the video shows as the state of a pool, an attempt or a landing, may depend on a fork having finished. The note's `attempt.repo` is `null` when the repo did not exist at acceptance.
+- Fixed as before: provisioning is asynchronous (AG5); synthetic agents get no repo; fork throughput is reported separately (14.8). With `features.attempt_repos = false` nothing is provisioned.
+
+Evidence: X5. 20 concurrent forks gave 15 usable repositories and 5 failures (`INTERNAL_ERROR`, code 10400). A fork was ready in 1.7 to 4.0 s (p50 3.4 s). A push to a fork left the source unchanged.
+
+**Fallback: A.** `create()` an empty repository per attempt (X1: ready in 1.3 to 2.7 s; a push with its token took 168 to 245 ms). If that fails too, the attempt has no repo and says so (`attempt.repo { ok: false }`).
+
+Not yet measured: whether `fork()` can place the fork in the separate attempt namespace that SE22 requires. If it cannot, SE22 wins and option A is used.
 
 ### S4. Green line verification runtime
 
 Interface: `Verifier` (11.5).
 
-| Option | Description |
-| --- | --- |
-| A (preferred) | Browser Run opens the pool at the commit and runs the in-page self-test. |
-| B | A Dynamic Worker isolate imports the modules by ref and runs the headless self-test. |
-| C | A container with node. |
-| D (fallback) | `static`: parse, import resolution, policy invariants. The Floor says "static checks only". |
+| Option | Description | Status |
+| --- | --- | --- |
+| A | Browser Run opens the pool at the commit and runs the in-page self-test. | Not built, not measured |
+| B | A Dynamic Worker isolate imports the modules of the commit and runs the headless self-test. | **Chosen** |
+| C | A container with node. | Not built, not measured |
+| D | `static`: parse, import resolution, policy invariants. The Floor says "static checks only". | Fallback |
 
-To measure: whether each deploys from the owner's machine without Docker, cold and warm run time, flakiness over 50 runs (GR3 tolerates one false red per verification, not two). Every option must meet GR6 (no bindings, no secrets, no outbound network) and GR7.
+**Chosen: B**, with these rules:
+
+- **S4a (how).** The `Verifier` reads the commit's `.js` files by commit id (S7) and loads them, with the generated entry module of `02-tidepool.md` 5.4, as the modules of one Dynamic Worker through the Worker Loader binding: an empty environment, `globalOutbound: null`, and `limits: { cpuMs: GREEN_CPU_MS }`. It takes the verdict the entry module returns and maps it by GR8.
+- **S4b (concurrency).** At most four Dynamic Workers may be in flight per Worker request (ten per Durable Object); a fifth is refused with a clear error. One verification uses one isolate at a time, its checks run in sequence, and at most one verification is in flight (GR1).
+- **S4c.** No container and no Browser Run is in the build. `VerifyResult.runtime` keeps the values `browser` and `container` so that such an adapter can be added later; every option must meet GR6 and GR7.
+
+Evidence (the record's sandbox test): a fresh isolate loaded and ran the pool's simulation (shared rules, one creature, 3,000 ticks) in 9 to 14 ms per run, for nine code versions. `fetch()` inside the isolate throws. A runaway loop under `cpuMs: 50` was stopped ("Worker exceeded CPU time limit."). A syntax error and a missing export were reported as errors. The limit of four in flight per request was observed.
+
+The same test showed one thing about the product claim. With `ENERGY_MAX` rescaled from 100 to 1 and a creature still written for the old scale, every generic invariant passed: the crab hid for all 3,000 ticks. A self-test that does not encode a creature's intended behaviour accepts the merged code. The green line does not catch the hero conflict. The premise check does (6.5, HC3).
+
+**Fallback: D.** Runtime `static`, stated on screen as "static checks only" (GR5); `features.green` is then `"static"`. With `features.green = "none"` no verification runs and the Floor shows no green line.
+
+Not yet measured: the full pool (every seed file and every creature) in the isolate; flakiness over 50 runs (GR3 tolerates one false red per verification, not two); the value of `GREEN_CPU_MS`.
 
 ### S5. Model mix and number of live agents
 
 ```ts
 type ModelPlan = {
-  workhorse: string;                                   // default "@cf/openai/gpt-oss-120b"
+  workhorse: string;                                   // "@cf/openai/gpt-oss-120b"
   race: string[];                                      // RACE_SIZE models
   per_minute: Record<string, number>;                  // enforced by the gate
   max_real_agents: number;
@@ -2337,29 +2580,99 @@ type ModelPlan = {
 };
 ```
 
-To measure on the seeded intents, per model: share that land, median and p90 time per change, tool-call error rate, success of the mid-flight adaptation (`30 → 0.3` after the `ENERGY_MAX` heads-up), tokens and cost per change (for `MAX_ATTEMPT_USD`), and, for energy creatures, the share whose module references `ENERGY_MAX` and the share that write an absolute number (HC4). `max_real_agents` is set from the measured success rate and latency, not from the rate-limit table.
+**Chosen (the starting plan):**
+
+| Role | Model |
+| --- | --- |
+| Workhorse | `@cf/openai/gpt-oss-120b` |
+| Race (`RACE_SIZE` is 3) | the workhorse, `@cf/moonshotai/kimi-k2.7-code`, `@cf/zai-org/glm-5.3-flash` |
+
+Evidence: X9. One run per model on one small task (read two small files, change a constant, update one call site, with two tools).
+
+| Model | Correct | Model calls | Total | Median per call |
+| --- | --- | --- | --- | --- |
+| `@cf/openai/gpt-oss-120b` | yes | 5 | 3.6 s | 0.78 s |
+| `@cf/moonshotai/kimi-k2.7-code` | yes | 5 | 4.1 s | 0.96 s |
+| `@cf/zai-org/glm-5.3-flash` | yes | 3 | 5.1 s | 1.9 s |
+| `@cf/deepseek-ai/deepseek-v4-flash-0731` | yes | 3 | 10.3 s | 3.9 s |
+| `@cf/zai-org/glm-5.3` | yes | 3 | 28.2 s | 3.5 s |
+| `@cf/qwen/qwen3.8-27b` | yes | 3 | 55.2 s | 23.0 s |
+
+This task is far smaller than a real intent. It shows the request shape and the relative speed, not coding quality.
+
+- **MP1 (request shape, measured).** `env.AI.run(model, { messages, tools: [{ type: "function", function: { name, description, parameters } }], max_tokens })`. An assistant message that carries tool calls MUST have a string `content` (the empty string when the model gave none); `null` is rejected with error 5006. The tool definitions themselves are in `05-agent.md`.
+- **MP2 (the final mix follows the seeded-intent measurement).** The measurement protocol is in `05-agent.md`. It reports, per model, on the seeded intents of `02-tidepool.md` section 9: the share completed; the median and p90 time per change; the tool-call error rate; for energy creatures, the share whose module references `ENERGY_MAX` and the share that write an absolute number (HC4); the share that repair correctly after a scripted heads-up (`30` to `0.3` after the `ENERGY_MAX` diff); the cost of one confirm turn of row E2m; tokens and cost per change (for `MAX_ATTEMPT_USD`). `workhorse`, `race`, `per_minute` and `max_real_agents` are set from these numbers, not from the rate-limit table. A first run of it needs no engine and no premises (the seven tools over an in-memory copy of the seed, Workers AI over REST), so it can run before Trunk exists.
+
+**Fallback.** `ModelPlan` is data. A model that misses the marks of the build plan is replaced by the next model of the table above that completed the task, or the race list is shortened and `RACE_SIZE` lowered with it. A model outside Workers AI needs the owner's approval (`04-build-plan.md`).
+
+Not yet measured: everything in MP2.
 
 ### S6. Clef limits and accuracy
 
 ```ts
-interface Triage {
-  // One call per attempt per batch (7.3). `answers` has one entry per premise id of the input.
-  judge(input: TriageInput): Promise<{ answers: Record<string, number | null>; model: string; ms: number; error?: ErrCode }>;
-  readonly synchronous: boolean;      // true for ScriptedTriage and for "off" (TR5, TR8)
+type TriageInput = {
+  attempt_id: string;
+  intent: string;
+  patch: Array<{ key: string; source: string }>;                 // added and altered entities, as in the attempt view
+  premises: Record<string, {                                      // one entry per pending premise; the key is the question id
+    kind: PremiseKind; key: string; rule: string;                 // the triage row: E3, F4, F6, QT2 or QR4
+    read_then: string | null; is_now: string | null; changed_by_intent: string | null;
+    added?: Array<{ key: string; source: string | null }>;        // listing and query premises: the gained members
+    changed: string[];                                            // for a file premise: the entity keys of D (7.2); else []
+  }>;
+  truth: string[] | null;                                         // synthetic attempts only (TR8); for QR4 the landed change's list
+};
+type TriageAnswers = { answers: Record<string, number | null>;    // one entry per premise id; null = unavailable
+                       model: string };
+
+interface Triage {            // asynchronous: Clef. Called after the transaction (TR2). One call per attempt per batch (7.3).
+  judge(input: TriageInput): Promise<TriageAnswers & { ms: number; error?: ErrCode }>;
+}
+interface SyncTriage {        // synchronous: answers inside the accept transaction (TR5). No promise, no `await`.
+  judgeNow(input: TriageInput): TriageAnswers;
 }
 interface RiskJudge {
   judge(input: RiskInput): Promise<RiskAnswers>;
 }
 ```
 
-| Option | Description |
-| --- | --- |
-| A | `clef-flash` for triage, `clef` for risk. |
-| B | `clef` for both. |
-| C | Off (`CLEF_TRIAGE = off`): triage answers unavailable inside the transaction (TR5, → `confirm`), no risk questions. This is also the behaviour of a build without Clef. |
-| (always) | `ScriptedTriage` for synthetic attempts (TR8), whatever option is chosen. |
+- **S6a (two ports, one choice per attempt).** At classification Trunk picks the triage of the attempt: `ScriptedTriage` (a `SyncTriage`) when `agent_kind = synthetic` (TR8); `OffTriage` (a `SyncTriage` whose every answer is `null`) when `CLEF_TRIAGE` is off or the kill switch is set (TR5); otherwise `ClefTriage` (a `Triage`). `SyncTriage.judgeNow` returns a value, not a promise, so `ScriptedTriage` is pure code that can live with the Swarm scripts and be called inside the transaction (SY2). `RiskInput` is the `state` object of 10.4.
 
-To measure on the hand-labelled cases (the `triage` vectors plus at least 40 more, including QR4 cases): accuracy, latency, request limits, how many questions one request accepts (`CLEF_MAX_QUESTIONS`), the input size at which the service truncates state (`CLEF_INPUT_TOKEN_LIMIT`), whether `criteria` is accepted on `noul` questions, the answer field name. `T_REPAIR`, `T_CONFIRM`, `T_INTENT_MIN`, `T_UNRELATED_MAX`, `T_SHARED_MAX` and `T_CONTRADICT` are set from these results and recorded with the confusion table.
+| Option | Description | Status |
+| --- | --- | --- |
+| A | `clef-flash` for triage, `clef` for risk. | Fallback when latency matters |
+| B | `clef` for both. | **Chosen** |
+| C | Off (`CLEF_TRIAGE = off`): `OffTriage` answers unavailable inside the transaction (TR5, → `confirm`), no risk questions. | The build without Clef (`features.clef = false`) |
+| (always) | `ScriptedTriage` for synthetic attempts (TR8), whatever option is chosen. | In every build |
+
+**Chosen: B.** `@cf/cloudflare/clef` answers the triage questions (7.3) and the risk questions (10.4): `CLEF_TRIAGE_MODEL_ID` and `CLEF_RISK_MODEL_ID` are both `@cf/cloudflare/clef`.
+
+Evidence (the record's Clef test): eight hand-made cases, each with the intent, the old and the new source of something the agent read, the agent's patch, and one yes/no question. Both models put every case on the correct side of 0.5. `clef` separated the classes more widely (lowest "yes" 0.93, highest "no" 0.08) than `clef-flash` (0.76 and 0.31). Latency was 130 to 930 ms per call, at about 460 input tokens per call. A burst of 40 concurrent `clef-flash` calls all succeeded in 1.1 s.
+
+- **S6b (thresholds are not set by this evidence).** Eight cases written by the author of the question are a smoke test, not a calibration. `T_REPAIR`, `T_CONFIRM`, `T_INTENT_MIN`, `T_UNRELATED_MAX`, `T_SHARED_MAX` and `T_CONTRADICT` stay *calibrated* constants with their starting values, and `CLEF_TRIAGE`, `CLEF_RISK` and `CLEF_CONTRADICTION` stay `off`, until they are measured on a larger set and recorded with the confusion table.
+
+**Fallback: A** for triage when latency matters (`CLEF_TIMEOUT_MS` is 2,000 and triage sits between a landing and the agents that wait for its outcome): `CLEF_TRIAGE_MODEL_ID` becomes `@cf/cloudflare/clef-flash`. Its narrower separation needs its own thresholds. Below that, option C.
+
+Not yet measured: accuracy on the hand-labelled set (the `triage` vectors plus at least 40 more cases, including QR4 cases and cases from real agent runs); latency under load for `clef`; how many questions one request accepts (`CLEF_MAX_QUESTIONS`); the input size at which the service truncates state (`CLEF_INPUT_TOKEN_LIMIT`); whether `criteria` is accepted on `noul` questions; the answer field name.
+
+### S7. Reading pool files
+
+Interface: `PoolSource` (`02-tidepool.md` 4.9), used by the app server and by the verifier. Trunk's rebuild makes the same reads (3.6).
+
+| Option | Description | Status |
+| --- | --- | --- |
+| By commit id | `readFile({ ref: <commit id>, path })` through the Artifacts binding. | **Chosen** |
+| By object id | `readCommit`, then `readTree` one level at a time, then `readBlob`, with trees cached per version. | Fallback |
+| Trunk's `files` table | Head files from Trunk. | Not built: a public request never reaches Trunk (SE19) |
+| An attempt view | A live read of an attempt's view. | Not built: previews are preview commits (PV1, PV4) |
+| A directory on disk | For tests and local runs. | Tests only |
+
+- **S7a (always by commit id).** Every read of pool files names a commit id. A moving source (`main`, `green`, `plain`) is first resolved to a commit id: by the app server from the Floor's state (SE19); by Trunk from its own `meta`, or from the ref advertisement.
+- **S7b (what the binding resolves).** Commit ids, short branch names (`main`, `green`) and tag names resolve. Full ref names (`refs/heads/green`) and other namespaces (`refs/notes/premise`, `refs/previews/...`) do not. Code never passes a full ref name to the binding. Notes are read by object id (S1c).
+
+Evidence: X4 and X6. `readFile({ ref: <commit id>, path })` returned the file for every ref tested. `readFile`, `readTree`, `readCommit`, `readBlob` and `log` took about 110 ms each (p50). After a push, reads showed the new head within 109 to 274 ms. A commit-addressed response is cached for good (SE20), so this cost is paid once per file and commit.
+
+Not yet measured: a read by commit id of a commit that is reachable only from `refs/previews/*` (PV1a) or only from the notes ref (S1c); the time to load a whole pool page (about 25 modules) on a cold cache.
 
 ---
 
@@ -2400,8 +2713,9 @@ type Case = {
   pool: string;                                // key of pools
   files?: Record<string, string | null>;       // overrides on top of the pool; null removes a file
   constants?: Record<string, number>;          // overrides for this case
-  attempts: Record<string, { intent: string; intent_id?: string }>;  // opened before step 1, in this order, at head_seq 0;
-                                               // attempts with the same intent_id are attempts of one intent (GL3)
+  attempts: Record<string, { intent: string; intent_id?: string; race?: boolean }>;  // opened before step 1, in this order, at head_seq 0;
+                                               // attempts with the same intent_id are attempts of one intent (GL3);
+                                               // race: true marks a race candidate (RC1, runner rule 11)
   steps: Step[];
   final: Final;
   note?: string;
@@ -2415,7 +2729,7 @@ type Step = {
     | "push_result"                            // a push ended otherwise; args: { remote_main, remote_notes }, each "old" | "new" | "other" (LP5)
     | "restart"                                // Trunk restarts; args as push_result; remote_notes defaults to remote_main (LP7, TR6)
     | "triage"                                 // a Clef answer arrives; args: { attempt, kind, key, p, asked_at_op? } (p may be null = unavailable)
-    | "owner";                                 // args: { action: "land" | "land_now" | "decline" | "undo" | "retry" | "stop",
+    | "owner";                                 // args: { action: "land" | "land_now" | "decline" | "undo" | "retry" | "stop" | "choose",
                                                //         attempt?, seq?, expect_reverted? }
   args?: object;
   call_id?: string;                            // default: unique per step
@@ -2488,10 +2802,11 @@ Runner rules:
 6. Policy risk questions are off (`CLEF_RISK = off`), so a passing `auto` submit answers `validated`.
 7. A `tick` with a pending outbox row does nothing (LP1); `push_ok` confirms it.
 8. Attempt names in the file (`A`, `B`, `S`, ...) stand for attempt ids; order of `validated_at` is the order in which attempts entered `validated` (by a submit, by T12 or by an owner step).
-9. All attempts are real agents (`agent_kind = real`), so every judgment emits its event.
+9. All attempts are real agents (`agent_kind = real`) and the pool is not `summary_only`, so every judgment emits its event (EV6).
 10. The spec cites a case by its number prefix (`C04` means `C04-hero-shared-rule-lands-first`).
+11. An attempt with `race: true` is a race candidate (RC1). The candidates of one race share an `intent_id`, and that intent's race card is open before step 1 (so a candidate's submit emits `card.updated`, not `card.opened`). The `owner` action `choose` with `attempt` chooses that candidate (RC4): it is the `choose` option of the race card with that `attempt_id`.
 
-Case index (57 cases, 23 hash cases, 5 inbox cases). Cases `C29` and later were added in revision 2; "Changes after review" names the finding each one answers.
+Case index (58 cases, 23 hash cases, 5 inbox cases). Cases `C29` to `C57` were added in revision 2; "Changes after review" names the finding each one answers. Case `C58` was added in the reconciliation of 2026-10-04 (rule RC7). The reference simulator under `reference/spec-sim/` is frozen and has no race support, so it runs cases `C01` to `C57` only; `C58` was checked with a copy of it extended by the candidate flag and the `choose` action. No expected value of `C01` to `C57` changed in the reconciliation.
 
 | Case | Tests | Rules |
 | --- | --- | --- |
@@ -2552,6 +2867,9 @@ Case index (57 cases, 23 hash cases, 5 inbox cases). Cases `C29` and later were 
 | `C55-info-heads-up-does-not-wake-or-close-a-card` | An info heads-up to an attempt waiting on a held card starts no model turn and leaves the card open; the pending triage blocks the owner's tap until it is answered | HE2, HU5, TR1, TR3, T13, 11.6 |
 | `C56-replace-then-write-base-changed` | A whole-file write that follows a replace on the same path records its own base: when the file changes underneath, every operation on the path is dropped | W4, OP5, OP6, F1 |
 | `C57-star-reexport-name-now-shadowed` | An import resolved through `export *` relied on the name being absent from the re-exporting module: that absence is pinned, so a local export added later is caught | 6.2 resolveExport, D1b, E2, HU2a |
+| `C58-chosen-race-candidate-reopened-by-undo` | A race candidate that the owner chose is an ordinary attempt afterwards: reopened by an undo, its next submit follows its path tier and lands with no card | 11.4 RC1, RC2, RC4, RC7, T4, T13, T14, T19, 11.3, UN2, E2 |
+
+Not covered by the vectors (the vectors exercise the pure core with real attempts only). Each of these needs a Durable Object, Workflow or reducer test in the build plan: the `stop` call (TA9, T20) and `resume` (RS1 to RS5, T20r); the revert-limit card (GL6, T19s); `changed` in `headsup.resolved` (HU12) and metric 14.4; event sources and delivery (EV2a, EM6); hibernatable sockets (EV7); `summary_only` (EV6, EM1a, PL1); the minimal held form (HD1); the Swarm route (SWR1 to SWR4); scripted triage (TR5, TR8, S6a); the unlock brake (SE2a); the check codes (GR8). As before: timers and alarms (AL1 to AL4), re-index and rebuild (RB1 to RB5), push time-out and poison batch (LP5a to LP5c), model gate accounting (SE6 to SE8), sandbox headers (SE13 to SE15), the green line (GR1 to GR7), preview commits (PV1 to PV5), note shrinking (NT2).
 
 ## Appendix B. Where each must-fix item is addressed
 
@@ -2571,8 +2889,8 @@ Items that concern rules or protocol are mapped to sections. Items that are sche
 | Originality | Four day-1 spikes | S1, S2, S3, S5 |
 | Originality | One primitive; scope cut | Outside this file (brief section 6). This file defines one primitive, the premise, and no second one. |
 | Originality | Real shared code; hard rate and spend cap on public pages; neutral wording for the plain-merge pool | 13.2, 13.3, 11.7. The seed codebase is specified elsewhere. |
-| Feasibility | Day-1 landing spike with pass/fail; container fallback | S1, S2 |
-| Feasibility | Model spike; keep-alive and recovery so an evicted agent ends in a recorded state | S5; AG1 to AG4; T20 |
+| Feasibility | Day-1 landing spike with pass/fail; container fallback | S1, S2 (measured on 2026-10-04; the hand-built push and the minted token work, so the container option is not built) |
+| Feasibility | Model spike; keep-alive and recovery so an evicted agent ends in a recorded state | S5 and `05-agent.md` (the seeded-intent measurement); AG1 to AG4, AG8; T20, T20r, RS4 |
 | Feasibility | Freeze one primitive and one engine; green line falls back to parse and import checks and says so | Section 5 (no merge engine), GR5, S4 |
 | Feasibility | Take forks off the hot path | AG5, S3, 14.8; `attempts.attempt_repo` is never read on the landing path (3.2) |
 | Feasibility | Deterministic hero conflict in either order through derived premises; fix "only referenced premises force a repair"; measure false aborts | 6.3, 6.5 (HC1 to HC4), 7.2 (last consequence), 14.4; vectors `C04`, `C05`, `C10`, `C36`, `C37` |
@@ -2615,7 +2933,8 @@ Values are starting values. *Calibrated* constants MUST be replaced by measured 
 | `MAX_ATTEMPT_TOKENS` | 400,000 | calibrated (S5) |
 | `MAX_ATTEMPT_USD` | 1.00 | calibrated (S5); never reset (AG6) |
 | `RESUME_STEPS`, `RESUME_MODEL_CALLS`, `RESUME_TIMEOUT_MS` | 15, 12, 300,000 | allowance after T19 or T21 (AG6) |
-| `MAX_REVISIONS` | 3 | reopens per attempt (GR3a) |
+| `MAX_REVISIONS` | 3 | revisions per attempt before the owner is asked: at most two reopens happen by themselves, then the revert-limit card (GR3a, T19s, GL6) |
+| `RESUME_ACK_TIMEOUT_MS` | 30,000 | how long Trunk waits for the Agent's answer to `resume` before `reopen_failed` (RS1, RS4). Not the time allowance `RESUME_TIMEOUT_MS` of AG6. |
 | `RESERVATION_MARGIN_MS` | 10,000 | SE6a |
 | `REGISTER_TIMEOUT_MS` | 30,000 | 3.6 step 8 |
 | `ATTEMPT_TIMEOUT_MS` | 600,000 | owner waiting time on a card is excluded |
@@ -2633,7 +2952,10 @@ Values are starting values. *Calibrated* constants MUST be replaced by measured 
 | `CLEF_STATE_MAX_CHARS` | 60,000 | below the smaller Clef context window; a larger state is unavailable, never cut (TR7) |
 | `CLEF_MAX_QUESTIONS` | 64 | per request; calibrated (S6) |
 | `CLEF_INPUT_TOKEN_LIMIT` | 60,000 | calibrated (S6); TR7 |
-| `CLEF_TRIAGE`, `CLEF_RISK`, `CLEF_CONTRADICTION` | `off` | switches; `on` only after S6 |
+| `CLEF_TRIAGE`, `CLEF_RISK`, `CLEF_CONTRADICTION` | `off` | switches; `on` only after the thresholds are calibrated (S6b); always `off` when `features.clef` is false |
+| `CLEF_TRIAGE_MODEL_ID`, `CLEF_TRIAGE_MODEL` | `@cf/cloudflare/clef`, `clef` | S6; fallback `@cf/cloudflare/clef-flash`, `clef-flash` |
+| `CLEF_RISK_MODEL_ID`, `CLEF_RISK_MODEL` | `@cf/cloudflare/clef`, `clef` | S6 |
+| `DEFAULT_GLOBALS` | the 16 names of the `globals` list in 10.1 | PO4; one constant in the `protocol` module |
 | `PUSH_BACKOFF_BASE_MS` | 250 | |
 | `PUSH_BACKOFF_MAX_MS` | 30,000 | |
 | `PUSH_STALL_MS` | 5,000 | |
@@ -2646,16 +2968,22 @@ Values are starting values. *Calibrated* constants MUST be replaced by measured 
 | `GREEN_MIN_INTERVAL_MS` | 2,000 | GR1 |
 | `GREEN_TIMEOUT_MS` | 60,000 | GR6 |
 | `GREEN_LOG_MAX_CHARS` | 4,000 | |
+| `GREEN_CPU_MS` | 5,000 | CPU limit of the verifier's isolate (GR6, S4a); calibrated on the full pool |
+| `MAX_FORKS_IN_FLIGHT` | 4 | S3a; from the platform record (15 of 20 concurrent forks usable) |
+| `FORK_RETRIES`, `FORK_BACKOFF_BASE_MS` | 3, 2,000 | S3a; the backoff doubles |
+| `PREVIEW_REF_PREFIX` | `refs/previews/` | PV1; the fallback is `refs/heads/previews/` (PV1a) |
 | `METRICS_WINDOW_MS` | 10,000 | |
 | `METRICS_EVERY_MS` | 1,000 | EM5 |
-| `FLOOR_KEEP_LANDINGS` | 200 | FS1 |
+| `LIMITS_EVERY_MS` | 1,000 | SE9: the shortest interval between two `limits` events for spend or bucket changes |
+| `FLOOR_KEEP_LANDINGS` | 200 | FS1; the one name for this window in every file |
 | `FALSE_ABORT_TARGET` | 0.05 | calibrated with the Swarm |
 | `ESCAPE_TARGET` | 0 | |
 | `SPEND_CAP_USD` | 40 | the owner's budget is 50; the cap leaves a margin for non-model usage |
 | `MAX_REAL_AGENTS` | from S5 | |
 | `PUBLIC_RATE_PER_MIN` | 120 | per client address (SE21) |
 | `APP_FILE_RATE_PER_MIN` | 1,200 | per client address, commit-addressed files, cache misses only (SE21) |
-| `MAX_SOCKETS_PER_ADDR` | 8 | |
+| `MAX_SOCKETS_PER_ADDR` | 8 | counted by socket tag (EV7) |
+| `UNLOCK_FAILS_PER_MIN` | 10 | failed unlocks per client address per minute, then 429 (SE2a) |
 | `READ_TOKEN_TTL_S` | 3,600 | SE5c |
 | `SESSION_TTL_S` | 43,200 | |
 
@@ -2728,7 +3056,7 @@ Revision 2. Two adversarial reviews (correctness, platform) and the two parallel
 | `ops_first` and half-finished work; two attempts creating one file | PM4 (interrupted), PM3 (a moved base counts as a text conflict). |
 | L2 for any named kind | Adopted: only gained or lost names. |
 | `MAX_PATHS` 16 | Raised to 64 (`MAX_OPS` to 128); a pool's policy may lower it. |
-| L3 judgments at Swarm scale | Kept as rows; their events are not emitted in synthetic pools (EV6); the scale run reports tick CPU time. |
+| L3 judgments at Swarm scale | Kept as rows; their events are not emitted in `summary_only` pools (EV6, as restated in the reconciliation); the scale run reports tick CPU time. |
 | The example policy | Replaced by the tide pool's file (10.1). |
 
 ### From the Floor specification
@@ -2742,3 +3070,79 @@ Revision 2. Two adversarial reviews (correctness, platform) and the two parallel
 | N16, N19, N22, N25 | Routes fixed in 13.6; stop reason `cancelled`; undo plan and refusal reasons (11.3); `{ killed: false }` resumes; an undo landing cannot be undone. |
 | N18 | Channel schema in SE16. |
 | N24 | RC5: the race card stays open and is updated; CD2. |
+
+---
+
+## Changes in reconciliation (2026-10-04)
+
+Inputs: the lead's decisions, the cross-document critic's findings F01 to F43, the architect's corrections for `02-tidepool.md` and `03-floor.md`, the planner's gaps GP1 to GP5, and the platform record. No rule id was renumbered. New rules have new ids. The vector format is still `premise-cases/2`: 58 cases (one new, `C58`), 23 hash cases, 5 inbox cases. No expected value of `C01` to `C57` changed.
+
+### Lead decisions
+
+| Decision | What changed in this file | Section |
+| --- | --- | --- |
+| Platform: push path, landing atomicity | Section 15 S1 rewritten as chosen, with evidence and fallback (S1a to S1c); LP4 states the measured behaviour; the rebuild reads notes by object id | 15 S1, 9.6 LP4, 3.6 |
+| Platform: tokens | S2 chosen (`createToken()`), S2a (only Trunk holds a write token), S2b; SE5 | 15 S2, 13.1 SE5 |
+| Platform: attempt repositories | S3 chosen (`fork()` off the landing path, at most four in flight), S3a to S3c; constants `MAX_FORKS_IN_FLIGHT`, `FORK_RETRIES`, `FORK_BACKOFF_BASE_MS` | 15 S3, 3.5, Appendix C |
+| Platform: reading pool files | New port item S7 (S7a, S7b): reads by commit id; what the binding resolves | 15 S7, 13.2 SE19, 3.6 |
+| Platform: green-line runtime | S4 chosen (Dynamic Worker isolate), S4a to S4c; GR5, GR6; `GREEN_CPU_MS`; HC3 (a) says what the self-test does not catch | 15 S4, 11.5, 6.5 |
+| Platform: models | S5 starting plan; MP1 (measured request shape), MP2 (the final mix follows the seeded-intent measurement) | 15 S5 |
+| Platform: Clef | S6 chosen (`clef` for triage and risk, `clef-flash` as fallback), S6b (thresholds stay calibrated); the triage request names `clef`; constants `CLEF_TRIAGE_MODEL_ID`, `CLEF_RISK_MODEL_ID` | 15 S6, 7.3, Appendix C |
+| 1. Live pool frame | SE16a: live frames use `main` and `plain` and receive `probe`; commit frames (Replay, card previews) use `FrameAddress` and `advance` | 13.5 SE16, SE16a |
+| 2. Card options | CD4: the options of every card kind and reason; GL6: the `revert_limit` card offers `retry` and `stop`; T19s and T21 follow | 10.3, 11.1, 9.2 |
+| 4. Stopping from the Agent side | Agent-only call `stop { attempt_id, reason }` (TA9, TA9a, `AgentStopReason`); stop reason `withdrawn`; AG2 and T20 use the call | 4.1, 9.1, 9.2, 3.3 |
+| GP1 | PV5: source segment `p-<40 hex>` for a commit of the plain-merge repository, and the mapping from `FrameAddress` | 10.2 |
+| GP2 | The Swarm route takes `SwarmRequest` with `pool`, `patterns`, `release` (SWR1 to SWR4) | 13.6 |
+| GP4 | PL1 names the seeds `tidepool`, `tidepool-auto`, `tidepool-swarm` | 13.6 |
+| GP5 | The per-pool flag `summary_only` (PL1, `pool.state.summary_only`). EV6, FS1, JE1, `headsup.sent.items`, `landing.landed.note_json` and the note route are restated for `summary_only` pools; nothing is suppressed because an attempt is synthetic. EM1a defines `pool.state.synthetic`. | 12.1, 3.4, 7.5, 13.6, 1 |
+| Held tier in every build | HD1: the minimal form of T4, T13 and T14 | 10.2, 9.2 |
+| Agent prompt and tools | Pointer to `05-agent.md`: new section 4.11 (PR1), and at every mention of the prompt or the tool definitions | header, 4, 4.9, 4.10, 4.11, 6.5 |
+| Waking or restarting an Agent | The call `resume` (RS1 to RS5), transition T20r, AG8, `attempts.resumes`, `RESUME_ACK_TIMEOUT_MS`; UN6a defines `new_attempt` | 8.3, 9.2, 3.3, 11.3 |
+| Early model measurement | MP2 says the first run needs no engine; the protocol is in `05-agent.md` | 15 S5, 4.11 |
+
+### Critic findings
+
+| Finding | What changed in this file | Section |
+| --- | --- | --- |
+| F01 | As decision 1: SE16a; the comments of `probe`, `advance`, `highlight` | 13.5 |
+| F02 | As decision 2: CD4, GL6; the card route names `attempt_id` for `choose` | 10.3, 11.1, 13.6 |
+| F04 | As decision 4: `stop`, `withdrawn` (17 stop reasons) | 4.1, 9.1 |
+| F05 | Section 4.11 points to `05-agent.md` (the lead moved the prompt and the tool definitions there) | 4.11 |
+| F06 | `resume`, RS1 to RS5, T20r; AG8 says the Agent side belongs to every build | 8.3, 9.2, 3.3 |
+| F07 | RC7: a chosen candidate's race flag is cleared; `attempts.race`; RC1 says when the race card opens; vector `C58` | 11.4, 3.2, Appendix A |
+| F08 | `plain.updated` gains `tree`; PM7 defines "no visible difference" by tree equality | 11.7, 12.1 |
+| F09 | Client route `GET /p/{pool}` | 13.6 |
+| F14 | `headsup.resolved` gains `result`, `go_around`, `changed` (HU12, `heads_ups.op_mark`); 14.4 is defined from it for every pool; 14.3 is decided from `headsup.sent`, not from `note_json`; 14.5 on screen is green-line reverts only; truth-label numbers go to `SoakResult` | 8.3, 12.1, 14, 3.2 |
+| F15 | EV2a: the sources `trunk`, `agent:<id>`, `gate`, `swarm`, `floor`; per-pool counters; registration at pool creation; `EventBase.src`; EM6; SE9 | 12.2, 12.1, 3.4, 13.3 |
+| F16 | Ports `SyncTriage.judgeNow` and `Triage.judge`; `TriageInput`; TR5 and TR8 restated (`ScriptedTriage`, `OffTriage`, the truth list, p = 1 or 0) | 15 S6, 7.3, 3.2 |
+| F17 | CD5: card texts come from the pure `copy` module | 10.3 |
+| F18 | FS2: the app server's `seq` and per-path order come from the Floor's state | 3.4 |
+| F19 | GR8: the fixed list of check names and codes | 11.5 |
+| F20 | GR3 states what `confirmed` means and that a first failed run announces nothing | 11.5, 12.1 |
+| F21 | FJ1: the type `Features` and the code `feature_off` | 13.6 |
+| F22 | UN4 says an unrelated landing is in no list; the type `UndoPlan` | 11.3 |
+| F25 | `withdrawn` is the stop reason a sweep pattern uses when it gives up (TA9a) | 4.1 |
+| F26 | `UndoPlanResponse`, `UndoResponse` (the new plan with `plan_changed`); SE19 says what `green` resolves to before any green commit | 11.3, 13.2 |
+| F27 | The flag is named `summary_only` (the lead's name), applied as under GP5 | 12.1, 3.4, 7.5, 13.6 |
+| F28 | EV7: hibernatable sockets; FS3 | 12.2, 3.4 |
+| F29 | (g): `FLOOR_KEEP_LANDINGS` is the one name for the window | Appendix C |
+| F30 | The platform record's experiments are cited as X1 to X9; glossary rows "Landed commit" and "Card" | header, 1 |
+| F31 | `max_paths` is 64 in the example policy | 10.1 |
+| F32 | 14.7 ends at the first `submit.result` of status `validated`, `submitted` or `held`; p50 and p90 | 14 |
+| F33 | S1 lists memory, pack size and SQLite size as not yet measured, with their owner | 15 S1 |
+| F35 | `card.closed` gains `attempt_id`; `reason` is only the typed reason (CD1, RC4) | 10.3, 11.4, 12.1 |
+| F39 | PO4: the constant `DEFAULT_GLOBALS` | 10.1, Appendix C |
+| F40 | PV1a: the fallback ref for preview commits; `PREVIEW_REF_PREFIX` | 10.2 |
+| F42 | SE2a: at most `UNLOCK_FAILS_PER_MIN` failed unlocks per address per minute, then 429 | 13.1, 13.2, 13.6 |
+| F43 | RB0: what a rebuild from Artifacts does not bring back | 3.1 |
+| F03, F10 to F13, F23, F24, F34, F36 to F38, F41 | No change in this file. Their corrections are in `02-tidepool.md`, `03-floor.md` or `04-build-plan.md`, and this file is their reference (D1, HU2a, QT1, L2, PM3, SE15, HC3 are unchanged). | |
+
+### Architect's corrections and notes for the lead
+
+| Item | What changed in this file | Section |
+| --- | --- | --- |
+| S5 must report the share that references `ENERGY_MAX` and the cost of an E2m confirm | MP2 | 15 S5 |
+| S6 must measure questions per request, the truncation point and QR4 cases | "Not yet measured" of S6 | 15 S6 |
+| S2 must measure the lifetime of a `create()` token and what a fork copies | "Not yet measured" of S2 (needed only for the fallback) | 15 S2 |
+| Rules not covered by vectors | The list after the case index, extended by the rules added here | Appendix A |
+| Corrections for `02-tidepool.md` and `03-floor.md` | No change here: they bring those files to this file's revision 2. | |

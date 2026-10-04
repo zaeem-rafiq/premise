@@ -14995,6 +14995,414 @@
         ]
       },
       "note": "The hop entity and energy.js#drain are unchanged by B; what changed is the binding. The file premise on world/index.js is also judged (F3), and its item is folded into the entity item (HU2a)."
+    },
+    {
+      "id": "C58-chosen-race-candidate-reopened-by-undo",
+      "title": "A race candidate that the owner chose is an ordinary attempt afterwards: reopened by an undo, its next submit follows its path tier and lands with no card",
+      "rules": [
+        "11.4 RC1",
+        "RC2",
+        "RC4",
+        "RC7",
+        "T4",
+        "T13",
+        "T14",
+        "T19",
+        "11.3",
+        "UN2",
+        "E2"
+      ],
+      "pool": "tidepool",
+      "attempts": {
+        "S": {
+          "intent": "make energy a fraction from 0 to 1"
+        },
+        "A": {
+          "intent": "a crab that hides when its energy is low",
+          "intent_id": "i_crab",
+          "race": true
+        },
+        "A2": {
+          "intent": "a crab that hides when its energy is low",
+          "intent_id": "i_crab",
+          "race": true
+        }
+      },
+      "steps": [
+        {
+          "by": "S",
+          "do": "read",
+          "args": {
+            "path": "world/energy.js",
+            "entity": "ENERGY_MAX"
+          },
+          "expect": {
+            "ok": true,
+            "premises": [
+              {
+                "kind": "entity",
+                "key": "world/energy.js#ENERGY_MAX",
+                "at": 0,
+                "read": true,
+                "edit": false,
+                "derived": false
+              }
+            ]
+          }
+        },
+        {
+          "by": "S",
+          "do": "replace",
+          "args": {
+            "path": "world/energy.js",
+            "old": "ENERGY_MAX = 100",
+            "new": "ENERGY_MAX = 1"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "by": "S",
+          "do": "submit",
+          "args": {
+            "summary": "Make energy a fraction: ENERGY_MAX is 1"
+          },
+          "expect": {
+            "status": "validated"
+          }
+        },
+        {
+          "do": "tick",
+          "expect": {
+            "accepted": [
+              "S"
+            ]
+          }
+        },
+        {
+          "do": "push_ok",
+          "expect": {
+            "landed": [
+              1
+            ]
+          }
+        },
+        {
+          "by": "A",
+          "do": "read",
+          "args": {
+            "path": "world/energy.js",
+            "entity": "ENERGY_MAX"
+          },
+          "expect": {
+            "ok": true,
+            "premises": [
+              {
+                "kind": "entity",
+                "key": "world/energy.js#ENERGY_MAX",
+                "at": 1,
+                "read": true,
+                "edit": false,
+                "derived": false
+              }
+            ]
+          }
+        },
+        {
+          "by": "A",
+          "do": "write",
+          "args": {
+            "path": "creatures/crab.js",
+            "content": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 0.3;\n}\n"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "by": "A",
+          "do": "submit",
+          "args": {
+            "summary": "Add a crab that hides when its energy is low"
+          },
+          "expect": {
+            "status": "held",
+            "states": {
+              "A": "held"
+            },
+            "events_include": [
+              "card.updated"
+            ],
+            "events_exclude": [
+              "card.opened"
+            ]
+          }
+        },
+        {
+          "by": "A2",
+          "do": "read",
+          "args": {
+            "path": "world/energy.js",
+            "entity": "ENERGY_MAX"
+          },
+          "expect": {
+            "ok": true,
+            "premises": [
+              {
+                "kind": "entity",
+                "key": "world/energy.js#ENERGY_MAX",
+                "at": 1,
+                "read": true,
+                "edit": false,
+                "derived": false
+              }
+            ]
+          }
+        },
+        {
+          "by": "A2",
+          "do": "write",
+          "args": {
+            "path": "creatures/crab.js",
+            "content": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 0.25;\n}\n"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "by": "A2",
+          "do": "submit",
+          "args": {
+            "summary": "Add a crab that hides at a quarter of its energy"
+          },
+          "expect": {
+            "status": "held",
+            "states": {
+              "A": "held",
+              "A2": "held"
+            }
+          }
+        },
+        {
+          "do": "tick",
+          "expect": {
+            "accepted": [],
+            "states": {
+              "A": "held",
+              "A2": "held"
+            }
+          }
+        },
+        {
+          "do": "owner",
+          "args": {
+            "action": "choose",
+            "attempt": "A"
+          },
+          "expect": {
+            "states": {
+              "A": "validated",
+              "A2": "stopped"
+            },
+            "stop_reasons": {
+              "A2": "not_chosen"
+            },
+            "events_include": [
+              "card.closed"
+            ]
+          }
+        },
+        {
+          "do": "tick",
+          "expect": {
+            "accepted": [
+              "A"
+            ],
+            "states": {
+              "A": "accepted",
+              "A2": "stopped"
+            }
+          }
+        },
+        {
+          "do": "push_ok",
+          "expect": {
+            "landed": [
+              2
+            ],
+            "states": {
+              "A": "landed"
+            }
+          }
+        },
+        {
+          "do": "owner",
+          "args": {
+            "action": "undo",
+            "seq": 1
+          },
+          "expect": {
+            "undo": {
+              "reverted": [
+                1,
+                2
+              ],
+              "reopened": [
+                "A"
+              ],
+              "kept_readers": []
+            },
+            "states": {
+              "S": "landed",
+              "A": "landed"
+            }
+          }
+        },
+        {
+          "do": "tick",
+          "expect": {
+            "accepted": [
+              "undo:1"
+            ],
+            "landings": [
+              {
+                "seq": 3,
+                "kind": "undo",
+                "undoes": [
+                  1,
+                  2
+                ]
+              }
+            ],
+            "heads_ups": [
+              {
+                "to": "A",
+                "hn": 1,
+                "result": "repair",
+                "cause": "undo",
+                "items": [
+                  {
+                    "kind": "entity",
+                    "key": "world/energy.js#ENERGY_MAX",
+                    "rule": "E2",
+                    "result": "repair",
+                    "after_contains": "ENERGY_MAX = 100;"
+                  }
+                ],
+                "dropped_ops": []
+              }
+            ],
+            "states": {
+              "S": "stopped",
+              "A": "going_around",
+              "A2": "stopped"
+            },
+            "stop_reasons": {
+              "S": "undone"
+            },
+            "go_arounds": {
+              "A": 1
+            }
+          }
+        },
+        {
+          "do": "push_ok",
+          "expect": {
+            "landed": [
+              3
+            ]
+          }
+        },
+        {
+          "by": "A",
+          "do": "replace",
+          "args": {
+            "path": "creatures/crab.js",
+            "old": "crab.energy < 0.3",
+            "new": "crab.energy < 30"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "by": "A",
+          "do": "submit",
+          "args": {
+            "summary": "Add a crab that hides when its energy is low",
+            "acknowledge": [
+              1
+            ],
+            "statement": "Energy is back to points from 0 to 100, so the threshold is 30."
+          },
+          "expect": {
+            "status": "validated",
+            "states": {
+              "A": "validated"
+            },
+            "cards": [],
+            "events_exclude": [
+              "card.opened",
+              "card.updated"
+            ]
+          }
+        },
+        {
+          "do": "tick",
+          "expect": {
+            "accepted": [
+              "A"
+            ]
+          }
+        },
+        {
+          "do": "push_ok",
+          "expect": {
+            "landed": [
+              4
+            ]
+          }
+        }
+      ],
+      "final": {
+        "head_seq": 4,
+        "files": {
+          "world/energy.js": "// Energy is counted in points, from 0 to ENERGY_MAX.\nexport const ENERGY_MAX = 100;\n\n// Remove energy from a creature. `amount` is in points per tick.\nexport function drain(creature, amount) {\n  creature.energy = Math.max(0, creature.energy - amount);\n}\n",
+          "creatures/crab.js": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 30;\n}\n"
+        },
+        "states": {
+          "S": "stopped",
+          "A": "landed",
+          "A2": "stopped"
+        },
+        "go_arounds": {
+          "A": 1
+        },
+        "landings": [
+          {
+            "seq": 1,
+            "attempt": "S",
+            "kind": "change"
+          },
+          {
+            "seq": 2,
+            "attempt": "A",
+            "kind": "change"
+          },
+          {
+            "seq": 3,
+            "kind": "undo"
+          },
+          {
+            "seq": 4,
+            "attempt": "A",
+            "kind": "change"
+          }
+        ]
+      },
+      "note": "Added in the reconciliation of 2026-10-04 for rule RC7. A and A2 are the two candidates of one race (the same intent_id, race: true); the intent's race card is open before step 1. Both go to held at their submit whatever their tier (RC2). The owner chooses A: A is validated and its race flag is cleared, A2 stops as not_chosen, the race card closes. The undo of landing 1 reverts A's landing as a dependent and reopens A. Without RC7 A's next submit would go to held on the closed race card. With RC7 it follows its tier (auto) and is validated with no card. The frozen simulator in reference/spec-sim has no race support and cannot run this case; it was checked with a scratch copy extended by the candidate flag and the owner action choose."
     }
   ]
 }

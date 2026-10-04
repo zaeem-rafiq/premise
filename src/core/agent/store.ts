@@ -132,6 +132,10 @@ export function opPut(sql: Sql, op_seq: number, body: unknown): void {
   sql.exec("INSERT OR REPLACE INTO ops (op_seq, body) VALUES (?, ?)", op_seq, JSON.stringify(body));
 }
 
+export function opDelete(sql: Sql, op_seq: number): void {
+  sql.exec("DELETE FROM ops WHERE op_seq = ?", op_seq);
+}
+
 export function opList(sql: Sql): { op_seq: number; body: unknown }[] {
   return sql
     .exec("SELECT * FROM ops ORDER BY op_seq")

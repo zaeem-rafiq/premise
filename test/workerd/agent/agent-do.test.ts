@@ -7,6 +7,7 @@
 //   SW4  a scripted agent runs the add-plain script through the same tools
 //   TA9  an owner stop ends the attempt with the reason cancelled
 //   HU6a an out-of-order push is answered by a sync before it is shown
+//   3.6.6 a call answered attempt_unknown is followed by register
 //
 // The fake records every request, executes each new call_id once, keeps the
 // response it stored, and returns that stored response to a repeat without
@@ -51,6 +52,9 @@ class FakeTrunk {
   // The latest call number per attempt: a call_id belongs to its attempt,
   // never to a global sequence (TA2's "older call_id" is per attempt).
   #maxN = new Map<string, number>();
+  // Attempts a rebuilt Trunk no longer knows: their calls answer
+  // attempt_unknown until register restores them (3.6 step 6).
+  forgotten = new Set<string>();
   #gates: {
     match: (body: Record<string, unknown>) => boolean;
     seen: (b: Record<string, unknown>) => void;
@@ -93,6 +97,22 @@ class FakeTrunk {
     this.requests.push(entry);
     if (path === "/tool") {
       const req = body as unknown as ToolRequest;
+      if (this.forgotten.has(req.attempt_id)) {
+        this.served.push(entry);
+        return {
+          status: 200,
+          json: {
+            call_id: req.call_id,
+            ok: false,
+            head_seq: 0,
+            error: { code: "attempt_unknown", message: "attempt not known" },
+            premises: [],
+            heads_ups: [],
+            heads_ups_more: false,
+            attempt: attemptBlock(),
+          },
+        };
+      }
       // TA2: a repeat of an in-flight or stored call_id returns the stored
       // response; nothing else changes.
       const pending = this.#inflight.get(req.call_id);
@@ -139,6 +159,10 @@ class FakeTrunk {
       return { status: 200, json: { ok: true, stop_reason: body.reason, attempt: attemptBlock("stopped") } };
     }
     if (path === "/register") {
+      if (!this.forgotten.has(body.attempt_id as string)) {
+        return { status: 200, json: { ok: false, error: "invalid_args" } };
+      }
+      this.forgotten.delete(body.attempt_id as string);
       return { status: 200, json: { ok: true, heads_ups: [], attempt: attemptBlock() } };
     }
     return { status: 404, json: { error: { code: "not_found" } } };
@@ -375,5 +399,41 @@ describe("the Agent Durable Object in workerd", () => {
     const shown = (JSON.parse(userRows[0]?.content ?? "{}") as { heads_ups: { hn: number }[] }).heads_ups;
     expect(shown.map((h) => h.hn)).toEqual([1, 2]);
     expect(s.inbox.every((i) => i.shown_step === 2)).toBe(true);
+  });
+
+  it("3.6 step 6: a call answered attempt_unknown is followed by register", async () => {
+    // The rebuilt Trunk forgot the attempt before it opened: every call
+    // answers attempt_unknown until the Agent registers its mirror.
+    fake.forgotten.add("a_reg");
+    await openAttempt("a_reg", {
+      pattern: "t",
+      truth: ["entity:world/energy.js#ENERGY_MAX"],
+      steps: [
+        { tool: "list", args: { path: "creatures/" } },
+        { tool: "read", args: { path: "world/energy.js" } },
+      ],
+    });
+    await waitFor(() => fake.requests.some((r) => r.path === "/register" && r.body.attempt_id === "a_reg"));
+
+    // The register carries the mirror of 3.6 step 6: intent, revision,
+    // operations and read premises — and the truth list (TR8).
+    const reg = fake.requests.find((r) => r.path === "/register" && r.body.attempt_id === "a_reg");
+    expect(reg?.body).toMatchObject({
+      intent_id: "i_t",
+      change_id: "c_t",
+      revision: 1,
+      agent_kind: "synthetic",
+      truth: ["entity:world/energy.js#ENERGY_MAX"],
+    });
+    expect(Array.isArray(reg?.body.ops)).toBe(true);
+    expect(Array.isArray(reg?.body.read_premises)).toBe(true);
+
+    // Registered, the attempt runs the rest of its script: the transcript
+    // shows the refused list call, then the read that now succeeds.
+    await waitFor(async () => (await inspect("a_reg")).transcript.length === 2);
+    const s = await inspect("a_reg");
+    expect(s.meta.register_needed).toBe("0");
+    expect(s.transcript.map((r) => r.tool)).toEqual(["list", "read"]);
+    expect(fake.requests.filter((r) => r.path === "/register" && r.body.attempt_id === "a_reg")).toHaveLength(1);
   });
 });

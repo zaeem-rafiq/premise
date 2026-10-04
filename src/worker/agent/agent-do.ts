@@ -36,7 +36,16 @@ import {
 import type { Driver, Sql } from "../../protocol/ports.ts";
 import type { AgentStopReason, AttemptState } from "../../protocol/attempt.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
-import type { ModelToolMessage, ResumeResponse, ToolName, ToolRequest, ToolResponse } from "../../protocol/tools.ts";
+import type { PremiseKind } from "../../protocol/premise.ts";
+import type {
+  ModelToolMessage,
+  RegisterRequest,
+  RegisterResponse,
+  ResumeResponse,
+  ToolName,
+  ToolRequest,
+  ToolResponse,
+} from "../../protocol/tools.ts";
 import {
   applySchema,
   inboxHns,
@@ -45,7 +54,9 @@ import {
   metaAll,
   metaGet,
   metaSet,
+  opList,
   opPut,
+  premiseList,
   premisePut,
   timerDelete,
   timerDue,
@@ -366,6 +377,11 @@ export class Agent extends DurableObject<Env> {
           continue;
         }
 
+        if (this.#meta("register_needed") === "1") {
+          if (!(await this.#register())) return;
+          continue;
+        }
+
         if (this.#meta("sync_needed") === "1") {
           if (!(await this.#sync())) return;
           continue;
@@ -561,11 +577,32 @@ export class Agent extends DurableObject<Env> {
         });
       }
       if (response.ok && (request.tool === "write" || request.tool === "replace")) {
-        const r = response.result as { op_seq?: number } | undefined;
+        // The ops mirror holds the Operation of 01-core 5.1, rebuilt from the
+        // acknowledged call: the results carry op_seq and (for replace) the
+        // targets; a write's base_oid is the file premise's pinned hash
+        // (`absent` for a create, W4).
+        const a = request.args as { path?: string; content?: string; old?: string; new?: string };
+        const r = response.result as { op_seq?: number; targets?: string[] } | undefined;
         if (r?.op_seq !== undefined) {
-          opPut(this.#sql, r.op_seq, { tool: request.tool, args: request.args, result: response.result });
+          const file = premiseList(this.#sql).find((x) => x.kind === "file" && x.key === a.path);
+          opPut(
+            this.#sql,
+            r.op_seq,
+            request.tool === "write"
+              ? {
+                  op_seq: r.op_seq,
+                  op: "write",
+                  path: a.path,
+                  content: a.content ?? null,
+                  base_oid: file?.hash ?? "absent",
+                }
+              : { op_seq: r.op_seq, op: "replace", path: a.path, old: a.old, new: a.new, targets: r.targets ?? [] },
+          );
         }
       }
+      // 3.6 step 6: a call for an attempt Trunk does not know is answered
+      // attempt_unknown; the Agent then calls register itself.
+      if (response.error?.code === "attempt_unknown") this.#set("register_needed", "1");
       if (request.tool === "submit" && response.ok) {
         const status = (response.result as { status?: string } | undefined)?.status;
         const duplicate = (response.result as { duplicate?: true } | undefined)?.duplicate;
@@ -640,6 +677,52 @@ export class Agent extends DurableObject<Env> {
     }
   }
 
+  // 3.6 step 6: a call answered attempt_unknown means Trunk was rebuilt and
+  // lost the attempt. The Agent answers with its mirror — intent, revision,
+  // the current operations and the read premises, plus the truth list of a
+  // synthetic attempt (TR8). The `ops` mirror stores spec-shaped operations;
+  // RegisterRequest["ops"] names the wider protocol union, which no tool
+  // result returns — the cast marks the spec's own shape as what is sent.
+  async #register(): Promise<boolean> {
+    const req: Omit<RegisterRequest, "attempt_id"> = {
+      intent_id: this.#meta("intent_id") ?? "",
+      change_id: this.#meta("change_id") ?? "",
+      revision: this.#int("revision"),
+      agent_kind: (this.#meta("agent_kind") ?? "synthetic") as "real" | "synthetic",
+      model: this.#meta("model") === "" ? null : this.#meta("model"),
+      ops: opList(this.#sql).map((o) => o.body) as RegisterRequest["ops"],
+      read_premises: premiseList(this.#sql)
+        .filter((x) => x.read)
+        .map((x) => ({ kind: x.kind as PremiseKind, key: x.key, hash: x.hash, seq: x.seq })),
+      truth: JSON.parse(this.#meta("truth") ?? "[]") as string[],
+    };
+    let res: RegisterResponse;
+    try {
+      res = await (this.#trunk as TrunkCalls).register(req);
+    } catch {
+      timerPut(this.#sql, "register", "main", Date.now() + HEADS_UP_REPUSH_MS);
+      await this.#armAlarm();
+      return false;
+    }
+    this.#sql.transaction(() => {
+      if (res.ok) {
+        inbox.receive(this.#sql, res.heads_ups, Date.now());
+        this.#set("state", res.attempt.state);
+        this.#set("register_needed", "0");
+      } else if (res.error === "attempt_closed") {
+        this.#set("register_needed", "0");
+        this.#set("sync_needed", "1"); // the attempt's real state comes by sync
+      } else {
+        timerPut(this.#sql, "register", "main", Date.now() + HEADS_UP_REPUSH_MS);
+      }
+    });
+    if (this.#meta("register_needed") === "1") {
+      await this.#armAlarm();
+      return false;
+    }
+    return true;
+  }
+
   // stop repeats until Trunk answers (TL16): the pending reason survives
   // restarts, and the call timer named "stop" re-sends after a failure.
   async #sendStop(reason: AgentStopReason): Promise<void> {
@@ -697,6 +780,8 @@ export class Agent extends DurableObject<Env> {
           } else if (t.kind === "sync") {
             timerDelete(this.#sql, "sync", t.key);
             await this.#sync();
+          } else if (t.kind === "register") {
+            timerDelete(this.#sql, "register", t.key); // #run retries while the flag stands
           } else {
             timerDelete(this.#sql, t.kind, t.key);
           }
@@ -760,6 +845,7 @@ export class Agent extends DurableObject<Env> {
         result: (JSON.parse(r.body) as HeadsUp).result,
         wake: (JSON.parse(r.body) as HeadsUp).wake,
       })),
+      ops: opList(this.#sql),
       timers: timerList(this.#sql),
       transcript: transcriptRows(this.#sql).map((r) => ({
         step: Number(r.step),

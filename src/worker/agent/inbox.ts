@@ -17,11 +17,14 @@ import {
   inboxMarkShown,
   inboxPut,
   inboxRows,
+  opDelete,
 } from "../../core/agent/store.ts";
 
 export function receive(sql: Sql, heads_ups: readonly HeadsUp[], received_at: number): number[] {
   const stored: number[] = [];
   for (const hu of heads_ups) {
+    // OP6: dropped operations leave the mirror — register sends current ops.
+    for (const d of hu.dropped_ops ?? []) opDelete(sql, d.op_seq);
     if (inboxPut(sql, hu.hn, hu, received_at)) stored.push(hu.hn);
   }
   return stored;

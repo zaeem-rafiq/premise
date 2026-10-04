@@ -1,12 +1,37 @@
 // Entities, regions, the normalized entity hash, outline lines and the module hash
-// (01-core.md 2.3, 2.4, 2.7 and KH1). The parser is acorn, pinned in package.json; the parse
-// options are exactly `{ ecmaVersion: 2025, sourceType: "module" }` (2.3).
+// (01-core.md 2.3, 2.4, 2.7 and KH1; the TypeScript rows of 06-repos.md LG2). The parser is
+// acorn, pinned in package.json; for JavaScript the parse options are exactly
+// `{ ecmaVersion: 2025, sourceType: "module" }` (2.3). TypeScript parses through
+// `@sveltejs/acorn-typescript` (LG1), with JSX for `.tsx` and for the `.jsx` language.
 
 import * as acorn from "acorn";
+import { tsPlugin } from "@sveltejs/acorn-typescript";
 import { H } from "../sync/h.ts";
+import type { Language } from "../keys/paths.ts";
 import type { EntityKind } from "../../protocol/premise.ts";
 
 export const PARSE_OPTIONS = { ecmaVersion: 2025, sourceType: "module" } as const;
+
+// The plugin asks for `locations` (its README); `loc` is dropped by the cleaning of 2.4.
+const TS_PARSE_OPTIONS = { ...PARSE_OPTIONS, locations: true } as const;
+
+const TS_PARSER = acorn.Parser.extend(tsPlugin());
+const TSX_PARSER = acorn.Parser.extend(tsPlugin({ jsx: true }));
+
+/**
+ * The TypeScript-only entity kinds of LG2. `EntityKind` lives in `src/protocol`, the lead's
+ * file, and is widened when the engine wires the pool's languages into the tools; until then
+ * the four are asserted into it here. Under the tide-pool set no entity can hold one, because
+ * TypeScript files are opaque there.
+ */
+type TsEntityKind = "type" | "interface" | "enum" | "namespace";
+
+const TS_DECLARATION_KINDS: Readonly<Record<string, TsEntityKind>> = {
+  TSTypeAliasDeclaration: "type",
+  TSInterfaceDeclaration: "interface",
+  TSEnumDeclaration: "enum",
+  TSModuleDeclaration: "namespace",
+};
 
 /** A syntax node or a cleaned syntax node. `[key]` holds child nodes, arrays of them, or values. */
 export type AstNode = { type: string; start?: number; end?: number; [key: string]: unknown };
@@ -130,6 +155,7 @@ function declareVariable(
       entity.nodes.push({
         type: "VariableDeclarator",
         kind: statement.kind,
+        ...(statement.declare === true ? { declare: true } : {}),
         id: clean(declarator.id),
         init: clean(declarator.init ?? null),
       } as AstNode);
@@ -146,7 +172,8 @@ function declareHoisted(
   get: (name: string, kind: EntityKind) => WorkingEntity,
   names: string[],
 ): void {
-  const kind: EntityKind = declaration.type === "FunctionDeclaration" ? "function" : "class";
+  const kind: EntityKind =
+    declaration.type === "ClassDeclaration" ? "class" : "function"; // TSDeclareFunction included (LG2)
   const name = isDefault ? nameOf(declaration.id as AstNode) || "default" : nameOf(declaration.id as AstNode);
   const entity = get(name, kind);
   entity.nodes.push(clean(declaration) as AstNode);
@@ -155,13 +182,36 @@ function declareHoisted(
 }
 
 /**
- * Parses `source` into entities and regions (2.3). Throws the acorn `SyntaxError` when the module
+ * A `type`, `interface`, `enum`, `const enum`, `namespace` or `module` declaration (LG2):
+ * entity of the declared name and the row's kind.
+ */
+function declareTs(
+  declaration: AstNode,
+  exported: boolean,
+  get: (name: string, kind: EntityKind) => WorkingEntity,
+  names: string[],
+): void {
+  const name = nameOf(declaration.id as AstNode);
+  const entity = get(name, TS_DECLARATION_KINDS[declaration.type] as EntityKind);
+  entity.nodes.push(clean(declaration) as AstNode);
+  if (exported) entity.exports.add(name);
+  names.push(name);
+}
+
+/**
+ * Parses `source` into entities and regions (2.3, LG2). `language` is the path's language
+ * (LG1): `javascript` is acorn with the 2.3 options, `jsx` adds JSX, `typescript` and `tsx`
+ * go through `@sveltejs/acorn-typescript`. Throws the parser's `SyntaxError` when the module
  * does not parse; the caller decides whether the file is a module at all (2.1: opaque).
  */
-export function parseModule(source: string): ModuleInfo {
-  const program = acorn.parse(
-    source,
-    PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" },
+export function parseModule(source: string, language: Language = "javascript"): ModuleInfo {
+  const program = (
+    language === "javascript"
+      ? acorn.parse(source, PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" })
+      : (language === "typescript" ? TS_PARSER : TSX_PARSER).parse(
+          source,
+          TS_PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module"; locations: true },
+        )
   ) as unknown as AstNode;
   const body = program.body as AstNode[];
   const entities = new Map<string, WorkingEntity>();
@@ -212,10 +262,16 @@ export function parseModule(source: string): ModuleInfo {
         const declaration = statement.declaration as AstNode | null;
         const source = statement.source as AstNode | null;
         if (declaration !== null && declaration !== undefined) {
-          if (declaration.type === "FunctionDeclaration" || declaration.type === "ClassDeclaration") {
+          if (
+            declaration.type === "FunctionDeclaration" ||
+            declaration.type === "ClassDeclaration" ||
+            declaration.type === "TSDeclareFunction"
+          ) {
             declareHoisted(declaration, true, false, get, names);
           } else if (declaration.type === "VariableDeclaration") {
             declareVariable(declaration, true, get, names);
+          } else if (declaration.type in TS_DECLARATION_KINDS) {
+            declareTs(declaration, true, get, names);
           } else top();
         } else if (source !== null && source !== undefined) {
           for (const specifierNode of statement.specifiers as AstNode[]) {
@@ -226,6 +282,7 @@ export function parseModule(source: string): ModuleInfo {
               type: "ReExport",
               source: nameOf(source),
               imported: nameOf(specifierNode.local as AstNode),
+              ...(statement.exportKind === "type" ? { exportKind: "type" } : {}),
             } as AstNode);
             names.push(exported);
           }
@@ -265,10 +322,17 @@ export function parseModule(source: string): ModuleInfo {
       }
       case "FunctionDeclaration":
       case "ClassDeclaration":
+      case "TSDeclareFunction":
         declareHoisted(statement, false, false, get, names);
         break;
       case "VariableDeclaration":
         declareVariable(statement, false, get, names);
+        break;
+      case "TSTypeAliasDeclaration":
+      case "TSInterfaceDeclaration":
+      case "TSEnumDeclaration":
+      case "TSModuleDeclaration":
+        declareTs(statement, false, get, names);
         break;
       default:
         top();
@@ -320,7 +384,9 @@ export function parseModule(source: string): ModuleInfo {
       const exports = [...entity.exports].sort();
       const canonical = canon({ exports, nodes: entity.nodes });
       const firstFunction = entity.nodes.find(
-        (node) => node.type === "FunctionDeclaration" && Array.isArray(node.params),
+        (node) =>
+          (node.type === "FunctionDeclaration" || node.type === "TSDeclareFunction") &&
+          Array.isArray(node.params),
       );
       return {
         name: entity.name,
@@ -414,9 +480,11 @@ export function entitySignature(source: string, info: ModuleInfo, name: string):
   const entity = info.entities.find((entry) => entry.name === name);
   if (entity === undefined) return null;
   const prefix = entity.exports.length > 0 ? "export " : "";
-  switch (entity.kind) {
+  switch (entity.kind as string) {
     case "function": {
-      const node = entity.nodes.find((entry) => entry.type === "FunctionDeclaration");
+      const node = entity.nodes.find(
+        (entry) => entry.type === "FunctionDeclaration" || entry.type === "TSDeclareFunction",
+      );
       const params = node === undefined ? [] : (node.params as AstNode[]).map((param) => nameOf(param) || "…");
       return `${prefix}function ${name}(${params.join(", ")})`;
     }
@@ -438,7 +506,17 @@ export function entitySignature(source: string, info: ModuleInfo, name: string):
     }
     case "reexport-all":
       return `export * from "${name.slice(1)}"`;
+    case "type":
+      return `${prefix}type ${name}`;
+    case "interface":
+      return `${prefix}interface ${name}`;
+    case "enum":
+      return `${prefix}enum ${name}`;
+    case "namespace":
+      return `${prefix}namespace ${name}`;
     case "top":
       return "(top)";
+    default:
+      return `${prefix}${name}`;
   }
 }

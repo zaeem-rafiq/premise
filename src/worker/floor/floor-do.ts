@@ -173,8 +173,8 @@ export class Floor extends DurableObject<Env> {
     const stream = /^\/api\/pools\/([^/]+)\/stream$/.exec(path);
     if (stream !== null && request.method === "GET") return this.openSocket(request);
 
-    const note = /^\/api\/pools\/[^/]+\/landings\/(\d+)\/note$/.exec(path);
-    if (note !== null && request.method === "GET") return this.landingNote(Number(note[1]));
+    const note = /^\/api\/pools\/[^/]+\/landings\/([^/]+)\/note$/.exec(path);
+    if (note !== null && request.method === "GET") return this.landingNote(note[1] ?? "");
 
     if (/^\/api\/pools\/[^/]+\/replay\.ndjson$/.test(path) && request.method === "GET") {
       return this.replayExport(url);
@@ -274,10 +274,13 @@ export class Floor extends DurableObject<Env> {
 
   // ---- The note route (13.6) ----
 
-  private landingNote(seq: number): Response {
-    const event = landingEvent(this.ctx.storage.sql, seq);
+  private landingNote(segment: string): Response {
+    // `seq` is a decimal landing number: a non-numeric segment is invalid_args (400), a number
+    // that names no landing is not_found (404), and so is a summary_only landing (EV6).
+    if (!/^\d+$/.test(segment)) return jsonError("invalid_args", 400);
+    const event = landingEvent(this.ctx.storage.sql, Number(segment));
     if (event === null || event.type !== "landing.landed") return jsonError("not_found", 404);
-    if (event.note_json === null) return jsonError("not_found", 404); // EV6: summary_only has no notes
+    if (typeof event.note_json !== "string") return jsonError("not_found", 404); // EV6: summary_only has no notes
     return new Response(event.note_json, { headers: { "content-type": "application/json" } });
   }
 

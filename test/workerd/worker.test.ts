@@ -90,14 +90,23 @@ describe("the Worker bundle in workerd, deployed with no OWNER_KEY", () => {
     expect(await response.json()).toBeTypeOf("object");
   });
 
-  it.each(Object.entries(DURABLE_OBJECTS) as Array<[DurableObjectBinding, string]>)(
-    "the %s binding reaches the stub class %s, which answers not_built",
-    async (binding) => {
-      const response = await worker.fetchDurableObject(binding, "x", "/");
-      expect(response.status).toBe(503);
-      expect(await response.json()).toEqual(NOT_BUILT_BODY);
-    },
-  );
+  it.each(
+    (Object.entries(DURABLE_OBJECTS) as Array<[DurableObjectBinding, string]>).filter(
+      // The gate is built now (Slice 4): its checks live in test/workerd/gate/. What the three
+      // remaining stubs answer is still not_built.
+      ([binding]) => binding !== "GATE",
+    ),
+  )("the %s binding reaches the stub class %s, which answers not_built", async (binding) => {
+    const response = await worker.fetchDurableObject(binding, "x", "/");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual(NOT_BUILT_BODY);
+  });
+
+  it("the GATE binding reaches the built ModelGate: /killed answers", async () => {
+    const response = await worker.fetchDurableObject("GATE", "premise", "/killed");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ killed: false });
+  });
 });
 
 // Acceptance item 5 of plan 2.1, run in local workerd instead of `npm run dev` (which the lead runs
@@ -157,16 +166,22 @@ describe("the guards of SE1 to SE3 with OWNER_KEY configured", () => {
     expect(await response.json()).toMatchObject({ error: { code: "invalid_args" } });
   });
 
-  it("POST /api/kill with the right key reaches the stub gate: 503 not_built", async () => {
-    const response = await worker.fetch("/api/kill", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${ownerKey}`,
-      },
-      body: "{}",
-    });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual(NOT_BUILT_BODY);
+  // The gate is built now (Slice 4): POST /api/kill forwards the KillRequest to it and returns
+  // the gate's answer. Its behaviour is tested in test/workerd/gate/se10-se12.test.ts.
+  it("POST /api/kill with the right key reaches the gate: the KillRequest's answer", async () => {
+    const post = (body: unknown) =>
+      worker.fetch("/api/kill", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ownerKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    const killed = await post({ killed: true });
+    expect(killed.status).toBe(200);
+    expect(await killed.json()).toEqual({ ok: true, killed: true });
+    const cleared = await post({ killed: false });
+    expect(await cleared.json()).toEqual({ ok: true, killed: false });
   });
 });

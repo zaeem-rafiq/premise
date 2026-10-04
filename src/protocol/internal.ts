@@ -162,6 +162,43 @@ export type GateRegisterPoolResponse = { ok: true } | { ok: false; error: unknow
 /** `GET /killed` (SE10): the kill switch's state; `killed === true` stops all launching. */
 export type GateKilledResponse = { killed: boolean };
 
+/** `POST /internal/reserve` (SE6): the bound a model call is charged against. The answer is a
+ * reservation, a refusal (`spend_cap`, `killed`), or a wait (`retry_after_ms`, SE8). */
+export type GateReserveRequest = {
+  attempt_id: string;
+  pool: string;
+  model: string;
+  /** Bytes of the JSON request body: the input-token bound of SE6. */
+  request_bytes: number;
+  /** MODEL_MAX_TOKENS: the output bound of SE6. */
+  max_tokens: number;
+};
+export type GateReserveResponse =
+  | { ok: true; reservation_id: string; expires_at: number }
+  | { ok: false; refused: "spend_cap" | "killed" }
+  | { ok: false; retry_after_ms: number };
+
+/** `POST /internal/settle` (SE6a): the usage the provider reported; `null` charges the full bound. */
+export type GateSettleRequest = {
+  reservation_id: string;
+  usage: { tokens_in: number; tokens_out: number } | null;
+};
+export type GateSettleResponse = { ok: true; charged_usd: number; found: boolean };
+
+/** `POST /internal/release` (MG5): the attempt's real-agent slot is free again. Idempotent. */
+export type GateReleaseRequest = { attempt_id: string };
+export type GateReleaseResponse = { ok: true; released: boolean };
+
+/** `POST /internal/may-start` (SE8/MG5): may a new real agent start? The counts are the
+ * `real_agents` and `max_real_agents` that `pool.state` shows. */
+export type GateMayStartRequest = { attempt_id?: string };
+export type GateMayStartResponse =
+  | { ok: true; real_agents: number; max_real_agents: number }
+  | { ok: false; retry_after_ms: number; real_agents: number; max_real_agents: number };
+
+/** `POST /internal/kill` (SE10 to SE12): the body is the owner route's `KillRequest`. */
+export type GateKillResponse = { ok: true; killed: boolean };
+
 // ---- Workflows ----
 
 /** The `SWARM` Workflow's `create` params (EV2a): registering a pool with the launcher. */

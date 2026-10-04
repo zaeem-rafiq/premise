@@ -96,7 +96,8 @@ export type AgentOpenRequest = {
   model?: string | null;
   revision?: number;
   started_at?: number;
-  driver?: "scripted";
+  /** `"model"` opens the real agent of Slice 4 (05-agent); `"scripted"` or absent is the canned path. */
+  driver?: "scripted" | "model";
   pattern?: string;
   seed?: number;
   agent_n?: number;
@@ -106,6 +107,10 @@ export type AgentOpenRequest = {
   script?: Script;
   /** Point the Agent's Trunk client at an HTTP endpoint instead of the Trunk object (tests). */
   trunk_url?: string;
+  /** Point the model adapter at an HTTP endpoint instead of the `AI` binding (tests). */
+  model_url?: string;
+  /** Point the gate client at an HTTP endpoint instead of the gate object (tests). */
+  gate_url?: string;
 };
 
 export type AgentOpenResponse = { ok: true; attempt_id?: string; already?: boolean } | { ok: false; error: unknown };

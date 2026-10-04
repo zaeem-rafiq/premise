@@ -43,7 +43,7 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
   let worker: LandingWorker;
 
   beforeAll(async () => {
-    worker = await startLandingWorker({ ownerKey: KEY, repos: [REFUSE, ACCEPT], refuseRepos: [REFUSE] });
+    worker = await startLandingWorker({ ownerKey: KEY, repos: [REFUSE, ACCEPT, "it-head"], refuseRepos: [REFUSE] });
   }, 60_000);
   afterAll(async () => {
     await worker?.dispose();
@@ -149,4 +149,73 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
     expect(row?.bytes).toBeInstanceOf(Uint8Array);
     expect([...(row?.bytes as Uint8Array)]).toEqual([1, 2, 3, 4]);
   });
+
+  it("E (SE14, plan 2.2 item 5): HEAD answers what GET answers — status, headers, no body", async () => {
+    const create = await worker.fetch(
+      "/api/pools",
+      bearer({ pool: "it-head", seed: SEED, summary_only: false, request_id: "r-head" }),
+    );
+    expect(create.status).toBe(200);
+    await waitFor(() => worker.refs("it-head").main !== null, 30_000);
+    const get = await worker.fetch(`/pool/it-head/main/`, { method: "GET" });
+    expect(get.status).toBe(200);
+    const head = await worker.fetch(`/pool/it-head/main/`, { method: "HEAD" });
+    expect(head.status).toBe(get.status);
+    for (const name of ["content-type", "cache-control", "x-content-type-options", "content-security-policy"]) {
+      expect(head.headers.get(name), name).toBe(get.headers.get(name));
+    }
+    expect(await head.text()).toBe("");
+
+    // A versioned file the same way, and a path nothing serves: HEAD answers GET's 404 too.
+    const main = worker.refs("it-head").main!;
+    const fileGet = await worker.fetch(`/pool/it-head/v/c-${main}/missing.js`, { method: "GET" });
+    const fileHead = await worker.fetch(`/pool/it-head/v/c-${main}/missing.js`, { method: "HEAD" });
+    expect(fileHead.status).toBe(fileGet.status);
+    expect(await fileHead.text()).toBe("");
+
+    const healthGet = await worker.fetch("/api/health", { method: "GET" });
+    const healthHead = await worker.fetch("/api/health", { method: "HEAD" });
+    expect(healthHead.status).toBe(healthGet.status);
+  }, 30_000);
+});
+
+describe("defects F and G of the first live run (Slice 3, part 1)", () => {
+  const DUP = "it-dup";
+  const HANG = "it-hang";
+  let worker: LandingWorker;
+  beforeAll(async () => {
+    // The real workflows binding: `env.SWARM` is the local engine's `SwarmWorkflow`.
+    worker = await startLandingWorker({ ownerKey: KEY, repos: [DUP, HANG], swarm: true });
+  }, 60_000);
+  afterAll(async () => {
+    await worker?.dispose();
+  });
+
+  it("F (9.8): a second POST /api/pools with the same request_id replays the first answer", async () => {
+    const body = { pool: DUP, seed: SEED, summary_only: false, request_id: "r-dup" };
+    const first = await worker.fetch("/api/pools", bearer(body));
+    expect(first.status).toBe(200);
+    const second = await worker.fetch("/api/pools", bearer(body));
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual(await first.json());
+    // And a different request_id for the same pool still answers pool_exists (the 9.8 table).
+    const third = await worker.fetch("/api/pools", bearer({ ...body, request_id: "r-other" }));
+    expect(third.status).toBe(409);
+    expect(await third.json()).toMatchObject({ error: { code: "pool_exists" } });
+  }, 60_000);
+
+  it("G (PL1): the registration a pool create starts completes — nothing hangs", async () => {
+    const create = await worker.fetch(
+      "/api/pools",
+      bearer({ pool: HANG, seed: SEED, summary_only: false, request_id: "r-hang" }),
+    );
+    expect(create.status).toBe(200);
+    await waitFor(async () => {
+      try {
+        return (await worker.swarmInstanceStatus(`register-pool-${HANG}-r-hang`)) === "complete";
+      } catch {
+        return false; // instance.not_found while the engine creates it
+      }
+    }, 20_000);
+  }, 60_000);
 });

@@ -25,10 +25,19 @@ function cost(s: CastState): string {
 
 function takeEnergyValue(s: CastState, hu: HeadsUp, ack: { statement: string }): void {
   for (const item of hu.items) {
-    if (item.premise.kind !== "entity" || item.premise.key !== ENERGY_KEY || item.diff.kind !== "entity") {
-      continue;
+    // The entity item of an E2 (`diff.after` is the entity's new source) or the file item
+    // of an X0/F4 `info` (H reads whole files; the new `ENERGY_MAX` is in the unified
+    // diff's added lines) both carry the new value.
+    let shown: string | null = null;
+    if (item.premise.kind === "entity" && item.premise.key === ENERGY_KEY && item.diff.kind === "entity") {
+      shown = item.diff.after;
+    } else if (item.premise.key === "world/energy.js" && item.diff.kind === "file") {
+      shown = item.diff.unified
+        .split("\n")
+        .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+        .join("\n");
     }
-    const v = energyMaxOf(item.diff.after);
+    const v = energyMaxOf(shown);
     if (v === null) continue;
     s.data.v = v;
     const next = dartCost(v);

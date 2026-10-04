@@ -92,10 +92,10 @@ export function drawWorld(world, kinds, control) {
   control.end();
   const report = [];
   for (const creature of world.creatures) {
-    const module = kinds[creature.kind];
-    if (!module || world.benched[creature.kind]) continue;
+    const mod = kinds[creature.kind];
+    if (!mod || world.benched[creature.kind]) continue;
     control.begin(creature.x, creature.y, isResting(creature) ? "resting" : "creature");
-    guard(world, creature.kind, () => module.draw(creature, control.pen, world));
+    guard(world, creature.kind, () => mod.draw(creature, control.pen, world));
     const used = control.end();
     report.push({ id: creature.id, kind: creature.kind, ...used });
   }

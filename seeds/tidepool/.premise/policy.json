@@ -6,5 +6,5 @@
     { "paths": ["world/**", "main.js", "pen.js", "index.html", "selftest/**", "GUIDE.md"], "tier": "held" }
   ],
   "globals": ["Math", "Number", "String", "Boolean", "Array", "Object", "JSON", "Map", "Set", "Infinity", "NaN", "undefined", "isFinite", "isNaN", "parseInt", "parseFloat"],
-  "limits": { "max_paths": 16, "max_change_bytes": 65536 }
+  "limits": { "max_paths": 64, "max_change_bytes": 65536 }
 }

@@ -81,11 +81,19 @@ export async function deliverEvents(
       return false;
     }
     if ("appended" in answer || ("duplicate" in answer && answer.duplicate === true)) {
-      const last = "last_n" in answer && typeof answer.last_n === "number" ? answer.last_n : rows[rows.length - 1]!.n;
-      confirmEvents(sql, Math.min(last, rows[rows.length - 1]!.n));
+      // `last_n` is the Floor's own stream position, not the source's counter:
+      // the batch was appended or already held, so every sent source_n is confirmed.
+      confirmEvents(sql, rows[rows.length - 1]!.n);
       continue; // more may be pending
     }
     if ("error" in answer && answer.error.code === "gap" && typeof answer.error.expected === "number") {
+      if (rows.length > 0 && answer.error.expected < rows[0]!.n) {
+        // The Floor wants a source_n below our oldest pending row — those were
+        // confirmed and deleted. A rebuilt Floor is answered on the next pass
+        // (a new epoch is the EV2 answer for that); do not spin here.
+        timerPut(sql, "events", "main", Date.now() + HEADS_UP_REPUSH_MS);
+        return false;
+      }
       confirmEvents(sql, answer.error.expected - 1);
       continue; // resend from the expected number
     }

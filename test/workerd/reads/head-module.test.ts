@@ -127,9 +127,7 @@ describe("Slice 7 item 5: generated modules from Floor state (FS2, AS11, AS16)",
     // used — RB5 restarts the counter at source_n 1, the shape of a re-reporting incarnation.
     const trunkEpoch = Math.max(
       0,
-      ...(await worker.events(POOL))
-        .filter((e) => e.type === "pool.state")
-        .map((e) => (e.epoch as number) ?? 0),
+      ...(await worker.events(POOL)).filter((e) => e.type === "pool.state").map((e) => (e.epoch as number) ?? 0),
     );
     const inject = await worker.floor(POOL).fetch("/internal/events", {
       method: "POST",

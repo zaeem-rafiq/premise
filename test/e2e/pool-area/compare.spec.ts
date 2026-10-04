@@ -303,10 +303,24 @@ async function openCompare(page: Page): Promise<void> {
   await expect(page.locator(".floor-body")).toHaveAttribute("data-view", "compare");
 }
 
-const logOf = (page: Page, source: keyof typeof FRAME_URL) =>
-  poolFrame(page, source)!.evaluate(
+type FrameLog = { type: string; version?: string; selftest?: boolean }[] | null;
+
+/** The fake host's recorded FloorToPool log — null while the iframe is mid-navigation (a
+ * replay `advance` reload swaps the element and `page.frames()` has a gap). */
+const logOf = async (page: Page, source: keyof typeof FRAME_URL): Promise<FrameLog> => {
+  const frame = poolFrame(page, source);
+  if (frame === undefined) return null;
+  return frame.evaluate(
     () => (window as never as { __log: { type: string; version?: string; selftest?: boolean }[] }).__log,
   );
+};
+
+/** The frame's log, re-read until the frame exists — navigation gaps are a swap, not data. */
+async function liveLog(page: Page, source: keyof typeof FRAME_URL): Promise<FrameLog> {
+  let log: FrameLog = null;
+  await expect.poll(async () => (log = await logOf(page, source)) !== null).toBe(true);
+  return log;
+}
 
 test.beforeAll(() => {
   mkdirSync(HARNESS_DIR, { recursive: true });
@@ -359,9 +373,9 @@ test.describe("the Compare view", () => {
     const srcBefore = await plain.getAttribute("src");
     // A second plain.updated — the frame is told by a debounced probe, never by a new src.
     await send(page, [plainUpdated(30, { commit: PLAIN_2, tree: "tree-plain-2", through_seq: 1 })]);
-    await expect.poll(async () => (await logOf(page, "plain")).map((m) => m.type)).toContain("probe");
+    await expect.poll(async () => (await logOf(page, "plain"))?.map((m) => m.type) ?? []).toContain("probe");
     expect(await plain.getAttribute("src")).toBe(srcBefore);
-    expect((await logOf(page, "plain")).every((m) => m.type !== "advance")).toBe(true);
+    expect((await liveLog(page, "plain"))!.every((m) => m.type !== "advance")).toBe(true);
   });
 
   test("AC23/RY17: in Replay the plain frame is a commit frame on p-<commit> that gets advance", async ({ page }) => {
@@ -372,17 +386,16 @@ test.describe("the Compare view", () => {
     const plain = page.locator('.cmp-col[data-pool="plain"] iframe');
     await expect(plain).toHaveAttribute("src", `/pool/tidepool/p-${PLAIN_1}/?seed=42`);
     await send(page, [plainUpdated(30, { commit: PLAIN_2, tree: "tree-plain-2", through_seq: 1 })]);
+    // Read both claims off one log: the advance went out, and the only probes the commit
+    // frame ever gets carry selftest (CO25a; SE16a forbids the live-mode probe here).
     await expect
-      .poll(async () =>
-        (await logOf(page, "plain-replay")).some((m) => m.type === "advance" && m.version === `p-${PLAIN_2}`),
-      )
-      .toBe(true);
-    // CO25a: in Replay the only probe a commit frame gets is the self-test probe.
-    expect(
-      (await logOf(page, "plain-replay")).every(
-        (m: { type: string; selftest?: boolean }) => m.type !== "probe" || m.selftest === true,
-      ),
-    ).toBe(true);
+      .poll(async () => {
+        const log = await logOf(page, "plain-replay");
+        if (log === null) return "navigating";
+        if (!log.some((m) => m.type === "advance" && m.version === `p-${PLAIN_2}`)) return "waiting";
+        return log.every((m) => m.type !== "probe" || m.selftest === true) ? "ok" : "bare-probe";
+      })
+      .toBe("ok");
   });
 
   test("AC24: equal trees show plain.no_difference; differing trees do not", async ({ page }) => {
@@ -496,11 +509,11 @@ test.describe("the Compare view", () => {
     await expect.poll(async () => poolFrame(page, "plain") !== undefined).toBe(true);
     await page.evaluate(() => (window as never as { harness: { paused: (b: boolean) => void } }).harness.paused(true));
     for (const source of ["main", "plain"] as const) {
-      await expect.poll(async () => (await logOf(page, source)).map((m) => m.type)).toContain("pause");
+      await expect.poll(async () => (await logOf(page, source))?.map((m) => m.type) ?? []).toContain("pause");
     }
     await page.evaluate(() => (window as never as { harness: { paused: (b: boolean) => void } }).harness.paused(false));
     for (const source of ["main", "plain"] as const) {
-      await expect.poll(async () => (await logOf(page, source)).map((m) => m.type)).toContain("resume");
+      await expect.poll(async () => (await logOf(page, source))?.map((m) => m.type) ?? []).toContain("resume");
     }
   });
 

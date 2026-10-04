@@ -190,7 +190,9 @@ async function pushOutboxInner(
   try {
     target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
   } catch (cause) {
-    console.error("writeTarget failed", cause);
+    // BP7: an operator's line — the error's name and message, never the request or the target
+    // (which carries secret material).
+    console.error("push writeTarget failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;
@@ -233,7 +235,7 @@ async function pushOutboxInner(
   try {
     outcome = await runPush(batch, { tokenSource: deps.tokenSource, pusher: deps.pusher });
   } catch (cause) {
-    console.error("push transport", cause);
+    console.error("push transport failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;

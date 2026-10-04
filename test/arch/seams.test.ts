@@ -86,12 +86,13 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     }
   });
 
-  it("the seam builders produce empty tables while every wire is empty (Slice 0)", () => {
+  it("the seam builders run; the engine table is empty until its lane wires it", () => {
     // The pure seams are called here; the worker seams are checked from their text above: the
     // Worker's types are not part of this test's program (plan 1.3, mechanism 1).
     expect(engineTable().entries.size).toBe(0);
     expect(engineTable().effects.size).toBe(0);
-    expect(registry().entries.size).toBe(0);
+    // The Floor's registry is filled since track 1F: floor-shell registers its views, sheets and keys.
+    expect(registry().entries.size).toBeGreaterThan(0);
   });
 
   it.each(STUB_CLASSES)("%s exists and answers not_built", (file) => {

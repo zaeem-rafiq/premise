@@ -3,7 +3,14 @@
 
 import type { RegistryTable } from "../registry.ts";
 
+const POOL_AREA_VIEWS = ["view.compare"] as const;
+
 export function wire(_table: RegistryTable): void {
+  // Slice 6: the Compare view of 03-floor 2.3/3.6, bound in `pool-area.views.tsx` to
+  // `components/compare/compare.tsx`. The `view-compare` key itself is the shell's entry.
+  for (const name of POOL_AREA_VIEWS) {
+    _table.entries.set(name, { kind: "view", name, value: name });
+  }
   // Slice 1 registers nothing. The registry's entries are views, sheets and keys, and this slice
   // gives the lane none of those: the pool area (`../components/pool-frame/`, exported as PoolArea
   // from `pool-area.tsx`) is a region component the Floor view renders — it is the live pool frame

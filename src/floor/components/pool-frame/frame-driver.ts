@@ -71,6 +71,8 @@ export class FrameDriver {
   stalledCaption: { id: StalledId; vars: CopyVars } | null = null;
   /** The version token this frame is being asked to reach (`c-<commit>`), or null when current. */
   expecting: string | null = null;
+  /** The newest validated `stats` (CO22), kept for the self-test badge (CO25a). */
+  lastStats: FrameStats | null = null;
   /** The comparison base of the loaded page address — no `paused` page parameter, so a pause
    * toggle never reads as a new address. "" before the first load. */
   base = "";
@@ -88,6 +90,11 @@ export class FrameDriver {
   private announced = false;
   private highlight: string[] = [];
   private highlightSent = false;
+  /** CO23b: `highlight` is posted only while the prop is given — an empty list when the panel
+   * closes, nothing at all when the caller never passes the prop. */
+  private highlightGiven = false;
+  private wantSelftest = false;
+  private askedSelftest: string | null = null;
 
   constructor(sink: DriverSink, opts: DriverOptions) {
     this.sink = sink;
@@ -115,7 +122,12 @@ export class FrameDriver {
     this.base = base;
     this.phase = "loading";
     this.lastStatsVersion = null;
+    this.lastStats = null;
     this.highlightSent = false;
+    this.askedSelftest = null;
+    // The `paused` page parameter already tells the host (AC11): the first stats does not
+    // need a `pause` post for a state the page address announced.
+    this.announced = this.effectivePaused();
     this.sink.cancel("stall");
     this.sink.schedule("load", FRAME_LOAD_TIMEOUT_MS);
     this.sink.load(this.fullSrc(base));
@@ -177,6 +189,8 @@ export class FrameDriver {
    * FR28 stall watch. */
   onStats(stats: FrameStats): void {
     this.lastStatsVersion = stats.version;
+    this.lastStats = stats;
+    this.askSelftest(stats);
     if (this.phase === "loading" || this.phase === "error" || this.phase === "stalled") {
       this.phase = "live";
       this.sink.cancel("load");
@@ -190,7 +204,7 @@ export class FrameDriver {
       this.probeRetried = true;
       this.sink.schedule("probe-retry", FRAME_PROBE_RETRY_MS);
     }
-    if (!this.highlightSent && this.highlight.length > 0) {
+    if (!this.highlightSent && this.highlightGiven) {
       this.sink.post({ type: "highlight", kinds: [...this.highlight] });
       this.highlightSent = true;
     }
@@ -270,8 +284,7 @@ export class FrameDriver {
   setUserPaused(paused: boolean): void {
     if (this.userPaused === paused) return;
     this.userPaused = paused;
-    this.syncPausePost();
-    this.armStall();
+    this.syncPause();
     this.sink.changed();
   }
 
@@ -279,8 +292,34 @@ export class FrameDriver {
   setVisible(visible: boolean): void {
     if (this.visible === visible) return;
     this.visible = visible;
+    this.syncPause();
+  }
+
+  /** Pause arrives by `postMessage` on a live frame and by the `paused` page parameter on a
+   * load (6.4, AC11): a load already in flight is restarted so its page comes up paused. */
+  private syncPause(): void {
+    if (this.phase === "loading" && this.base !== "" && this.effectivePaused()) {
+      this.loadNow(this.base);
+      return;
+    }
     this.syncPausePost();
     this.armStall();
+  }
+
+  /** CO25a: the badge asks each frame to run its self-test — `probe` with `selftest` — once per
+   * version the frame reports, until that version's `stats.selftest` arrives. With `on` false
+   * nothing is posted (the Floor view's main frame shows no badge). */
+  setSelftest(on: boolean): void {
+    this.wantSelftest = on;
+    if (on && this.lastStats !== null) this.askSelftest(this.lastStats);
+  }
+
+  private askSelftest(stats: FrameStats): void {
+    if (!this.wantSelftest || this.phase !== "live") return;
+    if (stats.selftest !== null && stats.selftest.version === stats.version) return;
+    if (this.askedSelftest === stats.version) return;
+    this.askedSelftest = stats.version;
+    this.sink.post({ type: "probe", selftest: true });
   }
 
   /** The FR28 watch: armed while the frame is live, visible and not paused — the only state in
@@ -301,11 +340,12 @@ export class FrameDriver {
 
   /** CO23b: outline the creatures of `kinds` (already filtered by `highlightKinds`). The host
    * forgets the set on each page load, so it is posted again on the first stats of a new page. */
-  setHighlight(kinds: readonly string[]): void {
+  setHighlight(kinds: readonly string[], given = true): void {
     const changed = kinds.length !== this.highlight.length || kinds.some((k, i) => k !== this.highlight[i]);
     this.highlight = [...kinds];
+    this.highlightGiven = given;
     this.highlightSent = false;
-    if (changed && this.phase === "live") {
+    if (changed && given && this.phase === "live") {
       this.sink.post({ type: "highlight", kinds: [...this.highlight] });
       this.highlightSent = true;
     }

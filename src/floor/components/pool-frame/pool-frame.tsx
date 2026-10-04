@@ -15,6 +15,7 @@ import {
   mainCaption,
   parsePoolMessage,
 } from "./frame-plan.ts";
+import { greenCheckLabel } from "../../../copy/checks.ts";
 import { FrameDriver } from "./frame-driver.ts";
 import type { DriverSink, FrameStats, TimerKey } from "./frame-driver.ts";
 
@@ -44,8 +45,13 @@ export type PoolFrameProps = {
   /** A `tapped` message → open the Why card of `whyTarget(path)` (CO22). The component reports
    * the file path; opening the card is the shell's. */
   onTapped?: (path: string) => void;
-  /** Who relies: kind names to outline in the frame (CO23b); [] or absent clears. */
+  /** Who relies: kind names to outline in the frame (CO23b): kinds post while the panel is
+   * open, the empty list posts when it is given (the panel closed); an absent prop posts
+   * nothing at all. */
   highlight?: readonly string[];
+  /** CO25a: run the pool's self-test in this frame and show its badge under it (Compare turns
+   * it on; the Floor view's frame leaves it off). */
+  selftest?: boolean;
   /** The world seed of the pool page (default HOST_SEED; Compare shares one seed, CO24a). */
   seed?: number;
   /** The `ViewState.frames` key this frame reports under (default "main"). */
@@ -79,12 +85,60 @@ const FRAME_CSS = `
   align-items: center; justify-content: center; gap: 12px; padding: 16px;
   background: var(--bg, #0b1720); color: var(--muted, #a8bcc6);
   font-size: var(--size-body, 16px); text-align: center; }
-@media (prefers-reduced-motion: reduce) { .pf-overlay { transition: none; } }
+.pf-body.pf-glow { animation: pf-edge 1.2s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1)); }
+@keyframes pf-edge { from { outline: 3px solid var(--accent, #6fd6cc); outline-offset: -3px; }
+  to { outline: 3px solid transparent; outline-offset: -3px; } }
+.pf-selftest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  font-size: var(--size-small, 14px); color: var(--muted, #a8bcc6); }
+.pf-selftest-pass { color: var(--holds, #5bd68f); }
+.pf-selftest-fail { color: var(--changed, #ff7a6b); }
+.pf-selftest ul { margin: 0; padding-inline-start: 18px; }
+@media (prefers-reduced-motion: reduce) { .pf-overlay { transition: none; }
+  .pf-body.pf-glow { animation: none; outline: 3px solid var(--accent, #6fd6cc); outline-offset: -3px; } }
 `;
+
+/** 6.4/AC11: "reduced" is the system's `prefers-reduced-motion: reduce`. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+/** CO25a: the badge under a frame — fed only by that frame's `stats.selftest`. `running` until
+ * the self-test's version equals the frame's reported version, then `pass` or `fail` with one
+ * `selftest.fail.line` per failed check. */
+function SelftestBadge({ stats }: { stats: FrameStats | null }) {
+  const st = stats?.selftest ?? null;
+  const fresh = st !== null && stats !== null && st.version === stats.version;
+  return (
+    <div className="pf-selftest" title={text("selftest.tip")}>
+      {!fresh ? (
+        <span>{text("selftest.running")}</span>
+      ) : st.ok ? (
+        <span className="pf-selftest-pass">{text("selftest.pass")}</span>
+      ) : (
+        <span className="pf-selftest-fail">
+          {text("selftest.fail", { n: st.failed.length })}
+          <ul>
+            {st.failed.map((f, i) => (
+              <li key={i}>
+                {f.kind === null
+                  ? greenCheckLabel(f.name)
+                  : text("selftest.fail.line", { "check label": greenCheckLabel(f.name, f.kind), kind: f.kind })}
+              </li>
+            ))}
+          </ul>
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function PoolFrame(props: PoolFrameProps) {
   const { pool, state, mode = "live", name = "main" } = props;
-  const [innerPaused, setInnerPaused] = useState(props.defaultPaused ?? false);
+  const [innerPaused, setInnerPaused] = useState(() => props.defaultPaused ?? prefersReducedMotion());
   const paused = props.paused ?? innerPaused;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const driverRef = useRef<FrameDriver | null>(null);
@@ -141,17 +195,28 @@ export function PoolFrame(props: PoolFrameProps) {
   const driver = drv.driver;
   driverRef.current = driver;
 
+  // 6.4/AC11: under reduced motion a frame starts paused. Uncontrolled, `innerPaused` already
+  // covers it; the report still goes through the same callback the Pause button uses, so a
+  // controlled `pool_paused` records it too.
+  const rmReported = useRef(false);
+  useEffect(() => {
+    if (rmReported.current || !prefersReducedMotion()) return;
+    rmReported.current = true;
+    if (propsRef.current.paused !== true) propsRef.current.onPausedChange?.(true);
+  }, []);
+
   // Feed the driver: state targets on every reducer change, then the ViewState slice. Pause goes
   // first so a `paused` page parameter lands on the first load (AC11/6.4).
   useEffect(() => {
     driver.setUserPaused(paused);
-    driver.setHighlight(highlightKinds(props.highlight ?? []));
+    driver.setHighlight(highlightKinds(props.highlight ?? []), props.highlight !== undefined);
+    driver.setSelftest(props.selftest === true);
     driver.setTarget({
       landedCommit: state.pool.landed_commit,
       greenCommit: state.green.commit,
       greenSeq: state.green.seq,
     });
-  }, [driver, paused, props.highlight, state.pool.landed_commit, state.green.commit, state.green.seq]);
+  }, [driver, paused, props.highlight, props.selftest, state.pool.landed_commit, state.green.commit, state.green.seq]);
 
   // CO22/SE16: accept messages only from our own iframe, only of the channel's shape.
   useEffect(() => {
@@ -185,6 +250,20 @@ export function PoolFrame(props: PoolFrameProps) {
   }, []);
 
   useEffect(() => () => driverRef.current?.dispose(), []);
+
+  // 6.4 "a change lands": the frame's edge glows in `accent` for 1.2 s — a static outline for
+  // 2 s under reduced motion.
+  const seenLanded = useRef<number | null>(null);
+  const [edgeGlow, setEdgeGlow] = useState(false);
+  useEffect(() => {
+    const seq = state.pool.landed_seq;
+    const prev = seenLanded.current;
+    seenLanded.current = seq;
+    if (prev === null || prev === seq) return;
+    setEdgeGlow(true);
+    const t = window.setTimeout(() => setEdgeGlow(false), prefersReducedMotion() ? 2000 : 1200);
+    return () => window.clearTimeout(t);
+  }, [state.pool.landed_seq]);
 
   const caption = mainCaption(state, mode);
   const pending = landingPending(state);
@@ -230,7 +309,7 @@ export function PoolFrame(props: PoolFrameProps) {
           {paused ? text("frame.play") : text("frame.pause")}
         </button>
       </div>
-      <div className="pf-body">
+      <div className={`pf-body${edgeGlow ? " pf-glow" : ""}`}>
         {frame.src !== "" && (
           <iframe
             key={frame.seq}
@@ -248,6 +327,7 @@ export function PoolFrame(props: PoolFrameProps) {
         {phase === "error" && overlayText(loadFailureId(mode))}
         {phase === "stalled" && overlayText(stalled?.id ?? "frame.stalled", stalled?.vars)}
       </div>
+      {props.selftest === true && <SelftestBadge stats={driver.lastStats} />}
     </div>
   );
 }

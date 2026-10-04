@@ -1350,11 +1350,12 @@ export class Agent extends DurableObject<Env> {
 
   async #recover(): Promise<void> {
     // The journal row — not the pump — decides: it is the call that never
-    // completed, so it is sent again with the same call_id (AG4). While a
-    // pump is already live its own journal step does the resend — a second
-    // serve could race a model send in flight (TL15).
+    // completed, so it is sent again with the same call_id (AG4). A live pump
+    // owns a journaled MODEL call — a second serve would send a second charged
+    // provider request (TL15); a journaled tool call is resent regardless —
+    // Trunk answers a repeated call_id from its stored response (TA2).
     const j = journaledCall(this.#sql);
-    if (j === null || this.#running) {
+    if (j === null || (this.#running && j.kind === "model")) {
       await this.#run();
       return;
     }

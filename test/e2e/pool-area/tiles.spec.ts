@@ -104,17 +104,36 @@ async function sendEvents(page: Page, throughIndex: number, extra: unknown[] = [
 /** A fabricated removal landing: seq 3 takes creatures/snail.js off main (write.new "absent"). */
 const REMOVE_SNAIL = [
   {
-    ts: 1704067209600, src: "trunk", type: "landing.accepted", seq: 3, batch_id: 3,
-    kind: "change", attempt_id: null, change_id: "c-rm", intent_id: null, request_id: null,
+    ts: 1704067209600,
+    src: "trunk",
+    type: "landing.accepted",
+    seq: 3,
+    batch_id: 3,
+    kind: "change",
+    attempt_id: null,
+    change_id: "c-rm",
+    intent_id: null,
+    request_id: null,
     paths: ["creatures/snail.js"],
     writes: [{ kind: "file", key: "creatures/snail.js", old: "h-snail", new: "absent" }],
-    n: 46, t: 1704067209605, pool: "tidepool",
+    n: 46,
+    t: 1704067209605,
+    pool: "tidepool",
   },
   {
-    ts: 1704067209800, src: "trunk", type: "landing.landed", seq: 3, batch_id: 3,
-    commit: "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0e2", tree: "tree-3",
-    note: "note-3", note_json: "{}", time_to_land_ms: 100,
-    n: 47, t: 1704067209805, pool: "tidepool",
+    ts: 1704067209800,
+    src: "trunk",
+    type: "landing.landed",
+    seq: 3,
+    batch_id: 3,
+    commit: "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0e2",
+    tree: "tree-3",
+    note: "note-3",
+    note_json: "{}",
+    time_to_land_ms: 100,
+    n: 47,
+    t: 1704067209805,
+    pool: "tidepool",
   },
 ];
 
@@ -154,9 +173,9 @@ test.describe("the file tiles (3.7)", () => {
     // The held path carries tile.held; the listing premise marks the creatures/ label;
     // fish.js carries a_T's reader ring and writer square.
     await expect(cells.filter({ hasText: "policy" })).toContainText("Held");
-    await expect(
-      page.locator(`${TILES} .tile-label`, { hasText: "creatures/" }).locator(".tile-mark-r"),
-    ).toHaveCount(1);
+    await expect(page.locator(`${TILES} .tile-label`, { hasText: "creatures/" }).locator(".tile-mark-r")).toHaveCount(
+      1,
+    );
     const fish = cells.filter({ hasText: "fish" });
     await expect(fish.locator(".tile-mark-r")).toHaveCount(1);
     await expect(fish.locator(".tile-mark-w")).toHaveCount(1);
@@ -180,12 +199,11 @@ test.describe("the file tiles (3.7)", () => {
     await page.setViewportSize({ width: 1152, height: 800 });
     await serveHarness(page);
     const files = Array.from({ length: 30 }, (_, i) => ({
-      path: `creatures/c${String(i).padStart(2, "0")}.js`, tier: "auto",
+      path: `creatures/c${String(i).padStart(2, "0")}.js`,
+      tier: "auto",
     }));
     files.push({ path: ".premise/policy.json", tier: "held" });
-    await sendEvents(page, 0, [
-      { ts: 1, src: "trunk", type: "pool.files", files, n: 2, t: 1, pool: "tidepool" },
-    ]);
+    await sendEvents(page, 0, [{ ts: 1, src: "trunk", type: "pool.files", files, n: 2, t: 1, pool: "tidepool" }]);
     const more = page.locator(`${TILES} .tile-more`);
     await expect(more).toBeVisible();
     await expect(more).toContainText("more");
@@ -219,9 +237,7 @@ test.describe("the file tiles (3.7)", () => {
     await expect(page.getByRole("menuitem", { name: "Who relies on this" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Why (newest change)" })).toBeVisible();
     await page.getByRole("menuitem", { name: "Who relies on this" }).click();
-    await expect
-      .poll(() => page.evaluate(() => (window as { tileWho?: string }).tileWho))
-      .toBe("creatures/fish.js");
+    await expect.poll(() => page.evaluate(() => (window as { tileWho?: string }).tileWho)).toBe("creatures/fish.js");
     await fish.click();
     await page.getByRole("menuitem", { name: "Why (newest change)" }).click();
     await expect

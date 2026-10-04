@@ -152,10 +152,7 @@ export function FileTiles(props: FileTilesProps) {
 
   // CO28: `tiles.more` clips the grid and opens the full list. While open the same cell (kept
   // last, same label, aria-expanded) closes it — the pattern `banner.more` uses.
-  const allCells = useMemo(
-    () => tileCells(state, { removedPaths: gone, glowPaths: glow }),
-    [state, gone, glow],
-  );
+  const allCells = useMemo(() => tileCells(state, { removedPaths: gone, glowPaths: glow }), [state, gone, glow]);
   const clipped = useMemo(
     () => tileCells(state, { capacity, removedPaths: gone, glowPaths: glow }),
     [state, capacity, gone, glow],
@@ -210,16 +207,14 @@ export function FileTiles(props: FileTilesProps) {
           {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
         </span>
         {file.tier === "held" && !removed && (
-          <span className="tile-tag" title={text("tile.held.tip")}>{text("tile.held")}</span>
+          <span className="tile-tag" title={text("tile.held.tip")}>
+            {text("tile.held")}
+          </span>
         )}
         {removed && <span className="tile-tag">{text("tile.removed")}</span>}
       </>
     );
-    const cls = [
-      "tile",
-      removed ? "tile-removed" : "",
-      cell.glow ? "tile-glow" : "",
-    ].filter(Boolean).join(" ");
+    const cls = ["tile", removed ? "tile-removed" : "", cell.glow ? "tile-glow" : ""].filter(Boolean).join(" ");
     const label = text("tile.name", { path: file.path, r: file.readers.length, w: file.writers.length });
     const entries = menuEntries(file, props);
     if (removed || entries.length === 0) {
@@ -247,10 +242,7 @@ export function FileTiles(props: FileTilesProps) {
                   path: file.path,
                   seq: file.last_landed_seq,
                   left: Math.max(4, Math.min(r.left, window.innerWidth - 220)),
-                  top:
-                    r.bottom + 4 + 110 > window.innerHeight
-                      ? Math.max(4, r.top - 110)
-                      : r.bottom + 4,
+                  top: r.bottom + 4 + 110 > window.innerHeight ? Math.max(4, r.top - 110) : r.bottom + 4,
                 },
           );
         }}
@@ -263,14 +255,11 @@ export function FileTiles(props: FileTilesProps) {
   return (
     <section className="tiles" data-open={open} aria-label={text("tiles.files")}>
       <style>{TILES_CSS}</style>
-      <button
-        type="button"
-        className="tiles-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
+      <button type="button" className="tiles-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {text("tiles.files")}
-        <span className="tiles-caret" aria-hidden>{open ? "▾" : "▸"}</span>
+        <span className="tiles-caret" aria-hidden>
+          {open ? "▾" : "▸"}
+        </span>
       </button>
       <div ref={scrollRef} className="tiles-scroll">
         {empty ? (
@@ -280,7 +269,9 @@ export function FileTiles(props: FileTilesProps) {
                 <div key={i} className="tile tile-ghost" />
               ))}
             </div>
-            <div className="tiles-loading" role="status">{text("tiles.loading")}</div>
+            <div className="tiles-loading" role="status">
+              {text("tiles.loading")}
+            </div>
           </>
         ) : (
           <div className="tiles-grid">{cells.map(renderCell)}</div>
@@ -294,17 +285,34 @@ export function FileTiles(props: FileTilesProps) {
             onClick={() => setMenu(null)}
             onKeyDown={(e) => e.key === "Escape" && setMenu(null)}
           />
-          <div className="tile-menu" role="menu" style={{ left: menu.left, top: menu.top }}
-            onKeyDown={(e) => e.key === "Escape" && setMenu(null)}>
+          <div
+            className="tile-menu"
+            role="menu"
+            style={{ left: menu.left, top: menu.top }}
+            onKeyDown={(e) => e.key === "Escape" && setMenu(null)}
+          >
             {props.onTileWho !== undefined && (
-              <button type="button" role="menuitem" autoFocus
-                onClick={() => { setMenu(null); props.onTileWho?.(menu.path); }}>
+              <button
+                type="button"
+                role="menuitem"
+                autoFocus
+                onClick={() => {
+                  setMenu(null);
+                  props.onTileWho?.(menu.path);
+                }}
+              >
                 {text("tile.menu.who")}
               </button>
             )}
             {props.onTileWhy !== undefined && menu.seq !== null && (
-              <button type="button" role="menuitem"
-                onClick={() => { setMenu(null); props.onTileWhy?.(menu.path, menu.seq!); }}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  props.onTileWhy?.(menu.path, menu.seq!);
+                }}
+              >
                 {text("tile.menu.why")}
               </button>
             )}

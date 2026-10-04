@@ -93,7 +93,10 @@ export function tileCells(
 
 /** The visible mark counts of a cell (3.7, CO26): up to MARKS_MAX rings and MARKS_MAX squares,
  * then `+{n}` for the rest. */
-export function tileMarks(readers: readonly string[], writers: readonly string[]): {
+export function tileMarks(
+  readers: readonly string[],
+  writers: readonly string[],
+): {
   readers: number;
   writers: number;
   more: number;

@@ -234,9 +234,7 @@ test.describe("the pool frame component", () => {
         ),
       )
       .toContain("advance");
-    const posts = await poolFrame(page)!.evaluate(
-      () => (window as never as { __log: { type: string }[] }).__log,
-    );
+    const posts = await poolFrame(page)!.evaluate(() => (window as never as { __log: { type: string }[] }).__log);
     expect(posts.every((m) => m.type !== "probe")).toBe(true);
     await expect(iframe).toHaveAttribute("src", `/pool/tidepool/${LANDED_1}/?seed=7`);
   });
@@ -318,8 +316,7 @@ test.describe("the pool frame component", () => {
     await sendEvents(page, 0);
     const frame = poolFrame(page);
     await expect.poll(async () => frame !== undefined).toBe(true);
-    const log = () =>
-      frame!.evaluate(() => (window as never as { __log: { type: string; kinds?: string[] }[] }).__log);
+    const log = () => frame!.evaluate(() => (window as never as { __log: { type: string; kinds?: string[] }[] }).__log);
     // Never passed: after a few stats beats the log still carries no highlight.
     await page.waitForTimeout(450);
     expect((await log()).filter((m) => m.type === "highlight")).toHaveLength(0);
@@ -348,8 +345,9 @@ test.describe("the pool frame component", () => {
     await expect
       .poll(async () =>
         frame?.evaluate(() =>
-          (window as never as { __log: { type: string; selftest?: boolean }[] }).__log
-            .some((m) => m.type === "probe" && m.selftest === true),
+          (window as never as { __log: { type: string; selftest?: boolean }[] }).__log.some(
+            (m) => m.type === "probe" && m.selftest === true,
+          ),
         ),
       )
       .toBe(true);
@@ -372,9 +370,7 @@ test.describe("the pool frame component", () => {
       window.postMessage({ type: "tapped", creature: "snail", path: "creatures/snail.js" }, "*");
     });
     await page.waitForTimeout(300);
-    expect(await page.evaluate(() => (window as { tappedPath?: string }).tappedPath)).toBe(
-      "creatures/fish.js",
-    );
+    expect(await page.evaluate(() => (window as { tappedPath?: string }).tappedPath)).toBe("creatures/fish.js");
   });
 
   test("FR20: a live frame that cannot load shows frame.error and frame.reload inside it", async ({ page }) => {
@@ -408,10 +404,9 @@ test.describe("the pool frame component", () => {
     });
     // First stall: loaded again on main, captioned frame.stalled.reloaded (FR28's no-green row).
     const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
-    await expect(page.locator(".pf-caption")).toContainText(
-      "The pool stopped answering and was loaded again.",
-      { timeout: 15_000 },
-    );
+    await expect(page.locator(".pf-caption")).toContainText("The pool stopped answering and was loaded again.", {
+      timeout: 15_000,
+    });
     await expect(iframe).toHaveAttribute("src", /\/pool\/tidepool\/main\/\?seed=7$/);
     // The reloaded page answers again; silence it and it stalls a second time → frame.stalled.
     const frame2 = poolFrame(page);
@@ -433,7 +428,9 @@ test.describe("the pool frame component", () => {
     await sendEvents(page, EVENTS.length - 1); // the tracer's pool has plain_remote
     await page.getByRole("button", { name: "Compare" }).click();
     await expect
-      .poll(() => page.evaluate(() => (window as { harness?: { compareTapped: () => boolean } }).harness?.compareTapped()))
+      .poll(() =>
+        page.evaluate(() => (window as { harness?: { compareTapped: () => boolean } }).harness?.compareTapped()),
+      )
       .toBe(true);
   });
 

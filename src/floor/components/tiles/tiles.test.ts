@@ -33,12 +33,22 @@ function markup(state: FloorState, props: Record<string, unknown> = {}): string 
   return renderToStaticMarkup(createElement(FileTiles, { state, ...props }));
 }
 
-function withFiles(state: FloorState, paths: [string, string][], extra: Partial<FloorState["files"][string]> = {}): FloorState {
+function withFiles(
+  state: FloorState,
+  paths: [string, string][],
+  extra: Partial<FloorState["files"][string]> = {},
+): FloorState {
   const files = { ...state.files };
   for (const [path, tier] of paths) {
     files[path] = {
-      path, exists: true, tier: tier as "auto" | "held" | null,
-      readers: [], writers: [], last_landed_seq: null, keys: [], ...extra,
+      path,
+      exists: true,
+      tier: tier as "auto" | "held" | null,
+      readers: [],
+      writers: [],
+      last_landed_seq: null,
+      keys: [],
+      ...extra,
     };
   }
   return { ...state, files };
@@ -48,9 +58,14 @@ describe("3.7 the cells (CO26)", () => {
   it("groups the tracer's files by directory in pool.files order, label cell first", () => {
     const cells = tileCells(tracerState());
     expect(cells.map((c) => (c.kind === "label" ? c.dir : c.kind === "file" ? c.file.path : "+more"))).toEqual([
-      ".premise/", ".premise/policy.json",
-      "world/", "world/energy.js", "world/movement.js",
-      "creatures/", "creatures/fish.js", "creatures/snail.js",
+      ".premise/",
+      ".premise/policy.json",
+      "world/",
+      "world/energy.js",
+      "world/movement.js",
+      "creatures/",
+      "creatures/fish.js",
+      "creatures/snail.js",
     ]);
   });
 
@@ -74,14 +89,19 @@ describe("3.7 the cells (CO26)", () => {
   });
 
   it("caps marks at 5 each, then tile.more_marks counts the rest", () => {
-    expect(tileMarks(["a","b","c","d","e","f","g"], ["x","y","z","w","v","u"])).toEqual({
-      readers: 5, writers: 5, more: 3,
+    expect(tileMarks(["a", "b", "c", "d", "e", "f", "g"], ["x", "y", "z", "w", "v", "u"])).toEqual({
+      readers: 5,
+      writers: 5,
+      more: 3,
     });
     expect(MARKS_MAX).toBe(5);
   });
 
   it("the last cell is tiles.more when there are more files than cells (CO28)", () => {
-    const state = withFiles(emptyFloorState(), Array.from({ length: 10 }, (_, i) => [`d/f${i}.js`, "auto"]));
+    const state = withFiles(
+      emptyFloorState(),
+      Array.from({ length: 10 }, (_, i) => [`d/f${i}.js`, "auto"]),
+    );
     const cells = tileCells(state, { capacity: 6 });
     const last = cells[cells.length - 1]!;
     expect(cells).toHaveLength(6);
@@ -90,7 +110,10 @@ describe("3.7 the cells (CO26)", () => {
   });
 
   it("a landing's removed file keeps its cell as removed while its peers stay", () => {
-    const state = withFiles(emptyFloorState(), [["a/x.js", "auto"], ["a/y.js", "auto"]]);
+    const state = withFiles(emptyFloorState(), [
+      ["a/x.js", "auto"],
+      ["a/y.js", "auto"],
+    ]);
     const files = { ...state.files, "a/y.js": { ...state.files["a/y.js"]!, exists: false, last_landed_seq: 3 } };
     const cells = tileCells({ ...state, files }, { removedPaths: new Set(["a/y.js"]) });
     const removed = cells.find((c) => c.kind === "file" && c.removed);
@@ -131,7 +154,8 @@ describe("3.7 the rendered table", () => {
 
   it("the marks render as ring then square shapes, capped at five each", () => {
     const state = withFiles(emptyFloorState(), [["a/x.js", "auto"]], {
-      readers: ["1","2","3","4","5","6"], writers: ["a","b"],
+      readers: ["1", "2", "3", "4", "5", "6"],
+      writers: ["a", "b"],
     });
     const html = markup(state);
     expect(html.match(/class="tile-mark tile-mark-r"/g)).toHaveLength(5);

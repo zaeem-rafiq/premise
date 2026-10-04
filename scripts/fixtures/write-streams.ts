@@ -22,7 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AttemptState } from "../../src/protocol/attempt.ts";
 import type { Card, CardOption } from "../../src/protocol/cards.ts";
-import type { PoolEvent } from "../../src/protocol/events.ts";
+import type { EventBase, EventSrc, PoolEvent } from "../../src/protocol/events.ts";
 import type { HeadsUpItem } from "../../src/protocol/headsup.ts";
 import type { PremiseKind, PremiseRef } from "../../src/protocol/premise.ts";
 import type { ReplayHeader } from "../../src/protocol/replay.ts";
@@ -57,21 +57,25 @@ const ENERGY_IMPORTS = [
 /** A `PoolEvent` minus the fields the builder assigns; the omit distributes over the union. */
 type EventInput = PoolEvent extends infer E ? (E extends PoolEvent ? Omit<E, "n" | "t" | "pool"> : never) : never;
 
+/** A line of a Replay file: a protocol event, or — FE1 — the envelope of a type the page does
+ * not know (RY11/FE1), which the page ignores and counts. */
+type ReplayEvent = EventBase & { type: string } & Record<string, unknown>;
+
 /** One stream under construction: `n` is assigned in push order, `t` tracks `ts`. */
 type StreamBuilder = {
   push(body: EventInput): void;
-  events: PoolEvent[];
+  /** FE1: an event of a type outside 12.1 — the envelope is the protocol's, the payload is not. */
+  foreign(body: { ts: number; src: EventSrc; type: string } & Record<string, unknown>): void;
+  events: ReplayEvent[];
 };
 
 function stream(): StreamBuilder {
-  const events: PoolEvent[] = [];
-  return {
-    events,
-    push(body) {
-      const n = events.length + 1;
-      events.push({ ...body, n, t: body.ts + 5, pool: POOL } as PoolEvent);
-    },
+  const events: ReplayEvent[] = [];
+  const append = (body: { ts: number; src: EventSrc; type: string } & Record<string, unknown>): void => {
+    const n = events.length + 1;
+    events.push(Object.assign({}, body, { n, t: body.ts + 5, pool: POOL }));
   };
+  return { events, push: append, foreign: append };
 }
 
 type Push = StreamBuilder["push"];
@@ -264,7 +268,7 @@ function poolState(
 
 // ---- hero-c04: the shared rule lands first, the in-flight crab is sent around by E2 ----
 
-function heroC04(): PoolEvent[] {
+function heroC04(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -289,7 +293,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "read",
@@ -312,7 +316,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_510,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "write",
@@ -328,7 +332,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_520,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "write",
@@ -336,7 +340,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_530,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_A",
     op_seq: 1,
@@ -366,7 +370,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "read",
@@ -389,7 +393,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_510,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -397,7 +401,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_520,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -413,7 +417,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_530,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_S",
     op_seq: 1,
@@ -428,7 +432,7 @@ function heroC04(): PoolEvent[] {
   // S submits and validates; the tick accepts it and sends A around (E2, repair).
   push({
     ts: T0 + 5_000,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: "a_S",
     submit_id: "s_S1",
@@ -444,7 +448,7 @@ function heroC04(): PoolEvent[] {
     attempt_id: "a_S",
     from: "working",
     to: "submitted",
-    transition: "T5",
+    transition: "T3",
     reason: null,
     go_arounds: 0,
     pull_backs: 0,
@@ -457,7 +461,7 @@ function heroC04(): PoolEvent[] {
     attempt_id: "a_S",
     from: "submitted",
     to: "validated",
-    transition: "T7",
+    transition: "T12",
     reason: null,
     go_arounds: 0,
     pull_backs: 0,
@@ -565,7 +569,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_010,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_A",
     op_seq: 2,
@@ -578,7 +582,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_500,
-    src: "agent",
+    src: "trunk",
     type: "headsup.resolved",
     attempt_id: "a_A",
     hn: 1,
@@ -589,7 +593,7 @@ function heroC04(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_510,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: "a_A",
     submit_id: "s_A1",
@@ -605,7 +609,7 @@ function heroC04(): PoolEvent[] {
     attempt_id: "a_A",
     from: "going_around",
     to: "submitted",
-    transition: "T6",
+    transition: "T3",
     reason: null,
     go_arounds: 1,
     pull_backs: 0,
@@ -618,7 +622,7 @@ function heroC04(): PoolEvent[] {
     attempt_id: "a_A",
     from: "submitted",
     to: "validated",
-    transition: "T7",
+    transition: "T12",
     reason: null,
     go_arounds: 1,
     pull_backs: 0,
@@ -652,7 +656,7 @@ function heroC04(): PoolEvent[] {
 
 // ---- hero-c05: the crab lands first; the shared-rule change learns the referrer by QR1 ----
 
-function heroC05(): PoolEvent[] {
+function heroC05(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -677,7 +681,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "read",
@@ -700,7 +704,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_510,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -708,7 +712,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_520,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -724,7 +728,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 3_530,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_S",
     op_seq: 1,
@@ -754,7 +758,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "read",
@@ -777,7 +781,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_510,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "write",
@@ -793,7 +797,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_520,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_A",
     tool: "write",
@@ -801,7 +805,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 4_530,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_A",
     op_seq: 1,
@@ -816,7 +820,7 @@ function heroC05(): PoolEvent[] {
   // A submits, validates; the tick accepts it and repairs S's query premise (QR1).
   push({
     ts: T0 + 5_000,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: "a_A",
     submit_id: "s_A1",
@@ -832,7 +836,7 @@ function heroC05(): PoolEvent[] {
     attempt_id: "a_A",
     from: "working",
     to: "submitted",
-    transition: "T5",
+    transition: "T3",
     reason: null,
     go_arounds: 0,
     pull_backs: 0,
@@ -845,7 +849,7 @@ function heroC05(): PoolEvent[] {
     attempt_id: "a_A",
     from: "submitted",
     to: "validated",
-    transition: "T7",
+    transition: "T12",
     reason: null,
     go_arounds: 0,
     pull_backs: 0,
@@ -960,7 +964,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -976,7 +980,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_020,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -992,7 +996,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_030,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_S",
     tool: "replace",
@@ -1000,7 +1004,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_040,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_S",
     op_seq: 2,
@@ -1013,7 +1017,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_500,
-    src: "agent",
+    src: "trunk",
     type: "headsup.resolved",
     attempt_id: "a_S",
     hn: 1,
@@ -1024,7 +1028,7 @@ function heroC05(): PoolEvent[] {
   });
   push({
     ts: T0 + 8_510,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: "a_S",
     submit_id: "s_S1",
@@ -1040,7 +1044,7 @@ function heroC05(): PoolEvent[] {
     attempt_id: "a_S",
     from: "going_around",
     to: "submitted",
-    transition: "T6",
+    transition: "T3",
     reason: null,
     go_arounds: 1,
     pull_backs: 0,
@@ -1053,7 +1057,7 @@ function heroC05(): PoolEvent[] {
     attempt_id: "a_S",
     from: "submitted",
     to: "validated",
-    transition: "T7",
+    transition: "T12",
     reason: null,
     go_arounds: 1,
     pull_backs: 0,
@@ -1090,7 +1094,7 @@ function heroC05(): PoolEvent[] {
 
 // ---- tracer: one of every event type the slice emits, in a coherent story ----
 
-function tracer(): PoolEvent[] {
+function tracer(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -1135,7 +1139,7 @@ function tracer(): PoolEvent[] {
   });
   push({
     ts: T0 + 2_010,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_T",
     tool: "read",
@@ -1166,7 +1170,7 @@ function tracer(): PoolEvent[] {
   });
   push({
     ts: T0 + 2_110,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_T",
     tool: "list",
@@ -1189,7 +1193,7 @@ function tracer(): PoolEvent[] {
   });
   push({
     ts: T0 + 2_210,
-    src: "agent",
+    src: "trunk",
     type: "premise.recorded",
     attempt_id: "a_T",
     tool: "replace",
@@ -1205,7 +1209,7 @@ function tracer(): PoolEvent[] {
   });
   push({
     ts: T0 + 2_220,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: "a_T",
     op_seq: 1,
@@ -1218,7 +1222,7 @@ function tracer(): PoolEvent[] {
   });
   push({
     ts: T0 + 2_300,
-    src: "agent",
+    src: "trunk",
     type: "premise.removed",
     attempt_id: "a_T",
     kind: "listing",
@@ -1229,15 +1233,13 @@ function tracer(): PoolEvent[] {
   // A held path sends the submit to a card; the owner lands it.
   push({
     ts: T0 + 3_000,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: "a_T",
     submit_id: "s_T1",
     status: "held",
     tier: "held",
-    // The pinned Slice-1 recording keeps the schema it was written with (the Floor embeds
-    // these bytes): Check carried `code`, not the current `detail` of 01-core 12.1.
-    checks: [{ name: "tier", ok: false, code: "held_path" }] as unknown as Check[],
+    checks: [{ name: "tier", ok: false, detail: "held_path" }],
     duplicate: false,
   });
   push({
@@ -1247,7 +1249,7 @@ function tracer(): PoolEvent[] {
     attempt_id: "a_T",
     from: "working",
     to: "held",
-    transition: "T9",
+    transition: "T4",
     reason: "held_path",
     go_arounds: 0,
     pull_backs: 0,
@@ -1270,8 +1272,7 @@ function tracer(): PoolEvent[] {
         { id: "land_now", label: "Land now" },
         { id: "decline", label: "Decline" },
       ],
-      // Pinned bytes (see above): `paths` was a plain list of strings then.
-      paths: ["creatures/fish.js"] as unknown as Card["paths"],
+      paths: [{ path: "creatures/fish.js", tier: "held" }],
       blast_radius: {},
       preview: null,
       candidates: null,
@@ -1296,7 +1297,7 @@ function tracer(): PoolEvent[] {
         { id: "land_now", label: "Land now" },
         { id: "decline", label: "Decline" },
       ],
-      paths: ["creatures/fish.js"] as unknown as Card["paths"],
+      paths: [{ path: "creatures/fish.js", tier: "held" }],
       blast_radius: {},
       preview: null,
       candidates: null,
@@ -1354,7 +1355,7 @@ function tracer(): PoolEvent[] {
     commit: "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
     ok: true,
     runtime: "isolate",
-    checks: [{ name: "self_test", ok: true }],
+    checks: [{ name: "selftest_ran", ok: true }],
     ms: 900,
     confirmed: true,
   });
@@ -1394,27 +1395,10 @@ function tracer(): PoolEvent[] {
     reopened: ["a_T"],
     kept_readers: [],
   });
-  push({
-    ts: T0 + 9_110,
-    src: "trunk",
-    type: "attempt.reopened",
-    attempt_id: "a_T",
-    cause: "undo",
-    revision: 2,
-    model_changed: false,
-  });
-  push({ ts: T0 + 9_120, src: "trunk", type: "intent.state", intent_id: "i_T", state: "undone" });
+  // EV3: landing.accepted first, then the undo's effects — the reopened attempt, the undone
+  // intent, then the classification effects in the order EV3 names them (premise.judged, op.dropped).
   push({
     ts: T0 + 9_200,
-    src: "agent",
-    type: "op.dropped",
-    attempt_id: "a_T",
-    op_seqs: [1],
-    path: "creatures/fish.js",
-    rule: "OP5",
-  });
-  push({
-    ts: T0 + 9_300,
     src: "trunk",
     type: "landing.accepted",
     seq: 2,
@@ -1426,6 +1410,42 @@ function tracer(): PoolEvent[] {
     request_id: "r_1",
     paths: ["creatures/fish.js"],
     writes: [{ kind: "entity", key: "creatures/fish.js#spawn", old: "h-fish-1", new: "h-fish-0" }],
+  });
+  push({
+    ts: T0 + 9_210,
+    src: "trunk",
+    type: "attempt.reopened",
+    attempt_id: "a_T",
+    cause: "undo",
+    revision: 2,
+    model_changed: false,
+  });
+  push({ ts: T0 + 9_220, src: "trunk", type: "intent.state", intent_id: "i_T", state: "undone" });
+  push({
+    ts: T0 + 9_230,
+    src: "trunk",
+    type: "premise.judged",
+    attempt_id: "a_U",
+    kind: "entity",
+    key: "creatures/fish.js#spawn",
+    old_hash: "h-fish-1",
+    new_hash: "h-fish-0",
+    cause: "undo",
+    cause_seq: 2,
+    rule: "E2",
+    class: "rule",
+    result: "holds",
+    reason: "reverted to the read text",
+    clef: null,
+  });
+  push({
+    ts: T0 + 9_240,
+    src: "trunk",
+    type: "op.dropped",
+    attempt_id: "a_T",
+    op_seqs: [1],
+    path: "creatures/fish.js",
+    rule: "OP5",
   });
   push({
     ts: T0 + 9_400,
@@ -1450,23 +1470,6 @@ function tracer(): PoolEvent[] {
     notes: "note-2",
     tries: 1,
     ms: 200,
-  });
-  push({
-    ts: T0 + 9_600,
-    src: "trunk",
-    type: "premise.judged",
-    attempt_id: "a_U",
-    kind: "entity",
-    key: "creatures/fish.js#spawn",
-    old_hash: "h-fish-1",
-    new_hash: "h-fish-0",
-    cause: "undo",
-    cause_seq: 2,
-    rule: "E2",
-    class: "rule",
-    result: "holds",
-    reason: "reverted to the read text",
-    clef: null,
   });
   push({ ts: T0 + 9_700, src: "trunk", type: "pool.paused", reason: "owner", detail: "owner_pause" });
   push({
@@ -1495,7 +1498,7 @@ function tracer(): PoolEvent[] {
 
 // ---- write the three files in the Replay format of 01-core 12.3 ----
 
-function write(name: string, label: string, synthetic: boolean, events: PoolEvent[]): void {
+function write(name: string, label: string, synthetic: boolean, events: ReplayEvent[]): void {
   const header: ReplayHeader = {
     premise_replay: REPLAY_FORMAT,
     pool: POOL,
@@ -1555,7 +1558,7 @@ function aStep(
 }
 
 function aPremise(push: Push, ts: number, attemptId: string, tool: string, premise: PremiseRef): void {
-  push({ ts, src: "agent", type: "premise.recorded", attempt_id: attemptId, tool, premise });
+  push({ ts, src: "trunk", type: "premise.recorded", attempt_id: attemptId, tool, premise });
 }
 
 function aOp(
@@ -1572,7 +1575,7 @@ function aOp(
 ): void {
   push({
     ts,
-    src: "agent",
+    src: "trunk",
     type: "op.recorded",
     attempt_id: attemptId,
     op_seq: opSeq,
@@ -1584,6 +1587,38 @@ function aOp(
     removed,
   });
 }
+
+/** The from/to of every id of the table of 9.2 ("same" resolved; "unchanged" means to = from). */
+const TRANSITIONS: Record<string, { from: AttemptState[]; to: AttemptState[] | "unchanged" }> = {
+  T1: { from: ["opened"], to: ["working"] },
+  T2: { from: ["working", "going_around", "needs_confirm"], to: ["validated"] },
+  T3: { from: ["working", "going_around", "needs_confirm"], to: ["submitted"] },
+  T4: { from: ["working", "going_around", "needs_confirm"], to: ["held"] },
+  T5: { from: ["working", "going_around", "needs_confirm"], to: ["needs_confirm"] },
+  T6: { from: ["working", "going_around", "needs_confirm"], to: ["going_around"] },
+  T7: { from: ["working", "going_around", "needs_confirm"], to: "unchanged" },
+  T8: { from: ["working", "needs_confirm", "submitted", "validated", "held"], to: ["going_around"] },
+  T9: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
+  T9c: { from: ["working", "needs_confirm", "submitted", "validated", "held", "going_around"], to: ["stopped"] },
+  T10: { from: ["going_around"], to: ["going_around"] },
+  T10a: { from: ["going_around"], to: ["going_around"] },
+  T11: { from: ["submitted", "validated", "held"], to: ["needs_confirm"] },
+  T11s: { from: ["submitted", "validated", "held"], to: ["stopped"] },
+  T12: { from: ["submitted"], to: ["validated", "held"] },
+  T13: { from: ["held"], to: ["validated"] },
+  T14: { from: ["held"], to: ["stopped"] },
+  T15: { from: ["validated"], to: ["accepted"] },
+  T16: { from: ["accepted"], to: ["landed"] },
+  T17: { from: ["accepted"], to: ["going_around"] },
+  T17a: { from: ["accepted"], to: ["landed"] },
+  T18: { from: ["landed"], to: ["stopped"] },
+  T19: { from: ["landed"], to: ["going_around"] },
+  T19s: { from: ["landed"], to: ["stopped"] },
+  T20: { from: ["opened", "working", "going_around", "needs_confirm", "submitted", "validated", "held"], to: ["stopped"] },
+  T20r: { from: ["going_around", "needs_confirm", "working"], to: ["stopped"] },
+  T21: { from: ["stopped"], to: ["going_around", "needs_confirm", "working"] },
+  T22: { from: ["submitted", "validated", "held"], to: ["working"] },
+};
 
 function aState(
   push: Push,
@@ -1597,6 +1632,12 @@ function aState(
   rightOfWay = false,
   reason: string | null = null,
 ): void {
+  const rule = TRANSITIONS[transition];
+  if (rule === undefined) throw new Error(`attempt.state ${attemptId}: ${transition} is not an id of 9.2`);
+  if (!rule.from.includes(from))
+    throw new Error(`attempt.state ${attemptId}: ${transition} does not go from ${from} (9.2)`);
+  const toOk = rule.to === "unchanged" ? to === from : rule.to.includes(to);
+  if (!toOk) throw new Error(`attempt.state ${attemptId}: ${transition} does not go to ${to} (9.2)`);
   push({
     ts,
     src: "trunk",
@@ -1623,7 +1664,7 @@ function aSubmit(
 ): void {
   push({
     ts,
-    src: "agent",
+    src: "trunk",
     type: "submit.result",
     attempt_id: attemptId,
     submit_id: submitId,
@@ -1707,7 +1748,7 @@ function aResolved(
 ): void {
   push({
     ts,
-    src: "agent",
+    src: "trunk",
     type: "headsup.resolved",
     attempt_id: attemptId,
     hn,
@@ -2057,7 +2098,7 @@ function creatureLands(
   );
 }
 
-function vectorC39(): PoolEvent[] {
+function vectorC39(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -2372,7 +2413,7 @@ function c32Ack(push: Push, ts: number, hn: number, submitId: string): void {
   aState(push, ts + 20, "a_A", "going_around", "validated", "T2", hn);
 }
 
-function vectorC32(): PoolEvent[] {
+function vectorC32(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -2542,7 +2583,7 @@ function vectorC32(): PoolEvent[] {
 
 // ---- vector-c47: C47, confirms pull an attempt out of the queue — T11, GA3, RW1, RW3 ----
 
-function vectorC47(): PoolEvent[] {
+function vectorC47(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -2769,7 +2810,7 @@ function vectorC47(): PoolEvent[] {
 
 // ---- pool-summary-only: AC26, EV6 — a summary_only pool carries no premise, op or step events ----
 
-function poolSummaryOnly(): PoolEvent[] {
+function poolSummaryOnly(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   push({
@@ -2931,7 +2972,7 @@ function poolSummaryOnly(): PoolEvent[] {
 
 // ---- pool-synthetic: AC26, EM1a — a synthetic pool that is not summary_only keeps the full stream ----
 
-function poolSynthetic(): PoolEvent[] {
+function poolSynthetic(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3140,7 +3181,7 @@ function poolSynthetic(): PoolEvent[] {
 
 // ---- card-held-minimal: AC22 + plan 2.6 item 5 — the held card of HD1's minimal form ----
 
-function cardHeldMinimal(): PoolEvent[] {
+function cardHeldMinimal(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3233,7 +3274,7 @@ function cardHeldMinimal(): PoolEvent[] {
 
 // ---- card-choice-reopen-failed: AC22 + CD4 — the revert lands, the agent cannot be reopened ----
 
-function cardChoiceReopenFailed(): PoolEvent[] {
+function cardChoiceReopenFailed(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3393,7 +3434,7 @@ function cardChoiceReopenFailed(): PoolEvent[] {
 
 // ---- green-confirmed-fail: AC21 + GR3 — a first failed run is quiet, the second announces ----
 
-function greenConfirmedFail(): PoolEvent[] {
+function greenConfirmedFail(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   const greenChecks = (ok: boolean): Array<{ name: string; ok: boolean; code?: string }> => [
@@ -3489,7 +3530,7 @@ function greenConfirmedFail(): PoolEvent[] {
 // ---- failure rows of 03-floor 7 whose state a stream can express (AC15) ----
 
 /** FR1: the model is slow — a working attempt quiet past QUIET_NOTICE_MS. */
-function fr01ModelSlow(): PoolEvent[] {
+function fr01ModelSlow(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3515,7 +3556,7 @@ function fr01ModelSlow(): PoolEvent[] {
 }
 
 /** FR2: a tool step failed — attempt.step with ok: false. */
-function fr02StepFailed(): PoolEvent[] {
+function fr02StepFailed(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3526,7 +3567,7 @@ function fr02StepFailed(): PoolEvent[] {
 }
 
 /** FR3: the checks sent a change back — submit.result status rejected. */
-function fr03SubmitRejected(): PoolEvent[] {
+function fr03SubmitRejected(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3550,7 +3591,7 @@ function fr03SubmitRejected(): PoolEvent[] {
 }
 
 /** FR4: an attempt stopped — one attempt per agent-side stop reason of the row. */
-function fr04AttemptStopped(): PoolEvent[] {
+function fr04AttemptStopped(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3564,7 +3605,7 @@ function fr04AttemptStopped(): PoolEvent[] {
 }
 
 /** FR5: a push is being retried — an accepted landing whose first push failed. */
-function fr05PushRetry(): PoolEvent[] {
+function fr05PushRetry(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3598,7 +3639,7 @@ function fr05PushRetry(): PoolEvent[] {
 }
 
 /** FR6: a push is pending for long — pushStalled once the wait passes PUSH_STALL_MS. */
-function fr06PushStalled(): PoolEvent[] {
+function fr06PushStalled(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3648,7 +3689,7 @@ function fr06PushStalled(): PoolEvent[] {
 }
 
 /** FR7: spend is near the cap — spend_usd >= cap_usd x SPEND_NEAR_SHARE. */
-function fr07SpendNear(): PoolEvent[] {
+function fr07SpendNear(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3667,7 +3708,7 @@ function fr07SpendNear(): PoolEvent[] {
 }
 
 /** FR8: the spend cap is reached — limits.refusing true, attempts stop with spend_cap. */
-function fr08SpendCap(): PoolEvent[] {
+function fr08SpendCap(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3688,7 +3729,7 @@ function fr08SpendCap(): PoolEvent[] {
 }
 
 /** FR9: the kill switch is on — limits.killed stops the agents. */
-function fr09KillSwitch(): PoolEvent[] {
+function fr09KillSwitch(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3709,7 +3750,7 @@ function fr09KillSwitch(): PoolEvent[] {
 }
 
 /** FR11 (diverged): pool.paused reason diverged — attempts in "Landing…" stay so. */
-function fr11Diverged(): PoolEvent[] {
+function fr11Diverged(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3735,7 +3776,7 @@ function fr11Diverged(): PoolEvent[] {
 }
 
 /** FR11 (push_rejected): LP8 pauses the pool after PUSH_REJECT_LIMIT refused pushes. */
-function fr11PushRejected(): PoolEvent[] {
+function fr11PushRejected(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3788,7 +3829,7 @@ function fr11PushRejected(): PoolEvent[] {
 }
 
 /** FR12: a note does not match its commit — pool.paused reason note_seq_mismatch. */
-function fr12NoteSeqMismatch(): PoolEvent[] {
+function fr12NoteSeqMismatch(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3797,7 +3838,7 @@ function fr12NoteSeqMismatch(): PoolEvent[] {
 }
 
 /** FR13: the owner paused landings — pool.paused reason owner. */
-function fr13OwnerPaused(): PoolEvent[] {
+function fr13OwnerPaused(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3806,7 +3847,7 @@ function fr13OwnerPaused(): PoolEvent[] {
 }
 
 /** FR14: the pool is rebuilding — pool.state rebuilding; a higher epoch closes open cards (RB5). */
-function fr14Rebuilding(): PoolEvent[] {
+function fr14Rebuilding(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -3859,7 +3900,7 @@ function fr14Rebuilding(): PoolEvent[] {
 }
 
 /** FR16 + AC22: a change was sent back too often — the choice card of reason go_around_limit. */
-function fr16GoAroundLimit(): PoolEvent[] {
+function fr16GoAroundLimit(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -4044,7 +4085,7 @@ function fr16GoAroundLimit(): PoolEvent[] {
 }
 
 /** FR17: two requests contradict — GL3 stops the attempt and opens the choice card. */
-function fr17Contradiction(): PoolEvent[] {
+function fr17Contradiction(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
@@ -4213,7 +4254,7 @@ function fr17Contradiction(): PoolEvent[] {
 }
 
 /** FR26: all agent slots are busy — a new attempt waits in opened. */
-function fr26SlotsBusy(): PoolEvent[] {
+function fr26SlotsBusy(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   push({
@@ -4263,13 +4304,13 @@ function fr26SlotsBusy(): PoolEvent[] {
 }
 
 /** FR27 + FE1: an event of a type the page does not know is ignored and counted. */
-function fr27UnknownEvent(): PoolEvent[] {
+function fr27UnknownEvent(): ReplayEvent[] {
   const s = stream();
   const push = s.push;
   seed(push, T0);
   openAttempt(push, T0 + 1_000, "i_A", "a_A", "a crab that hides when its energy is low");
   // RY11/FE1: a type outside the 35 of 12.1 changes only n, ts and unknown_events.
-  push({ ts: T0 + 2_000, src: "trunk", type: "pool.weather", mood: "calm" } as unknown as EventInput);
+  s.foreign({ ts: T0 + 2_000, src: "trunk", type: "pool.weather", mood: "calm" });
   aStep(push, T0 + 3_000, "a_A", 1, "read", "world/energy.js");
   return s.events;
 }

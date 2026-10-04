@@ -101,10 +101,10 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(note?.go_arounds[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
   });
 
-  it.fails("item 2 (T8): the attempt.state event to going_around reports go_arounds 1", () => {
+  it("item 2 (T8): the attempt.state event to going_around reports go_arounds 1", () => {
     // 01-core 9.2 T8: `going_around`, effect `go_arounds += 1`; the acceptance text expects
-    // "attempt.state to going_around with go_arounds: 1". The engine emits the event inside
-    // setState BEFORE enterRepair's increment, so the event carries go_arounds: 0.
+    // "attempt.state to going_around with go_arounds: 1". The event reports the count after
+    // the transition: enterRepair applies T8's effect before setState emits it.
     const sim = new SwarmSim(swarmFiles(), { seed: 7 });
     const { held } = order1(sim, ["add-energy"]);
     const ae = held[0] as AgentHandle;

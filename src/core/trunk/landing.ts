@@ -504,10 +504,10 @@ export function sendHeadsUp(
       openCard(pool, "choice", "go_around_limit", [a.id]);
       return;
     }
-    setState(pool, a, "needs_confirm", "T11");
     a.pull_backs += 1;
-    unvalidate(pool, a);
     if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
+    setState(pool, a, "needs_confirm", "T11");
+    unvalidate(pool, a);
   }
 }
 
@@ -544,6 +544,9 @@ export function enterRepair(
     openCard(pool, "choice", "go_around_limit", [a.id]);
     return;
   }
+  a.go_arounds += 1;
+  a.op_mark = a.opCount; // HU12: where this go-around started
+  if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
   if (a.state !== "going_around") setState(pool, a, "going_around", "T9");
   else
     event(pool, "attempt.state", {
@@ -552,14 +555,11 @@ export function enterRepair(
       to: "going_around",
       transition: "T10a",
       reason: null,
-      go_arounds: a.go_arounds + 1,
+      go_arounds: a.go_arounds,
       pull_backs: a.pull_backs,
       right_of_way: a.right_of_way_at !== null,
     });
-  a.go_arounds += 1;
-  a.op_mark = a.opCount; // HU12: where this go-around started
   unvalidate(pool, a);
-  if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
   pool.dirtyAttempts.add(a.id);
 }
 

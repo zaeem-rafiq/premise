@@ -570,6 +570,8 @@ export function tick(pool: Pool): void {
         setState(pool, a, "stopped", "T18", "undone");
       } else {
         // T19: a dependent landing's attempt is reopened with its frozen state.
+        a.go_arounds += 1;
+        a.right_of_way_at = null;
         setState(pool, a, "going_around", "T19");
         event(pool, "attempt.reopened", {
           attempt_id: a.id,
@@ -579,8 +581,6 @@ export function tick(pool: Pool): void {
         });
         a.revision += 1;
         a.resumes += 1;
-        a.go_arounds += 1;
-        a.right_of_way_at = null;
         unvalidate(pool, a);
         a.ops = x.ops.map((o) => ({
           ...o,
@@ -1244,8 +1244,8 @@ export function owner(
     a.stop_reason = null;
     const open = a.heads.filter((h) => h.resolved_at === null);
     if (open.some((h) => h.result === "repair")) {
-      setState(pool, a, "going_around", "T21");
       a.go_arounds = 1;
+      setState(pool, a, "going_around", "T21");
     } else if (open.length > 0) {
       setState(pool, a, "needs_confirm", "T21");
     } else {

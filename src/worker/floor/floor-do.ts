@@ -281,7 +281,11 @@ export class Floor extends DurableObject<Env> {
     const event = landingEvent(this.ctx.storage.sql, Number(segment));
     if (event === null || event.type !== "landing.landed") return jsonError("not_found", 404);
     if (typeof event.note_json !== "string") return jsonError("not_found", 404); // EV6: summary_only has no notes
-    return new Response(event.note_json, { headers: { "content-type": "application/json" } });
+    // NT1: the blob is the canonical JSON plus exactly one LF. `note_json` carries the JSON
+    // without it, so the route's bytes are the field with the LF the blob ends in — its
+    // hash-object is then `landing.landed.note`.
+    const body = event.note_json.endsWith("\n") ? event.note_json : `${event.note_json}\n`;
+    return new Response(body, { headers: { "content-type": "application/json" } });
   }
 
   // ---- The Replay export (12.3, RP1) ----

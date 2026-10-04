@@ -2,7 +2,7 @@
 
 Status: binding for the build. Revision 1, 2026-10-03. Read `01-core.md`, `02-tidepool.md` and `03-floor.md` before this file. They say what Premise is. This file says in what order it is built, who owns which paths, and what evidence closes each step.
 
-Sources: the architecture brief (scope lists, engineering standards), the design brief (contest dates and platform limits), the concept panel (the three judges' must-fix lists; Appendix A maps every schedule and measurement item to a section of this file).
+Sources: the architecture brief (scope lists, engineering standards), the design brief (contest dates and platform limits), the concept panel (the three judges' must-fix lists; Appendix A maps every schedule and measurement item to a section of this file), and the platform record `docs/measurements/spikes/2026-10-04-platform.md` (what was measured on the real service before the build).
 
 Not in this file: any rule of the product. Where this file needs a product rule it cites it by id.
 
@@ -12,6 +12,7 @@ Conventions:
 - Roles. **Owner**: the person. Defines goals, drives the Floor, records the video, submits. Cannot read code. **Lead**: the lead agent. Owns the shared files, merges, deploys, verifies. **Builder**: one coding agent working in one lane.
 - Ids in this file: `BP` (rules of the build), **Slice** 0 to 15 with tracks such as `1A`, `IP` (integration points), `M` (milestones), `PT` (plan thresholds), `VE` (verification), `RR` (risks), `SC` (submission checklist), `GP` (gaps in the specification).
 - `S1` to `S6` are the spikes of `01-core.md` section 15. `PS` is the `PoolSource` spike of `02-tidepool.md` 4.9. A slice is never written `S<n>`.
+- **The platform record** is `docs/measurements/spikes/2026-10-04-platform.md`. `E1` to `E9` are its experiments. Every experiment ran once, from one location, on small repositories; the record says so itself.
 - Days: D1 is Sunday 2026-10-04, D11 is Wednesday 2026-10-14. A day ends at the lead's integration run. "Behind" means the day's milestone check failed at that run.
 - A **plan threshold** is a pass mark set by this file for a go or no-go decision. It is not a calibrated constant of the product.
 - Authorizations already given by the owner (brief, 2026-10-03): deployment to the owner's Cloudflare account, and up to $50 of Cloudflare usage. Not yet given: making the repository public, deleting resources, any other paid commitment. Section 7 says where each is needed.
@@ -28,7 +29,7 @@ Conventions:
 | BP3 | A slice is complete when its acceptance check passed on merged `main`, run by the lead, on the deployed `test` environment where the check says so. A builder's report is not evidence. | The lead records commands and results in `docs/measurements/integration/ip<N>.md`. |
 | BP4 | A feature that fails its acceptance check at the freeze (M5) is switched off in `features` (`/floor.json`) and listed under limits in About and in the README. Nothing ships half-working. | AC19 of `03-floor.md`; the rows of `03-floor.md` 1.4. |
 | BP5 | Dependencies are pinned to exact versions (1.2). A package that ends up in the Worker bundle or in a browser bundle must be MIT, Apache-2.0, BSD or Unlicense. A new dependency is added by the lead only. | `npm run check:licenses` reads the bundlers' module lists and fails on any other licence. |
-| BP6 | No code is copied from another entry or from a GPL or FSL project. Three scratch tools were made before the build and are not in the repository. (a) The core simulator checked `premise-cases.json`. It is never used as product code, so the vectors stay an independent check of the engine. (b) The spike harness's pack and pkt-line code and (c) the tide pool reference tree are the project's own work. The lead may hand them to a builder as a starting point. They then count as new code: the same tests and review apply, and the specification wins where they differ. | Review at the integration point. Tracks 1B and 1G pass their checks (2.2) whatever the starting point was. |
+| BP6 | No code is copied from another entry or from a GPL or FSL project. `reference/` holds the working material from before the build and is not product code (its README). Nothing under `src/`, `test/` or `scripts/` imports from it. (a) `reference/spec-sim/` checked `premise-cases.json`. It is never used as product code or as a source of expected values, so the vectors stay an independent check of the engine. (b) The pack and pkt-line code of `reference/artifacts-spike/` and (c) the trees of `reference/tidepool-check/` are the project's own work. A builder may start from them. They then count as new code: the same tests and review apply, and the specification wins where they differ (`reference/tidepool-check/pool` has 20 files, with a `creatures/README.md` and without `GUIDE.md` and `index.html`; `02` 2.1 fixes 21). | `test/arch/imports.test.ts` fails on an import from `reference/`. Tracks 1B and 1G pass their checks (2.2) whatever the starting point was. |
 | BP7 | Secrets (the `OWNER_KEY` value, Artifacts tokens, Cloudflare API tokens) never enter the repository, a log, a test report, a recording or a chat message. Tests read them from the shell environment. | `npm run check:secrets` scans the work tree and the full history for the patterns of `redact()` (SE5a). |
 | BP8 | A calibrated constant is changed only together with a measurement file under `docs/measurements/`, named in a comment next to the value (`01-core.md` conventions). | Unit test: every constant marked calibrated in Appendix C either has its starting value or cites an existing file. |
 | BP9 | The sum of `SPEND_CAP_USD` over all deployed environments is 40 (`01-core.md` Appendix C). Start: `production` 30, `test` 10. The gate's ledger is never reset before the submission. | `wrangler.jsonc`; `npm run spend` prints both ledgers. |
@@ -76,7 +77,8 @@ One npm package, one Worker project. No workspaces.
 | `README.md` | What Premise is, run instructions, limits (built from `src/copy/limits.ts`, AC19), measured numbers with the file each came from. | |
 | `LICENSE` | MIT. | |
 | `docs/spec/` | The four specification files and `premise-cases.json`. | |
-| `docs/measurements/` | Recorded evidence: `spikes/`, `models/`, `calibration/`, `soak/`, `integration/`, `rehearsal/`, `cases.md`, `rules.md`, `deploys.md`. | |
+| `docs/measurements/` | Recorded evidence: `spikes/` (the platform record is its first file), `models/`, `calibration/`, `soak/`, `integration/`, `rehearsal/`, `cases.md`, `rules.md`, `deploys.md`. | |
+| `reference/` | Working material from before the build: `spec-sim/`, `tidepool-check/`, `artifacts-spike/`. Not product code and not changed by the build (BP6). `typecheck`, `npm test`, `build` and prettier leave it out; `check:secrets` scans it. | |
 | `docs/reviews/` | `security.md`, `design.md`, `screens/`. | |
 | `docs/submission/` | `vision.txt`, `cloudflare.txt`, `run.txt`, `checklist.md`. | |
 | `src/protocol/` | The shared module: every event, tool request and response, record type, route, constant, `redact()`, port interface. `src/protocol/reducer/` holds `FloorState` and `reduce` (EV5). | yes |
@@ -158,7 +160,7 @@ Pure paths: `src/protocol/**`, `src/copy/**`, `src/config/**`, `src/core/**`, `s
    | `src/floor/**` | `src/floor`, `src/protocol`, `src/copy`, `react`, `react-dom` |
    | `src/worker/**` | everything under `src` except `src/floor` and `src/host`; `cloudflare:workers`; `node:*` |
 
-   A test file (`*.test.ts`) may also import `vitest`, `node:*` and `test/support`. Test files are compiled by `tsconfig.test.json`, never by `tsconfig.core.json`.
+   A test file (`*.test.ts`) may also import `vitest`, `node:*` and `test/support`. Test files are compiled by `tsconfig.test.json`, never by `tsconfig.core.json`. No file under `src/`, `test/` or `scripts/` imports from `reference/` (BP6).
 
 3. **No waits, no clock, no chance** (`test/arch/sync.test.ts`; SY1, SY2, FE2). In `src/core/**`, `src/swarm/**` and `src/protocol/reducer/**` these tokens are forbidden: `async`, `await`, `Promise`, `.then(`, `fetch(`, `crypto.subtle`, `CompressionStream`, `setTimeout`, `Date.now(`, `new Date()` with no argument, `Math.random(`. Time, ids and random numbers are arguments. `src/protocol/ports.ts` declares asynchronous interfaces as types only. The cases driver also fails if any engine call returns a thenable.
 4. **No patterns built from input** (`test/arch/sql.test.ts`; SQ1). No SQL text under `src/core/trunk/` contains `LIKE` or `GLOB`.
@@ -242,7 +244,8 @@ interface Driver {
 | `AI` | Workers AI | Coding models and Clef |
 | `TRUNK`, `AGENT`, `FLOOR`, `GATE` | Durable Object classes `Trunk`, `Agent`, `Floor`, `ModelGate`, SQLite-backed | One per pool, per attempt, per pool, per deployment |
 | `SWARM`, `GREEN`, `ARCHIVE` | Workflows | Slice 8, Slice 14, track 4D |
-| `BROWSER` | Browser Run | Slice 14, only if S4 chooses option A |
+| `LOADER` | Worker Loader (`worker_loaders`) | Slice 14 part 14b, under S4 option B: the Dynamic Worker isolate that runs the self-test |
+| `BROWSER` | Browser Run | Slice 14, only if a record chooses S4 option A |
 | `OWNER_KEY` | Secret | SE1. Not listed under `secrets.required`: SE1 and RP2 need a deployment without it to start and to fail closed. |
 | Variables | `SPEND_CAP_USD`, `APP_HOST` (optional, SE14b), `CLEF_TRIAGE`, `CLEF_RISK`, `CLEF_CONTRADICTION` | |
 
@@ -252,17 +255,17 @@ Environments: the top level is `production` (Worker `premise`). `env.test` is Wo
 
 ### 1.7 Ports decided by spike
 
-The rest of the system codes against the interface. Each option is one file. `src/worker/adapters/index.ts` names the option in use; that file changes only with a decision record `docs/measurements/spikes/<id>.md` (question, measurement, choice, date). Until a record exists, option A of each spike is the working assumption (`01-core.md` section 15). This file chooses none.
+The rest of the system codes against the interface. Each option is one file. `src/worker/adapters/index.ts` names the option in use. That file changes only together with a record under `docs/measurements/spikes/` (question, measurement, choice, date). This file chooses none: the last column quotes the platform record, and a later record that measures otherwise replaces it (RR20).
 
-| Spike | Interface | Options | Adapter directory |
-| --- | --- | --- | --- |
-| S1 | `Pusher`, `NotesReader` | A hand-built pack and raw receive-pack; B isomorphic-git for the push only; C one warm container. `NotesReader`: binding read by ref, or the ref advertisement plus binding reads by hash. | `adapters/pusher/`, `adapters/notes-reader/` |
-| S2 | `TokenSource` | A minted token; B the token returned by `create()`, with rotation through `fork()`; C a container. | `adapters/token-source/` |
-| S3 | `AttemptRepoProvisioner` | A `create()`; B `fork()` with retry; C a pre-warmed pool of repos. | `adapters/attempt-repo/` |
-| S4 | `Verifier` | A Browser Run; B a Dynamic Worker isolate; C a container; D `static`. | `adapters/verifier/` |
-| S5 | `ModelPlan` | Workhorse, race models, per-minute limits, `max_real_agents`, prices: all from measurement. | `src/config/model-plan.ts` |
-| S6 | `Triage`, `RiskJudge` | A `clef-flash` and `clef`; B `clef` for both; C off; always `ScriptedTriage` for synthetic attempts. | `adapters/triage/`, `adapters/risk/` |
-| PS | `PoolSource` | A binding reads by hash; B `readFile` with a commit id as ref; C Trunk's `files` table for head; E a directory on disk (tests). Option D is not built (0.1). | `adapters/pool-source/` |
+| Spike | Interface | Options | Adapter directory | The platform record says |
+| --- | --- | --- | --- | --- |
+| S1 | `Pusher`, `NotesReader` | A hand-built pack and raw receive-pack; B isomorphic-git for the push only; C one warm container. `NotesReader`: binding read by ref, or the ref advertisement plus binding reads by hash. | `adapters/pusher/`, `adapters/notes-reader/` | Option A. E8: a hand-built pack was accepted in a single-ref and in a two-ref request (one sample each); with one wrong old id the server refused both commands; `atomic` is not advertised. E7, 100 of 100 pushes in a row at p50 128 ms, ran through isomorphic-git: it speaks for the service and for option B, not yet for a hand-built pack at volume (2.4 item 2 measures that). E4: the binding does not resolve `refs/notes/premise` by name, so notes are read by commit id. |
+| S2 | `TokenSource` | A minted token; B the token returned by `create()`, with rotation through `fork()`; C a container. | `adapters/token-source/` | Option A. E2: minted write and read tokens were accepted from inside a Durable Object. Not measured: the lifetime of a `create()` token, and what a fork copies (needed only for option B). |
+| S3 | `AttemptRepoProvisioner` | A `create()`; B `fork()` with retry; C a pre-warmed pool of repos. | `adapters/attempt-repo/` | Option B, at most four forks at a time, with retry. E5: 15 of 20 concurrent forks usable, ready in 1.7 to 4.0 s; `fork()` returned no usable token, so the token is minted. |
+| S4 | `Verifier` | A Browser Run; B a Dynamic Worker isolate; C a container; D `static`. | `adapters/verifier/` | Option B, no container. A fresh isolate ran a small simulation in 9 to 14 ms; `fetch()` throws; a CPU limit stops a loop; at most four Dynamic Workers in flight per request. Options A and C were not measured. |
+| S5 | `ModelPlan` | Workhorse, race models, per-minute limits, `max_real_agents`, prices: all from measurement. | `src/config/model-plan.ts` | Starting plan: `@cf/openai/gpt-oss-120b`, with `@cf/moonshotai/kimi-k2.7-code` for races. E9 was a task far smaller than an intent. The seeded intents are measured at M3 (2.5). |
+| S6 | `Triage`, `RiskJudge` | A `clef-flash` and `clef`; B `clef` for both; C off; always `ScriptedTriage` for synthetic attempts. | `adapters/triage/`, `adapters/risk/` | Not chosen. Eight hand-made cases: both models were on the correct side of 0.5, and `clef` separated the classes more widely. Thresholds and request limits are measured in Slice 15. |
+| PS | `PoolSource` | A binding reads by hash; B `readFile` with a commit id as ref; C Trunk's `files` table for head; E a directory on disk (tests). Option D is not built (0.1). | `adapters/pool-source/` | Reads by commit id through the binding. E4 and E6: `readFile` accepted a commit id as `ref`; each read took about 110 ms; a read by branch name showed a new head 109 to 274 ms after a push. |
 
 ---
 
@@ -287,7 +290,7 @@ Slice 0 is the scaffold. Slice 1 is the thinnest path through every layer. Slice
 | 12 | Race and choose | SHOULD | 4, 11 | none new |
 | 13 | Causal Undo that reopens dependents | SHOULD | 2, 4, 5 | `C19`, `C53` |
 | 14 | Green line: verify, advance, revert on red | SHOULD | 3; 13 for the revert | none new |
-| 15 | Clef triage and the risk lines | SHOULD | 2, 4; 11 for the risk lines | `C06`, `C07`, `C12`, `C31`, `C38`, `C42`, `C52`, `C55` |
+| 15 | Clef triage and the risk lines | SHOULD | 2, 3, 4, 11 | `C06`, `C07`, `C12`, `C31`, `C38`, `C42`, `C52`, `C55` |
 
 3 + 34 + 5 + 5 + 2 + 8 = 57. Every case is required by exactly one slice and stays required from then on. A case is named by its number prefix (`C04` is `C04-hero-shared-rule-lands-first`; Appendix A of `01-core.md`, runner rule 10).
 
@@ -413,7 +416,7 @@ npm run test:e2e -- --project=deployed tracer
 | | |
 | --- | --- |
 | Goal | A landing that changes something an in-flight attempt relied on reaches that attempt, in the accept transaction, as a heads-up with the exact diff. The attempt goes around and lands. Attempts that did not rely on it are not disturbed. |
-| Builds | 7.1, 7.2 (every row; triage rows answer `confirm`, `triage_unavailable`, by TR5), 7.4, 7.5, section 8, 6.4, 9.3, 9.4 steps 3a and 3b and the checks of step 3c (row `CKL`), 11.1, 11.2 (RW1 to RW4), the card route, and the transitions of 9.2 with these exceptions: T3 and T12 (Slice 15), T17 and T17a (Slice 3), T18 to T19s (Slice 13). T4, T13 and T14 are built here in their minimal form, because a `held` tier must fail closed in every build: state `held`, `card.opened` with `preview: null` and an empty blast radius, and the options `land` and `decline`. Slice 11 adds what the card shows, `land_now`, and the CK9 part of step 3c. |
+| Builds | 7.1, 7.2 (every row; triage rows answer `confirm`, `triage_unavailable`, by TR5), 7.4, 7.5, section 8, 6.4, 9.3, 9.4 steps 3a and 3b and the checks of step 3c (row `CKL`), 11.1, 11.2 (RW1 to RW4), EV6 as GP5 settles it, the card route, and the transitions of 9.2 with these exceptions: T3 and T12 (Slice 15), T17 and T17a (Slice 3), T18 to T19s (Slice 13). T4, T13 and T14 are built here in their minimal form, because a `held` tier must fail closed in every build: state `held`, `card.opened` with `preview: null` and an empty blast radius, and the options `land` and `decline`. Slice 11 adds what the card shows, `land_now`, and the CK9 part of step 3c. |
 | Lanes | leaf, engine, trunk, agent, swarm |
 | Owns | `src/core/classify/**`, `src/core/diff/**`; `src/core/trunk/` files `classify-batch`, `headsup`, `transitions`, `blind-spot`, `go-around`, `right-of-way`, `cards`; `src/worker/trunk/headsup-push.ts`; `src/worker/routes/cards.ts`; `src/worker/agent/heads-up.ts`; `src/swarm/patterns/` files `add-energy`, `add-relative`, `rescale-energy`, `cosmetic`; `test/integration/collide/**` |
 | Depends on | Slice 1; GP2 and GP5 closed (for `collide`) |
@@ -424,10 +427,10 @@ Acceptance:
 ```
 CASES=required npm run test:cases
 npm test -- src/core/classify
-npm run test:integration -- collide            # on test, pool seeded from tidepool-swarm
+npm run test:integration -- collide            # items 2 to 7, on test; pools seeded from tidepool-swarm, and from tidepool for item 7
 ```
 
-1. `src/core/classify` has at least one test named with each row id of 7.2: `X0`; `E0`, `E1`, `E2`, `E2m`, `E3`, `E4`; `F0`, `F1`, `F2`, `F3`, `F3m`, `F4` to `F7`; `L0` to `L3`, and L1 checked late; `QT0` to `QT3`; `QR0`, `QR1`, `QR1m`, `QR2`, `QR3`, `QR4`; `QO0` to `QO2`; `B1`; `CKL`; `Z1`. One test runs the first steps of `C06` with `CLEF_TRIAGE` off and expects `confirm`, reason `triage_unavailable`, in the same heads-up (TR5).
+1. `src/core/classify` has at least one test named with each row id of 7.2: `X0`; `E0`, `E1`, `E2`, `E2m`, `E3`, `E4`; `F0`, `F1`, `F2`, `F3`, `F3m`, `F4` to `F7`; `L0` to `L3`, and L1 checked late; `QT0` to `QT3`; `QR0`, `QR1`, `QR1m`, `QR2`, `QR3`, `QR4`; `QO0` to `QO2`; `B1`; `CKL`; `Z1`. One test runs `C06` as far as its landing with `CLEF_TRIAGE` off and expects `confirm`, reason `triage_unavailable`, in the same heads-up (TR5).
 2. `collide`, order 1, on a pool that is not quiet (GP5): an `add-energy` agent is held before its submit (`op.recorded` for its file is the signal); a `rescale-energy` agent lands. The stream then has `headsup.sent` for the `add-energy` attempt with `result: "repair"`, `keys[0]` equal to `{ kind: "entity", key: "world/energy.js#ENERGY_MAX", rule: "E2" }`, `items[0].diff.before` containing `ENERGY_MAX = 100` and `after` containing `ENERGY_MAX = 1`; then `attempt.state` to `going_around` with `go_arounds: 1`; after release, `headsup.resolved` with a statement, then `landing.landed`. The landed file passes the oracle SW2. Its note has one `go_arounds` entry with rule `E2`.
 3. `collide`, order 2: `rescale-energy` is held before its submit; `add-energy` lands. `headsup.sent` goes to the `rescale-energy` attempt with rule `QR1` in `keys` and the new referrers in `items[0].diff.added`.
 4. An `add-plain` attempt in flight during either order receives no `headsup.sent`. A `cosmetic` landing causes no `headsup.sent` for any attempt (E0, F2).
@@ -486,7 +489,7 @@ npm run measure:models
 4. workerd, with a model plan whose `max_real_agents` is 2: of three intents the third attempt stays `opened`, and `pool.state` shows `real_agents: 2`, `max_real_agents: 2` (SE8). After a rebuild from Artifacts, an Agent that is answered `attempt_unknown` calls `register` with its mirror and continues (3.6 step 6).
 5. workerd: an Agent aborted during a model call retries from its journal at most `MODEL_RETRIES` times and then stops with `model_error` (AG2). With no journal row and state `working` it continues. The watchdog stops it with `stalled` only under the three conditions of AG3. An unsettled reservation is charged in full (SE6a). A rate-limit answer makes a `gate` timer and no retry count (SE8).
 6. A heads-up placed in a tool result is acknowledged by the next submit of the same Agent Durable Object, and the transcript's step numbers continue (HE1). Text inside the heads-up never appears in the system role (HE4).
-7. Track 4D: `attempt.repo` with `ok: true`; the repo in the `ATTEMPTS` namespace has `refs/heads/attempt` with `transcript.jsonl`, `ops.json`, `premises.json`. In workerd, with a provisioner that always fails, the landing still lands and `attempt.repo` has `ok: false` (AG5).
+7. Track 4D: `attempt.repo` with `ok: true`; the repo in the `ATTEMPTS` namespace has `refs/heads/attempt` with `transcript.jsonl`, `ops.json`, `premises.json`. In workerd, with a provisioner that always fails, the landing still lands and `attempt.repo` has `ok: false` (AG5). With 12 attempts opened at once, at most four provisioning calls are in flight at any moment (the platform record, E5), and each attempt's token is minted with an explicit scope, never taken from `fork()`.
 
 `measure:models` writes one file per model:
 
@@ -539,7 +542,7 @@ npm run test:e2e -- --project=deployed floor      # after IP3
 | --- | --- |
 | Goal | The same changes are shown in two pools side by side: `main`, where the broken premise was caught and repaired, and the plain-merge pool, labelled as constructed. Both landing orders. Deterministic with the canned cast; honest with real agents (TP20). |
 | Builds | 11.7 (PM1 to PM6), `ops_first`, the plain-merge repository, `plain.updated`; the `plain` source of the app server; the in-page self-test (`02` 5.5); Compare view (`03` 2.3, 3.6); the canned casts of `02` 7.3 and 8.2 and the conductor (`02` 7.11) |
-| Lanes | leaf, engine, git, pool, swarm, floor |
+| Lanes | leaf, engine, git, pool, swarm, floor-pool |
 | Owns | `src/core/plain/**`; `src/core/trunk/` files `ops-first`, `plain-apply`; `src/worker/trunk/plain-runner.ts`; `src/swarm/casts/**`, `src/swarm/conductor.ts`; `src/floor/components/` directories `compare`, `plain-frame`; `test/tidepool/scenarios/**`; `test/integration/hero/**`; `scripts/rehearse/**` |
 | Depends on | Slices 2, 3, 5; GP1, GP2, GP4 and GP5 closed |
 | Cases | none new |
@@ -565,7 +568,7 @@ npm run rehearse:hero -- --runs 20
 | --- | --- |
 | Goal | Any creature on screen explains itself from the landing's note, and the same record is readable with stock git. |
 | Builds | `03` 3.9, 3.10, 3.11, 2.5; the note route and the read-token route (13.6, SE5c); FS2, SE19 |
-| Lanes | floor, stream, trunk, git |
+| Lanes | floor-pool, stream, trunk, git |
 | Owns | `src/floor/components/` directories `why`, `git-drawer`, `who-relies`; `src/protocol/reducer/` files `why`, `who-relies`; `src/worker/floor/public-reads.ts`; `src/worker/routes/read-token.ts` |
 | Depends on | Slices 1, 2, 5 |
 | Cases | none new |
@@ -578,7 +581,7 @@ npm run test:integration -- why
 ```
 
 1. Tapping a creature opens its Why card: the requester's words, the model, what it relied on, each go-around with its cause and the agent's statement, the checks, how it landed.
-2. "Show the git" shows the commit id, the two trailers, the note and two git commands. For a landing by a real agent, the body of `GET /api/pools/<pool>/landings/<seq>/note` has the blob id given in `landing.landed.note`. On a quiet pool the route answers 404 and the drawer says so (13.6).
+2. "Show the git" shows the commit id, the two trailers, the note and two git commands. For a landing by a real agent, the body of `GET /api/pools/<pool>/landings/<seq>/note` has the blob id given in `landing.landed.note`. In a synthetic pool the route answers 404 (13.6) and the drawer shows `git.no_note`.
 3. A token from `POST …/read-token` clones the repo and is refused on push. The adapter never calls `createToken` without a scope (unit test).
 4. Who relies on `ENERGY_MAX` lists the landed changes and the in-flight attempts; the pool frame receives `highlight`.
 5. workerd: during 100 public reads (Why, who relies, metrics, a ref-following frame) Trunk receives 0 requests (SE19).
@@ -588,8 +591,8 @@ npm run test:integration -- why
 | | |
 | --- | --- |
 | Goal | One Trunk, one pool, a thousand scripted agents on the same tools and landing path, under the SYNTHETIC banner, with numbers that were measured in the run on screen. |
-| Builds | `02` 10.1 to 10.4 (the remaining patterns, the collision dial, SW1 to SW3); the Swarm Workflow and its route; the `metrics` event (EM5, section 14); `ScriptedTriage` (TR8); EV6; `03` 2.6, 3.15, row F24 |
-| Lanes | swarm, stream, floor |
+| Builds | `02` 10.1 to 10.4 (the remaining patterns, the collision dial, SW1 to SW3); the Swarm Workflow and its route; the `metrics` event (EM5, section 14); `ScriptedTriage` (TR8); `03` 2.6, 3.15, row F24 |
+| Lanes | swarm, stream, floor-shell |
 | Owns | `src/swarm/patterns/` files `retune`, `edit-creature`, `sweep-colour`, `sweep-search`, `same-file`, `reader`, `blind`; `src/swarm/` files `dial`, `oracle`, `scripted-triage`; `src/worker/workflows/swarm.ts` (the route of track 1J now starts it); `src/protocol/reducer/metrics.ts`; `src/worker/floor/metrics.ts`; `src/floor/components/swarm/**`; `scripts/soak/**`; `docs/measurements/soak/**` |
 | Depends on | Slices 2, 3, 5 |
 | Cases | none new |
@@ -611,9 +614,9 @@ npm run test:e2e -- swarm
 | | |
 | --- | --- |
 | Goal | A judge opens one address with no account and no key, and the same page plays the recorded stream. |
-| Builds | `03` section 8 (RP1 to RP25), 2.7, 3.16; the export route and the check of 12.3 RP1; the list of recordings |
-| Lanes | floor, stream, lead |
-| Owns | `src/floor/replay/**` except `player.ts`; `src/worker/floor/export.ts`; `scripts/recordings/**`; `public/replay/**`; `test/e2e/replay/**` |
+| Builds | `03` section 8 (RP1 to RP25), 2.7, 3.16, row F25; the export route and the check of 12.3 RP1; the list of recordings |
+| Lanes | floor-shell, stream, lead |
+| Owns | `src/floor/replay/**` except `player.ts`; `src/worker/floor/export.ts`; `scripts/recordings/**`; `public/replay/**`; `test/e2e/shell/replay/**` |
 | Depends on | Slices 5, 6 |
 | Cases | none new |
 
@@ -628,6 +631,7 @@ npm run test:e2e -- replay
 2. AC1, AC6 and AC18 pass. RP25: against a local Worker started with no `OWNER_KEY`, in a browser context with no cookies, way 1 and way 3 of `03` 8.7 play the recording to its end, and the network log holds only the requests of RP1.
 3. The same test against the deployed address, with no cookies: the frames load their commit addresses (RP10).
 4. A recording of a synthetic pool shows both banners (RP3). Chapter keys jump to the chapters of `03` 8.5.
+5. `record:export` refuses a file larger than `REPLAY_MAX_BYTES` (RP6) and a file that fails a check of `03` 8.3. In the page, each failing check of 8.3 shows its sentence and `replay.to_live` (row F25).
 
 ### 2.11 Slice 10: README, About, run instructions
 
@@ -635,7 +639,7 @@ npm run test:e2e -- replay
 | --- | --- |
 | Goal | A stranger can run it and knows its limits. |
 | Builds | `README.md`, the About sheet (`03` 5.12), the three submission texts |
-| Lanes | lead, floor |
+| Lanes | lead, floor-shell |
 | Owns | `README.md`; `src/floor/components/about/**`; `src/copy/limits.ts`; `docs/submission/**`; `scripts/submission/**` |
 | Depends on | Slices 1 to 9 |
 | Cases | none new |
@@ -656,8 +660,8 @@ git clone . /tmp/premise-fresh && cd /tmp/premise-fresh && npm ci && npm run che
 | | |
 | --- | --- |
 | Goal | A change to a held path waits for one owner tap on a card that shows the pool before and after and which waiting changes it would send back. |
-| Builds | 10.2 (T4, T13, T14), PV1 to PV4, 11.6 blast radius, RW5, 9.4 step 3c with CK9; `03` 2.4, 3.13, row F15 |
-| Lanes | engine, git, trunk, floor |
+| Builds | 10.2 in full (what the card shows, `land_now`; the minimal T4, T13 and T14 exist since Slice 2), PV1 to PV4, 11.6 blast radius, RW5, the CK9 part of 9.4 step 3c; `03` 2.4, 3.13, row F15 |
+| Lanes | engine, git, trunk, floor-rail |
 | Owns | `src/core/trunk/` files `held`, `blast-radius`, `preview`; `src/worker/trunk/preview-runner.ts`; `src/floor/components/held-sheet/**`; `test/integration/held/**` |
 | Depends on | Slices 2, 5, 6 |
 | Cases | `C18`, `C34`, `C35`, `C48`, `C49` |
@@ -674,7 +678,7 @@ Acceptance: `CASES=required npm run test:cases`, `npm run test:integration -- he
 | --- | --- |
 | Goal | Three models attempt one intent; the owner compares three running pools and chooses one; it lands through the same gate. |
 | Builds | 11.4 (RC1 to RC5), the race card (CD2), `03` 3.14 |
-| Lanes | engine, trunk, agent, floor |
+| Lanes | engine, trunk, agent, floor-rail |
 | Owns | `src/core/trunk/race.ts`; `src/floor/components/race-sheet/**`; `test/integration/race/**` |
 | Depends on | Slices 4, 11; PT4 |
 | Cases | none new (`C54` is already required) |
@@ -691,7 +695,7 @@ Acceptance: `npm run test:integration -- race`, `npm run test:e2e -- race`.
 | --- | --- |
 | Goal | Undo takes back one landing and exactly the later landings built on it, and reopens their agents with their transcripts. |
 | Builds | 11.3 (UN1 to UN8), T18, T19, T19s, AG6, the two undo routes; `03` 3.12, row F23 |
-| Lanes | leaf, engine, trunk, agent, floor |
+| Lanes | leaf, engine, trunk, agent, floor-pool |
 | Owns | `src/core/undo/**`; `src/core/trunk/` files `undo-apply`, `reopen`; `src/worker/routes/undo.ts`; `src/worker/agent/reopen.ts`; `src/floor/components/undo-sheet/**`; `test/integration/undo/**` |
 | Depends on | Slices 2, 4, 5 |
 | Cases | `C19`, `C53` |
@@ -708,9 +712,9 @@ Acceptance: `CASES=required npm run test:cases`, `npm run test:integration -- un
 | --- | --- |
 | Goal | `refs/heads/green` follows the newest verified commit. A confirmed red reverts and reopens. |
 | Builds | 11.5 (GR1 to GR7); `02` 5.4; the `Verifier` chosen by S4; `03` rows F19 and the green cell of the strip. Part 14a: runtime `static`, GR1, GR2, GR4, GR5. Part 14b: the measured runtime and GR3. |
-| Lanes | git, pool, engine, floor |
+| Lanes | git, pool, engine, floor-shell |
 | Owns | `src/core/trunk/green.ts`; `src/worker/workflows/green-line.ts`; `src/worker/adapters/verifier/**`; `src/floor/components/green/**`; `test/integration/green/**` |
-| Depends on | Slice 3 for 14a; Slice 13 and the S4 record for 14b |
+| Depends on | Slice 3 for 14a; Slice 13 for 14b. The runtime of 14b is the one the newest S4 record names (today the platform record: a Dynamic Worker isolate, harness B of `02` 5.4). |
 | Cases | none new |
 
 Acceptance: `npm run test:integration -- green`.
@@ -718,6 +722,7 @@ Acceptance: `npm run test:integration -- green`.
 1. 14a: after a landing, `git ls-remote` shows `refs/heads/green` at the head commit; the stream has `green.verified` with `runtime: "static"` and `green.advanced`; the strip says "static checks only".
 2. 14b: the plain-merge tree of the hero (row A5), pushed to a throwaway pool as a landing, gives `green.verified` with `ok: false` twice, then one landing of kind `revert` and reopened attempts (GR3). The log appears in no event and no heads-up (GR7).
 3. 14b: the verifier's environment has no binding and no outbound network (GR6), shown by a test creature that tries both and is refused.
+4. 14b: 50 verifications of the seed commit give at most one missing or late verdict, and a commit with `MAX_KINDS` creature files loads and gives a verdict (RR4). The lead adds the result as a dated record under `docs/measurements/spikes/`.
 
 ### 2.16 Slice 15: Clef triage and the risk lines
 
@@ -725,9 +730,9 @@ Acceptance: `npm run test:integration -- green`.
 | --- | --- |
 | Goal | Where an agent read something that changed and its patch does not name it, Clef gives a recorded probability instead of a blanket `confirm`. A held card shows three risk answers. |
 | Builds | 7.3 (TR1 to TR9), V7, V7a, 10.4 (RK1 to RK4), GL4 if `CLEF_CONTRADICTION` is on; `03` row F18 and the risk lines |
-| Lanes | engine, agent, trunk, floor |
+| Lanes | engine, agent, trunk, floor-rail |
 | Owns | `src/core/trunk/triage.ts`; `src/worker/trunk/triage-runner.ts`; `src/worker/adapters/triage/**`, `adapters/risk/**`; `scripts/calibrate/**`; `docs/measurements/calibration/**`; `test/workerd/triage/**`; `src/floor/components/risk/**` |
-| Depends on | Slices 2, 4; Slice 11 for the risk lines; the S6 record |
+| Depends on | Slices 2, 4; Slice 3 for `C52`; Slice 11 for `C55` and for the risk lines; the S6 record for the adapters |
 | Cases | `C06`, `C07`, `C12`, `C31`, `C38`, `C42`, `C52`, `C55` |
 
 Acceptance: `CASES=required npm run test:cases`, `npm run test:workerd -- triage`, `npm run calibrate:clef`.
@@ -747,41 +752,60 @@ Clef vision check of screenshots, duplicate-intent detection, outside agents ove
 
 ### 3.1 Lanes
 
-A lane is a set of paths with one builder at a time. Two tasks that run at the same time are always in different lanes, so their paths are disjoint. Each lane works in its own git worktree on a branch `lane/<lane>/<slice>`. Commits are `<type>: <description>`. Only the lead merges into `main`. Nothing is pushed to a remote until the owner has named one (RR19, SC1).
+A lane is a set of paths with one builder at a time. Two tasks that run at the same time are always in different lanes, so the paths they write are disjoint (BP2). Each lane works in its own git worktree on a branch `lane/<lane>/<slice>`. Commits are `<type>: <description>`. Only the lead merges into `main`. Nothing is pushed to a remote until the owner has named one (RR19, SC1).
+
+`scripts/ops/lanes.json` holds this table as globs. `check:lane` and the lane table of `AGENTS.md` are built from it. A path that no lane lists belongs to the lead.
 
 | Lane | Paths |
 | --- | --- |
-| lead | Root files, `src/protocol/*.ts`, `src/config/**`, the seam files of 3.2, `scripts/build/**`, `scripts/ops/**`, `scripts/submission/**`, `docs/**`, `README.md`, `AGENTS.md`, `test/arch/**`, `test/support/**`, `test/workerd/cases-smoke.test.ts`, `public/**` |
+| lead | Root files, `src/protocol/*.ts`, `src/config/**`, the seams of 3.2, `src/copy/index.ts`, `src/worker/env.ts`, `src/worker/adapters/index.ts`, `src/worker/adapters/not-built.ts`, `scripts/build/**`, `scripts/ops/**`, `scripts/submission/**`, `docs/**`, `README.md`, `AGENTS.md`, `test/arch/**`, `test/support/**`, `test/cases/` files `load.ts`, `required.json`, `list.test.ts`, `test/workerd/cases-smoke.test.ts`, `test/e2e/lead/**` (the rehearsal run), `public/**` |
 | leaf | `src/core/` directories `sync`, `keys`, `entities`, `refs`, `replay`, `policy`, `diff`, `classify`, `plain`, `undo`; `test/tidepool/scenarios/**` |
-| git | `src/core/` directories `git`, `outbox`, `rebuild`; `src/core/trunk/` files `outbox-apply`, `restart`, `register`; `src/worker/adapters/` directories `pusher`, `token-source`, `notes-reader`, `verifier`; `src/worker/trunk/` files `push-runner`, `reconcile`, `rebuild-job`, `plain-runner`, `preview-runner`; `src/worker/workflows/green-line.ts`; `test/git/**`; `test/integration/landing/**`, `test/integration/green/**` |
-| engine | `src/core/trunk/**` except the three files of the git lane; `test/cases/driver.ts`, `test/cases/run.test.ts` |
-| trunk | `src/worker/trunk/` (all other files); `src/worker/routes/**` except `swarm.ts`; `src/worker/security/**`; `test/workerd/trunk/**`, `test/workerd/landing/**`; `test/integration/**` except the directories named in other lanes |
+| git | `src/core/` directories `git`, `outbox`, `rebuild`; `src/core/trunk/` files `outbox-apply`, `restart`, `register`, `wiring/git`; `src/worker/adapters/` directories `pusher`, `token-source`, `notes-reader`, `verifier`; `src/worker/trunk/` files `push-runner`, `reconcile`, `rebuild-job`, `plain-runner`, `preview-runner`, `wiring/git`; `src/worker/workflows/green-line.ts`; `test/git/**`; `test/integration/landing/**`, `test/integration/green/**` |
+| engine | `src/core/trunk/**` except `engine.ts` (seam) and the four files of the git lane; `test/cases/driver.ts`, `test/cases/run.test.ts` |
+| trunk | `src/worker/trunk/**` except `effects.ts` (seam) and the files of the git lane; `src/worker/routes/**` except `swarm.ts`; `src/worker/security/**`; `test/workerd/trunk/**`, `test/workerd/landing/**`; `test/integration/**` except the directories named in other lanes |
 | agent | `src/core/agent/**`, `src/core/gate/**`; `src/worker/agent/**`, `src/worker/gate/**`; `src/worker/adapters/` directories `model`, `attempt-repo`, `triage`, `risk`; `src/worker/workflows/attempt-repo.ts`; `test/workerd/agent/**`, `test/workerd/gate/**`, `test/workerd/triage/**`; `scripts/measure/**`, `scripts/calibrate/**` |
 | stream | `src/protocol/reducer/**`; `src/worker/floor/**`; `test/workerd/floor/**`; `test/fixtures/streams/**`; `scripts/fixtures/**`, `scripts/recordings/**` |
-| floor | `src/floor/**`, `test/e2e/**`. Up to three builders, each on its own directories: shell (`app`, `stream`, `replay`, `styles`, `keys`, header, strip, banners, About, Swarm view), rail (intent box, cards, lights, heads-up, tray, card sheets), pool area (frames, Compare, tiles, Why, git drawer, Who relies, Undo). |
-| copy | `src/copy/**`. Used on D1 and D2; then a seam owned by the lead. |
+| floor-shell | `src/floor/main.tsx`; `src/floor/app/**` except `registry.ts` (seam) and the wiring modules of the other two floor lanes; `src/floor/` directories `stream`, `replay`, `state`, `styles`, `keys`; `src/floor/components/` directories `strip`, `banners`, `owner-key`, `kill-switch`, `toast`, `about`, `swarm`, `green`; `test/e2e/shell/**` |
+| floor-rail | `src/floor/app/wiring/rail.ts`; `src/floor/components/` directories `intent-box`, `attempt-card`, `lights`, `heads-up`, `tray`, `card-sheet`, `held-sheet`, `race-sheet`, `risk`; `test/e2e/rail/**` |
+| floor-pool | `src/floor/app/wiring/pool-area.ts`; `src/floor/components/` directories `pool-frame`, `plain-frame`, `compare`, `tiles`, `why`, `git-drawer`, `who-relies`, `undo-sheet`; `test/e2e/pool-area/**` |
+| copy | `src/copy/**` except `index.ts`. Used on D1 and D2; from D3 these paths belong to the lead. |
 | pool | `seeds/**`, `scripts/seeds/**`, `src/host/**`, `src/worker/app-server/**`, `src/worker/adapters/pool-source/**`, `test/tidepool/**` except `scenarios/` |
 | swarm | `src/swarm/**`, `src/worker/routes/swarm.ts`, `src/worker/workflows/swarm.ts`, `scripts/soak/**`, `scripts/rehearse/**`, `test/integration/collide/**`, `test/integration/hero/**` |
 
-### 3.2 Seam files
+Result files under `docs/measurements/` are written by a lane's script and committed by the lead (BP3). A slice's "Owns" row in section 2 lists the files the slice adds; each of them lies inside the lane named for it here.
 
-A seam file holds one registration line per handler and no logic. A slice adds its line in its own branch. When two branches add lines to one seam, the lead merges both lines. No other file is edited by two lanes.
+### 3.2 Seams and wiring modules
 
-| Seam file | One line per |
-| --- | --- |
-| `src/core/trunk/engine.ts` | Engine entry (tool, tick step, owner action, effect kind) |
-| `src/worker/trunk/effects.ts` | Effect handler that runs after the transaction (push, events, heads-up push, triage, plain, preview, green) |
-| `src/worker/index.ts` | Route |
-| `src/protocol/reducer/index.ts` | Event type handler |
-| `src/floor/app/registry.ts` | View, sheet, key |
-| `src/copy/index.ts` | Copy file |
-| `src/worker/adapters/index.ts` | Port and the option in use |
-| `src/config/features.ts` | Feature switch |
-| `wrangler.jsonc`, `package.json`, `test/cases/required.json` | Binding; script or dependency; required case. Lead only. |
+Two lanes never edit the same file. Where handlers of several lanes meet, the meeting point is a **seam**: a file of the lead, written in Slice 0 and complete from then on. A seam holds a table type and no logic. It imports one **wiring module** for each lane that registers something there and calls that module's `wire` function. Slice 0 creates every wiring module with an empty `wire`. After IP0 a wiring module is edited by its lane only, in whichever slice that lane is working on.
 
-Worked example. Slice 3 adds `src/core/outbox/decide.ts` and `src/core/trunk/outbox-apply.ts` (both git lane). Its only edit outside owned paths is one line in `engine.ts` (`pushResult: outboxApply.pushResult`) and one in `effects.ts` (`push: pushRunner.run`). Slice 2, built at the same time, adds `headsup: headsUpPush.run` to the same `effects.ts`. The lead keeps both lines.
+| Seam (lead) | Wiring modules, each with its lane | A line registers |
+| --- | --- | --- |
+| `src/core/trunk/engine.ts` | `src/core/trunk/wiring/engine.ts` (engine), `src/core/trunk/wiring/git.ts` (git) | An engine entry: a tool, a tick step, an owner action, an effect kind |
+| `src/worker/trunk/effects.ts` | `src/worker/trunk/wiring/trunk.ts` (trunk), `src/worker/trunk/wiring/git.ts` (git) | A handler that runs after the transaction: events to the Floor, push, heads-up push, triage, plain, preview, green |
+| `src/worker/index.ts` | `src/worker/routes/wiring.ts` (trunk), `src/worker/routes/swarm.ts` (swarm), `src/worker/floor/wiring.ts` (stream), `src/worker/app-server/wiring.ts` (pool) | A route of `protocol/routes.ts`. The seam also re-exports the seven class files of 2.1. |
+| `src/floor/app/registry.ts` | `src/floor/app/wiring/shell.ts` (floor-shell), `rail.ts` (floor-rail), `pool-area.ts` (floor-pool) | A view, a sheet, a key |
 
-A change to `src/protocol/*.ts` after IP0 is a protocol change: a builder asks, the lead edits, every lane rebases the same day.
+Files that only the lead edits, and that are not seams: `src/copy/index.ts`, `src/worker/adapters/index.ts` (the option in use for each port), `src/config/features.ts`, `wrangler.jsonc`, `package.json`, `test/cases/required.json`. The reducer's `index.ts` needs no seam: only the stream lane writes handlers.
+
+Worked example. The seam is fixed at IP0:
+
+```ts
+// src/core/trunk/engine.ts (lead)
+import { wire as wireEngine } from "./wiring/engine.js";
+import { wire as wireGit } from "./wiring/git.js";
+
+export type EngineTable = { entries: Map<string, EntryHandler>; effects: Set<string> };
+export function engineTable(): EngineTable {
+  const table: EngineTable = { entries: new Map(), effects: new Set() };
+  wireEngine(table);
+  wireGit(table);
+  return table;
+}
+```
+
+Slice 3 (git lane) adds `src/core/outbox/decide.ts` and `src/core/trunk/outbox-apply.ts`, and the lines `table.entries.set("push_result", outboxApply.pushResult)` and `table.entries.set("restart", restart.reconcile)` to `src/core/trunk/wiring/git.ts`. Slice 2 (engine lane), built at the same time, adds its entries to `src/core/trunk/wiring/engine.ts`. No file is touched by both, and `engine.ts` is touched by neither.
+
+A builder asks the lead, and does not edit, when it needs: a change to `src/protocol/*.ts` (a protocol change; every lane rebases the same day), a new field in a seam's table type, a new dependency, a new binding, or a path that no lane owns.
 
 ### 3.3 What runs at the same time
 
@@ -796,7 +820,9 @@ Cells are slice or track ids. A lane with an empty cell helps the lead verify, o
 | trunk | 1D | 1D | 2, 3 | 4 (routes) | 11, 7 (note route) | 13 | 12 |
 | agent | 1H | 1H | 4 | 4, `measure:models` | 4D | 13 (reopen) | 15 (adapters, labelled cases) |
 | stream | 1E | 1E | 5 | 5 | 7, 8 (metrics) | 9 (export) | |
-| floor | 1F | 1F | 5 | 5 | 6, 7, 8 | 9, 11 | 12, 13, 10 |
+| floor-shell | 1F | 1F | 5 | 5 | 8 (Swarm view) | 9 | 10 (About), 14 (green cell) |
+| floor-rail | 1F | 1F | 5 | 5 | 11 (on fixtures) | 11 | 12, 15 (risk lines) |
+| floor-pool | 1F | 1F | 5 | 5 | 6, 7 | 7, 13 (on fixtures) | 13 |
 | copy | 1I | 1I | | | | | |
 | pool | 1G | 1G | hot swap, in-page self-test | 6 (`plain` source) | 6 | 14 (harness) | 14b |
 | swarm | 1J | 2 (patterns) | 2 (`collide`) | 6 (casts, conductor) | 8 | 8 (soak) | |
@@ -805,18 +831,18 @@ Dependencies, as a list of what may not start earlier:
 
 - Every track of Slice 1 after IP0.
 - Slice 2 engine work after track 1C passes its three cases. `src/core/classify` (leaf) needs only track 1A.
-- Slice 3 needs track 1B and track 1C. It runs beside Slice 2 (different lanes, different files, two seam lines).
+- Slice 3 needs track 1B and track 1C. It runs beside Slice 2: different lanes, different files, different wiring modules. The trunk lane does its Slice 2 files first, then its Slice 3 files.
 - Slice 4's pure parts and gate need only IP0. Its integration needs IP2.
 - Slice 5 needs track 1F only.
 - Slices 6, 7 and 8 need IP2; their Floor parts need Slice 5's components.
 - Slice 9 needs Slice 6 for the hero recording.
-- Slices 11 to 15 follow the table of section 2. The engine parts of Slices 13 and 15 need only Slice 2.
+- Slices 11 to 15 follow the table of section 2. The engine parts of Slice 13 need only Slice 2. The engine part of Slice 15 needs Slice 2 for six of its cases, Slice 3 for `C52` and Slice 11 for `C55`.
 
 ### 3.4 Integration points
 
 At each point the lead does these steps in order. A failing step blocks only the lane that fails; its merge is reverted and the others proceed.
 
-1. Rebase each lane branch on `main`. Merge in the order given. Merge seam lines.
+1. Run `npm run check:lane` for each lane branch. Rebase it on `main`. Merge in the order given. A branch that fails `check:lane` is not merged.
 2. `npm ci && npm run check && npm run test:workerd`.
 3. `npm run deploy:test`, then the integration and browser commands of the slices being merged.
 4. Do the observable checks of those slices in a browser on `test`. Save screenshots under `docs/reviews/screens/ip<N>/`.
@@ -825,7 +851,7 @@ At each point the lead does these steps in order. A failing step blocks only the
 
 | Point | When | Merges, in order | The lead verifies |
 | --- | --- | --- | --- |
-| IP0 | D1 | Slice 0 | 2.1. The protocol is frozen. Spike records S1 and S2 exist, or the working assumption is noted. |
+| IP0 | D1 | Slice 0 | 2.1. The protocol is frozen. Every port still resolves to `not-built`. When a track that builds an adapter is merged, the lead points that port in `adapters/index.ts` at the option the platform record names, in a commit that cites the record. |
 | IP1 | D2 | 1A, 1B, 1C, 1D, 1E, 1G, 1H, 1J, 1I, 1F | 2.2: the tracer on `test`. Milestone M1. |
 | IP2 | D3 | Slice 2 (leaf, engine, trunk, agent, swarm), Slice 3 (git, trunk) | 2.3 and 2.4. 42 cases required. |
 | IP3 | D4 | Slice 4, then Slice 5 | 2.5 and 2.6. `measure:models` against PT1 to PT4. Milestone M3. |
@@ -842,16 +868,16 @@ The video is recorded on D9. D10 is margin. Nothing is built after D7.
 
 | Day | Date | Work | Milestone at the end of the day | Cut line: if the day ends behind |
 | --- | --- | --- | --- | --- |
-| D1 | Sun Oct 4 | Slice 0 in the morning. Spike results arrive and are recorded. Slice 1 tracks start. | IP0 merged. | Slice 1 starts on D2 from the protocol as it is. STRETCH is dropped for good. If no S1 or S2 result has arrived, the tracer uses option A of each and the lead repeats the two checks on `test` on D2. |
+| D1 | Sun Oct 4 | Slice 0 in the morning, with the corrections of 0.1 and the decisions on GP1 to GP5. Slice 1 tracks start. The platform record is already in the repository, so no track waits for a spike. | IP0 merged. | Slice 1 starts on D2 from the protocol as it is. STRETCH is dropped for good. A gap of 0.2 that is still open is built as its proposal. |
 | D2 | Mon Oct 5 | Slice 1. `src/core/classify` and Slice 2 patterns start. | **M1**: the tracer passes 2.2 on `test`. | D3 is the tracer only, all lanes. Slice 15's adapters and part 14b are dropped. If the push is the blocker, RR1's trigger has fired: switch option the same day. |
 | D3 | Tue Oct 6 | Slices 2 and 3. Slice 4 pure parts and gate. Slice 5 on fixtures. | **M2**: IP2; 42 cases required and passing. | The engine lane stays on Slice 2 on D4. Slice 12 is dropped. |
 | D4 | Wed Oct 7 | Slice 4 integration and model measurement. Slice 5 complete on fixtures. Slice 6 parts in leaf, engine, pool, swarm. | **M3**: IP3; PT1 to PT3 measured; kill and cap pass on `test`. | Apply RR5 or RR6. Slice 12 is dropped unless PT4 holds. Track 4D is dropped if it is not merged. |
 | D5 | Thu Oct 8 | Slices 6 and 7. Slice 8 patterns and Workflow. Slice 11 engine part. | **M4**: IP4; `hero-20.json` shows 20 of 20. | D6 is Slice 6 only in the lanes it uses. Slice 13 and part 14b are dropped. |
 | D6 | Fri Oct 9 | Slices 8, 9, 11. Engine lane reaches all 57 cases. Soak run 1. | **M5 (MUST)**: every acceptance check of Slices 1 to 9 passes at one commit on `test`. | D7 is MUST only. Of the SHOULD slices only Slice 11 may still finish on D7. The Swarm is run at the size that passes (RR9). |
 | D7 | Sat Oct 10 | Slices 12, 13, 14, 15 in that order of priority. Slice 10. Security review and design review on the D6 build, by builders that wrote none of the reviewed code. | **M5 (freeze)**: `features` is final. | Each SHOULD slice that has not passed is switched off (BP4). No feature code after this day. |
-| D8 | Sun Oct 11 | Review findings fixed, high ones before anything else. Calibrated constants set. Soak run 2 on the frozen build. `production` deployed; its pool created; the check of BP10 done; state P1 to P7 of `03` 1.1 prepared. Rehearsal 1 (scripted browser). Rehearsal 2 (the owner). Recordings `hero` and `swarm` exported. | **M6**: rehearsal 2 completes every beat in order with no use of key `R`; no open high finding. | A beat that failed is replaced by its row of `03` 1.4 and its feature is switched off. If a beat without such a row failed (0, 1, 6, 8, 9, 10), D9 morning is the fix and one more rehearsal, and the recording moves to D9 afternoon. |
+| D8 | Sun Oct 11 | Review findings fixed, high ones before anything else. Calibrated constants set. Soak run 2 on the frozen build. `production` deployed; its pool created; the check of BP10 done; state P1 to P7 of `03` 1.1 prepared. Rehearsal 1 (scripted browser). Rehearsal 2 (the owner). Recordings `hero` and `swarm` exported. | **M6**: rehearsal 2 completes every beat in order with no use of key `R`; no open high finding. | A beat that failed is replaced by its row of `03` 1.4 and its feature is switched off. If a beat without such a row failed (0, 1, 2, 6, 8, 9, 10), D9 morning is the fix and one more rehearsal, and the recording moves to D9 afternoon. |
 | D9 | Mon Oct 12 | Rehearsal 3, then the recording (the owner). The lead watches spend and the stream. | **M7**: one complete take that follows BS1 to BS6. | D10 is the second recording day. Slice 10's remaining work continues beside it; it needs no owner time. |
-| D10 | Tue Oct 13 | Cuts (waiting only), export, checks of SC5. Repository made public. Fresh-clone check. Texts final. Test resources cleaned. `OWNER_KEY` rotated. | **M8**: every row of section 7 except SC12 is done. | The best complete take is used. No re-recording after 12:00 PDT on D11. |
+| D10 | Tue Oct 13 | Cuts (waiting only), export, the checks of SC6. Repository made public. Fresh-clone check. Texts final. Test resources cleaned. `OWNER_KEY` rotated. | **M8**: every row of section 7 except SC12 is done. | The best complete take is used. No re-recording after 12:00 PDT on D11. |
 | D11 | Wed Oct 14 | The owner submits, target 12:00 PDT, deadline 23:59 PDT. The lead runs SC9 before and after. | **M9**: submitted; the confirmation is saved. | Nothing is cut. Nothing is deployed except a fix for a public address that does not answer. |
 
 Order in which things are dropped, from the top. An item is dropped whole, by its switch.
@@ -871,7 +897,7 @@ What the owner does, and when:
 
 | Date | The owner | About |
 | --- | --- | --- |
-| Oct 4 | Confirms that the Cloudflare account is on Workers Paid and that `wrangler login` was done on the build machine. | 5 minutes |
+| Oct 4 | Confirms that the account the spikes ran on is the one to deploy to (Workers Paid, `wrangler login` on the build machine). Names the host and account for a private remote (RR19). | 10 minutes |
 | Oct 7 | Reads the M3 result. Decides RR5's paid option only if the lead asks. | 10 minutes |
 | Oct 8, Oct 12 | Opens the Cloudflare billing page and tells the lead the total (RR14). | 5 minutes each |
 | Oct 11 | Rehearsal 2 on the Floor, in a browser. | 90 minutes |
@@ -892,7 +918,7 @@ What the owner does, and when:
 | VE3 | Real git | Every commit | Object ids equal git's; packs pass `git index-pack` and `git fsck --strict`; stock git reads the notes | Test output; the `stock-git` integration report |
 | VE4 | Integration on a dedicated Artifacts namespace | Every integration point | The named tests of section 2 pass on `test` | `docs/measurements/integration/ip<N>.md` |
 | VE5 | Browser checks of the Floor | Every integration point from IP1 | AC1 to AC20; the rows of `03` section 7; the deployed checks | Playwright report; `docs/reviews/screens/` |
-| VE6 | Swarm soak | D6, D8 | The nine checks of 5.2 | `docs/measurements/soak/<date>-<build>-d<dial>.json`; `public/replay/swarm.ndjson` |
+| VE6 | Swarm soak | D6, D8 | The ten checks of 5.2 | `docs/measurements/soak/<date>-<build>-d<dial>.json`; `public/replay/swarm.ndjson` |
 | VE7 | Security review | D7, closed D8 | No open high finding; every row of 5.3 has a result | `docs/reviews/security.md` |
 | VE8 | Design review | D7, closed D8 | No open high finding; every row of 5.4 has a result | `docs/reviews/design.md`; `docs/reviews/screens/design/` |
 | VE9 | Rehearsal of the beat sheet | D8 (two), D9 (one) | 5.5 | `docs/measurements/rehearsal/rehearsal-<n>.md`; the session's exported recording |
@@ -906,7 +932,7 @@ What the owner does, and when:
 
 **VE5.** Three layers. (a) Fixture streams through Replay in Chromium at 1920×1080, 1440×900 and 320 wide, both themes: every acceptance check of `03` Appendix B. (b) The deployed project against `test`: headers, roles, the tracer, the hero. (c) A hostile-input pass: an intent, a statement and a path that contain markup are shown as text (AC8); a creature that names `fetch`, `document` or `eval` is rejected at submit with `banned_global` (CK6).
 
-**VE6.** One Trunk, one pool per dial value, seeded from `tidepool-swarm`. `SwarmConfig`: `seed` 7, `agents` 1,024, `collision_dial` each of 0, 0.1, 0.25, 0.5, 1, `launch_per_second` set so that Trunk stays under its request-rate guidance (start at 50; the value used is recorded).
+**VE6.** One Trunk, one pool per dial value, seeded from `tidepool-swarm` and created quiet (GP5). `SwarmConfig`: `seed` 7, `agents` 1,024, `collision_dial` each of 0, 0.1, 0.25, 0.5, 1, `launch_per_second` set so that Trunk stays under its request-rate guidance (start at 50; the value used is recorded).
 
 ```ts
 type SoakResult = {
@@ -935,6 +961,7 @@ Checks. These are about correctness. Speed has no pass mark: the numbers are pub
 | `fsck` | `git fsck --strict` passes on a fresh clone. |
 | `rebuildable` | After the run, rebuild from Artifacts gives the same `head_seq` and the same head tree id. |
 | `false_abort_reported` | `false_abort_rate` is present. Above `FALSE_ABORT_TARGET` it is published as measured and the README says the target was missed. |
+| `recording_fits` | The exported stream of the run chosen as the `swarm` recording is at most `REPLAY_MAX_BYTES` (`stream.bytes`). If no run at 1,024 agents fits, the recording is made from a shorter run and its banner shows that run's agent count. |
 
 Real-agent repair latency (14.7) comes from `measure:models`, never from the soak. Fork throughput (14.8) comes from track 4D's `attempt.repo` events, never from landing numbers.
 
@@ -973,7 +1000,7 @@ On `production`, in a browser, no terminal (BS1). Before each run the state P1 t
 
 | Run | Driven by | Purpose |
 | --- | --- | --- |
-| 1 | `test/e2e/rehearsal.spec.ts`, with the canned cast on a second pool | Every control of every beat exists and responds. Repeatable after any fix. |
+| 1 | `test/e2e/lead/rehearsal.spec.ts`, with the canned cast on a second pool that is not quiet (GP5) | Every control of every beat exists and responds. Repeatable after any fix. |
 | 2 | The owner, with real agents | Timing, wording, the owner's path through the page. |
 | 3 | The owner, the morning of the recording | The same as the take. |
 
@@ -987,27 +1014,29 @@ Record for each run: per beat, start and end on the run clock, the window of `03
 
 | Id | Risk | Level | Trigger | Fallback | Responsible |
 | --- | --- | --- | --- | --- | --- |
-| RR1 | S1, push path. A hand-built pack over receive-pack from Trunk is refused, slow or unreliable. | high | By the end of D2: the harness or the `pushes` test shows a refused pack, or fewer than 300 of 300 batches reach `pushed`, or push p99 above 5 s. | Option B (isomorphic-git for the push only). If B fails the same test: option C, which needs `docker info` to succeed on the build machine; the lead checks that on D1. If C is not possible, the lead tells the owner the same day: nothing can land. | lead |
-| RR1a | S1, two-ref atomicity. The server applies one ref and not the other. | medium | The harness reports a non-atomic result, or `retry_notes` or `retry_main` occurs on `test`. | None needed: LP5 decides by ref values either way. The lead confirms that vectors `C50` and `C51` and the workerd fault matrix pass, and records which behaviour the service has. | lead |
-| RR1b | S1, reading notes. The binding does not read `refs/notes/premise` by ref. | medium | The harness reports it, or the `rebuild` test fails at step 2 of 3.6. | `NotesReader` from the ref advertisement (`Pusher.readRefs`) plus binding reads by hash (`readCommit`, `readTree`, `readBlob`). | git lane |
-| RR2 | S2, token source. A minted token is refused for git from a Durable Object. | high | The harness reports 401 or 403 for the minted token while the `create()` token works. | Option B. If the `create()` token expires before 2026-10-22, the rotation rules of S2 are built and tested on `test` before M6; otherwise rotation is not built and the README states the expiry. Option C only with RR1's container. | lead |
-| RR3 | S3, attempt repos. Provisioning is slow or fails under concurrency. | medium | At 10 at a time: more than 5% fail after retries, or ready p90 above 10 s. | The next option of S3 (create, fork, pre-warmed). If none passes: track 4D is off, `note.attempt.repo` is `null`, About says so. No landing is affected in any case (AG5). | agent lane |
-| RR4 | S4, green-line runtime. Browser Run cannot be deployed or flakes. | medium | By the end of D2 there is no S4 record; or in 50 runs on the seed more than one verdict is missing or late (`SELFTEST_TIMEOUT_MS`). | Option B. If B fails the same 50 runs: option D (`static`), and the strip says "static checks only" (GR5). Option C only if a container image deployed from the build machine on D2. | git lane, pool lane |
+| RR1 | S1, push path. A hand-built pack over receive-pack from Trunk is refused, slow or unreliable at the size of a real pool. The platform record saw option A accepted in two single requests (E8); its 100-push run used isomorphic-git (E7). | high | By the end of D3: the `pushes` test shows a refused pack, or fewer than 300 of 300 batches reach `pushed`, or push p99 above 5 s. | Option B (isomorphic-git for the push only), which the record's E7 ran 100 times with no failure. If B fails the same test: option C, which needs `docker info` to succeed on the build machine and was not measured. If C is not possible, the lead tells the owner the same day: nothing can land. | lead |
+| RR1a | S1, two-ref atomicity. The server applies one ref and not the other. The platform record saw both commands refused together (E8, one sample per order). | low | `retry_notes` or `retry_main` occurs on `test`. | None needed: LP5 decides by ref values either way. The lead confirms that vectors `C50` and `C51` and the workerd fault matrix pass, and adds a dated record of the behaviour seen. | lead |
+| RR1b | S1, reading notes. The binding does not resolve `refs/notes/premise` by name (the platform record, E4), so `NotesReader` takes the notes commit id from the ref advertisement (`Pusher.readRefs`) and reads by hash (`readCommit`, `readTree`, `readBlob`). The risk is that a read by hash fails for an object reachable only from the notes ref. | medium | The `rebuild` test fails at step 2 of 3.6. | `NotesReader` fetches the notes with a hand-built upload-pack request (a read token, the pkt-line code of `src/core/git`). | git lane |
+| RR2 | S2, token source. A minted token is refused for git from a Durable Object. The platform record saw minted tokens accepted (E2). | medium | On `test`, a push with a freshly minted token answers 401 or 403 twice in a row (LP5a asks for a fresh token between the two). | Option B. The lead first measures the lifetime of a `create()` token. If it expires before 2026-10-22, the rotation rules of S2 are built and tested on `test` before M6; otherwise rotation is not built and the README states the expiry. Option C only with RR1's container. | lead |
+| RR3 | S3, attempt repos. Provisioning is slow or fails under concurrency. The platform record saw 5 of 20 concurrent forks fail (E5). | medium | At four at a time: more than 5% fail after retries, or ready p90 above 10 s. | Option A (`create()` and a push of the checkpoint; E1 saw 1.3 to 2.7 s to ready), then option C. If none passes: track 4D is off, `note.attempt.repo` is `null`, About says so. No landing is affected in any case (AG5). | agent lane |
+| RR4 | S4, green-line runtime. The Dynamic Worker isolate cannot load the whole pool, or flakes. The platform record ran shared rules and one creature, not the 21 files and every kind. | medium | In 50 runs on the seed more than one verdict is missing or late (`SELFTEST_TIMEOUT_MS`); or a run with `MAX_KINDS` creature files does not load. | Option D (`static`), and the strip says "static checks only" (GR5). Option A only after a record that measures Browser Run on `test`. Option C is not used: the record chose no container. | git lane, pool lane |
 | RR5 | S5, model mix. Workers AI models do not land the seeded intents. | high | PT1 or PT2 missed at M3. | In order: (1) the best measured model becomes the workhorse; (2) the live cast is narrowed to the intents of difficulty E that pass; (3) the lead asks the owner about Claude through AI Gateway (a new paid commitment; the owner decides). `max_real_agents` is set from the measurement in every case. | agent lane; the owner for (3) |
 | RR6 | S5, the repair. No model turns `30` into `0.3` after the heads-up. | high | PT3 missed at M3. | The video shows the hero with the canned cast on a second pool under the SYNTHETIC banner, and real agents on additive requests in the main pool. The voiceover and About say so. The catch itself (the heads-up with the diff) is still shown on real agents. | lead |
-| RR7 | S6, Clef. Accuracy or latency is not good enough, or the service limits differ. | medium | On the labelled set, with the best thresholds: any case that truly depends gets `holds`; or fewer than half of the independent cases get `holds`; or p95 latency above `CLEF_TIMEOUT_MS`. | Option C: the three switches stay `off`. Triage rows answer `confirm` (TR5). The script does not mention Clef (`03` 1.4). | agent lane |
-| RR8 | PS, pool files. Reads by ref lag a push, or `readFile` refuses a commit id. | medium | A frame shows an old file after `landing.landed`, or the harness reports the refusal. | Option A (reads by hash), which cannot lag: the commit id comes from the event. | pool lane |
-| RR9 | One Trunk does not carry 1,024 scripted agents. | medium | A soak check fails, or the tick's CPU p99 exceeds `TICK_CPU_BUDGET_MS` at every launch rate tried. | Lower `launch_per_second`, then the agent count, to the largest run that passes all nine checks. The banner and the README state the size that was run. The sharding argument stays an argument. | swarm lane |
+| RR7 | S6, Clef. Accuracy or latency is not good enough, or the service limits differ. The platform record is a smoke test of eight cases by one author. | medium | On the labelled set, with the best thresholds: any case that truly depends gets `holds`; or fewer than half of the independent cases get `holds`; or p95 latency above `CLEF_TIMEOUT_MS`. | Option C: the three switches stay `off`. Triage rows answer `confirm` (TR5). The script does not mention Clef (`03` 1.4). | agent lane |
+| RR8 | PS, pool files. A read lags a push. The platform record saw reads by branch name catch up 109 to 274 ms after a push; reads by commit id were not timed right after a push. | medium | A frame shows an old file after `landing.landed`; or a read of a commit that `landing.landed` named answers not found. | The app server never resolves a branch name: the commit id comes from the event (SE19). A commit that the Floor state names and Artifacts does not return yet is answered 503, never 404 and never cached, and the host's next probe retries. If `readFile` by commit id misbehaves, option A (`readCommit`, `readTree`, `readBlob`). | pool lane |
+| RR9 | One Trunk does not carry 1,024 scripted agents. | medium | A soak check fails, or the tick's CPU p99 exceeds `TICK_CPU_BUDGET_MS` at every launch rate tried. | Lower `launch_per_second`, then the agent count, to the largest run that passes all ten checks. The banner and the README state the size that was run. The sharding argument stays an argument. | swarm lane |
 | RR10 | The Durable Object's SQLite and `node:sqlite` differ. | low | `test/workerd/cases-smoke.test.ts` fails where the Node run passes. | The engine avoids the construct; the adapter in `test/support` is corrected. Never a test weakened. | engine lane |
 | RR11 | The specification files disagree in a place 0.1 does not list. | medium | A builder finds two rules that cannot both hold. | The builder stops that piece, reports both rule ids; the lead decides by the brief and `01-core.md` and edits the file the same day. | lead |
-| RR12 | Two lanes need the same file. | medium | A merge conflict outside a seam file. | The lead moves the logic into an owned file and leaves a registration line. | lead |
+| RR12 | Two lanes need the same file. | medium | `check:lane` fails at an integration point, or a merge conflict occurs. | The lead moves the logic into a file of one lane and has it registered through that lane's wiring module. If a seam's table type lacks the field, the lead adds it and every lane rebases. | lead |
 | RR13 | The schedule slips. | high | A milestone check fails. | The cut line of that day (section 4). | lead |
-| RR14 | Spend passes the budget. | medium | `npm run spend` shows more than 80% of an environment's cap; or the owner's billing page shows more than $40 in total. | Measurement runs stop. Rehearsals use the canned cast. The cap itself refuses further calls (SE7). The spike harness's own model calls are outside both gates; their cost is read from its result files and counted in the total. | lead; the owner reads the billing page on Oct 8 and Oct 12 |
+| RR14 | Spend passes the budget. | medium | `npm run spend` shows more than 80% of an environment's cap; or the owner's billing page shows more than $40 in total. | Measurement runs stop. Rehearsals use the canned cast. The cap itself refuses further calls (SE7). The model calls of the two spike Workers (E9 and the Clef test) were outside both gates; they are part of the billing total the owner reads. Artifacts operations are billed from 2026-10-14 (10,000 a month included, then $0.15 per 1,000), so both soak runs and the 300-push test are done before that date, and a soak after it needs the lead's count of its pushes and creates first. | lead; the owner reads the billing page on Oct 8 and Oct 12 |
 | RR15 | Workers AI is slow or limited during the recording. | medium | In rehearsal 3, intent to landed p50 above twice the M3 value. | Record at another hour the same day. The Replay recording stands in for a beat only with the REPLAY banner on screen. | the owner, lead |
 | RR16 | The production pool or the address breaks between the recording and Oct 21. | medium | SC9 fails. | BP12. Replay recordings are static assets and play with no Durable Object state (RP6). | lead |
 | RR17 | A secret reaches the public repository or a recording. | high | `check:secrets` matches. | The secret is rotated at once; the history is rewritten before the repository is made public; the recording is exported again. | lead |
 | RR18 | A real model writes the crab without a number in points. | medium | In `measure:models`, `absolute_number` is below half of `runs` for the chosen model. | Another model for the crab; the seeded wording of TP21 is kept. If none: TP20 applies and the canned recording shows the break. | agent lane |
 | RR19 | The build machine is the only copy of the work. | medium | No remote exists (true on Oct 3). | A private remote as soon as the owner names the host and account (section 7, SC1). | the owner |
+| RR20 | The platform record misleads. Every experiment ran once, from one location, on small repositories. | medium | A test of this plan on `test` contradicts a row of the record (`pushes`, `rebuild`, `deploy-drill`, track 4D, `green`, the soak). | The test's result wins. The lead adds a dated record under `docs/measurements/spikes/`, switches the port to the next option in `adapters/index.ts` in the same commit, and applies the risk row of that spike. | lead |
+| RR21 | The owner cannot do a rehearsal or the recording on its planned day. | medium | The owner says so, or no record of rehearsal 2 exists at the end of D8. | Rehearsal 2 moves to the morning of D9 and the recording to the afternoon; D10 is the second recording day. No agent records a voice or stands in for the owner (SC6). If no complete take exists at 12:00 PDT on D11, the lead tells the owner at once: the form cannot be sent without a video. | the owner, lead |
 
 ---
 
@@ -1019,16 +1048,16 @@ Record for each run: per beat, start and end on the run clock, the window of `03
 | --- | --- | --- | --- |
 | SC1 | The repository is public and holds a `LICENSE` file that names the MIT License. | Opened in a logged-out browser. `git log` on the public copy shows no secret (`check:secrets`). | owner approves; the owner names the host and account |
 | SC2 | The README has: what Premise is, the public address with the Replay line, run instructions, the limits list, measured numbers with their files, related work with no priority claim. | Slice 10 acceptance. The two arXiv ids and the entry named in the brief resolve when opened. | lead |
-| SC3 | "Instructions to run your project": `docs/submission/run.txt`, at most 4,000 characters. It holds, in this order: the Replay line of RP24; prerequisites (Node 22, git, a Cloudflare account on Workers Paid with Artifacts); `npm ci`; `npm run dev:floor` for an offline Replay; `npx wrangler login`; `npm run deploy`; `npx wrangler secret put OWNER_KEY`; `npm run pool:create`; unlocking the Floor; `npm run check`. | `npm run check:submission`. A builder follows it from a fresh clone (2.11). | lead |
+| SC3 | "Instructions to run your project": `docs/submission/run.txt`, at most 4,000 characters. It holds, in this order: the Replay line of RP24; prerequisites (Node 22, git, a Cloudflare account on Workers Paid with Artifacts); `npm ci`; `npm run dev:floor` for an offline Replay; `npx wrangler login`; `npm run deploy`; `npx wrangler secret put OWNER_KEY`; `npm run pool:create`; unlocking the Floor; `npm run check`. | `npm run check:submission`, which also checks that the README's section "Run it" is the same text. A builder follows it from a fresh clone (2.11). | lead |
 | SC4 | "Project vision": `docs/submission/vision.txt`, at most 2,000 characters. It answers "What did you rethink, and why does it matter?": the thesis sentence; what a change replaces; the two catches; what one record serves; the limits. | `check:submission`; BP11. | lead writes; owner approves |
 | SC5 | "How you used Cloudflare": `docs/submission/cloudflare.txt`, at most 2,000 characters. It lists only what is in the frozen build: the Worker, the four Durable Objects, Artifacts (pool repo with `main`, `green` and `refs/notes/premise`, plain-merge repo, attempt repos, every write a push with compare-and-swap), Workflows, Workers AI, static assets, the Cache API, and Browser Run and Clef only if their switches are on. | `check:submission`; compared with `features`. | lead writes; owner approves |
-| SC6 | The video: MP4 (H.264 video, AAC audio), 1920×1080, 5:00 to 10:00 (target 7:30), under 2 GiB. It follows BS1 to BS6: one session on the deployed system, in a browser, no terminal; cuts remove waiting only; the run clock is in every shot. | `ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height -of json <file>`: duration between 300 and 600, size below 2147483648. One full viewing by the lead against the beat sheet. | **owner only**: driving the session and recording the voice. lead: state P1 to P7, the cuts, the export. |
+| SC6 | The video: MP4 (H.264 video, AAC audio), 1920×1080, 5:00 to 10:00 (target 7:30), under 2 GiB. It follows BS1 to BS6: one session on the deployed system, in a browser, no terminal; cuts remove waiting only; the run clock is in every shot. | `ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height -of json <file>`: duration between 300 and 600, size below 2147483648. One full viewing by the lead against the beat sheet. The video holds no music, picture or text from a third party (terms, section 4). | **owner only**: driving the session and recording the voice. lead: state P1 to P7, the cuts, the export. |
 | SC7 | The session's stream is exported and committed as the `hero` recording; the Swarm run as `swarm`. | 2.10 item 1; both play at the public address. | lead |
 | SC8 | Every calibrated constant has its measurement (BP8). Every number spoken in the video is on screen in the take (BS4). | The BP8 test; the lead's viewing. | lead |
 | SC9 | The public demo address answers and plays Replay with no credentials. | In a browser with no cookies: `<address>/replay/hero` plays to the end; `<address>/` shows no owner control; `curl -X POST <address>/api/kill` answers 401. Run before the submission, after it, and daily until Oct 21. | lead |
-| SC10 | Test resources are cleaned. Deleted: the Worker `premise-test`, every repo in the two `test` namespaces, the spike harness Worker and its `spike` namespace repos. Kept: `production`, its pool repo, its plain-merge repo, the recorded pools, the attempt repos named in notes. Read tokens are revoked. `OWNER_KEY` is rotated after the recording; the new key goes to the owner outside the repository and outside chat. | `wrangler artifacts repos list` for each namespace; the evidence under `docs/measurements/` was committed before the deletion. | owner approves (deletion cannot be undone); lead executes |
-| SC11 | The terms hold: original work; licences (BP5); no third-party material without permission; no product is attacked and no GitHub branding appears (BP11); the two confirmations on the form are true. | `check:licenses`, `check:submission`, one read of the README and the texts. | lead prepares; **owner only** confirms on the form |
-| SC12 | The form is submitted: team name, primary contact name and e-mail, team location, attendee names and e-mails, project name "Premise", the two texts, the video upload, the repository URL, the run instructions, the two confirmations. | The confirmation page or e-mail is saved by the owner. | **owner only** |
+| SC10 | Test resources are cleaned. Deleted: the Worker `premise-test` and every repo in the two `test` namespaces. The platform record says the two spike Workers and their repos were deleted on 2026-10-04; the lead confirms that none is left. Kept: `production`, its pool repo, its plain-merge repo, the recorded pools, the attempt repos named in notes. Read tokens are revoked. `OWNER_KEY` is rotated after the recording; the new key goes to the owner outside the repository and outside chat. | `wrangler artifacts repos list` for each namespace; the evidence under `docs/measurements/` was committed before the deletion. | owner approves (deletion cannot be undone); lead executes |
+| SC11 | The terms hold: original work; licences (BP5); no third-party material without permission; no product is attacked and no GitHub branding appears (BP11); the two confirmations on the form are true. The entrant meets the eligibility rules of the terms (section 3: residence and age). | `check:licenses`, `check:submission`, one read of the README and the texts. The owner reads section 3 of the terms. | lead prepares; **owner only** confirms eligibility and ticks the form |
+| SC12 | The form is submitted: team name, primary contact name and e-mail, team location, attendee names and e-mails, project name "Premise", the two texts, the video upload, the repository URL, the run instructions, the two confirmations. | The confirmation page or e-mail is saved by the owner. The terms void an entry made by automated means, so no agent fills in or sends the form. | **owner only** |
 
 ---
 
@@ -1038,16 +1067,16 @@ Record for each run: per beat, start and end on the run clock, the window of `03
 
 | Judge | Must-fix item (short) | Where in this file |
 | --- | --- | --- |
-| Infrastructure | Day-1 push spike; recovery between accepted and on `main`; stock git reads the notes | RR1, RR1a, RR1b, RR2; 2.4; 2.2 item 3 |
+| Infrastructure | Day-1 push spike; recovery between accepted and on `main`; stock git reads the notes | The platform record (E2, E3, E7, E8); RR1, RR1a, RR1b, RR2; 2.4; 2.2 item 3 |
 | Infrastructure | Measure one Trunk with 1,000 or more scripted agents against the collision dial; report real-model repair latency separately | 2.9, VE6; `ModelMeasurement.hero.repair_ms` (2.5) |
 | Infrastructure | Gate real-agent reliability by day 4, including the `30` to `0.3` adaptation; a reopened attempt uses its authoring model or the screen says otherwise | M3, PT1 to PT3, RR5, RR6; 2.14 item 2 |
 | Infrastructure | Decide the verification runtime early; protect the public address; Replay built early | RR4; BP10, 2.2 item 6, 2.5 items 2 and 3; track 1F plays fixtures on D2 |
 | Originality | Rehearse 20 runs and publish the false-abort and escape rates | VE10, VE6; 2.11 item 3 |
-| Originality | Four spikes before other work | 1.7; D1 in section 4; RR1 to RR5 |
+| Originality | Four spikes before other work | The platform record (push and notes: E4, E8; token: E2; fork: E5; tool loop: E9); 1.7; RR1 to RR5. The tool-loop success rate on the seed is still open: M3. |
 | Originality | One primitive; fixed build order; crowd input, the many-pool wall, MCP, merge and bisect out | Section 2 order; 2.17; the drop order in section 4 |
-| Feasibility | Landing spike with pass or fail; container fallback decided the same day | RR1 (the `docker info` check on D1) |
+| Feasibility | Landing spike with pass or fail; container fallback decided the same day | The platform record (E7, E8: pass; no container); RR1 |
 | Feasibility | Model spike on the real codebase; live agent count from measurement; an evicted agent ends in a recorded state | 2.5 items 5 and `measure:models`; RR5 |
-| Feasibility | Freeze one engine; confirm by day 2 whether a container deploys; else the green line is static and says so | BP4; RR4 |
+| Feasibility | Freeze one engine; confirm by day 2 whether a container deploys; else the green line is static and says so | BP4; the platform record (a Dynamic Worker isolate, no container); RR4 |
 | Feasibility | Forks off the hot path; never per scripted agent; fork throughput reported separately | Track 4D, 2.5 item 7; SW3; VE6 last paragraph |
 | Feasibility | Measure the false-abort rate before recording; check that the cited papers exist | VE6 on D6 and D8; SC2 |
 | Feasibility | Build the Floor from day 2 against a scripted stream, Replay first; video and stage are separate deliverables; owner key and spend cap before the address is shared | Tracks 1E and 1F, Slice 5; 2.17 and BP12; BP10 |
@@ -1061,7 +1090,7 @@ Record for each run: per beat, start and end on the run clock, the window of `03
 | PT3 | 4 of 5 correct repairs of P1a and of P1b for at least one model | M3, RR6 |
 | PT4 | `RACE_SIZE` models land at least 6 of 12 | Slice 12 |
 | Push | 300 of 300 batches `pushed`, p99 at most 5 s | RR1, 2.4 |
-| Attempt repos | At most 5% failures, ready p90 at most 10 s, at 10 at a time | RR3 |
+| Attempt repos | At most 5% failures after retries, ready p90 at most 10 s, at four at a time | RR3 |
 | Verifier | At most one missing or late verdict in 50 runs | RR4 |
 | Clef | No truly dependent case gets `holds`; at least half of the independent cases get `holds`; p95 latency within `CLEF_TIMEOUT_MS` | RR7 |
 | Hero | 20 of 20 conductor runs | M4, VE10 |

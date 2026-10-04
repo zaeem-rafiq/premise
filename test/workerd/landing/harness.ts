@@ -26,6 +26,7 @@ import {
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
 const FAKE_ARTIFACTS = join(REPO_ROOT, "test/workerd/landing/fake-artifacts.mjs");
+const STUB_AGENT = join(REPO_ROOT, "test/workerd/landing/stub-agent.mjs");
 const ORIGIN = "http://premise.test";
 
 type Stub = { fetch(url: string, init?: RequestInit): Promise<Response> };
@@ -143,6 +144,10 @@ export async function startLandingWorker(options: {
   expectedToken?: string;
   /** Bind `env.SWARM` to the bundle's `SwarmWorkflow` through the local workflows engine. */
   swarm?: boolean;
+  /** Bind `env.AGENT` to the recording `StubAgent` of stub-agent.mjs instead of the real Agent
+   * (2.3 item 9's "a stub Agent bound in place of the real one"): `/resume` calls are logged
+   * and answered by the mode the test sets through `/internal/mode`. */
+  agentStub?: boolean;
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
@@ -180,7 +185,12 @@ export async function startLandingWorker(options: {
         compatibilityFlags: ["nodejs_compat"],
         bindings: options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
         durableObjects: Object.fromEntries(
-          Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [binding, { className, useSQLite: true }]),
+          Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [
+            binding,
+            binding === "AGENT" && options.agentStub === true
+              ? { className: "StubAgent", scriptName: "stub-agent" }
+              : { className, useSQLite: true },
+          ]),
         ),
         ...(options.swarm === true
           ? {
@@ -203,6 +213,17 @@ export async function startLandingWorker(options: {
         compatibilityFlags: ["nodejs_compat"],
         bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
       },
+      ...(options.agentStub === true
+        ? [
+            {
+              name: "stub-agent",
+              modules: [{ type: "ESModule" as const, path: STUB_AGENT }],
+              compatibilityDate: "2026-10-01",
+              compatibilityFlags: ["nodejs_compat"],
+              durableObjects: { StubAgent: { className: "StubAgent", useSQLite: true } },
+            },
+          ]
+        : []),
     ],
   });
   let miniflare = new Miniflare(workerOptions);

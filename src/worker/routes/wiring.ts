@@ -12,6 +12,7 @@ import { sessionDelete, sessionGet, sessionPost } from "./session.ts";
 import { kill } from "./kill.ts";
 import { createIntent } from "./intents.ts";
 import { stopAttempt } from "./stop.ts";
+import { handleCard } from "./cards.ts";
 
 /** The seam key of the `ROUTES` row for `method`+`path`: keyed on the row, not a retyped string. */
 function key(method: string, path: string): string {
@@ -29,4 +30,5 @@ export function wire(table: RouteTable): void {
   table.handlers.set(key("POST", "/api/pools/{pool}/read-token"), readToken);
   table.handlers.set(key("POST", "/api/pools/{pool}/intents"), createIntent);
   table.handlers.set(key("POST", "/api/pools/{pool}/attempts/{attempt_id}/stop"), stopAttempt);
+  table.handlers.set(key("POST", "/api/pools/{pool}/cards/{card_id}"), handleCard);
 }

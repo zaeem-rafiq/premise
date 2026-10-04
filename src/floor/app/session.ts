@@ -166,7 +166,9 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
     const handle = openLiveStream(
       pool,
       {
-        get: fetch,
+        // `fetch` keeps its Window receiver: `env.get(...)` would call it on `env`
+        // and Chromium rejects that with "Illegal invocation".
+        get: (input, init) => fetch(input, init),
         origin: location.origin,
         socket: (url) => new WebSocket(url) as unknown as SocketLike,
         now: () => Date.now(),

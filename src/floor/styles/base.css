@@ -424,7 +424,7 @@ a {
 }
 .strip-cell {
   position: relative;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -434,32 +434,32 @@ a {
   background: var(--surface);
   line-height: 1;
 }
+/* One inline flow of label, value and sub-line (2.2/2.8): a label that wraps keeps
+ * the value on its last line, so a long label costs its own rows and no more. */
+.strip-main {
+  margin: 0;
+  min-width: 0;
+  line-height: 1.15;
+}
 .strip-label {
   font-size: var(--size-small);
   color: var(--muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .strip-value {
   font-size: var(--size-counter);
   font-weight: 600;
-  line-height: 1;
+  line-height: 0.8;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   animation: counter-flash 1s var(--ease);
 }
-/* A sentence is not a counter (3.8): status size, allowed to wrap within the fixed cell. */
+/* A sentence is not a counter (3.8): status size, wraps within the fixed cell. */
 .strip-value--text {
   font-size: var(--size-status);
   font-weight: 400;
   white-space: normal;
-  line-height: 1.1;
 }
 @keyframes counter-flash {
   0% {
@@ -474,10 +474,6 @@ a {
 .strip-sub {
   font-size: var(--size-small);
   color: var(--muted);
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .strip-cell[data-tone="changed"] .strip-value {
   color: var(--changed);
@@ -580,6 +576,7 @@ a {
 .pool-stage {
   position: relative;
   min-height: 0;
+  flex: 1;
 }
 .start-overlay {
   position: absolute;

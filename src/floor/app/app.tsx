@@ -114,12 +114,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   // FR10/CO3: while the connection is lost every owner control is off and the last
   // content keeps, dimmed. Replay never is "offline" - it plays a file, not a socket.
   const offline = !replay && session.connection === "lost";
-  const floorRef = useRef(session.floor);
-  floorRef.current = session.floor;
-  const shell = useMemo(
-    () => makeShell(settings, owner, replay, () => floorRef.current.pool.max_real_agents),
-    [settings, owner, replay],
-  );
+  const shell = useMemo(() => makeShell(settings, owner, replay), [settings, owner, replay]);
 
   // ---- routing (client routes of 4.5; the page never reloads) ----
   const navigate = useCallback((path: string) => {
@@ -412,6 +407,19 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   const cells = stripCells(floor, clock, { greenFeature: settings.features.green });
   const sheets = (
     <>
+      {sheet.kind === "card" &&
+        call(table.entries.get("sheet.card"), { floor, card_id: sheet.card_id, onClose: closeSheet })}
+      {sheet.kind === "why" &&
+        call(table.entries.get("sheet.why"), { floor, seq: sheet.seq, onClose: closeSheet })}
+      {sheet.kind === "who" &&
+        call(table.entries.get("sheet.who"), {
+          floor,
+          kind_: sheet.kind_,
+          key: sheet.key,
+          onClose: closeSheet,
+        })}
+      {sheet.kind === "undo" &&
+        call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
       {sheet.kind === "about" && (
         <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
       )}
@@ -510,6 +518,25 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
               paused={framesPaused}
               onPausedChange={setFramesPaused}
               onCompare={floor.pool.plain_remote !== null ? () => setView("compare") : undefined}
+              selftest
+              onTapped={
+                table.entries.has("sheet.why")
+                  ? (path) => {
+                      const seq = floor.files[path]?.last_landed_seq;
+                      if (seq !== null && seq !== undefined) openSheet({ kind: "why", seq });
+                    }
+                  : undefined
+              }
+              onTileWho={
+                table.entries.has("sheet.who")
+                  ? (path) => openSheet({ kind: "who", kind_: "file", key: path })
+                  : undefined
+              }
+              onTileWhy={
+                table.entries.has("sheet.why")
+                  ? (_path, seq) => openSheet({ kind: "why", seq })
+                  : undefined
+              }
             />
             {!replay && quietPool(floor, clock) && !startDismissed && (
               <div className="start-overlay">

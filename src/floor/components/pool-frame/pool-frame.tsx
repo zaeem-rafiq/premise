@@ -63,7 +63,7 @@ export type PoolFrameProps = {
  * (`--bg`, `--control`, …) resolve against the shell's base.css; the fallbacks are the 6.3 dark
  * values so the frame still reads on its own. */
 const FRAME_CSS = `
-.pf { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pf { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .pf-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   font-size: var(--size-body, 16px); color: var(--text, #eaf2f4); }
 .pf-caption-text { color: var(--muted, #a8bcc6); }
@@ -88,7 +88,10 @@ const FRAME_CSS = `
 .pf-body.pf-glow { animation: pf-edge 1.2s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1)); }
 @keyframes pf-edge { from { outline: 3px solid var(--accent, #6fd6cc); outline-offset: -3px; }
   to { outline: 3px solid transparent; outline-offset: -3px; } }
-.pf-selftest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+.pf-selftest { position: absolute; inset-inline-end: 8px; inset-block-end: 8px; z-index: 1;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; max-width: 70%;
+  padding: 2px 8px; border: var(--border, 1px) solid var(--control, #7c98a8);
+  border-radius: var(--radius, 8px); background: var(--surface, #13242f);
   font-size: var(--size-small, 14px); color: var(--muted, #a8bcc6); }
 .pf-selftest-pass { color: var(--holds, #5bd68f); }
 .pf-selftest-fail { color: var(--changed, #ff7a6b); }

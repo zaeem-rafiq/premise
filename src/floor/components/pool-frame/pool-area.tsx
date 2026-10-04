@@ -40,7 +40,7 @@ export function PoolArea(props: PoolAreaProps) {
     const measure = () => {
       const caption = el.querySelector(".pf-caption");
       const captionH = caption?.getBoundingClientRect().height ?? 0;
-      const gaps = 16; // .pool-area gap + .pf gap
+      const gaps = 8; // .pool-area gap (the caption sits on the frame: .pf gap is 0)
       const need = el.clientWidth * (9 / 16) + captionH + TILES_MIN_PX + gaps;
       if (el.clientHeight > 0 && need > el.clientHeight) {
         el.dataset.tight = "true";

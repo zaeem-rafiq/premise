@@ -1,0 +1,187 @@
+// The layout acceptance of 03-floor section 2 and 6: AC12 (region sizes of 2.1 and the
+// type sizes of 6.2/VD15 at 1920x1080), AC13 (LY3: no sideways scroll at any width of the
+// table), AC11 (6.4: reduced motion - nothing moves, frames and Replay start paused), and
+// the three assembled-page defects the lead saw (the Replay bar's controls pushed off by
+// a long caption, a sentence value stretching the strip, laptop type at stage width).
+// Expected sizes are the spec's own numbers (2.1, 6.2), not the page's output (BP1).
+
+import { expect, test } from "@playwright/test";
+import { serveStream, poolState, intentCreated, attemptOpened } from "./stream.ts";
+
+async function box(locator: ReturnType<import("@playwright/test").Page["locator"]>) {
+  const b = await locator.boundingBox();
+  return b ?? { x: 0, y: 0, width: 0, height: 0 };
+}
+
+test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
+  test("regions have the sizes of the table within 1 px", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/replay/tracer");
+    await expect(page.locator(".replay-bar")).toBeVisible();
+    await expect(page.locator(".strip")).toBeVisible();
+
+    const header = await box(page.locator(".header"));
+    const strip = await box(page.locator(".strip"));
+    const banner = await box(page.locator(".banner[data-tone='replay']"));
+    const replayBar = await box(page.locator(".replay-bar"));
+    const pool = await box(page.locator(".pool-column"));
+    const rail = await box(page.locator(".rail"));
+
+    // 2.1: header 1920x64, strip 72, each banner 40, Replay bar 56.
+    expect(Math.abs(header.width - 1920)).toBeLessThanOrEqual(1);
+    expect(Math.abs(header.height - 64)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
+    expect(Math.abs(banner.height - 40)).toBeLessThanOrEqual(1);
+    expect(Math.abs(replayBar.height - 56)).toBeLessThanOrEqual(1);
+    // The pool area is 1152 wide, the rail 696 (padding 24, gap 24).
+    expect(Math.abs(pool.width - 1152)).toBeLessThanOrEqual(1);
+    expect(Math.abs(rail.width - 696)).toBeLessThanOrEqual(1);
+  });
+
+  test("VD15: the computed type sizes are the stage sizes of 6.2", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/replay/tracer");
+    await expect(page.locator(".strip")).toBeVisible();
+
+    // The regression the lead saw: stage width must draw stage type, not laptop.
+    await expect(page.locator("html")).toHaveAttribute("data-size", "stage");
+
+    const sizes = await page.evaluate(() => {
+      const px = (el: Element | null) =>
+        el === null ? null : Number.parseFloat(getComputedStyle(el).fontSize);
+      const pick = (sel: string) => px(document.querySelector(sel));
+      return {
+        counter: px(document.querySelector(".strip-cell", )?.querySelector(".strip-value") ?? null),
+        stripLabel: pick(".strip-label"),
+        bannerWord: pick(".banner-word"),
+        appName: pick(".app-name"),
+        button: pick(".header button"),
+        caption: pick(".pf-caption"),
+      };
+    });
+    // 6.2 stage: counter 40, small 16, intent 24 (banner words, the name), body 20.
+    expect(sizes.counter).toBe(40);
+    expect(sizes.stripLabel).toBe(16);
+    expect(sizes.bannerWord).toBe(24);
+    expect(sizes.appName).toBe(24);
+    expect(sizes.button).toBe(20);
+    // VD15: the frame caption is read from the back of a room - 22 or larger.
+    expect(sizes.caption ?? 0).toBeGreaterThanOrEqual(22);
+  });
+});
+
+test.describe("AC13 / LY3: the page never scrolls sideways", () => {
+  for (const width of [320, 768, 1100, 1280, 1440, 1600, 1920]) {
+    test(`width ${width}: no horizontal overflow`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/replay/tracer");
+      await expect(page.locator(".strip")).toBeVisible();
+      await expect(page.locator(".rail")).toBeVisible();
+      const overflow = await page.evaluate(() => {
+        const doc = document.documentElement;
+        return Math.max(doc.scrollWidth, document.body?.scrollWidth ?? 0) - window.innerWidth;
+      });
+      expect(overflow).toBeLessThanOrEqual(0);
+      // And every banner word, strip cell and replay control is inside the viewport.
+      const stuck = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const el of document.querySelectorAll(".strip-cell, .banner, .replay-bar > *")) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && (r.right > window.innerWidth + 1 || r.left < -1)) {
+            out.push(`${el.className} right=${Math.round(r.right)}`);
+          }
+        }
+        return out;
+      });
+      expect(stuck, `elements past the viewport at ${width}`).toEqual([]);
+    });
+  }
+});
+
+test.describe("defect regressions", () => {
+  test("the Replay bar's controls stay on screen with the longest chapter caption", async ({ page }) => {
+    // The defect: at 1440 in /replay/hero-c04 the Conflict chapter's caption (it gains
+    // "Press C to compare" when the pool has a plain-merge remote) pushed Speed and
+    // Close Replay off the screen. 3.16: the caption wraps or is cut with an ellipsis.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/replay/hero-c04");
+    await expect(page.locator(".replay-bar")).toBeVisible();
+    // Jump to the Conflict chapter so the longest caption is on the bar.
+    await page.keyboard.press("2");
+    await expect(page.locator(".replay-caption")).toContainText("Press C to compare");
+    const speed = page.locator(".replay-speed");
+    const close = page.locator(".replay-close");
+    await expect(speed).toBeVisible();
+    await expect(close).toBeVisible();
+    const speedBox = await box(speed);
+    const closeBox = await box(close);
+    expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(1440);
+    expect(speedBox.x + speedBox.width).toBeLessThanOrEqual(closeBox.x + closeBox.width);
+    // The caption gave way: it does not overlap the controls and its text is clipped.
+    const caption = await box(page.locator(".replay-caption"));
+    expect(caption.x + caption.width).toBeLessThanOrEqual(speedBox.x);
+  });
+
+  test("a sentence value in the strip does not stretch the strip (3.8)", async ({ page }) => {
+    // The defect: "not running in this build" / "not reported yet" drew at counter size
+    // and wrapped, making the strip's height depend on content. The strip has one fixed
+    // height per layout (2.1): 60 at laptop width.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // No limits event, features.green "none": both the green cell ("not running in this
+    // build") and the spend cell ("not reported yet") are sentences.
+    await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
+    await page.goto(`/p/testpool`);
+    await expect(page.locator(".strip")).toBeVisible();
+    await expect(page.locator(".strip-cell", { hasText: "Green line" })).toContainText(
+      "not running in this build",
+    );
+    await expect(page.locator(".strip-cell", { hasText: "Spend" })).toContainText("not reported yet");
+    const strip = await box(page.locator(".strip"));
+    expect(Math.abs(strip.height - 60)).toBeLessThanOrEqual(1);
+    // The sentences draw at status size, not counter size.
+    const fontSize = await page
+      .locator(".strip-cell", { hasText: "Spend" })
+      .locator(".strip-value")
+      .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+    expect(fontSize).toBe(18); // laptop status size (6.2)
+  });
+});
+
+test.describe("AC11 / 6.4: reduced motion", () => {
+  test("nothing moves: banners and sheets appear at once, frames and Replay start paused", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/replay/tracer");
+
+    // Replay starts paused (RY18 + 6.4: the bar offers Play, not Pause).
+    await expect(
+      page.locator(".replay-bar").getByRole("button", { name: "Play", exact: true }),
+    ).toBeVisible();
+
+    // A banner appears at once - no slide animation.
+    const bannerMotion = await page
+      .locator(".banner[data-tone='replay']")
+      .evaluate((el) => getComputedStyle(el).animationName);
+    expect(bannerMotion).toBe("none");
+
+    // A sheet appears at once.
+    await page.keyboard.press("a");
+    await expect(page.locator(".sheet")).toBeVisible();
+    const sheetMotion = await page
+      .locator(".sheet-backdrop")
+      .evaluate((el) => getComputedStyle(el).animationName);
+    expect(sheetMotion).toBe("none");
+  });
+
+  test("live pool frames start paused with frame.play (6.4 last row)", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
+    await page.goto(`/p/testpool`);
+    // The frame is paused and the caption bar offers Play (frame.play).
+    await expect(page.locator(".pf")).toContainText(
+      "Paused. The code still lands; only the picture is still.",
+    );
+    await expect(page.locator(".pf").getByRole("button", { name: "Play" })).toBeVisible();
+  });
+});

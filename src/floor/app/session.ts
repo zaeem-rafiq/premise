@@ -20,6 +20,7 @@ import {
 } from "../replay/player.ts";
 import { linesForEvent, type AnnouncedLine, type BeforeBits } from "../components/toast/announce.ts";
 import { changeName } from "../../copy/names.ts";
+import { stopSentence } from "../../copy/stops.ts";
 import { text } from "../../copy/strings.ts";
 import type { Route } from "./route.ts";
 
@@ -192,6 +193,12 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
               reduce(floor, event);
               clock.note(event.ts);
               effectsRef.current.announces.push(...linesForEvent(event, floor, before));
+              // FR4: an attempt that stops shows the 5.8 sentence on its card and as a toast.
+              if (event.type === "attempt.state" && event.to === "stopped") {
+                effectsRef.current.toasts.push(
+                  event.reason === null ? text("status.stopped") : stopSentence(event.reason),
+                );
+              }
               if (event.type === "landing.landed" && floor.landings[event.seq]?.kind === "change") {
                 const attemptId = floor.landings[event.seq]?.attempt_id;
                 const attempt = attemptId == null ? undefined : floor.attempts[attemptId];

@@ -870,6 +870,7 @@ type ToolRequest = {
   ack: number;         // highest heads-up number already placed in the model's context (HU6a)
   tool: "outline" | "read" | "list" | "search" | "write" | "replace" | "submit";
   args: object;
+  usage?: { model_calls: number; tokens_in: number; tokens_out: number };  // TA10; real agents only
 };
 
 type ToolResponse = {
@@ -928,6 +929,7 @@ type StopResponse = { ok: true; stop_reason: string; attempt: SyncResponse["atte
 
 - **TA9 (`stop`).** The Agent calls `stop` when it ends its own attempt: a budget or the time limit (AG4), the spend cap (SE7), exhausted retries (AG2), the watchdog (AG3), the kill switch (SE10), the owner's cancel (the route of 13.6 reaches the Agent, which then calls `stop` with `cancelled`), or a scripted withdrawal. Trunk runs transition T20 with that reason, in one transaction: the attempt is `stopped`, an open held card closes as `stale`, a race card is updated, and `attempt.state` is emitted. The call is idempotent: for an attempt that is already `stopped`, Trunk answers `ok: true` with the stored `stop_reason` and changes nothing. For an attempt in `accepted` or `landed` it answers `attempt_closed` (T20 does not apply; the change is landing or has landed), and the Agent takes its state from `sync`. A reason outside `AgentStopReason` is `invalid_args`: the other stop reasons of 9.1 are set by Trunk only.
 - **TA9a (`withdrawn`).** `withdrawn` means the agent itself decided that its change is no longer wanted. In this build only scripted agents send it (`02-tidepool.md` 10.3: a rescale or a cosmetic edit that another change already made, a sweep that gives up). A stop with `withdrawn` opens no card.
+- **TA10 (the Agent's counters).** A real agent's `ToolRequest` carries `usage`: the Agent's running totals of model calls and tokens at the moment of the call (`05-agent.md` TL1, TL4). Trunk keeps the last value it received on the attempt (`attempts.model_calls`, `tokens_in`, `tokens_out`) and freezes it into `Note.attempt` when the change is accepted. A synthetic attempt sends no `usage`, and its note holds zeros. This settles the open point O2 of `05-agent.md` (added on 2026-10-04, after the first real agent landed with `model_calls: 0` in its note).
 
 ### 4.2 Limits
 

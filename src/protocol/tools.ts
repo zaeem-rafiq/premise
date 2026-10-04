@@ -44,6 +44,7 @@ export type ToolRequest = {
   ack: number; // highest heads-up number already placed in the model's context (HU6a)
   tool: ToolName;
   args: object;
+  usage?: { model_calls: number; tokens_in: number; tokens_out: number }; // TA10; real agents only
 };
 
 export type ToolResponse = {

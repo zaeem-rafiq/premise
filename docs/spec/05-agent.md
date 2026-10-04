@@ -1124,7 +1124,7 @@ These are places where this file had to choose because `01-core.md` is silent or
 | # | Point | What this file does |
 | --- | --- | --- |
 | O1 | "Step" is a transcript row in 3.3 and 12.1 and the budget unit in AG4, 4.1 and the note. | 4.1: rows are numbered; `MAX_STEPS` counts tool steps. |
-| O2 | `Note.attempt` holds `steps`, `model_calls`, `tokens_in` and `tokens_out`, but no call carries the Agent's counters to Trunk. | This file defines the counters (TL1, TL4). The carrier is not defined here. |
+| O2 | `Note.attempt` holds `steps`, `model_calls`, `tokens_in` and `tokens_out`, but no call carries the Agent's counters to Trunk. | Settled on 2026-10-04: the carrier is `ToolRequest.usage` (`01-core.md` TA10). This file defines the counters (TL1, TL4). |
 | O3 | `SyncResponse` has no `stop_reason`. | An Agent that Trunk stopped mirrors `stopped` without a reason (4.10). |
 | O4 | TA2 does not say whether a `pool_not_ready` answer is stored as the response of its `call_id`. | TL12 assumes it is not, so the same call can succeed later. |
 | O5 | The shapes of the gate's calls and the agent slot are not in 13.3. | 5.2 defines the Agent's side. |

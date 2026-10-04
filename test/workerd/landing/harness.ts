@@ -208,10 +208,7 @@ export async function startLandingWorker(options: {
   let miniflare = new Miniflare(workerOptions);
   await miniflare.ready;
 
-  let namespaces = new Map<
-    DurableObjectBinding,
-    { idFromName(name: string): unknown; get(id: unknown): Stub }
-  >();
+  let namespaces = new Map<DurableObjectBinding, { idFromName(name: string): unknown; get(id: unknown): Stub }>();
   async function namespace(binding: DurableObjectBinding) {
     if (!namespaces.has(binding)) {
       namespaces.set(

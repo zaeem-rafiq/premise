@@ -282,12 +282,18 @@ export class Trunk extends DurableObject<Env> {
   async #pushOnce(now?: number): Promise<boolean> {
     let applied = false;
     try {
-      await pushOutbox(this.env, this.ctx, async (name, input) => {
-        const r = await this.#callEngineEntry(name, input);
-        if ("error" in r) throw new Error(`push apply ${name} failed`);
-        applied = true;
-        return r.result;
-      }, undefined, now);
+      await pushOutbox(
+        this.env,
+        this.ctx,
+        async (name, input) => {
+          const r = await this.#callEngineEntry(name, input);
+          if ("error" in r) throw new Error(`push apply ${name} failed`);
+          applied = true;
+          return r.result;
+        },
+        undefined,
+        now,
+      );
     } catch {
       recordTrunkError(this.ctx, "push", "transport");
     }

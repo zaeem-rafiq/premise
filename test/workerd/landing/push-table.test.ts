@@ -94,14 +94,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
   /** The receive-pack POSTs the Worker sent to `repo`, in order, body included for the LP6
    * byte-equality check. */
-  function pushes(
-    repo: string,
-  ): Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }> {
+  function pushes(repo: string): Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }> {
     return worker
       .gitRequests()
-      .filter((r) => r.method === "POST" && r.path.startsWith(`/${repo}/`) && r.path.endsWith("/git-receive-pack")) as Array<
-      RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }
-    >;
+      .filter(
+        (r) => r.method === "POST" && r.path.startsWith(`/${repo}/`) && r.path.endsWith("/git-receive-pack"),
+      ) as Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }>;
   }
 
   /** Fault only `repo`'s receive-pack POSTs, `times` times, then forward. */
@@ -116,9 +114,7 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
   /** Fault every request to `repo` that `match` names — POSTs and the info/refs reads. */
   function faultRepo(repo: string, match: (req: RecordedRequest) => boolean, fault: GitFault): void {
-    worker.setGitFault((req) =>
-      req.path.startsWith(`/${repo}/`) && match(req) ? fault : { action: "forward" },
-    );
+    worker.setGitFault((req) => (req.path.startsWith(`/${repo}/`) && match(req) ? fault : { action: "forward" }));
   }
 
   it("row new,new → mark_pushed: a response dropped after the remote applied both refs", async () => {
@@ -152,7 +148,8 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     await launch(POOL);
     await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "push.retry"), 60_000);
     // main is the landing commit already; notes is absent.
-    const landing = (await worker.events(POOL)).find((e) => e.type === "landing.landed") as { commit: string } | undefined;
+    const landing = (await worker.events(POOL)).find((e) => e.type === "landing.landed") as
+      { commit: string } | undefined;
     expect(worker.refs(POOL).main).toBe(landing?.commit ?? "");
     expect(worker.refs(POOL).notes).toBeNull();
 
@@ -213,7 +210,9 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     await launch(POOL);
     await waitFor(
       async () =>
-        (await worker.events(POOL)).some((e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged"),
+        (await worker.events(POOL)).some(
+          (e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged",
+        ),
       60_000,
     );
     const state = (await worker.trunk(POOL).state()) as { meta: Record<string, string> };
@@ -228,11 +227,17 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
   it("row old,other → pause: nothing applied and notes moved to a stranger (diverged)", async () => {
     const POOL = "lp5-div-old";
     await createAndSeed(POOL);
-    faultPushes(POOL, { action: "apply_then_answer", status: 500, setRefs: { [MAIN_REF]: "revert", [NOTES_REF]: "other" } });
+    faultPushes(POOL, {
+      action: "apply_then_answer",
+      status: 500,
+      setRefs: { [MAIN_REF]: "revert", [NOTES_REF]: "other" },
+    });
     await launch(POOL);
     await waitFor(
       async () =>
-        (await worker.events(POOL)).some((e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged"),
+        (await worker.events(POOL)).some(
+          (e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged",
+        ),
       60_000,
     );
     const state = (await worker.trunk(POOL).state()) as { meta: Record<string, string> };
@@ -247,7 +252,9 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     await launch(POOL);
     await waitFor(
       async () =>
-        (await worker.events(POOL)).some((e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged"),
+        (await worker.events(POOL)).some(
+          (e) => e.type === "pool.paused" && (e as { reason?: string }).reason === "diverged",
+        ),
       60_000,
     );
     const state = (await worker.trunk(POOL).state()) as { meta: Record<string, string> };
@@ -260,11 +267,7 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     await createAndSeed(POOL);
     // 503 on the receive-pack POST and on the info/refs read it triggers.
     let left = 4;
-    faultRepo(
-      POOL,
-      () => true,
-      { action: "answer", status: 503 },
-    );
+    faultRepo(POOL, () => true, { action: "answer", status: 503 });
     worker.setGitFault((req) =>
       req.path.startsWith(`/${POOL}/`) && left-- > 0 ? { action: "answer", status: 503 } : { action: "forward" },
     );
@@ -302,7 +305,10 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     faultPushes(POOL, { action: "answer", status: 429, headers: { "Retry-After": "2" } });
     await launch(POOL);
     await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "push.retry"), 60_000);
-    const retry = (await worker.events(POOL)).find((e) => e.type === "push.retry") as { next_try_ms: number; error: string };
+    const retry = (await worker.events(POOL)).find((e) => e.type === "push.retry") as {
+      next_try_ms: number;
+      error: string;
+    };
     expect(retry.error).toBe("rate_limited");
     expect(retry.next_try_ms).toBeGreaterThanOrEqual(2000);
 

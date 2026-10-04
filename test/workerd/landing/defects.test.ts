@@ -50,10 +50,10 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
 
   it("A+B (LP5a, LP5b, LP8): refused pushes retry on a schedule, then pause and stop", async () => {
     // A: the create answers — a refused batch is not pushed again from inside its own apply.
-    const create = await worker.fetch(
-      "/api/pools",
-      { ...bearer({ pool: REFUSE, seed: SEED, summary_only: false, request_id: "r-refuse" }), signal: AbortSignal.timeout(15_000) },
-    );
+    const create = await worker.fetch("/api/pools", {
+      ...bearer({ pool: REFUSE, seed: SEED, summary_only: false, request_id: "r-refuse" }),
+      signal: AbortSignal.timeout(15_000),
+    });
     expect(create.status).toBe(200);
 
     // LP5a: the first rejection already left one push.retry inside the request's post-commit.
@@ -108,7 +108,10 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
   });
 
   it("D: the seed push lands its objects — fsck --strict clean, tree equal to the seed's files", async () => {
-    const create = await worker.fetch("/api/pools", bearer({ pool: ACCEPT, seed: SEED, summary_only: false, request_id: "r-accept" }));
+    const create = await worker.fetch(
+      "/api/pools",
+      bearer({ pool: ACCEPT, seed: SEED, summary_only: false, request_id: "r-accept" }),
+    );
     expect(create.status).toBe(200);
     await waitFor(() => worker.refs(ACCEPT).main !== null, 30_000);
 
@@ -122,7 +125,10 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
 
     // `git cat-file -p` of the seed commit names a tree whose files equal the seed's.
     expect(git(dir, ["cat-file", "-t", main])).toBe("commit");
-    const tree = git(dir, ["cat-file", "-p", main]).split("\n").find((l) => l.startsWith("tree "))!.slice(5);
+    const tree = git(dir, ["cat-file", "-p", main])
+      .split("\n")
+      .find((l) => l.startsWith("tree "))!
+      .slice(5);
     const files = git(dir, ["ls-tree", "-r", "--name-only", tree])
       .split("\n")
       .filter((line) => line !== "")

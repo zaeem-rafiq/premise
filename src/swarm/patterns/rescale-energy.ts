@@ -30,14 +30,7 @@
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp, HeadsUpItem } from "../../protocol/headsup.ts";
 import type { Pattern, PatternStep, PatternTurn } from "../pattern.ts";
-import {
-  energyMaxOf,
-  readArgsOf,
-  sourceOf,
-  submitFields,
-  submitStatus,
-  thresholdText,
-} from "../scripted.ts";
+import { energyMaxOf, readArgsOf, sourceOf, submitFields, submitStatus, thresholdText } from "../scripted.ts";
 
 const ENERGY_KEY = "world/energy.js#ENERGY_MAX";
 

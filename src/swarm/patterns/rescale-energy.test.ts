@@ -68,7 +68,7 @@ function respondWith(
             ? SOURCE_V100.replace("ENERGY_MAX = 100", `ENERGY_MAX = ${v}`)
             : sources.length > 1
               ? (sources.shift() as string)
-              : sources[0] ?? "";
+              : (sources[0] ?? "");
         return { result: { key, source } };
       }
       case "replace":
@@ -232,15 +232,7 @@ describe("rescale-energy (02-tidepool.md 10.3)", () => {
         },
       }),
     });
-    expect(calls.map((call) => call.tool)).toEqual([
-      "read",
-      "replace",
-      "read",
-      "replace",
-      "read",
-      "replace",
-      "submit",
-    ]);
+    expect(calls.map((call) => call.tool)).toEqual(["read", "replace", "read", "replace", "read", "replace", "submit"]);
     const reads = calls.filter((call) => call.tool === "read").map((call) => call.args.path);
     expect(reads).toEqual(["world/energy.js", "creatures/s0004.js", "creatures/s0005.js"]);
     expect((calls[5] as Call).args).toEqual({
@@ -257,10 +249,7 @@ describe("rescale-energy (02-tidepool.md 10.3)", () => {
   });
 
   it("D2: a T-relative referrer is left alone", () => {
-    const relative = T_ENERGY_UPDATE.replace(
-      "creature.energy < 30",
-      "creature.energy < ENERGY_MAX * 0.3",
-    );
+    const relative = T_ENERGY_UPDATE.replace("creature.energy < 30", "creature.energy < ENERGY_MAX * 0.3");
     const reliedOnBy = ["creatures/s0006.js#update", "creatures/s0006.js#spawn"];
     const { calls } = run({
       rand: agentRandom(7, 0),
@@ -270,9 +259,7 @@ describe("rescale-energy (02-tidepool.md 10.3)", () => {
       }),
     });
     expect(calls.map((call) => call.tool)).toEqual(["read", "replace", "read", "submit"]);
-    expect(
-      calls.some((call) => call.tool === "replace" && call.args.path === "creatures/s0006.js"),
-    ).toBe(false);
+    expect(calls.some((call) => call.tool === "replace" && call.args.path === "creatures/s0006.js")).toBe(false);
   });
 
   it("D2/SW2: the reverse rescale repairs a stranded 0.3 back to 30", () => {
@@ -307,9 +294,7 @@ describe("rescale-energy (02-tidepool.md 10.3)", () => {
       }),
       inject,
     });
-    const repairs = calls.filter(
-      (call) => call.tool === "replace" && call.args.path === "creatures/s0004.js",
-    );
+    const repairs = calls.filter((call) => call.tool === "replace" && call.args.path === "creatures/s0004.js");
     expect(repairs).toHaveLength(1);
     expect(calls.map((call) => call.tool)).toEqual(["read", "replace", "read", "replace", "submit"]);
     // The heads-up queued nothing the `relied_on_by` visit had not already queued.
@@ -405,15 +390,7 @@ describe("rescale-energy (02-tidepool.md 10.3)", () => {
       }),
       inject,
     });
-    expect(calls.map((call) => call.tool)).toEqual([
-      "read",
-      "replace",
-      "read",
-      "replace",
-      "read",
-      "replace",
-      "submit",
-    ]);
+    expect(calls.map((call) => call.tool)).toEqual(["read", "replace", "read", "replace", "read", "replace", "submit"]);
     expect((calls[4] as Call).args).toEqual({ path: "creatures/s0004.js", entity: "update" });
     expect((calls[5] as Call).args).toEqual({
       path: "creatures/s0004.js",

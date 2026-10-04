@@ -59,26 +59,26 @@ export type PoolFrameProps = {
 const FRAME_CSS = `
 .pf { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .pf-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  font-size: var(--pf-body, 16px); color: var(--text, #eaf2f4); }
+  font-size: var(--size-body, 16px); color: var(--text, #eaf2f4); }
 .pf-caption-text { color: var(--muted, #a8bcc6); }
-.pf-chip { border: 1px solid var(--control, #7c98a8); border-radius: 8px;
+.pf-chip { border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   padding: 4px 8px; color: var(--muted, #a8bcc6); }
 .pf-chip-landing { color: var(--confirm, #ffc857); }
 .pf-chip-stalled { color: var(--changed, #ff7a6b); }
 .pf-spacer { flex: 1; }
 .pf-btn { min-width: 44px; min-height: 44px; padding: 8px 12px;
-  border: 1px solid var(--control, #7c98a8); border-radius: 8px;
+  border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   background: transparent; color: var(--text, #eaf2f4); font: inherit;
   font-weight: 600; cursor: pointer; }
 .pf-btn:focus-visible { outline: 3px solid var(--focus, #ffe08a); outline-offset: 2px; }
 .pf-body { position: relative; aspect-ratio: 16 / 9; width: 100%;
-  border: 1px solid var(--control, #7c98a8); border-radius: 8px;
+  border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   overflow: hidden; background: var(--bg, #0b1720); }
 .pf-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .pf-overlay { position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 16px;
   background: var(--bg, #0b1720); color: var(--muted, #a8bcc6);
-  font-size: var(--pf-body, 16px); text-align: center; }
+  font-size: var(--size-body, 16px); text-align: center; }
 @media (prefers-reduced-motion: reduce) { .pf-overlay { transition: none; } }
 `;
 

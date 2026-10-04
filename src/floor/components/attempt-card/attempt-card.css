@@ -3,8 +3,8 @@
 
 .attempt-card {
   background: var(--surface, #13242f);
-  border: 1px solid var(--line, #3a5669);
-  border-radius: 8px;
+  border: var(--border, 1px) solid var(--line, #3a5669);
+  border-radius: var(--radius, 8px);
   color: var(--text, #eaf2f4);
   min-height: 132px;
   padding: 12px 16px;
@@ -18,7 +18,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);
 }
 
@@ -27,10 +27,10 @@
 }
 
 .attempt-card__tag {
-  border: 1px solid var(--line, #3a5669);
-  border-radius: 4px;
+  border: var(--border, 1px) solid var(--line, #3a5669);
+  border-radius: calc(var(--radius, 8px) / 2);
   padding: 0 6px;
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);
   white-space: nowrap;
 }
@@ -51,7 +51,7 @@
 /* Line 2: the intent text, at most two lines (03 3.2). Text from outside is quoted (CP6). */
 .attempt-card__intent {
   margin: 0;
-  font-size: var(--type-intent, 24px);
+  font-size: var(--size-intent, 19px);
   line-height: 1.25;
   overflow: hidden;
   display: -webkit-box;
@@ -65,7 +65,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--type-status, 22px);
+  font-size: var(--size-status, 18px);
   font-weight: 600;
   flex-wrap: wrap;
 }
@@ -109,13 +109,13 @@
 }
 
 .attempt-card__relies {
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);
   margin-right: 2px;
 }
 
 .attempt-card__more {
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);
   font-variant-numeric: tabular-nums;
 }
@@ -124,7 +124,7 @@
    `confirm` (7, rows FR1–FR3). */
 .attempt-card__line4 {
   margin: 0;
-  font-size: var(--type-body, 20px);
+  font-size: var(--size-body, 16px);
   line-height: 1.3;
   color: var(--text, #eaf2f4);
 }
@@ -150,7 +150,7 @@
 /* CO13: the same-agent / model-changed note of a reopened attempt. */
 .attempt-card__note {
   margin: 0;
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);
 }
 
@@ -163,11 +163,11 @@
 .attempt-card--compact .attempt-card__intent {
   -webkit-line-clamp: 1;
   line-clamp: 1;
-  font-size: var(--type-body, 20px);
+  font-size: var(--size-body, 16px);
 }
 
 .attempt-card--compact .attempt-card__status {
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
 }
 
 .attempt-card--compact .attempt-card__glyph {
@@ -176,7 +176,7 @@
 }
 
 .attempt-card--compact .attempt-card__line4 {
-  font-size: var(--type-small, 16px);
+  font-size: var(--size-small, 14px);
 }
 
 /* A premise light (03 3.3): 28 across on a card, 20 on a compact card (CO15). The shape carries
@@ -189,7 +189,7 @@
   width: 28px;
   height: 28px;
   flex: none;
-  border-radius: 4px;
+  border-radius: calc(var(--radius, 8px) / 2);
 }
 
 .light svg {

@@ -1,8 +1,48 @@
 // The engine lane's wiring module for the engine seam (04-build-plan 3.2). The lane registers its
 // engine entries here; it edits this file, never `../engine.ts`.
+//
+// test/arch/seams.test.ts ("Slice 0") asserts `engineTable()` is empty until the lead lifts that
+// gate, so `wire` stays a no-op for now. The entries are defined in `wireEngineEntries` below —
+// activating the registration is the one-line body `wireEngineEntries(table)`.
+//
+// Each entry refines `EntryHandler`: `ctx` is the caller's `Trunk` (see `registry.ts`), `input`
+// the entry's arguments. The seam types both as `unknown` so a lane owns its signatures.
 
 import type { EngineTable } from "../engine.ts";
+import type { Trunk } from "../registry.ts";
+import type { ToolRequest } from "../../../protocol/tools.ts";
 
 export function wire(_table: EngineTable): void {
-  // Empty while the engine lane's slice is not built (Slice 0). The lane registers its entries here.
+  // Empty while the Slice-0 arch gate stands (see the file comment).
+}
+
+/** The engine lane's entries, ready to register into `table` (9.1, 9.4, 9.8, 10.3, 12.4). */
+export function wireEngineEntries(table: EngineTable): void {
+  const trunk = (ctx: unknown): Trunk => ctx as Trunk;
+  // The seven tools of 01-core.md 4.3, reached through one entry (TA1-TA5 in the tool envelope).
+  table.entries.set("tool", (input, ctx) => trunk(ctx).tool(input as ToolRequest));
+  // The non-tool calls of 9.1: sync (T12), stop (T20), tick (9.4), the push steps (9.8),
+  // triage (7.3), restart (TR6) and the owner actions (10.3).
+  table.entries.set("sync", (input, ctx) => trunk(ctx).sync(input as { attempt_id: string; ack: number }));
+  table.entries.set("stop", (input, ctx) => trunk(ctx).stop(input as { attempt_id: string; reason: string }));
+  table.entries.set("tick", (_input, ctx) => {
+    trunk(ctx).tick();
+  });
+  table.entries.set("push_ok", (_input, ctx) => {
+    trunk(ctx).pushOk();
+  });
+  table.entries.set("push_result", (input, ctx) =>
+    trunk(ctx).pushResult(
+      (input as { remote_main: "old" | "new" | "other" }).remote_main,
+      (input as { remote_notes?: "old" | "new" | "other" }).remote_notes,
+    ),
+  );
+  table.entries.set("triage", (input, ctx) => {
+    trunk(ctx).triage(input as Parameters<Trunk["triage"]>[0]);
+  });
+  table.entries.set("restart", (input, ctx) => trunk(ctx).restart(input as Parameters<Trunk["restart"]>[0]));
+  table.entries.set("owner", (input, ctx) => trunk(ctx).owner(input as Parameters<Trunk["owner"]>[0]));
+  // The effects the worker runs after a transaction (12.4): event delivery and the push outbox.
+  table.effects.add("events.flush");
+  table.effects.add("outbox.push");
 }

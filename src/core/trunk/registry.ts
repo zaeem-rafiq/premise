@@ -1,0 +1,1038 @@
+// src/core/trunk/registry.ts — the TrunkPool: the whole working state of the engine, assembled
+// from the SQLite schema of 3.2, mutated by one synchronous call at a time and written back in
+// the same transaction. `TrunkPool.open` is the rebuild path (3.6): a fresh instance over the
+// same `Sql` reconstructs everything the tables hold.
+//
+// The engine never awaits, never reads a clock it was not given, and never touches the network.
+
+import type { Sql } from "../../protocol/ports.ts";
+import type { ToolRequest, ToolResponse } from "../../protocol/tools.ts";
+import type {
+  Attempt,
+  CardRec,
+  FileMap,
+  Head,
+  IntentRec,
+  Judgment,
+  Landing,
+  Op,
+  OutboxRow,
+  PendingTriage,
+  Pool,
+  Premise,
+  UndoRequest,
+} from "./sets.ts";
+import { beginTrace } from "./sets.ts";
+import { applySchema, metaAll, metaSet, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
+import { event } from "./events.ts";
+import { openAttempt, type OpenArgs } from "./intents.ts";
+import { tool } from "./tools-edit.ts";
+import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
+import { blobId } from "../sync/sha1.ts";
+import { utf8, text as fromUtf8 } from "../sync/bytes.ts";
+import type { GitObject } from "../git/objects.ts";
+
+export type PoolOptions = {
+  pool_id?: string;
+  constants?: Partial<Pool["K"]>;
+  switches?: { CLEF_TRIAGE?: "on" | "off" };
+  now?: () => number;
+  ids?: { next(kind: string): string };
+};
+
+const DEFAULT_K: Pool["K"] = {
+  GO_AROUND_LIMIT: 3,
+  STARVATION_AFTER: 2,
+  MAX_BATCH: 64,
+  T_REPAIR: 0.7,
+  T_CONFIRM: 0.2,
+};
+
+const str = (v: unknown): string => String(v);
+const num = (v: unknown): number => Number(v);
+const bool = (v: unknown): boolean => v === 1 || v === true || v === "1";
+
+/**
+ * Create a fresh pool: the schema plus `meta`, the seed files, and the seed commit that `main`
+ * pointed to when the pool was created (3.5).
+ */
+export function createPool(
+  sql: Sql,
+  files: Record<string, string>,
+  opts: PoolOptions & { summary_only?: boolean; synthetic?: boolean } = {},
+): Pool {
+  applySchema(sql);
+  const pool = emptyPool(sql, opts);
+  const seed = seedCommit(pool, new Map(Object.entries(files)));
+  sql.transaction(() => {
+    metaSet(sql, "schema_version", SCHEMA_VERSION);
+    metaSet(sql, "hash_version", HASH_VERSION);
+    metaSet(sql, "pool_id", pool.meta.get("pool_id") ?? "pool");
+    metaSet(sql, "head_seq", "0");
+    metaSet(sql, "head_commit", seed.oid);
+    metaSet(sql, "head_tree", "");
+    metaSet(sql, "notes_commit", "");
+    metaSet(sql, "green_seq", "0");
+    metaSet(sql, "green_commit", "");
+    metaSet(sql, "pool_state", "ready");
+    metaSet(sql, "next_batch_id", "1");
+    metaSet(sql, "next_event_n", "1");
+    metaSet(sql, "epoch", "0");
+    metaSet(sql, "summary_only", opts.summary_only === true ? "1" : "0");
+    metaSet(sql, "synthetic", opts.synthetic === true ? "1" : "0");
+    for (const [path, content] of Object.entries(files)) {
+      sql.exec(
+        "INSERT INTO files (path, mode, oid, content, parse_state, changed_seq) VALUES (?, '100644', ?, ?, 'ok', 0)",
+        path,
+        blobId(utf8(content)),
+        utf8(content),
+      );
+      sql.exec(
+        "INSERT OR REPLACE INTO blobs (oid, content, seq) VALUES (?, ?, 0)",
+        blobId(utf8(content)),
+        utf8(content),
+      );
+    }
+  });
+  return openPool(sql, opts);
+}
+
+/** Rebuild the working Pool from the schema (3.6): everything the tables hold, in memory. */
+export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
+  const pool = emptyPool(sql, opts);
+  pool.meta = metaAll(sql);
+  pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");
+  pool.judgmentsCounter = num(
+    sql.exec("SELECT COALESCE(MAX(judgment_id), 0) AS m FROM judgments").toArray()[0]?.m ?? 0,
+  );
+  pool.cardCounter = num(sql.exec("SELECT COUNT(*) AS m FROM cards").toArray()[0]?.m ?? 0) + 1;
+  pool.undoCounter = num(sql.exec("SELECT COUNT(*) AS m FROM undo_requests").toArray()[0]?.m ?? 0) + 1;
+  // head files
+  for (const row of sql.exec("SELECT path, mode, content FROM files").toArray()) {
+    pool.files.set(str(row.path), row.content instanceof Uint8Array ? fromUtf8(row.content) : str(row.content));
+    pool.modes.set(str(row.path), str(row.mode));
+  }
+  // intents
+  for (const row of sql.exec("SELECT * FROM intents").toArray()) {
+    pool.intents.set(str(row.intent_id), {
+      intent_id: str(row.intent_id),
+      text: str(row.text),
+      requester: str(row.requester),
+      race: bool(row.race),
+      state: str(row.state) as IntentRec["state"],
+      created_at: num(row.created_at),
+    });
+  }
+  // attempts + premises + ops + heads_ups + judgments
+  const judgmentsByAttempt = new Map<string, Judgment[]>();
+  for (const row of sql.exec("SELECT * FROM judgments ORDER BY judgment_id").toArray()) {
+    const j = judgmentFromRow(row);
+    pool.judgments.set(j.judgment_id, j);
+    let l = judgmentsByAttempt.get(j.attempt_id);
+    if (l === undefined) {
+      l = [];
+      judgmentsByAttempt.set(j.attempt_id, l);
+    }
+    l.push(j);
+  }
+  for (const row of sql.exec("SELECT * FROM attempts ORDER BY attempt_id").toArray()) {
+    const a = attemptFromRow(pool, row);
+    const premiseRows = sql.exec("SELECT * FROM premises WHERE attempt_id = ?", a.id).toArray();
+    for (const pr of premiseRows) {
+      const p = premiseFromRow(pr);
+      a.premises.set(`${p.kind}|${p.key}`, p);
+    }
+    for (const or of sql.exec("SELECT * FROM ops WHERE attempt_id = ? ORDER BY op_seq", a.id).toArray()) {
+      a.ops.push(opFromRow(or));
+      a.opCount = Math.max(a.opCount, num(or.op_seq));
+    }
+    for (const hr of sql.exec("SELECT * FROM heads_ups WHERE attempt_id = ? ORDER BY hn", a.id).toArray()) {
+      const h = headFromRow(hr);
+      a.heads.push(h);
+      a.next_hn = Math.max(a.next_hn, h.hn + 1);
+      if (h.resolved_at !== null) a.resolved.add(h.hn);
+    }
+    for (const j of judgmentsByAttempt.get(a.id) ?? []) {
+      if (j.result === null) {
+        a.pending.push(j);
+        const p = a.premises.get(`${j.kind}|${j.key}`);
+        if (p !== undefined) pool.pendingTriage.push({ a, p, judgment: j, it: null, cause: j.cause, stamp: a.opCount });
+      }
+    }
+    pool.attempts.set(a.id, a);
+    pool.attemptCounter += 1;
+  }
+  // landings + companions
+  for (const row of sql.exec("SELECT * FROM landings ORDER BY seq").toArray()) {
+    const l = landingFromRow(row);
+    for (const fr of sql.exec("SELECT * FROM landing_files WHERE seq = ?", l.seq).toArray()) {
+      l.files.set(str(fr.path), { old_oid: str(fr.old_oid), new_oid: str(fr.new_oid) });
+    }
+    for (const wr of sql.exec("SELECT * FROM landing_writes WHERE seq = ?", l.seq).toArray()) {
+      l.writes.push({
+        kind: str(wr.kind) as Landing["writes"][number]["kind"],
+        key: str(wr.key),
+        old_hash: str(wr.old_hash),
+        new_hash: str(wr.new_hash),
+      });
+    }
+    for (const pr of sql.exec("SELECT * FROM landing_premises WHERE seq = ?", l.seq).toArray()) {
+      l.premises.push({
+        kind: str(pr.kind) as Premise["kind"],
+        key: str(pr.key),
+        hash: str(pr.hash),
+        seq: num(pr.pin_seq),
+        members: null,
+        shown: null,
+        read: bool(pr.read),
+        edit: bool(pr.edit),
+        derived: bool(pr.derived),
+        status: "holds",
+      });
+    }
+    for (const or of sql.exec("SELECT * FROM landing_ops WHERE seq = ? ORDER BY op_seq", l.seq).toArray()) {
+      l.ops.push(JSON.parse(str(or.body)) as Op);
+    }
+    pool.landings.push(l);
+  }
+  for (const l of pool.landings) {
+    l.before = pool.fileMapAt(l.seq - 1);
+    l.after = l.seq === pool.headSeq() ? pool.files : pool.fileMapAt(l.seq);
+  }
+  // cards
+  for (const row of sql.exec("SELECT * FROM cards").toArray()) {
+    const body = JSON.parse(str(row.body)) as CardRec["body"];
+    pool.cards.push({
+      card_id: str(row.card_id),
+      kind: str(row.kind) as CardRec["kind"],
+      open: str(row.state) === "open",
+      body,
+      created_at: num(row.created_at),
+      closed_at: row.closed_at === null ? null : num(row.closed_at),
+      reason: body.reason,
+      attempt_ids: body.attempt_ids,
+      intent_ids: body.intent_ids,
+    });
+  }
+  // outbox
+  const ob = sql.exec("SELECT * FROM outbox ORDER BY batch_id DESC").toArray()[0];
+  if (
+    ob !== undefined &&
+    (str(ob.state) === "pending" || str(ob.state) === "notes_pending" || str(ob.state) === "diverged")
+  ) {
+    pool.outbox = outboxFromRow(ob);
+  }
+  // undo requests: the queue plus the log of completed ones
+  for (const row of sql.exec("SELECT * FROM undo_requests").toArray()) {
+    const u: UndoRequest = {
+      request_id: str(row.request_id),
+      target_seq: num(row.target_seq),
+      cause: str(row.cause) as UndoRequest["cause"],
+      state: str(row.state) as UndoRequest["state"],
+      requested_by: row.detail === null ? null : str(row.detail),
+    };
+    pool.undoLog.set(u.request_id, u);
+    if (u.state === "queued") pool.undoQueue.push(u);
+  }
+  return pool;
+}
+
+function emptyPool(sql: Sql, opts: PoolOptions): Pool {
+  let clock = opts.now !== undefined ? 0 : 0;
+  const now = opts.now ?? (() => ++clock);
+  const pool: Pool = {
+    sql,
+    now,
+    ids:
+      opts.ids ??
+      (() => {
+        let n = 0;
+        return { next: (kind: string) => `${kind}_${(++n).toString(36).padStart(6, "0")}` };
+      })(),
+    K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
+    clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
+    files: new Map<string, string>(),
+    modes: new Map<string, string>(),
+    attempts: new Map(),
+    landings: [],
+    cards: [],
+    outbox: null,
+    undoQueue: [],
+    order: 0,
+    out: beginTrace(),
+    dirtyAttempts: new Set(),
+    dirtyCards: new Set(),
+    dirtyOutbox: false,
+    dirtyUndo: new Set(),
+    newLandings: [],
+    filesChanged: new Set(),
+    entitiesChanged: new Set(),
+    analyses: new Map(),
+    judgmentsCounter: 0,
+    eventCounter: 1,
+    cardCounter: 1,
+    attemptCounter: 1,
+    undoCounter: 1,
+    intents: new Map(),
+    dirtyIntents: new Set(),
+    pendingTriage: [],
+    judgments: new Map(),
+    steps: new Map(),
+    objects: new Map<string, GitObject>(),
+    undoLog: new Map(),
+    headSeq(): number {
+      return Number(pool.meta.get("head_seq") ?? "0");
+    },
+    setHead(seqv: number, files: FileMap) {
+      pool.files = files;
+      pool.meta.set("head_seq", String(seqv));
+      metaSet(sql, "head_seq", String(seqv));
+    },
+    event(type: string, fields: Record<string, unknown>) {
+      event(pool, type, fields);
+    },
+    dropPendingItem(a: Attempt, p: Premise) {
+      for (const t of [...pool.pendingTriage]) {
+        if (t.a === a && t.p === p) {
+          pool.pendingTriage.splice(pool.pendingTriage.indexOf(t), 1);
+          a.pending = a.pending.filter((x) => x !== t.judgment);
+          t.judgment.result = "holds";
+          t.judgment.reason = "premise_gone";
+          t.judgment.resolved_at = pool.now();
+          t.judgment.dirty = true;
+        }
+      }
+    },
+    newJudgment(
+      a: Attempt,
+      j: {
+        kind: Judgment["kind"];
+        key: string;
+        old_hash: string;
+        new_hash: string;
+        cause: Judgment["cause"];
+        cause_seq: number | null;
+        rule: string;
+        klass: "rule" | "triage";
+        result: Judgment["result"];
+        reason: string;
+        asked_op_seq?: number | null;
+      },
+    ): Judgment {
+      const record: Judgment = {
+        judgment_id: ++pool.judgmentsCounter,
+        attempt_id: a.id,
+        kind: j.kind,
+        key: j.key,
+        old_hash: j.old_hash,
+        new_hash: j.new_hash,
+        cause: j.cause,
+        cause_seq: j.cause_seq,
+        rule: j.rule,
+        klass: j.klass,
+        result: j.result,
+        asked_op_seq: j.asked_op_seq ?? null,
+        asked_at: j.klass === "triage" ? pool.now() : null,
+        tries: 0,
+        reason: j.reason,
+        clef_model: null,
+        clef_p: null,
+        clef_ms: null,
+        clef_error: null,
+        t_repair: null,
+        t_confirm: null,
+        created_at: pool.now(),
+        resolved_at: j.result === null ? null : pool.now(),
+        dirty: true,
+        item: null,
+      };
+      pool.judgments.set(record.judgment_id, record);
+      event(pool, "premise.judged", {
+        attempt_id: a.id,
+        kind: j.kind,
+        key: j.key,
+        old_hash: j.old_hash,
+        new_hash: j.new_hash,
+        cause: j.cause,
+        cause_seq: j.cause_seq,
+        rule: j.rule,
+        class: j.klass,
+        result: j.result,
+        reason: j.reason,
+        clef: null,
+      });
+      return record;
+    },
+    fileMapAt(seq: number): FileMap {
+      const headSeq = pool.headSeq();
+      if (seq >= headSeq) return pool.files;
+      // Rebuild backwards: start at head, restore each later landing's old blobs.
+      const files = new Map(pool.files);
+      for (const l of [...pool.landings].filter((x) => x.seq > seq).sort((a, b) => b.seq - a.seq)) {
+        for (const [path, fo] of l.files) {
+          if (fo.old_oid === "absent") {
+            files.delete(path);
+          } else {
+            const row = pool.sql.exec("SELECT content FROM blobs WHERE oid = ?", fo.old_oid).toArray()[0];
+            if (row === undefined) continue;
+            files.set(path, row.content instanceof Uint8Array ? fromUtf8(row.content) : str(row.content));
+          }
+        }
+      }
+      return files;
+    },
+    stepOf(a: Attempt): number {
+      const n = (pool.steps.get(a.id) ?? 0) + 1;
+      pool.steps.set(a.id, n);
+      return n;
+    },
+  } satisfies Pool;
+  return pool;
+}
+
+// ---------------------------------------------------------------------------
+// Row (de)serialisation.
+
+function premiseFromRow(row: Record<string, unknown>): Premise {
+  return {
+    kind: str(row.kind) as Premise["kind"],
+    key: str(row.key),
+    hash: str(row.hash),
+    seq: num(row.seq),
+    members: row.members === null ? null : (JSON.parse(str(row.members)) as string[]),
+    shown: row.shown === null ? null : (JSON.parse(str(row.shown)) as string | string[]),
+    read: bool(row.read),
+    edit: bool(row.edit),
+    derived: bool(row.derived),
+    status: str(row.status) as Premise["status"],
+  };
+}
+
+function opFromRow(row: Record<string, unknown>): Op {
+  const op = str(row.op);
+  if (op === "write") {
+    return {
+      op_seq: num(row.op_seq),
+      op: "write",
+      path: str(row.path),
+      content: row.content === null ? null : str(row.content),
+      base_oid: row.base_oid === null ? "absent" : str(row.base_oid),
+      dropped: bool(row.dropped),
+    };
+  }
+  return {
+    op_seq: num(row.op_seq),
+    op: "replace",
+    path: str(row.path),
+    old: row.old === null ? "" : str(row.old),
+    new: row.new === null ? "" : str(row.new),
+    targets: row.targets === null ? [] : (JSON.parse(str(row.targets)) as string[]),
+    dropped: bool(row.dropped),
+  };
+}
+
+function headFromRow(row: Record<string, unknown>): Head {
+  return {
+    hn: num(row.hn),
+    result: str(row.result) as Head["result"],
+    wake: bool(row.wake),
+    body: JSON.parse(str(row.body)) as Head["body"],
+    created_at: num(row.created_at),
+    received_at: row.received_at === null ? null : num(row.received_at),
+    delivered_at: row.delivered_at === null ? null : num(row.delivered_at),
+    resolved_at: row.resolved_at === null ? null : num(row.resolved_at),
+    statement: row.statement === null ? null : str(row.statement),
+    op_mark: num(row.op_mark),
+  };
+}
+
+function judgmentFromRow(row: Record<string, unknown>): Judgment {
+  return {
+    judgment_id: num(row.judgment_id),
+    attempt_id: str(row.attempt_id),
+    kind: str(row.kind) as Judgment["kind"],
+    key: str(row.key),
+    old_hash: str(row.old_hash),
+    new_hash: str(row.new_hash),
+    cause: str(row.cause) as Judgment["cause"],
+    cause_seq: row.cause_seq === null ? null : num(row.cause_seq),
+    rule: str(row.rule),
+    klass: str(row.class) as Judgment["klass"],
+    result: row.result === null ? null : (str(row.result) as Judgment["result"]),
+    asked_op_seq: row.asked_op_seq === null ? null : num(row.asked_op_seq),
+    asked_at: row.asked_at === null ? null : num(row.asked_at),
+    tries: num(row.tries),
+    reason: str(row.reason),
+    clef_model: row.clef_model === null ? null : str(row.clef_model),
+    clef_p: row.clef_p === null ? null : num(row.clef_p),
+    clef_ms: row.clef_ms === null ? null : num(row.clef_ms),
+    clef_error: row.clef_error === null ? null : str(row.clef_error),
+    t_repair: row.t_repair === null ? null : num(row.t_repair),
+    t_confirm: row.t_confirm === null ? null : num(row.t_confirm),
+    created_at: num(row.created_at),
+    resolved_at: row.resolved_at === null ? null : num(row.resolved_at),
+    dirty: false,
+    item: null,
+  };
+}
+
+function landingFromRow(row: Record<string, unknown>): Landing {
+  return {
+    seq: num(row.seq),
+    kind: str(row.kind) as Landing["kind"],
+    change_id: str(row.change_id),
+    attempt_id: row.attempt_id === null ? null : str(row.attempt_id),
+    intent_id: row.intent_id === null ? null : str(row.intent_id),
+    batch_id: num(row.batch_id),
+    commit_oid: str(row.commit_oid),
+    parent_oid: str(row.parent_oid),
+    tree_oid: str(row.tree_oid),
+    note_oid: str(row.note_oid),
+    note: str(row.note),
+    submitted_at: row.submitted_at === null ? null : num(row.submitted_at),
+    accepted_at: num(row.accepted_at),
+    pushed_at: row.pushed_at === null ? null : num(row.pushed_at),
+    undone_by: row.undone_by === null ? null : num(row.undone_by),
+    files: new Map(),
+    writes: [],
+    premises: [],
+    ops: [],
+    intentText: null,
+    request_id: null,
+    before: new Map(),
+    after: new Map(),
+  };
+}
+
+function outboxFromRow(row: Record<string, unknown>): OutboxRow {
+  return {
+    batch_id: num(row.batch_id),
+    state: str(row.state) as OutboxRow["state"],
+    first_seq: num(row.first_seq),
+    last_seq: num(row.last_seq),
+    old_main: str(row.old_main),
+    new_main: str(row.new_main),
+    old_notes: str(row.old_notes),
+    new_notes: str(row.new_notes),
+    tries: num(row.tries),
+    rejects: num(row.rejects),
+    next_try: row.next_try === null ? null : num(row.next_try),
+    last_error: row.last_error === null ? null : str(row.last_error),
+    created_at: num(row.created_at),
+    pushed_at: row.pushed_at === null ? null : num(row.pushed_at),
+    main: false,
+    notes: false,
+  };
+}
+
+function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
+  const intent = pool.intents.get(str(row.intent_id));
+  return {
+    id: str(row.attempt_id),
+    intent_id: str(row.intent_id),
+    change_id: str(row.change_id),
+    agent_kind: str(row.agent_kind) as Attempt["agent_kind"],
+    model: row.model === null ? null : str(row.model),
+    race: bool(row.race),
+    truth: row.truth === null ? null : (JSON.parse(str(row.truth)) as string[]),
+    resumes: num(row.resumes),
+    state: str(row.state) as Attempt["state"],
+    stop_reason: row.stop_reason === null ? null : str(row.stop_reason),
+    go_arounds: num(row.go_arounds),
+    pull_backs: num(row.pull_backs),
+    revision: num(row.revision),
+    right_of_way_at: row.right_of_way_at === null ? null : num(row.right_of_way_at),
+    opened_seq: num(row.opened_seq),
+    submit_id: row.submit_id === null ? null : str(row.submit_id),
+    summary: row.summary === null ? null : str(row.summary),
+    tier: row.tier === null ? null : (str(row.tier) as Attempt["tier"]),
+    approved_by: row.approved_by === null ? null : str(row.approved_by),
+    bypass_row: bool(row.bypass_row),
+    submitted_at: row.submitted_at === null ? null : num(row.submitted_at),
+    validated_at: row.validated_at === null ? null : num(row.validated_at),
+    landed_seq: row.landed_seq === null ? null : num(row.landed_seq),
+    attempt_repo: row.attempt_repo === null ? null : str(row.attempt_repo),
+    last_call_id: row.last_call_id === null ? null : str(row.last_call_id),
+    last_response: row.last_response === null ? null : (JSON.parse(str(row.last_response)) as Record<string, unknown>),
+    ack: num(row.ack),
+    next_hn: num(row.next_hn),
+    updated_at: num(row.updated_at),
+    intentText: intent?.text ?? "",
+    requester: intent?.requester ?? "agent",
+    opCount: 0,
+    op_mark: null,
+    premises: new Map(),
+    ops: [],
+    heads: [],
+    resolved: new Set(),
+    e1: new Set(),
+    checks: null,
+    opsFirstDone: false,
+    pending: [],
+    dirtyJudgments: new Set(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Persistence: write the dirty working state back, inside the call's transaction.
+
+function persistAttempt(pool: Pool, a: Attempt): void {
+  const sql = pool.sql;
+  sql.exec(
+    `INSERT OR REPLACE INTO attempts (
+      attempt_id, intent_id, change_id, agent_kind, model, race, truth, resumes, state, stop_reason,
+      go_arounds, pull_backs, revision, right_of_way_at, opened_seq, submit_id, summary, tier,
+      approved_by, bypass_row, sets, submitted_at, validated_at, landed_seq, attempt_repo,
+      last_call_id, last_response, ack, next_hn, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    a.id,
+    a.intent_id,
+    a.change_id,
+    a.agent_kind,
+    a.model,
+    a.race ? 1 : 0,
+    a.truth === null ? null : JSON.stringify(a.truth),
+    a.resumes,
+    a.state,
+    a.stop_reason,
+    a.go_arounds,
+    a.pull_backs,
+    a.revision,
+    a.right_of_way_at,
+    a.opened_seq,
+    a.submit_id,
+    a.summary,
+    a.tier,
+    a.approved_by,
+    a.bypass_row ? 1 : 0,
+    null,
+    a.submitted_at,
+    a.validated_at,
+    a.landed_seq,
+    a.attempt_repo,
+    a.last_call_id,
+    a.last_response === null ? null : JSON.stringify(a.last_response),
+    a.ack,
+    a.next_hn,
+    pool.now(),
+  );
+  sql.exec("DELETE FROM premises WHERE attempt_id = ?", a.id);
+  for (const p of a.premises.values()) {
+    sql.exec(
+      `INSERT INTO premises (attempt_id, kind, key, hash, seq, members, shown, read, edit, derived, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      a.id,
+      p.kind,
+      p.key,
+      p.hash,
+      p.seq,
+      p.members === null ? null : JSON.stringify(p.members),
+      p.shown === null ? null : JSON.stringify(p.shown),
+      p.read ? 1 : 0,
+      p.edit ? 1 : 0,
+      p.derived ? 1 : 0,
+      p.status,
+    );
+  }
+  sql.exec("DELETE FROM ops WHERE attempt_id = ?", a.id);
+  for (const o of a.ops) {
+    if (o.op === "write") {
+      sql.exec(
+        `INSERT INTO ops (attempt_id, op_seq, op, path, content, old, new, base_oid, targets, dropped)
+         VALUES (?, ?, 'write', ?, ?, NULL, NULL, ?, NULL, ?)`,
+        a.id,
+        o.op_seq,
+        o.path,
+        o.content,
+        o.base_oid,
+        o.dropped ? 1 : 0,
+      );
+    } else {
+      sql.exec(
+        `INSERT INTO ops (attempt_id, op_seq, op, path, content, old, new, base_oid, targets, dropped)
+         VALUES (?, ?, 'replace', ?, NULL, ?, ?, NULL, ?, ?)`,
+        a.id,
+        o.op_seq,
+        o.path,
+        o.old,
+        o.new,
+        JSON.stringify(o.targets),
+        o.dropped ? 1 : 0,
+      );
+    }
+  }
+  sql.exec("DELETE FROM heads_ups WHERE attempt_id = ?", a.id);
+  for (const h of a.heads) {
+    sql.exec(
+      `INSERT INTO heads_ups (attempt_id, hn, result, wake, body, created_at, received_at, delivered_at, resolved_at, statement, op_mark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      a.id,
+      h.hn,
+      h.result,
+      h.wake ? 1 : 0,
+      JSON.stringify(h.body),
+      h.created_at,
+      h.received_at,
+      h.delivered_at,
+      h.resolved_at,
+      h.statement,
+      h.op_mark,
+    );
+  }
+  if (!a.opsFirstDone && a.ops.length > 0) {
+    sql.exec(
+      "INSERT OR REPLACE INTO ops_first (attempt_id, revision, ops, submitted) VALUES (?, ?, ?, 0)",
+      a.id,
+      a.revision,
+      JSON.stringify(a.ops),
+    );
+    a.opsFirstDone = true;
+  }
+}
+
+function persistJudgment(pool: Pool, j: Judgment): void {
+  pool.sql.exec(
+    `INSERT OR REPLACE INTO judgments (
+      judgment_id, attempt_id, kind, key, old_hash, new_hash, cause, cause_seq, rule, class, result,
+      asked_op_seq, asked_at, tries, reason, clef_model, clef_p, clef_ms, clef_error, t_repair,
+      t_confirm, created_at, resolved_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    j.judgment_id,
+    j.attempt_id,
+    j.kind,
+    j.key,
+    j.old_hash,
+    j.new_hash,
+    j.cause,
+    j.cause_seq,
+    j.rule,
+    j.klass,
+    j.result,
+    j.asked_op_seq,
+    j.asked_at,
+    j.tries,
+    j.reason,
+    j.clef_model,
+    j.clef_p,
+    j.clef_ms,
+    j.clef_error,
+    j.t_repair,
+    j.t_confirm,
+    j.created_at,
+    j.resolved_at,
+  );
+  j.dirty = false;
+}
+
+function persistLanding(pool: Pool, l: Landing): void {
+  const sql = pool.sql;
+  sql.exec(
+    `INSERT OR REPLACE INTO landings (
+      seq, kind, change_id, attempt_id, intent_id, batch_id, commit_oid, parent_oid, tree_oid,
+      note_oid, note, submitted_at, accepted_at, pushed_at, undone_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    l.seq,
+    l.kind,
+    l.change_id,
+    l.attempt_id,
+    l.intent_id,
+    l.batch_id,
+    l.commit_oid,
+    l.parent_oid,
+    l.tree_oid,
+    l.note_oid,
+    l.note,
+    l.submitted_at,
+    l.accepted_at,
+    l.pushed_at,
+    l.undone_by,
+  );
+  sql.exec("DELETE FROM landing_files WHERE seq = ?", l.seq);
+  for (const [path, fo] of l.files) {
+    sql.exec(
+      "INSERT INTO landing_files (seq, path, old_oid, new_oid) VALUES (?, ?, ?, ?)",
+      l.seq,
+      path,
+      fo.old_oid,
+      fo.new_oid,
+    );
+    for (const oid of [fo.old_oid, fo.new_oid]) {
+      if (oid !== "absent") {
+        const content = fo.new_oid === oid ? l.after.get(path) : l.before.get(path);
+        if (content !== undefined) {
+          sql.exec("INSERT OR IGNORE INTO blobs (oid, content, seq) VALUES (?, ?, ?)", oid, utf8(content), l.seq);
+        }
+      }
+    }
+  }
+  sql.exec("DELETE FROM landing_writes WHERE seq = ?", l.seq);
+  for (const w of l.writes) {
+    sql.exec(
+      "INSERT INTO landing_writes (seq, kind, key, old_hash, new_hash) VALUES (?, ?, ?, ?, ?)",
+      l.seq,
+      w.kind,
+      w.key,
+      w.old_hash,
+      w.new_hash,
+    );
+  }
+  sql.exec("DELETE FROM landing_premises WHERE seq = ?", l.seq);
+  for (const p of l.premises) {
+    sql.exec(
+      "INSERT INTO landing_premises (seq, kind, key, hash, pin_seq, read, edit, derived) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      l.seq,
+      p.kind,
+      p.key,
+      p.hash,
+      p.seq,
+      p.read ? 1 : 0,
+      p.edit ? 1 : 0,
+      p.derived ? 1 : 0,
+    );
+  }
+  sql.exec("DELETE FROM landing_ops WHERE seq = ?", l.seq);
+  for (const o of l.ops) {
+    sql.exec("INSERT INTO landing_ops (seq, op_seq, body) VALUES (?, ?, ?)", l.seq, o.op_seq, JSON.stringify(o));
+  }
+}
+
+/** Write every dirty piece of the pool back to SQLite; called inside the call's transaction. */
+export function persist(pool: Pool): void {
+  const sql = pool.sql;
+  for (const id of pool.dirtyAttempts) {
+    const a = pool.attempts.get(id);
+    if (a !== undefined) persistAttempt(pool, a);
+  }
+  pool.dirtyAttempts.clear();
+  for (const id of pool.dirtyIntents) {
+    const i = pool.intents.get(id);
+    if (i !== undefined) {
+      sql.exec(
+        "INSERT OR REPLACE INTO intents (intent_id, text, requester, race, state, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        i.intent_id,
+        i.text,
+        i.requester,
+        i.race ? 1 : 0,
+        i.state,
+        i.created_at,
+      );
+    }
+  }
+  pool.dirtyIntents.clear();
+  for (const j of pool.judgments.values()) if (j.dirty) persistJudgment(pool, j);
+  for (const l of pool.newLandings) persistLanding(pool, l);
+  pool.newLandings = [];
+  for (const l of pool.landings) {
+    if (l.undone_by !== null || l.pushed_at !== null) persistLanding(pool, l);
+  }
+  for (const id of pool.dirtyCards) {
+    const c = pool.cards.find((x) => x.card_id === id);
+    if (c !== undefined) {
+      sql.exec(
+        "INSERT OR REPLACE INTO cards (card_id, kind, state, body, created_at, closed_at) VALUES (?, ?, ?, ?, ?, ?)",
+        c.card_id,
+        c.kind,
+        c.open ? "open" : "closed",
+        JSON.stringify(c.body),
+        c.created_at,
+        c.closed_at,
+      );
+    }
+  }
+  pool.dirtyCards.clear();
+  if (pool.dirtyOutbox) {
+    sql.exec("DELETE FROM outbox");
+    sql.exec("DELETE FROM outbox_chunks");
+    if (pool.outbox !== null) {
+      const o = pool.outbox;
+      sql.exec(
+        `INSERT INTO outbox (batch_id, state, first_seq, last_seq, old_main, new_main, old_notes, new_notes, tries, rejects, next_try, last_error, created_at, pushed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        o.batch_id,
+        o.state,
+        o.first_seq,
+        o.last_seq,
+        o.old_main,
+        o.new_main,
+        o.old_notes,
+        o.new_notes,
+        o.tries,
+        o.rejects,
+        o.next_try,
+        o.last_error,
+        o.created_at,
+        o.pushed_at,
+      );
+    }
+    pool.dirtyOutbox = false;
+  }
+  for (const id of pool.dirtyUndo) {
+    const u = pool.undoQueue.find((x) => x.request_id === id) ?? pool.undoLog.get(id);
+    if (u !== undefined) {
+      sql.exec(
+        "INSERT OR REPLACE INTO undo_requests (request_id, target_seq, cause, state, detail) VALUES (?, ?, ?, ?, ?)",
+        u.request_id,
+        u.target_seq,
+        u.cause,
+        u.state,
+        u.requested_by,
+      );
+    }
+  }
+  pool.dirtyUndo.clear();
+  for (const path of pool.filesChanged) {
+    const content = pool.files.get(path);
+    if (content === undefined) {
+      sql.exec("DELETE FROM files WHERE path = ?", path);
+    } else {
+      sql.exec(
+        `INSERT OR REPLACE INTO files (path, mode, oid, content, parse_state, changed_seq)
+         VALUES (?, '100644', ?, ?, 'ok', ?)`,
+        path,
+        blobId(utf8(content)),
+        utf8(content),
+        pool.headSeq(),
+      );
+      sql.exec(
+        "INSERT OR IGNORE INTO blobs (oid, content, seq) VALUES (?, ?, ?)",
+        blobId(utf8(content)),
+        utf8(content),
+        pool.headSeq(),
+      );
+    }
+  }
+  pool.filesChanged.clear();
+  for (const [k, v] of pool.meta) {
+    if (k !== "pool_id") metaSet(sql, k, v);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The public facade the driver (and later the DO) calls.
+
+export type RunOutcome = {
+  resp: ToolResponse | null;
+  extra: Record<string, unknown>;
+  out: Pool["out"];
+  pool: Pool;
+};
+
+function wrapCall<T>(pool: Pool, run: () => T): T {
+  pool.out = beginTrace();
+  const r = pool.sql.transaction(() => {
+    const got = run();
+    persist(pool);
+    return got;
+  });
+  return r;
+}
+
+export class Trunk {
+  readonly pool: Pool;
+
+  private constructor(pool: Pool) {
+    this.pool = pool;
+  }
+
+  static create(
+    sql: Sql,
+    files: Record<string, string>,
+    opts: PoolOptions & { summary_only?: boolean; synthetic?: boolean } = {},
+  ): Trunk {
+    return new Trunk(createPool(sql, files, opts));
+  }
+
+  static open(sql: Sql, opts: PoolOptions = {}): Trunk {
+    return new Trunk(openPool(sql, opts));
+  }
+
+  /** Create an intent + attempt (the case's attempt ids are used verbatim). */
+  openAttempt(id: string, args: OpenArgs): Attempt {
+    return wrapCall(this.pool, () => openAttempt(this.pool, id, args));
+  }
+
+  tool(req: ToolRequest): ToolResponse {
+    return wrapCall(this.pool, () => tool(this.pool, req));
+  }
+
+  sync(req: { attempt_id: string; ack: number }): Record<string, unknown> {
+    return wrapCall(this.pool, () => {
+      const a = this.pool.attempts.get(req.attempt_id);
+      if (a === undefined) return { ok: false, error: "attempt_unknown" };
+      const pending = a.heads.filter((h) => h.hn > req.ack).map((h) => h.body);
+      return {
+        ok: true,
+        heads_ups: pending.slice(0, 8),
+        heads_ups_more: pending.length > 8,
+        head_seq: this.pool.headSeq(),
+        attempt: { state: a.state, go_arounds: a.go_arounds, pull_backs: a.pull_backs },
+      };
+    });
+  }
+
+  tick(): void {
+    wrapCall(this.pool, () => tick(this.pool));
+  }
+
+  pushOk(): void {
+    wrapCall(this.pool, () => pushOk(this.pool));
+  }
+
+  pushResult(remote_main: "old" | "new" | "other", remote_notes?: "old" | "new" | "other"): string {
+    return wrapCall(this.pool, () => reconcile(this.pool, remote_main, remote_notes ?? remote_main));
+  }
+
+  restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {
+    return wrapCall(this.pool, () => restart(this.pool, args));
+  }
+
+  triage(args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number }): void {
+    wrapCall(this.pool, () => triage(this.pool, args));
+  }
+
+  owner(args: {
+    action: string;
+    attempt?: string;
+    seq?: number;
+    expect_reverted?: number[];
+    reason?: string;
+  }): Record<string, unknown> {
+    return wrapCall(this.pool, () => owner(this.pool, args));
+  }
+
+  /** TA9 `stop`: the Agent ends its own attempt. */
+  stop(req: { attempt_id: string; reason: string }): Record<string, unknown> {
+    return wrapCall(this.pool, () => {
+      const a = this.pool.attempts.get(req.attempt_id);
+      if (a === undefined) return { ok: false, error: "attempt_unknown" };
+      if (a.state === "stopped")
+        return {
+          ok: true,
+          stop_reason: a.stop_reason,
+          attempt: { state: a.state, go_arounds: a.go_arounds, pull_backs: a.pull_backs },
+        };
+      if (a.state === "accepted" || a.state === "landed") return { ok: false, error: "attempt_closed" };
+      closeCardLocal(this.pool, a, "stale");
+      setStateLocal(this.pool, a, "stopped", "T20", req.reason);
+      return {
+        ok: true,
+        stop_reason: req.reason,
+        attempt: { state: a.state, go_arounds: a.go_arounds, pull_backs: a.pull_backs },
+      };
+    });
+  }
+
+  get out(): Pool["out"] {
+    return this.pool.out;
+  }
+
+  state(id: string): Attempt["state"] | undefined {
+    return this.pool.attempts.get(id)?.state;
+  }
+}
+
+// Local indirection to keep this file's import list short.
+import { closeCard as closeCardLocal, setState as setStateLocal } from "./intents.ts";
+
+export type { Pool, Attempt, Landing, Judgment, Premise, PendingTriage, Op };

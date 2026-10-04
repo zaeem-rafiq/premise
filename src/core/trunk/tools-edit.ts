@@ -116,6 +116,10 @@ export function tool(pool: Pool, req: ToolRequest): ToolResponse {
     cost_usd: null,
   });
   const inner = toolInner(pool, a, req);
+  // EM2/TA7: every premise the response lists is recorded — a new pin, a re-pin, a flag set.
+  for (const p of inner.premises) {
+    event(pool, "premise.recorded", { attempt_id: a.id, premise: p, tool: req.tool });
+  }
   const resp = make(inner);
   // TA2: store the response without its heads-up carry.
   const { heads_ups: _h, heads_ups_more: _m, ...storable } = resp;
@@ -230,7 +234,7 @@ export function toolWrite(pool: Pool, a: Attempt, args: Record<string, unknown>)
   a.opCount += 1;
   a.ops.push({ ...(op as Extract<Operation, { op: "write" }>), dropped: false });
   pool.dirtyAttempts.add(a.id);
-  const premises = afterOp(pool, a);
+  const premises = afterOp(pool, a, op, v);
   const s = setsOf(a, head);
   const hk = entityKeysOf(head, path) ?? [];
   const result = {
@@ -280,7 +284,7 @@ export function toolReplace(pool: Pool, a: Attempt, args: Record<string, unknown
   a.opCount += 1;
   a.ops.push({ ...(op as Extract<Operation, { op: "replace" }>), dropped: false });
   pool.dirtyAttempts.add(a.id);
-  const premises = afterOp(pool, a);
+  const premises = afterOp(pool, a, op, v);
   const s = setsOf(a, head);
   const hk = entityKeysOf(head, path) ?? [];
   const result = {

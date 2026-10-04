@@ -6,7 +6,7 @@
 // The engine never awaits, never reads a clock it was not given, and never touches the network.
 
 import type { Sql, SyncTriage } from "../../protocol/ports.ts";
-import type { ToolRequest, ToolResponse } from "../../protocol/tools.ts";
+import type { Check, ToolRequest, ToolResponse } from "../../protocol/tools.ts";
 import type {
   Attempt,
   CardRec,
@@ -139,6 +139,9 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
   pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");
+  for (const [k, v] of pool.meta) {
+    if (k.startsWith("steps:")) pool.steps.set(k.slice(6), Number(v));
+  }
   pool.judgmentsCounter = num(
     sql.exec("SELECT COALESCE(MAX(judgment_id), 0) AS m FROM judgments").toArray()[0]?.m ?? 0,
   );
@@ -332,6 +335,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     dirtyIntents: new Set(),
     pendingTriage: [],
     judgments: new Map(),
+    eventBuffer: null,
     steps: new Map(),
     objects: new Map<string, GitObject>(),
     undoLog: new Map(),
@@ -355,6 +359,22 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
           t.judgment.reason = "premise_gone";
           t.judgment.resolved_at = pool.now();
           t.judgment.dirty = true;
+          // JE1: the pending triage is closed by the premise's deletion — the second
+          // premise.judged carries its final result (EV6 suppresses `holds` on summary pools).
+          event(pool, "premise.judged", {
+            attempt_id: a.id,
+            kind: t.judgment.kind,
+            key: t.judgment.key,
+            old_hash: t.judgment.old_hash,
+            new_hash: t.judgment.new_hash,
+            cause: t.judgment.cause,
+            cause_seq: t.judgment.cause_seq,
+            rule: t.judgment.rule,
+            class: t.judgment.klass,
+            result: "holds",
+            reason: "premise_gone",
+            clef: null,
+          });
         }
       }
     },
@@ -444,7 +464,9 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       return files;
     },
     stepOf(a: Attempt): number {
-      const n = (pool.steps.get(a.id) ?? 0) + 1;
+      const key = `steps:${a.id}`;
+      const n = Number(pool.meta.get(key) ?? "0") + 1;
+      pool.meta.set(key, String(n));
       pool.steps.set(a.id, n);
       return n;
     },
@@ -609,6 +631,18 @@ function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
     summary: row.summary === null ? null : str(row.summary),
     tier: row.tier === null ? null : (str(row.tier) as Attempt["tier"]),
     approved_by: row.approved_by === null ? null : str(row.approved_by),
+    approved_at: ((): number | null => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { at: number }).at;
+    })(),
+    approved_option: ((): Attempt["approved_option"] => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { option: Attempt["approved_option"] }).option;
+    })(),
+    policy_risk: ((): Attempt["policy_risk"] => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { risk: Attempt["policy_risk"] }).risk;
+    })(),
     bypass_row: bool(row.bypass_row),
     submitted_at: row.submitted_at === null ? null : num(row.submitted_at),
     validated_at: row.validated_at === null ? null : num(row.validated_at),
@@ -628,7 +662,10 @@ function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
     heads: [],
     resolved: new Set(),
     e1: new Set(),
-    checks: null,
+    checks: ((): Check[] | null => {
+      const raw = pool.meta.get(`checks:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as Check[]);
+    })(),
     opsFirstDone: false,
     pending: [],
     dirtyJudgments: new Set(),

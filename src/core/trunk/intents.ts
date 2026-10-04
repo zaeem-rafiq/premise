@@ -5,7 +5,7 @@
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
 import { CARD_TEMPLATES, type CardTemplateId } from "../../copy/cards.ts";
-import type { Attempt, CardRec, Pool, Premise } from "./sets.ts";
+import type { Attempt, CardRec, IntentRec, Pool, Premise } from "./sets.ts";
 import { event, emitPoolState } from "./events.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
@@ -71,6 +71,9 @@ export function unvalidate(pool: Pool, a: Attempt): void {
   a.submit_id = null;
   a.validated_at = null;
   a.approved_by = null;
+  a.approved_at = null;
+  a.approved_option = null;
+  a.policy_risk = null;
   a.bypass_row = false;
   pool.dirtyAttempts.add(a.id);
 }
@@ -114,6 +117,9 @@ export function closeCard(pool: Pool, a: Attempt, action: string, by: "owner" | 
     }
   }
   a.approved_by = null;
+  a.approved_at = null;
+  a.approved_option = null;
+  a.policy_risk = null;
   pool.dirtyAttempts.add(a.id);
 }
 
@@ -201,6 +207,15 @@ export type OpenArgs = {
   requester?: string;
 };
 
+/** Set an intent's state and emit `intent.state` once per transition (12.1). */
+export function setIntentState(pool: Pool, intent_id: string, state: IntentRec["state"]): void {
+  const i = pool.intents.get(intent_id);
+  if (i === undefined || i.state === state) return;
+  i.state = state;
+  pool.dirtyIntents.add(intent_id);
+  event(pool, "intent.state", { intent_id, state });
+}
+
 /** Create the intent (if new) and the attempt in state `opened` (9.2 T1); emits the events. */
 export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
   // An `open_attempt` for an attempt the pool already holds returns it unchanged (the route's
@@ -246,6 +261,9 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
     summary: null,
     tier: null,
     approved_by: null,
+    approved_at: null,
+    approved_option: null,
+    policy_risk: null,
     bypass_row: false,
     submitted_at: null,
     validated_at: null,

@@ -15,6 +15,12 @@ export function event(
   fields: Record<string, unknown>,
   opts: { headsup?: boolean } = {},
 ): void {
+  // EV3: the candidate classification of a tick runs before the batch commits, but its events
+  // order after every `landing.accepted` — the tick buffers them and flushes at the commit.
+  if (pool.eventBuffer !== null) {
+    pool.eventBuffer.push({ type, fields, opts });
+    return;
+  }
   if (pool.meta.get("summary_only") === "1") {
     // EV6: the detailed per-op, per-premise and per-step events are not emitted on a
     // summary-only stream; a `premise.judged` of `holds` emits only when a heads-up item
@@ -40,6 +46,14 @@ export function event(
   };
   pool.sql.exec("INSERT INTO events_out (n, ts, body, sent) VALUES (?, ?, ?, 0)", n, pool.now(), JSON.stringify(body));
   pool.out.events.push(type);
+}
+
+/** Drain the buffer the tick opened: every buffered event, in the order it was produced. */
+export function flushEvents(pool: Pool): void {
+  const buf = pool.eventBuffer;
+  pool.eventBuffer = null;
+  if (buf === null) return;
+  for (const e of buf) event(pool, e.type, e.fields, e.opts);
 }
 
 export function metaWrite(pool: Pool, k: string, v: string | number | null): void {

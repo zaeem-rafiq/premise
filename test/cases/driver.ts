@@ -127,8 +127,10 @@ const TOOL_NAMES = new Set(["outline", "read", "list", "search", "write", "repla
 
 export type Pools = Record<string, { files: Record<string, string> }>;
 
-/** Run one vector; returns the list of failed expectations, empty on a pass. */
-export function runCase(vector: Vector, pools: Pools): string[] {
+/** Run one vector; returns the list of failed expectations, empty on a pass. When `sink` is
+ * given it receives every event type the run emitted (the `events_out` rows, read before the
+ * database closes), so a caller can collect coverage over a whole suite. */
+export function runCase(vector: Vector, pools: Pools, sink?: { types?: Set<string> }): string[] {
   const fails: string[] = [];
   const fail = (where: string, want: unknown, got: unknown): void => {
     fails.push(`${where}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
@@ -521,6 +523,12 @@ export function runCase(vector: Vector, pools: Pools): string[] {
     }
   }
 
+  if (sink !== undefined) {
+    sink.types = sink.types ?? new Set();
+    for (const r of db.prepare("SELECT body FROM events_out").all()) {
+      sink.types.add((JSON.parse((r as { body: string }).body) as { type: string }).type);
+    }
+  }
   db.close();
   return fails;
 }

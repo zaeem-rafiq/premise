@@ -22,6 +22,9 @@ export type AlarmDeps = {
   push?: () => Promise<void>;
   /** The `repush` timer's work (HU5b): heads-up delivery to the attempt's Agent. */
   repush?: () => Promise<void>;
+  /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
+   * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
+  now?: number;
 };
 
 /** AL1: the alarm is always set to the smallest `due_at` — or deleted when `timers` is empty. */
@@ -51,8 +54,8 @@ function rescheduleTimer(sql: Sql, timer: TimerRow): void {
  * deleted before its work runs, so work that re-arms itself is not clobbered; a throw puts the row
  * back with a backoff (AL2). The alarm is always re-armed before the handler returns (AL1).
  */
-export async function runAlarm({ env, ctx, sql, runEntry, push, repush }: AlarmDeps): Promise<void> {
-  const now = Date.now();
+export async function runAlarm({ env, ctx, sql, runEntry, push, repush, now: at }: AlarmDeps): Promise<void> {
+  const now = at ?? Date.now();
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {
       try {

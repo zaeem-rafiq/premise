@@ -138,12 +138,33 @@ export function createServerRepo(prefix: string): ScratchRepo {
   return repo;
 }
 
+/** One ref command a git-receive-pack request body carries. */
+export type RefCommand = { ref: string; old: string; new: string };
+
+/** The commands of a git-receive-pack request: the pkt-lines before the flush and the pack. */
+export function parseReceivePackCommands(body: Buffer): RefCommand[] {
+  const commands: RefCommand[] = [];
+  let at = 0;
+  while (at + 4 <= body.length) {
+    const length = parseInt(body.toString("ascii", at, at + 4), 16);
+    if (!Number.isFinite(length) || length === 0) break;
+    const line = body.toString("latin1", at + 4, at + length);
+    const [oldOid, newOid, rest] = line.split(" ", 3);
+    if (oldOid === undefined || newOid === undefined || rest === undefined) break;
+    commands.push({ ref: rest.split("\0")[0]!.trim(), old: oldOid, new: newOid });
+    at += length;
+  }
+  return commands;
+}
+
 /** One request the test server saw, in the order it arrived. */
 export type RecordedRequest = {
   method: string;
   /** Pathname and query, for example `/repo/info/refs?service=git-receive-pack`. */
   path: string;
   authorization: string | null;
+  /** The ref commands of a `git-receive-pack` POST; absent on every other request. */
+  commands?: RefCommand[];
 };
 
 /**
@@ -157,6 +178,31 @@ export type GitGate = {
   status?: number;
 };
 
+/**
+ * What the server does with one request, decided per request by `server.fault` — the
+ * harness's configurable stand-in for Artifacts' unreliable edge (LP5):
+ * - `forward` (the default): hand the request to real `git http-backend` and relay its answer.
+ * - `answer`: never reach the backend — an HTTP status of the test's choosing (401, 429, 503),
+ *   with optional headers (`Retry-After`).
+ * - `apply_then_answer`: run the backend — real git applies every command — then rewrite refs
+ *   through `setRefs` and answer `status`. `"revert"` puts the command's old value back (deleting
+ *   the ref when it had none), `"other"` points the ref at a fresh orphan commit, a 40-hex value
+ *   pins it. This is how a row of LP5 like "main applied, notes not" is produced honestly.
+ * - `apply_then_drop`: run the backend — the refs land — then destroy the socket without
+ *   answering, a response lost after server-side application.
+ */
+export type GitFault =
+  | { action: "forward" }
+  | { action: "answer"; status: number; headers?: Record<string, string> }
+  | {
+      action: "apply_then_answer";
+      status: number;
+      setRefs?: Record<string, "revert" | "other" | (string & {})>;
+    }
+  | { action: "apply_then_drop" };
+
+export type GitFaultFor = (request: RecordedRequest & { body?: Buffer }) => GitFault;
+
 export type GitHttpServer = {
   /** `http://127.0.0.1:<port>` */
   readonly origin: string;
@@ -164,8 +210,43 @@ export type GitHttpServer = {
   remoteFor(repo: ScratchRepo): string;
   /** Every request the server saw, in order. */
   readonly requests: RecordedRequest[];
+  /** The fault hook; assigned by the test, consulted per request. Default `forward`. */
+  fault: GitFaultFor;
   close(): Promise<void>;
 };
+
+/** A ref value, or null when the ref does not resolve. */
+export function refValue(dir: string, ref: string): string | null {
+  try {
+    const value = git(dir, ["rev-parse", "--verify", "-q", ref]);
+    return value === "" ? null : value;
+  } catch {
+    return null;
+  }
+}
+
+const ZERO_OID_RE = /^0+$/;
+
+/** One `setRefs` rewrite of `apply_then_answer` (see `GitFault`). */
+function moveRef(dir: string, ref: string, how: string, commands: RefCommand[]): void {
+  if (how === "revert") {
+    const oldOid = commands.find((command) => command.ref === ref)?.old ?? "";
+    if (oldOid === "" || ZERO_OID_RE.test(oldOid)) {
+      if (refValue(dir, ref) !== null) git(dir, ["update-ref", "-d", ref]);
+      return;
+    }
+    git(dir, ["update-ref", ref, oldOid]);
+    return;
+  }
+  if (how === "other") {
+    // An orphan commit on the empty tree: a value no push of this batch could have produced.
+    const tree = git(dir, ["mktree"], "");
+    const orphan = git(dir, ["commit-tree", tree, "-m", "moved by the fault proxy"]);
+    git(dir, ["update-ref", ref, orphan]);
+    return;
+  }
+  git(dir, ["update-ref", ref, how]);
+}
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -224,11 +305,18 @@ function runBackend(
  */
 export async function startGitServer(projectRoot: string, options?: { gate?: GitGate }): Promise<GitHttpServer> {
   const requests: RecordedRequest[] = [];
+  // Held in a box so the test's later assignment to `server.fault` is what the handler reads.
+  const hook: { fault: GitFaultFor } = { fault: () => ({ action: "forward" }) };
   const server: Server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
       const authorization = req.headers.authorization ?? null;
-      requests.push({ method: req.method ?? "GET", path: `${url.pathname}${url.search}`, authorization });
+      const recorded: RecordedRequest & { body?: Buffer } = {
+        method: req.method ?? "GET",
+        path: `${url.pathname}${url.search}`,
+        authorization,
+      };
+      requests.push(recorded);
       const gate = options?.gate;
       if (
         gate?.expectedToken !== undefined &&
@@ -240,13 +328,22 @@ export async function startGitServer(projectRoot: string, options?: { gate?: Git
         return;
       }
       const body = await readBody(req);
+      if (recorded.method === "POST" && url.pathname.endsWith("/git-receive-pack")) {
+        recorded.body = body;
+        recorded.commands = parseReceivePackCommands(body);
+      }
+      const fault = hook.fault(recorded);
+      if (fault.action === "answer") {
+        res.writeHead(fault.status, fault.headers ?? {});
+        res.end();
+        return;
+      }
       const result = await runBackend(
         {
           ...scratchGitEnv(),
           GIT_PROJECT_ROOT: projectRoot,
           GIT_HTTP_EXPORT_ALL: "1",
           GATEWAY_INTERFACE: "CGI/1.1",
-          SERVER_PROTOCOL: "HTTP/1.1",
           REQUEST_METHOD: req.method ?? "GET",
           PATH_INFO: url.pathname,
           QUERY_STRING: url.search.startsWith("?") ? url.search.slice(1) : "",
@@ -256,6 +353,21 @@ export async function startGitServer(projectRoot: string, options?: { gate?: Git
         },
         body,
       );
+      // The backend has run: whatever the refs hold now is real git's answer. The fault may
+      // still drop the response or rewrite a ref before the report would have gone out.
+      if (fault.action === "apply_then_drop") {
+        req.socket.destroy();
+        return;
+      }
+      if (fault.action === "apply_then_answer") {
+        const repoDir = join(projectRoot, decodeURIComponent(url.pathname.split("/")[1] ?? ""));
+        for (const [ref, how] of Object.entries(fault.setRefs ?? {})) {
+          moveRef(repoDir, ref, how, recorded.commands ?? []);
+        }
+        res.statusCode = fault.status;
+        res.end();
+        return;
+      }
       res.statusCode = result.status;
       for (const [name, value] of result.headers) res.setHeader(name, value);
       res.end(result.body);
@@ -270,6 +382,12 @@ export async function startGitServer(projectRoot: string, options?: { gate?: Git
     origin: `http://127.0.0.1:${port}`,
     remoteFor: (repo: ScratchRepo) => `http://127.0.0.1:${port}/${basename(repo.directory)}`,
     requests,
+    get fault() {
+      return hook.fault;
+    },
+    set fault(next: GitFaultFor) {
+      hook.fault = next;
+    },
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.closeAllConnections();

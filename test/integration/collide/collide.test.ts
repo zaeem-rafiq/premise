@@ -253,31 +253,28 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(other.trunk.pool.landings).toEqual([]);
   });
 
-  it(
-    "item 7 (HD1, CD4): the minimal held card offers land+decline, an empty blast radius, and refuses other options",
-    () => {
-      // HD1: `card.opened` of kind `held` with `preview: null`, an EMPTY blast radius and
-      // exactly the options `land` and `decline` while `features.held` is off. CD4: an option
-      // the card does not offer answers `invalid_args`, and so does an unknown owner action.
-      const sim = new SwarmSim(tidepoolFiles(), { seed: 7 });
-      const rescale = sim.open("rescale-energy");
-      drive(sim, rescale);
-      const cards = sim.eventsOf("card.opened");
-      expect(cards).toHaveLength(1);
-      const card = cards[0]?.card as {
-        options?: Array<{ id: string }>;
-        blast_radius?: object;
-        preview?: unknown;
-        risk?: unknown;
-      };
-      expect(card.preview).toBeNull();
-      expect(card.risk).toBeNull();
-      expect(card.blast_radius).toEqual({});
-      expect(card.options?.map((o) => o.id)).toEqual(["land", "decline"]);
-      const answer = sim.trunk.owner({ action: "land_now_forever", attempt: rescale.id });
-      expect(answer).toMatchObject({ error: { code: "invalid_args" } });
-    },
-  );
+  it("item 7 (HD1, CD4): the minimal held card offers land+decline, an empty blast radius, and refuses other options", () => {
+    // HD1: `card.opened` of kind `held` with `preview: null`, an EMPTY blast radius and
+    // exactly the options `land` and `decline` while `features.held` is off. CD4: an option
+    // the card does not offer answers `invalid_args`, and so does an unknown owner action.
+    const sim = new SwarmSim(tidepoolFiles(), { seed: 7 });
+    const rescale = sim.open("rescale-energy");
+    drive(sim, rescale);
+    const cards = sim.eventsOf("card.opened");
+    expect(cards).toHaveLength(1);
+    const card = cards[0]?.card as {
+      options?: Array<{ id: string }>;
+      blast_radius?: object;
+      preview?: unknown;
+      risk?: unknown;
+    };
+    expect(card.preview).toBeNull();
+    expect(card.risk).toBeNull();
+    expect(card.blast_radius).toEqual({});
+    expect(card.options?.map((o) => o.id)).toEqual(["land", "decline"]);
+    const answer = sim.trunk.owner({ action: "land_now_forever", attempt: rescale.id });
+    expect(answer).toMatchObject({ error: { code: "invalid_args" } });
+  });
 
   it("item 8 (E1, OP1, TA9, TA9a): the second rescale withdraws through `stop`; no card opens", () => {
     const sim = new SwarmSim(swarmFiles(), { seed: 7 });

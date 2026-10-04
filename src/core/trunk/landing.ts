@@ -33,12 +33,10 @@ import { classify, rowFor } from "../classify/table.ts";
 import type { Classification, Row } from "../classify/table.ts";
 import { unified } from "../diff/unified.ts";
 
-
 // ---------------------------------------------------------------------------
 // Heads-up construction (8.1/8.2). Each trace item keeps the vector-facing shape
 // ({kind,key,rule,result,added,removed,context,after}); each stored heads-up keeps the protocol
 // body (HeadsUp) as well.
-
 
 /** The protocol `HeadsUpItem` plus the trace shape the vectors compare. */
 export function hItem(
@@ -328,8 +326,7 @@ export function applyClassification(
   // while CLEF_TRIAGE is off or the kill switch is set — one `judgeNow` per deciding attempt
   // (QR4's decider is the landed change, not the receiver). Otherwise the premises wait on
   // the asynchronous Clef `Triage` of TR2.
-  const deciderOf = (it: ClassifyItem): Attempt =>
-    it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a;
+  const deciderOf = (it: ClassifyItem): Attempt => (it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a);
   const syncOut = new Map<Attempt, { answers: Record<string, number | null>; model: string }>();
   const syncT = syncTriageOf(pool, a);
   if (syncT !== null) {
@@ -362,7 +359,9 @@ export function applyClassification(
         ? (syncOut.get(deciderOf(it))?.answers[`${p.kind}:${p.key}`] ?? null)
         : undefined;
     const outcome =
-      syncAnswer === undefined ? null : { ...triageOutcome(pool, syncAnswer), model: syncOut.get(deciderOf(it))!.model };
+      syncAnswer === undefined
+        ? null
+        : { ...triageOutcome(pool, syncAnswer), model: syncOut.get(deciderOf(it))!.model };
     const j = pool.newJudgment(a, {
       kind: p.kind,
       key: p.key,
@@ -373,13 +372,7 @@ export function applyClassification(
       rule: it.rule ?? "",
       klass: rowResult === "triage" ? "triage" : "rule",
       result:
-        outcome !== null
-          ? outcome.result
-          : rowResult === "triage"
-            ? null
-            : rowResult === "info"
-              ? "holds"
-              : rowResult,
+        outcome !== null ? outcome.result : rowResult === "triage" ? null : rowResult === "info" ? "holds" : rowResult,
       reason: outcome?.reason ?? it.reason ?? "",
       heads_up: it.folded !== true && rowResult !== "holds",
       ...(outcome !== null ? { clef: { model: outcome.model, p: syncAnswer ?? null, error: null } } : {}),
@@ -400,11 +393,7 @@ export function applyClassification(
         // no triage timer; the item is in the batch's heads-up with its final result (an
         // info-level item for `holds`, so a re-affirmation is never silent).
         p.status =
-          outcome.result === "repair"
-            ? "pending_repair"
-            : outcome.result === "confirm"
-              ? "pending_confirm"
-              : "holds";
+          outcome.result === "repair" ? "pending_repair" : outcome.result === "confirm" ? "pending_confirm" : "holds";
         hItems.push(hItem(pool, a, it, outcome.result, j.cause_seq));
         if (outcome.result === "repair") {
           strongest = "repair";

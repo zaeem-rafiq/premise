@@ -404,20 +404,25 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
         item: null,
       };
       pool.judgments.set(record.judgment_id, record);
-      event(pool, "premise.judged", {
-        attempt_id: a.id,
-        kind: j.kind,
-        key: j.key,
-        old_hash: j.old_hash,
-        new_hash: j.new_hash,
-        cause: j.cause,
-        cause_seq: j.cause_seq,
-        rule: j.rule,
-        class: j.klass,
-        result: j.result,
-        reason: j.reason,
-        clef: j.clef ?? null,
-      }, { headsup: j.heads_up === true });
+      event(
+        pool,
+        "premise.judged",
+        {
+          attempt_id: a.id,
+          kind: j.kind,
+          key: j.key,
+          old_hash: j.old_hash,
+          new_hash: j.new_hash,
+          cause: j.cause,
+          cause_seq: j.cause_seq,
+          rule: j.rule,
+          class: j.klass,
+          result: j.result,
+          reason: j.reason,
+          clef: j.clef ?? null,
+        },
+        { headsup: j.heads_up === true },
+      );
       return record;
     },
     fileMapAt(seq: number): FileMap {

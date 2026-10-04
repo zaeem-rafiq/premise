@@ -1270,9 +1270,7 @@ export function owner(
       const intent = pool.intents.get(a.intent_id);
       if (
         intent !== undefined &&
-        ![...pool.attempts.values()].some(
-          (x) => x.intent_id === a.intent_id && x !== a && x.state !== "stopped",
-        )
+        ![...pool.attempts.values()].some((x) => x.intent_id === a.intent_id && x !== a && x.state !== "stopped")
       ) {
         intent.state = "stopped";
         pool.dirtyIntents.add(a.intent_id);

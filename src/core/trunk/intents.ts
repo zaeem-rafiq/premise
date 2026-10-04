@@ -132,9 +132,8 @@ export function openCard(
   const fullHeld = kind === "held" && pool.featuresHeld;
   const landNow =
     fullHeld &&
-    Object.values(extra.blast_radius ?? {}).some(
-      (b) =>
-        b.right_of_way.some((id) => b.repair.includes(id) || b.confirm.includes(id)),
+    Object.values(extra.blast_radius ?? {}).some((b) =>
+      b.right_of_way.some((id) => b.repair.includes(id) || b.confirm.includes(id)),
     );
   const template = CARD_TEMPLATES[`${kind}:${reason}` as CardTemplateId];
   const options = (template?.options ?? [])

@@ -20,12 +20,7 @@ export function event(
     // summary-only stream; a `premise.judged` of `holds` emits only when a heads-up item
     // carries it (X0's info, a triage outcome's item); `headsup.sent` and `landing.landed`
     // lose their detail bodies while the rest of the event stands.
-    if (
-      type === "attempt.step" ||
-      type === "premise.recorded" ||
-      type === "premise.removed" ||
-      type === "op.recorded"
-    )
+    if (type === "attempt.step" || type === "premise.recorded" || type === "premise.removed" || type === "op.recorded")
       return;
     if (type === "premise.judged" && fields.result === "holds" && opts.headsup !== true) return;
     if (type === "headsup.sent") fields = { ...fields, items: null };

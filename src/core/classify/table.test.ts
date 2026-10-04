@@ -38,8 +38,7 @@ function premise(kind: Premise["kind"], key: string, at: FileMap, extra: Partial
 }
 
 type OpSpec =
-  | { op: "write"; path: string; content: string | null }
-  | { op: "replace"; path: string; old: string; new: string };
+  { op: "write"; path: string; content: string | null } | { op: "replace"; path: string; old: string; new: string };
 
 /** Ops as the tool layer records them (5.1): base_oid/targets computed on the evolving tree. */
 function opsFrom(tree: FileMap, steps: OpSpec[]): Op[] {
@@ -266,7 +265,9 @@ describe("7.2 decision table", () => {
     const after = fm({ "a.js": MOD_X2 });
     const a = attempt(
       [premise("file", "a.js", before)],
-      opsFrom(before, [{ op: "write", path: "c.js", content: 'import * as A from "./a.js";\nexport const c = A.x;\n' }]),
+      opsFrom(before, [
+        { op: "write", path: "c.js", content: 'import * as A from "./a.js";\nexport const c = A.x;\n' },
+      ]),
     );
     expect(item(a, before, after)).toMatchObject({
       rule: "F3",
@@ -307,7 +308,9 @@ describe("7.2 decision table", () => {
     const after = fm({ "data.txt": "two" });
     const a = attempt(
       [premise("file", "data.txt", before)],
-      opsFrom(before, [{ op: "write", path: "c.js", content: 'import * as d from "./data.txt";\nexport const c = d;\n' }]),
+      opsFrom(before, [
+        { op: "write", path: "c.js", content: 'import * as d from "./data.txt";\nexport const c = d;\n' },
+      ]),
     );
     expect(item(a, before, after)).toMatchObject({
       rule: "F5",
@@ -557,10 +560,7 @@ describe("7.2 decision table", () => {
     const before = fm({ "a.js": MOD_X });
     const after = fm({ "a.js": MOD_X });
     const p = premise("query", "bogus:key", before, { hash: "stale" });
-    const a = attempt(
-      [p],
-      opsFrom(before, [{ op: "write", path: "z.txt", content: "z" }]),
-    );
+    const a = attempt([p], opsFrom(before, [{ op: "write", path: "z.txt", content: "z" }]));
     expect(item(a, before, after)).toMatchObject({ rule: "Z1", result: "confirm", reason: "unclassified" });
   });
 });

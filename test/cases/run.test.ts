@@ -112,8 +112,20 @@ describe("synchronous triage (01-core S6a, TR5)", () => {
     trunk.pushOk();
     trunk.openAttempt("A", { intent: "a crab that hides when its energy is low" });
     trunk.openAttempt("B", { intent: "raise the top speed to 3" });
-    trunk.tool({ attempt_id: "A", call_id: "A:1", tool: "read", args: { path: "world/movement.js", entity: "MAX_SPEED" }, ack: 0 });
-    trunk.tool({ attempt_id: "A", call_id: "A:2", tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" }, ack: 0 });
+    trunk.tool({
+      attempt_id: "A",
+      call_id: "A:1",
+      tool: "read",
+      args: { path: "world/movement.js", entity: "MAX_SPEED" },
+      ack: 0,
+    });
+    trunk.tool({
+      attempt_id: "A",
+      call_id: "A:2",
+      tool: "read",
+      args: { path: "world/energy.js", entity: "ENERGY_MAX" },
+      ack: 0,
+    });
     trunk.tool({
       attempt_id: "A",
       call_id: "A:3",
@@ -127,9 +139,27 @@ describe("synchronous triage (01-core S6a, TR5)", () => {
       },
       ack: 0,
     });
-    trunk.tool({ attempt_id: "B", call_id: "B:1", tool: "read", args: { path: "world/movement.js", entity: "MAX_SPEED" }, ack: 0 });
-    trunk.tool({ attempt_id: "B", call_id: "B:2", tool: "replace", args: { path: "world/movement.js", old: "MAX_SPEED = 2", new: "MAX_SPEED = 3" }, ack: 0 });
-    const sub = trunk.tool({ attempt_id: "B", call_id: "B:3", tool: "submit", args: { summary: "Raise MAX_SPEED to 3" }, ack: 0 });
+    trunk.tool({
+      attempt_id: "B",
+      call_id: "B:1",
+      tool: "read",
+      args: { path: "world/movement.js", entity: "MAX_SPEED" },
+      ack: 0,
+    });
+    trunk.tool({
+      attempt_id: "B",
+      call_id: "B:2",
+      tool: "replace",
+      args: { path: "world/movement.js", old: "MAX_SPEED = 2", new: "MAX_SPEED = 3" },
+      ack: 0,
+    });
+    const sub = trunk.tool({
+      attempt_id: "B",
+      call_id: "B:3",
+      tool: "submit",
+      args: { summary: "Raise MAX_SPEED to 3" },
+      ack: 0,
+    });
     expect(sub.ok).toBe(true);
     trunk.tick();
 

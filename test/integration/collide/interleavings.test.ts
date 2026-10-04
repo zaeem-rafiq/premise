@@ -107,16 +107,16 @@ function aEnd(pa: string, pb: string, k: number): "landed" | "withdrawn" {
  * The one interleaving the engine answers with an escape by construction: `add-energy`
  * lands before `rescale-energy` has recorded its `replace`, so no `refs:` premise exists
  * (D2 pins it at the operation) and QR1 can never name the file the rescale then strands.
+ *
+ * The `it.fails` mark carries the rule and the engine's answer: SW2 says "the threshold
+ * number divided by ENERGY_MAX at head MUST be 0.3 … the expected count of escapes is 0"
+ * (02-tidepool.md 10.1), while D2 (01-core.md 6.5) pins the `refs:` premise when the
+ * operation is recorded — so no row gives this rescale a heads-up and `sw2Escapes`
+ * returns ["creatures/s0004.js"].
  */
 function isSpecGap(pa: string, pb: string, k: number): boolean {
   return pa === "rescale-energy" && pb === "add-energy" && k <= 1;
 }
-
-const GAP_RULE =
-  'SW2: "the threshold number divided by ENERGY_MAX at head MUST be 0.3 … expected count ' +
-  'of escapes is 0" — but D2 pins the `refs:` premise at the operation, so a referrer that ' +
-  "landed before the rescale's replace can never be caught by QR1; the engine's answer " +
-  "leaves escapes ['creatures/s0004.js']";
 
 function runInterleaving(
   pa: string,

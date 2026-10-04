@@ -1,0 +1,51 @@
+// The limits list of 03-floor 5.12: one file, shown in About and in the README from the same source.
+// A line whose condition is false for the build is left out. The README generator and the Floor read
+// this file.
+
+import { MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
+import type { Features } from "../protocol/floor-json.ts";
+
+/** The names line 15 uses for a switched-off feature (03-floor 5.12). Green and Clef have their own
+ * lines (7 and 8) and are never in it. */
+export const FEATURE_OFF_NAMES: Readonly<Record<"held" | "race" | "undo" | "attempt_repos", string>> = {
+  held: "the held card with previews",
+  race: "comparing attempts",
+  undo: "Undo",
+  attempt_repos: "attempt repositories",
+};
+
+/** Line 7's `{runtime sentence}` by `features.green`. */
+const GREEN_SENTENCE: Record<Features["green"], string> = {
+  isolate: "every landing by running the pool's self-test in a sandboxed isolate",
+  static: "every landing with static checks only",
+  none: "",
+};
+
+/** The limits list of 03-floor 5.12 for this build's `features`, lines whose condition is false left out. */
+export function limitsList(features: Features): string[] {
+  const off = (Object.keys(FEATURE_OFF_NAMES) as Array<keyof typeof FEATURE_OFF_NAMES>).filter(
+    (key) => features[key] === false,
+  );
+  const lines = [
+    "Premise understands JavaScript ES modules. Other files are tracked as whole files.",
+    `One Trunk serves one pool. A pool is small: each file is at most ${MAX_FILE_BYTES} bytes.`,
+    `Real agents are limited by the Workers AI rate limits. This build runs at most ${MAX_REAL_AGENTS} at once.`,
+    "Numbers in the Swarm view come from scripted agents. They make no model calls.",
+    "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
+    "A premise across two pools is not built.",
+    features.green === "none"
+      ? "The green line is not in this build."
+      : `The green line checks ${GREEN_SENTENCE[features.green]}.`,
+    `Clef judgments are ${features.clef ? "on" : "off"} in this build.`,
+    "Not built: text merge, TypeScript parsing, outside agents over MCP, audience input.",
+    "References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value.",
+    "A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.",
+    "Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.",
+    "A sweep is recognised from the edits an agent makes, not from the words of the request.",
+    "After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.",
+  ];
+  if (off.length > 0) {
+    lines.push(`Switched off in this build: ${off.map((key) => FEATURE_OFF_NAMES[key]).join(", ")}.`);
+  }
+  return lines;
+}

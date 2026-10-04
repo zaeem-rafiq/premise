@@ -8,10 +8,23 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { ShellContext } from "../../app/context.ts";
 import { sessionPath } from "../../stream/urls.ts";
+import { errorSentence } from "../../../copy/errors.ts";
 
 export type OwnerState = "visitor" | "checking" | "owner" | "wrong" | "not_configured" | "wait" | "saving";
 
-export function OwnerDialog({ onDone, onClose }: { onDone: (owner: boolean) => void; onClose: () => void }) {
+export function OwnerDialog({
+  onDone,
+  onClose,
+  unlocked,
+  onToast,
+}: {
+  onDone: (owner: boolean) => void;
+  onClose: () => void;
+  /** Whether the session is the owner's: `owner.lock` shows only then (3.17). */
+  unlocked?: boolean;
+  /** FR22: a failed request is reported next to the control and as a toast. */
+  onToast?: (line: string) => void;
+}) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const [key, setKey] = useState("");
@@ -45,10 +58,18 @@ export function OwnerDialog({ onDone, onClose }: { onDone: (owner: boolean) => v
 
   const lock = async () => {
     setState("saving");
+    let failed = false;
     try {
-      await fetch(sessionPath(), { method: "DELETE" });
+      const response = await fetch(sessionPath(), { method: "DELETE" });
+      failed = !response.ok;
     } catch {
-      // a failed lock leaves the session; the header keeps showing owner
+      failed = true;
+    }
+    // FR22: a lock the server did not take is reported; the session stays the owner's.
+    if (failed) {
+      onToast?.(errorSentence(null));
+      setState("visitor");
+      return;
     }
     onDone(false);
   };
@@ -95,9 +116,11 @@ export function OwnerDialog({ onDone, onClose }: { onDone: (owner: boolean) => v
             <button type="button" onClick={onClose}>
               {t("owner.cancel")}
             </button>
-            <button type="button" onClick={() => void lock()}>
-              {t("owner.lock")}
-            </button>
+            {unlocked === true && (
+              <button type="button" disabled={state === "saving"} onClick={() => void lock()}>
+                {t("owner.lock")}
+              </button>
+            )}
           </div>
         </form>
       </div>

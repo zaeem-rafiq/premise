@@ -1,8 +1,10 @@
 // The header (03 2.10, 3.19): the `banner` landmark - the name, the view switch with
 // `aria-current`, the Needs-you badge (absent at 0), the kill switch (owner, live) and the
-// owner lock. `nav.skip` is the first focus stop (AX2).
+// owner lock. `nav.skip` is the first focus stop (AX2). In the narrow layout the view
+// switch is a menu (2.9); its summary is the active view's name (the spec names no label
+// for the menu itself).
 
-import { useContext } from "react";
+import { useContext, useRef } from "react";
 import { ShellContext } from "./context.ts";
 
 export type HeaderProps = {
@@ -12,6 +14,9 @@ export type HeaderProps = {
   needs: number; // open cards that can be answered
   owner: boolean;
   killed: boolean; // limits.killed - the button becomes kill.allow
+  /** FR10/CO3: the connection is lost - owner controls are off (the rest keeps its last
+   * content, dimmed). */
+  offline?: boolean;
   onView: (view: "floor" | "compare" | "swarm") => void;
   onReplayMenu: () => void;
   onAbout: () => void;
@@ -23,6 +28,7 @@ export type HeaderProps = {
 export function Header(props: HeaderProps) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
+  const menu = useRef<HTMLDetailsElement>(null);
   const item = (view: "floor" | "swarm", label: string) => (
     <button
       type="button"
@@ -32,6 +38,18 @@ export function Header(props: HeaderProps) {
     >
       {label}
     </button>
+  );
+  const items = (
+    <>
+      {item("floor", t("nav.floor"))}
+      {item("swarm", t("nav.swarm"))}
+      <button type="button" className="nav-item" onClick={props.onReplayMenu}>
+        {t("nav.replay")}
+      </button>
+      <button type="button" className="nav-item" onClick={props.onAbout}>
+        {t("nav.about")}
+      </button>
+    </>
   );
   return (
     <header className="header">
@@ -43,15 +61,14 @@ export function Header(props: HeaderProps) {
         <span className="pool-name">{props.pool}</span>
       </div>
       <nav className="view-switch" aria-label="views">
-        {item("floor", t("nav.floor"))}
-        {item("swarm", t("nav.swarm"))}
-        <button type="button" className="nav-item" onClick={props.onReplayMenu}>
-          {t("nav.replay")}
-        </button>
-        <button type="button" className="nav-item" onClick={props.onAbout}>
-          {t("nav.about")}
-        </button>
+        {items}
       </nav>
+      <details className="nav-menu" ref={menu}>
+        <summary className="nav-menu-summary">{props.view === "swarm" ? t("nav.swarm") : t("nav.floor")}</summary>
+        <nav className="nav-menu-list" aria-label="views" onClick={() => menu.current?.removeAttribute("open")}>
+          {items}
+        </nav>
+      </details>
       {props.needs > 0 && (
         <button type="button" className="needs-badge" onClick={props.onNeeds}>
           {t("needs.badge", { n: props.needs })}
@@ -59,11 +76,16 @@ export function Header(props: HeaderProps) {
       )}
       <div className="header-end">
         {props.mode === "live" && props.owner && (
-          <button type="button" className="kill-open" onClick={props.onKill}>
+          <button type="button" className="kill-open" onClick={props.onKill} disabled={props.offline === true}>
             {props.killed ? t("kill.allow") : t("kill.open")}
           </button>
         )}
-        <button type="button" className="owner-button" onClick={props.onOwner} disabled={props.mode === "replay"}>
+        <button
+          type="button"
+          className="owner-button"
+          onClick={props.onOwner}
+          disabled={props.mode === "replay" || props.offline === true}
+        >
           {props.mode === "replay" ? t("owner.replay") : props.owner ? t("owner.unlocked") : t("owner.visitor")}
         </button>
       </div>

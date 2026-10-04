@@ -1,6 +1,11 @@
 /* The Floor's visual direction (03-floor 6). Plain CSS, custom properties, the system font
  * stack (VD6), tabular figures (VD7). Dark is the default theme; `data-theme="light"`
- * switches. `data-size="stage"` is the larger reading size (VD19, key Z). */
+ * switches. `data-size="stage"` is the larger reading size (VD19, key Z); without a saved
+ * choice it follows the window width - stage at 1600 and above (2.1).
+ *
+ * The layout picks its sizes from the window width: stage from 1600, the laptop layout
+ * from 1100 to 1599, the narrow single column below 1100 (2.8, 2.9). Region heights are
+ * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 56/48. */
 
 :root {
   --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -9,6 +14,13 @@
   --border: 1px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --banner-bg: var(--surface);
+  /* Region sizes of 2.1 - the laptop layout is the default. */
+  --header-h: 56px;
+  --banner-h: 36px;
+  --strip-h: 60px;
+  --replay-h: 48px;
+  --body-gap: 16px;
+  --body-pad: 16px;
 }
 
 /* Dark theme (6.3). */
@@ -67,6 +79,19 @@
   --size-status: 22px;
   --size-body: 20px;
   --size-small: 16px;
+}
+
+/* The stage region sizes of 2.1 (the layout breakpoint is the window width, not the
+ * type size). */
+@media (min-width: 1600px) {
+  :root {
+    --header-h: 64px;
+    --banner-h: 40px;
+    --strip-h: 72px;
+    --replay-h: 56px;
+    --body-gap: 24px;
+    --body-pad: 24px;
+  }
 }
 
 * {
@@ -166,14 +191,35 @@ a {
   flex-direction: column;
   min-height: 100vh;
 }
+@media (min-width: 1100px) {
+  /* The frame keeps one screen: the Replay bar sits at the bottom, the regions between
+   * it and the header shrink instead of scrolling the page (2.1, 2.7). */
+  .floor {
+    height: 100vh;
+    overflow: hidden;
+  }
+}
+
+/* FR10/CO3: the connection is lost - the page keeps the last state, dimmed to 60%.
+ * The banner stack is left bright: banner.offline is itself the new content that says why. */
+.floor[data-state="offline"] .header,
+.floor[data-state="offline"] .strip,
+.floor[data-state="offline"] .floor-main,
+.floor[data-state="offline"] .replay-bar {
+  opacity: 0.6;
+}
 
 .header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 16px;
-  padding: 8px 16px;
+  height: var(--header-h);
+  padding: 0 16px;
   background: var(--surface);
   border-bottom: var(--border) solid var(--line);
+  overflow: hidden;
 }
 .header-name {
   display: flex;
@@ -207,6 +253,42 @@ a {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+/* 2.9: below 1100 the view switch is a menu; its summary is the active view's name. */
+.nav-menu {
+  display: none;
+  position: relative;
+}
+.nav-menu-summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: var(--border) solid var(--control);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+.nav-menu-summary::-webkit-details-marker {
+  display: none;
+}
+.nav-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--surface);
+  border: var(--border) solid var(--control);
+  border-radius: var(--radius);
+}
+.nav-menu[open] .nav-menu-list .nav-item {
+  text-align: left;
+}
 .needs-badge {
   background: var(--confirm);
   border-color: var(--confirm);
@@ -223,17 +305,20 @@ a {
   background: transparent;
 }
 
-/* ---- Banners (3.18, 5.11, VD4): fixed order, at most three drawn ---- */
+/* ---- Banners (3.18, 5.11, VD4): fixed order, one fixed height each, at most three ---- */
 .banners {
   display: flex;
   flex-direction: column;
+  flex: none;
 }
 .banner {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  height: var(--banner-h);
+  padding: 0 16px;
   border-bottom: var(--border) solid var(--line);
+  overflow: hidden;
   animation: banner-in 240ms var(--ease);
 }
 @keyframes banner-in {
@@ -253,9 +338,14 @@ a {
 }
 .banner-sentence {
   color: var(--text);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .banner-button {
   margin-left: auto;
+  flex: none;
 }
 .banner[data-tone="changed"] {
   background: var(--changed);
@@ -300,45 +390,76 @@ a {
   padding: 0;
   border-bottom: var(--border) solid var(--line);
   background: var(--surface);
+  height: auto;
+  min-height: var(--banner-h);
 }
 .banner-more-button {
   border: none;
   background: transparent;
   width: 100%;
+  min-height: var(--banner-h);
   text-align: left;
+}
+.banner-more-list .banner {
+  height: var(--banner-h);
 }
 .banner-more-list .banner:last-child {
   border-bottom: none;
 }
 
-/* ---- The strip (3.8): counters, tabular figures ---- */
+/* ---- The strip (3.8): counters, tabular figures, one fixed height per layout ---- */
 .strip {
   display: flex;
   gap: 1px;
   background: var(--line);
   border-bottom: var(--border) solid var(--line);
+  height: var(--strip-h);
+  flex: none;
 }
-.strip[data-stale="true"] {
-  opacity: 0.6;
+/* CO3: with the connection lost the values dim and `strip.stale` dates them. */
+.strip[data-stale="true"] .strip-value,
+.strip[data-stale="true"] .strip-bar,
+.strip[data-stale="true"] .strip-sub {
+  opacity: 0.5;
 }
 .strip-cell {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
-  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 14px;
   background: var(--surface);
+  line-height: 1;
 }
 .strip-label {
   font-size: var(--size-small);
   color: var(--muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .strip-value {
   font-size: var(--size-counter);
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   animation: counter-flash 1s var(--ease);
+}
+/* A sentence is not a counter (3.8): status size, allowed to wrap within the fixed cell. */
+.strip-value--text {
+  font-size: var(--size-status);
+  font-weight: 400;
+  white-space: normal;
+  line-height: 1.1;
 }
 @keyframes counter-flash {
   0% {
@@ -353,6 +474,10 @@ a {
 .strip-sub {
   font-size: var(--size-small);
   color: var(--muted);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .strip-cell[data-tone="changed"] .strip-value {
   color: var(--changed);
@@ -366,37 +491,82 @@ a {
 .strip-cell[data-tone="checking"] .strip-value {
   color: var(--checking);
 }
+/* 3.18: the spend bar - its fill is spend_usd / cap_usd. */
+.strip-bar {
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--edge, var(--raised));
+  overflow: hidden;
+}
+.strip-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+.strip-cell[data-tone="confirm"] .strip-bar-fill {
+  background: var(--confirm);
+}
+.strip-cell[data-tone="changed"] .strip-bar-fill {
+  background: var(--changed);
+}
+/* The per-model lines of the spend cell (3.18: hover or focus lists them). */
+.strip-tip {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 8px;
+  z-index: 20;
+  display: none;
+  min-width: 16em;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: var(--border) solid var(--control);
+  border-radius: var(--radius);
+  font-size: var(--size-small);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.strip-cell:hover .strip-tip,
+.strip-cell:focus-within .strip-tip,
+.strip-cell:focus .strip-tip {
+  display: block;
+}
 .strip-stale {
+  flex: none;
   align-self: center;
   padding: 0 14px;
   color: var(--changed);
   font-size: var(--size-small);
+  white-space: nowrap;
 }
 
 /* ---- Body: pool area + rail ---- */
+/* Sheets, toasts and the announcer sit in `.floor-main`: the header, the banners and the
+ * strip stay visible and usable above an open sheet (LY4). */
+.floor-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .floor-body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 62fr) minmax(0, 38fr);
-  gap: 0;
+  grid-template-columns: minmax(0, 832fr) minmax(0, 560fr);
+  gap: var(--body-gap);
+  padding: var(--body-pad);
   min-height: 0;
 }
-@media (max-width: 1599px) {
+@media (min-width: 1600px) {
   .floor-body {
-    grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
-  }
-}
-@media (max-width: 1099px) {
-  .floor-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1152fr) minmax(0, 696fr);
   }
 }
 .pool-column {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 16px;
+  min-height: 0;
   gap: 8px;
 }
 .frame-under {
@@ -404,10 +574,12 @@ a {
   gap: 16px;
   align-items: center;
   min-height: 24px;
+  flex: none;
 }
 /* The start card overlays the pool area (RY23); `.pool-stage` is its positioned box. */
 .pool-stage {
   position: relative;
+  min-height: 0;
 }
 .start-overlay {
   position: absolute;
@@ -448,6 +620,14 @@ a {
   background: transparent;
 }
 
+/* VD15: the frame's caption text is read at stage size 22 (the pool frame's own styles
+ * target the smaller body size; the shell's layout fixes the larger one). */
+@media (min-width: 1600px) {
+  .floor-body .pf-caption {
+    font-size: 22px;
+  }
+}
+
 /* The start card (RY23): on a quiet pool, for a visitor. */
 .start-card {
   position: absolute;
@@ -465,6 +645,7 @@ a {
 }
 .start-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
 }
@@ -476,6 +657,7 @@ a {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .intent-box {
   padding: 12px;
@@ -554,7 +736,9 @@ a {
   color: var(--muted);
 }
 .landed-row {
-  display: block;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
   width: 100%;
   text-align: left;
   background: var(--raised);
@@ -569,11 +753,6 @@ a {
   font-size: var(--size-status);
   font-weight: 600;
   flex: none;
-}
-.landed-row {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
 }
 .landed-seq {
   font-family: var(--font-mono);
@@ -594,15 +773,17 @@ a {
   border-style: dashed;
 }
 
-/* ---- Sheets and dialogs (AX4) ---- */
+/* ---- Sheets and dialogs (AX4): inside .floor-main, so the header, banners and strip
+ * stay visible and usable (LY4). On the narrow layout a sheet is full-screen (2.9). ---- */
 .sheet-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 8vh 16px 16px;
+  padding: 16px;
+  overflow-y: auto;
   z-index: 20;
   animation: sheet-in 240ms var(--ease);
 }
@@ -617,12 +798,14 @@ a {
   }
 }
 .sheet {
+  position: relative;
+  margin: auto;
   background: var(--surface);
   border: var(--border) solid var(--control);
   border-radius: var(--radius);
   padding: 24px;
   width: min(720px, 100%);
-  max-height: 80vh;
+  max-height: 100%;
   overflow-y: auto;
 }
 .about-sheet {
@@ -634,6 +817,7 @@ a {
 }
 .sheet-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
 }
@@ -708,29 +892,36 @@ a {
   margin-top: 16px;
 }
 
-/* ---- The Replay bar (2.7, 3.16) ---- */
+/* ---- The Replay bar (2.7, 3.16): fixed height; the caption wraps or is cut with an
+ * ellipsis so the right-hand controls are always fully visible. ---- */
 .replay-bar {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 14px;
-  padding: 10px 16px;
+  height: var(--replay-h);
+  padding: 0 16px;
   background: var(--surface);
   border-top: 3px dotted var(--control);
+  overflow: hidden;
+  flex: none;
 }
 .replay-buttons {
   display: flex;
   gap: 8px;
+  flex: none;
 }
 .replay-position {
   font-variant-numeric: tabular-nums;
   font-size: var(--size-status);
   font-weight: 600;
   white-space: nowrap;
+  flex: none;
 }
 .replay-track-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   position: relative;
-  min-width: 120px;
+  min-width: 60px;
 }
 .replay-track {
   width: 100%;
@@ -752,22 +943,29 @@ a {
   color: var(--muted);
   font-size: var(--size-small);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .replay-skipped {
   color: var(--confirm);
   font-size: var(--size-small);
+  flex: none;
 }
 .replay-ended {
   font-size: var(--size-small);
+  flex: none;
 }
 .replay-speed,
 .replay-close {
   white-space: nowrap;
+  flex: none;
 }
 
 /* ---- Toasts (3.19): bottom left, at most three ---- */
 .toasts {
-  position: fixed;
+  position: absolute;
   left: 16px;
   bottom: 16px;
   display: flex;
@@ -788,6 +986,7 @@ a {
 .floor-swarm {
   display: block;
   padding: 24px;
+  overflow-y: auto;
 }
 .swarm-numbers {
   display: flex;
@@ -813,6 +1012,7 @@ a {
 }
 .swarm-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 16px;
   margin-top: 24px;
@@ -839,11 +1039,108 @@ a {
   color: var(--muted);
 }
 
-/* ---- Reduced motion (6.4, AX10) ---- */
+/* ---- The narrow layout (2.9): one column; header first, the strip wraps to two rows,
+ * then banners, the intent box, the tray, the pool frame, the tabs and the cards. ---- */
+@media (max-width: 1099px) {
+  .header {
+    height: auto;
+    min-height: var(--header-h);
+    padding: 8px 12px;
+    overflow: visible;
+  }
+  .view-switch {
+    display: none;
+  }
+  .nav-menu {
+    display: block;
+  }
+  .strip {
+    height: auto;
+    flex-wrap: wrap;
+  }
+  .strip-cell {
+    flex: 1 0 25%;
+    min-width: 0;
+    padding: 6px 10px;
+    min-height: 44px;
+  }
+  .floor-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+  /* The regions become one column; the intent box and the tray move above the frame
+   * (2.9) - the children of the two regions join the column's order. */
+  .floor-body > .pool-column,
+  .floor-body > .rail {
+    display: contents;
+  }
+  .floor-body .intent-box {
+    order: 1;
+  }
+  .floor-body .tray {
+    order: 2;
+  }
+  .floor-body .pool-stage {
+    order: 3;
+  }
+  .floor-body .frame-under {
+    order: 4;
+  }
+  .floor-body .tabs {
+    order: 5;
+    border-top: var(--border) solid var(--line);
+  }
+  .floor-body .rail-list {
+    order: 6;
+  }
+  .floor-body .intent-box,
+  .floor-body .tray,
+  .floor-body .tabs,
+  .floor-body .rail-list {
+    background: var(--surface);
+    border: var(--border) solid var(--line);
+    border-radius: var(--radius);
+  }
+  .replay-bar {
+    height: auto;
+    min-height: var(--replay-h);
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    row-gap: 8px;
+  }
+  /* 2.9: sheets are full-screen. */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    padding: 0;
+    align-items: stretch;
+  }
+  .sheet {
+    width: 100%;
+    margin: 0;
+    max-height: none;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  .start-card {
+    position: static;
+    margin: 8px 0;
+    max-width: none;
+  }
+  .start-overlay {
+    position: static;
+    display: block;
+  }
+}
+
+/* ---- Reduced motion (6.4, AX10): nothing moves; a banner or a sheet appears at once.
+ * The counter underline is the one cue that stays the same (6.4's table). ---- */
 @media (prefers-reduced-motion: reduce) {
   .banner,
-  .sheet-backdrop,
-  .strip-value {
+  .sheet-backdrop {
     animation: none;
   }
   * {

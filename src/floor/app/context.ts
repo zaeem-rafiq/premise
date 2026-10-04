@@ -18,12 +18,25 @@ export type Shell = {
   model: (id: string) => string;
 };
 
-export function makeShell(settings: FloorJson, owner: boolean, replay: boolean): Shell {
+export function makeShell(
+  settings: FloorJson,
+  owner: boolean,
+  replay: boolean,
+  /** The pool's live agent limit, read lazily. A caller that names a copy id but leaves
+   * `{max}` unfilled (the rail's `intent.queue`, FR26) means this one - every other `{max}`
+   * is passed where it is called. */
+  poolMax?: () => number,
+): Shell {
   const visitor = !owner || replay;
   return {
     settings,
     visitor,
-    t: (id, vars = {}) => text(id, { visitor, ...vars }),
+    t: (id, vars = {}) =>
+      text(id, {
+        visitor,
+        ...(vars.max === undefined && poolMax !== undefined ? { max: poolMax() } : {}),
+        ...vars,
+      }),
     model: (id) => settings.models[id] ?? modelName(id),
   };
 }

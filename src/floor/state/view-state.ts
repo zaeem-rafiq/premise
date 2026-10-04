@@ -12,6 +12,7 @@ export type SheetTarget =
   | { kind: "about" }
   | { kind: "owner" }
   | { kind: "kill" }
+  | { kind: "rebuild" }
   | { kind: "shortcuts" };
 
 export type Toast = { id: number; text: string };

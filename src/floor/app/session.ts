@@ -20,6 +20,7 @@ import {
 } from "../replay/player.ts";
 import { linesForEvent, type AnnouncedLine, type BeforeBits } from "../components/toast/announce.ts";
 import { changeName } from "../../copy/names.ts";
+import { stopSentence } from "../../copy/stops.ts";
 import { text } from "../../copy/strings.ts";
 import type { Route } from "./route.ts";
 
@@ -192,6 +193,12 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
               reduce(floor, event);
               clock.note(event.ts);
               effectsRef.current.announces.push(...linesForEvent(event, floor, before));
+              // FR4: an attempt that stops shows the 5.8 sentence on its card and as a toast.
+              if (event.type === "attempt.state" && event.to === "stopped") {
+                effectsRef.current.toasts.push(
+                  event.reason === null ? text("status.stopped") : stopSentence(event.reason),
+                );
+              }
               if (event.type === "landing.landed" && floor.landings[event.seq]?.kind === "change") {
                 const attemptId = floor.landings[event.seq]?.attempt_id;
                 const attempt = attemptId == null ? undefined : floor.attempts[attemptId];
@@ -228,14 +235,19 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
       },
     );
 
-    return () => handle.close();
+    // VD4: the run clock and the stall/idle timers of 4.4 tick between events.
+    const ticker = window.setInterval(tick, 1_000);
+    return () => {
+      window.clearInterval(ticker);
+      handle.close();
+    };
   }, [key, settings, reducedMotion, route]);
 
   // Keep the snapshot view fresh: the player's subscribe bumps, but the fields below must
   // always read the newest values.
   const player = session.player;
-  const floor = floorRef.current;
   const snap = player === null ? null : player.snapshot();
+  const floor = snap === null ? floorRef.current : snap.floor;
   const staleFor = floor.ts === 0 ? null : Math.max(0, session.clock.time() - floor.ts);
   return { ...session, floor, snap, staleFor, effects: effectsRef.current };
 }

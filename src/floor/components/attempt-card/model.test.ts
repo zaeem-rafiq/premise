@@ -565,24 +565,24 @@ describe("the tracer fixture (01-core 12.3, 03-floor 4.3)", () => {
     expect(owner.status.word).toBe("Waiting for you");
   });
 
-  it("event 23: accepted reads 'Landing…' and 'Recorded by Trunk. Being pushed to main.' (FL3)", () => {
-    const state = stateAt(events, 23);
+  it("event 24: accepted reads 'Landing…' and 'Recorded by Trunk. Being pushed to main.' (FL3)", () => {
+    const state = stateAt(events, 24);
     const attempt = must(state.attempts.a_T);
     const model = cardModel(state, attempt, state.ts, true);
     expect(model.status.word).toBe("Landing…");
     expect(model.line4.text).toBe("Recorded by Trunk. Being pushed to main.");
   });
 
-  it("event 27: landed reads 'Landed' and 'On main as landing 1.'", () => {
-    const state = stateAt(events, 27);
+  it("event 28: landed reads 'Landed' and 'On main as landing 1.'", () => {
+    const state = stateAt(events, 28);
     const attempt = must(state.attempts.a_T);
     const model = cardModel(state, attempt, state.ts, true);
     expect(model.status.word).toBe("Landed");
     expect(model.line4.text).toBe("On main as landing 1.");
   });
 
-  it("event 36: a_U skipped behind a_T shows the right-of-way sentence (5.6)", () => {
-    const state = stateAt(events, 36);
+  it("event 37: a_U skipped behind a_T shows the right-of-way sentence (5.6)", () => {
+    const state = stateAt(events, 37);
     const attempt = must(state.attempts.a_U);
     expect(attempt.skipped).toEqual({ why: "right_of_way", behind: "a_T" });
     expect(cardModel(state, attempt, state.ts, true).line4.text).toBe(
@@ -590,14 +590,16 @@ describe("the tracer fixture (01-core 12.3, 03-floor 4.3)", () => {
     );
   });
 
-  it("event 40: the undo reopens a_T with its tag while it is still `landed` (CO13)", () => {
-    const state = stateAt(events, 40);
+  it("event 42: the undo stops a_T (T18, UN5a) and the card reads 'Undone'", () => {
+    const state = stateAt(events, 42);
     const attempt = must(state.attempts.a_T);
-    expect(attempt.reopened_by).toBe("undo");
-    expect(attempt.state).toBe("landed");
+    expect(attempt.reopened_by).toBeNull();
+    expect(attempt.state).toBe("stopped");
+    expect(attempt.stop_reason).toBe("undone");
     const model = cardModel(state, attempt, state.ts, true);
-    expect(model.tags).toContain("Reopened by undo");
-    // The note follows while it works again; a still-`landed` attempt does not show it yet.
+    expect(model.status.word).toBe("Undone");
+    expect(model.tags).not.toContain("Reopened by undo");
+    // A stopped attempt shows no same-agent note (CO13); the tag tests cover the reopened case.
     expect(model.note).toBeNull();
   });
 });

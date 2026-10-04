@@ -23,6 +23,10 @@ import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { ToolName, ToolResponse } from "../../protocol/tools.ts";
 import {
   HEADS_UP_REPUSH_MS,
+  MAX_ATTEMPT_TOKENS,
+  MAX_ATTEMPT_USD,
+  MAX_MODEL_CALLS,
+  MAX_STEPS,
   MODEL_MAX_TOKENS,
   MODEL_RETRIES,
   MODEL_RETRY_BACKOFF_MS,
@@ -116,6 +120,26 @@ function rawUsageOf(result: unknown): { prompt_tokens: number; completion_tokens
   return { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens };
 }
 
+/** The resume extension (RS1): a resume raises the Agent's `*_limit` rows above
+ * the spec's base budgets, but the pure loop's checks read the constants. The
+ * driver hands the loop counters shifted by the extension — a shifted counter
+ * may go negative, which only reads as more headroom to the loop's `>=` checks
+ * — and `budgetExtension` gives the shift back so a persist stores the real
+ * numbers. The WeakMap keys on the loaded state object: the extension that was
+ * applied at load is the one undone at persist, whatever a resume changed in
+ * between. */
+interface BudgetExt {
+  calls: number;
+  steps: number;
+  tokens: number;
+  usd: number;
+}
+const BUDGET_EXT = new WeakMap<LoopState, BudgetExt>();
+const NO_EXT: BudgetExt = { calls: 0, steps: 0, tokens: 0, usd: 0 };
+export function budgetExtension(s: LoopState): BudgetExt {
+  return BUDGET_EXT.get(s) ?? NO_EXT;
+}
+
 /** `meta.state` mirror + counters, rebuilt from the tables of 01-core 3.3. */
 export function loadLoopState(sql: Sql): LoopState {
   const m = metaAll(sql);
@@ -137,17 +161,24 @@ export function loadLoopState(sql: Sql): LoopState {
     shown_step: r.shown_step,
     received_at: r.received_at,
   }));
-  return {
+  // RS1: counters shifted down by the resume extension; persisted back +ext.
+  const ext: BudgetExt = {
+    calls: Math.max(0, num("model_limit") - MAX_MODEL_CALLS),
+    steps: Math.max(0, num("step_limit") - MAX_STEPS),
+    tokens: Math.max(0, num("token_limit") - MAX_ATTEMPT_TOKENS),
+    usd: Math.max(0, num("usd_limit") - MAX_ATTEMPT_USD),
+  };
+  const state: LoopState = {
     rows,
     inbox,
     meta: {
       step: num("step"),
-      tool_steps: num("tool_steps"),
-      model_calls: num("model_calls"),
+      tool_steps: num("tool_steps") - ext.steps,
+      model_calls: num("model_calls") - ext.calls,
       nudges: num("nudges"),
-      tokens_in: num("tokens_in"),
+      tokens_in: num("tokens_in") - ext.tokens,
       tokens_out: num("tokens_out"),
-      spent_usd: num("usd_spent"),
+      spent_usd: num("usd_spent") - ext.usd,
       shown_hn: num("shown_hn"),
       acked_hn: num("acked_hn"),
       state: m.state ?? "opened",
@@ -155,6 +186,8 @@ export function loadLoopState(sql: Sql): LoopState {
     },
     syncNeeded: m.sync_needed === "1",
   };
+  if (ext.calls !== 0 || ext.steps !== 0 || ext.tokens !== 0 || ext.usd !== 0) BUDGET_EXT.set(state, ext);
+  return state;
 }
 
 /** The calls of the last assistant reply with no tool row yet (05-agent 4.5 row 5). */
@@ -225,13 +258,14 @@ export class ModelDriver implements Driver {
   // -- persistence: the loop's in-memory effects to the tables of 3.3 ---------
 
   #persistCounters(s: LoopState): void {
+    const ext = budgetExtension(s);
     this.#set("step", s.meta.step);
-    this.#set("tool_steps", s.meta.tool_steps);
-    this.#set("model_calls", s.meta.model_calls);
+    this.#set("tool_steps", s.meta.tool_steps + ext.steps);
+    this.#set("model_calls", s.meta.model_calls + ext.calls);
     this.#set("nudges", s.meta.nudges);
-    this.#set("tokens_in", s.meta.tokens_in);
+    this.#set("tokens_in", s.meta.tokens_in + ext.tokens);
     this.#set("tokens_out", s.meta.tokens_out);
-    this.#set("usd_spent", s.meta.spent_usd);
+    this.#set("usd_spent", s.meta.spent_usd + ext.usd);
     this.#set("shown_hn", s.meta.shown_hn);
     this.#set("acked_hn", s.meta.acked_hn);
     this.#set("state", s.meta.state);

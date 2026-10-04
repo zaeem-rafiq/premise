@@ -88,10 +88,10 @@ import { ScriptedDriver, scriptedHeadsUpForModel, type Script } from "./scripted
 import { PatternDriver } from "./pattern-driver.ts";
 import { patternById } from "../../swarm/pattern.ts";
 import { sqlOver } from "../sql-port.ts";
-import { ModelDriver, loadLoopState } from "./model-driver.ts";
+import { ModelDriver, budgetExtension, loadLoopState } from "./model-driver.ts";
 import { urlModel } from "../adapters/model/workers-ai.ts";
 import { GateCalls, gateDurableObjectTransport, gateUrlTransport } from "./gate-client.ts";
-import { appendEvent, deliverEvents, ensureEventsSchema } from "./events.ts";
+import { appendEvent, deliverEvents, ensureEventsSchema, pendingEvents } from "./events.ts";
 import { MODEL_PLAN } from "../../config/model-plan.ts";
 import { RESUME_MESSAGE } from "../../protocol/agent-prompt.ts";
 import { firstRows } from "../../core/agent/loop/context.ts";
@@ -588,7 +588,11 @@ export class Agent extends DurableObject<Env> {
           await this.#sendStop(pending as AgentStopReason);
           return;
         }
-        if (TERMINAL_STATES.has(this.#meta("state") as AttemptState)) {
+        // A stopped attempt that Trunk reopened answers `working` on the next
+        // sync (T20r): the resume's `sync_needed`/`resume_show` flags outrank
+        // the terminal mirror — they are exactly the path that updates it.
+        const reopening = this.#meta("sync_needed") === "1" || this.#meta("resume_show") === "1";
+        if (TERMINAL_STATES.has(this.#meta("state") as AttemptState) && !reopening) {
           await this.#releaseGateSlot(); // MG5: a landed or stopped attempt frees its slot
           return;
         }
@@ -1029,7 +1033,7 @@ export class Agent extends DurableObject<Env> {
         }
       }
       this.#set("step", row.step);
-      this.#set("tool_steps", s.meta.tool_steps);
+      this.#set("tool_steps", s.meta.tool_steps + budgetExtension(s).steps);
       this.#set("shown_hn", s.meta.shown_hn);
       this.#heldMirror(prev, response.attempt.state);
       this.#set("state", response.attempt.state);
@@ -1374,6 +1378,7 @@ export class Agent extends DurableObject<Env> {
       })),
       ops: opList(this.#sql),
       timers: timerList(this.#sql),
+      events: pendingEvents(this.#sql),
       transcript: transcriptRows(this.#sql).map((r) => ({
         step: Number(r.step),
         role: String(r.role),

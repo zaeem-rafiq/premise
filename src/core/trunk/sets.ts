@@ -11,7 +11,7 @@ import type { Operation } from "../../protocol/operations.ts";
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Check } from "../../protocol/tools.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
-import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
+import type { Card, CardKind, CardReason, RiskAnswers } from "../../protocol/cards.ts";
 import type { PremiseKind } from "../../protocol/premise.ts";
 import { ABSENT } from "../../protocol/premise.ts";
 import { blobId } from "../sync/sha1.ts";
@@ -115,6 +115,9 @@ export type Attempt = {
   summary: string | null;
   tier: "auto" | "held" | null;
   approved_by: string | null;
+  approved_at: number | null; // approval time; persisted in meta for the note's policy block
+  approved_option: "land" | "land_now" | "choose" | null;
+  policy_risk: RiskAnswers | null; // the approving card's risk answers at approval
   bypass_row: boolean;
   submitted_at: number | null;
   validated_at: number | null;

@@ -196,7 +196,7 @@ export function buildNote(
             model: a.model,
             repo: a.attempt_repo,
             opened_seq: a.opened_seq,
-            steps: a.opCount,
+            steps: pool.steps.get(a.id) ?? a.opCount,
             model_calls: 0,
             tokens_in: 0,
             tokens_out: 0,
@@ -224,9 +224,9 @@ export function buildNote(
     policy: {
       tier: a?.tier ?? "auto",
       approved_by: a?.approved_by ?? null,
-      approved_at: null,
-      option: null,
-      risk: null,
+      approved_at: a?.approved_at === null || a?.approved_at === undefined ? null : iso(a.approved_at),
+      option: a?.approved_option ?? null,
+      risk: a?.policy_risk ?? null,
     },
     pull_backs: a?.pull_backs ?? 0,
     batch: { id: l.batch_id, index: l.index, size: l.size },
@@ -307,8 +307,6 @@ export function recordLanding(
     accepted_at: l.accepted_at,
     ...(l.undo !== undefined ? { undo: l.undo } : {}),
   });
-  const noteBlob = makeBlob(noteBytes(note));
-  pool.objects.set(noteBlob.oid, noteBlob);
   const landing: Landing = {
     seq: l.seq,
     kind: l.kind,
@@ -319,7 +317,7 @@ export function recordLanding(
     commit_oid: commitObj.oid,
     parent_oid: parent,
     tree_oid: treeObj.oid,
-    note_oid: noteBlob.oid,
+    note_oid: "",
     note: canonicalJson(note),
     submitted_at: a?.submitted_at ?? null,
     accepted_at: l.accepted_at,
@@ -762,7 +760,13 @@ export function tick(pool: Pool): void {
   const oldNotes = pool.meta.get("notes_commit") ?? "";
   for (const l of batch) {
     l.batch_id = batchId;
-    l.note = canonicalJson(JSON.parse(l.note) as Note);
+    // NT3: the note is built after the batch is complete — `batch` is final here.
+    const note = JSON.parse(l.note) as Note;
+    note.batch = { id: batchId, index: batch.indexOf(l), size: batch.length };
+    const noteBlob = makeBlob(noteBytes(note));
+    pool.objects.set(noteBlob.oid, noteBlob);
+    l.note_oid = noteBlob.oid;
+    l.note = canonicalJson(note);
     event(pool, "landing.accepted", {
       seq: l.seq,
       batch_id: batchId,
@@ -1175,6 +1179,13 @@ export function owner(
     ) {
       closeOwned(card, action);
       a.approved_by = "owner";
+      a.approved_at = pool.now();
+      a.approved_option = action;
+      a.policy_risk = card.body.risk ?? null;
+      pool.meta.set(
+        `approved:${a.id}`,
+        JSON.stringify({ at: a.approved_at, option: a.approved_option, risk: a.policy_risk }),
+      );
       a.bypass_row = action === "land_now";
       setState(pool, a, "validated", "T13");
       a.validated_at = ++pool.order;
@@ -1211,6 +1222,13 @@ export function owner(
       chosen.submit_id === submitIdOf(chosen)
     ) {
       chosen.approved_by = "owner";
+      chosen.approved_at = pool.now();
+      chosen.approved_option = "choose";
+      chosen.policy_risk = card?.body.risk ?? null;
+      pool.meta.set(
+        `approved:${chosen.id}`,
+        JSON.stringify({ at: chosen.approved_at, option: chosen.approved_option, risk: chosen.policy_risk }),
+      );
       setState(pool, chosen, "validated", "T13");
       chosen.validated_at = ++pool.order;
     }

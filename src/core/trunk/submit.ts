@@ -74,8 +74,8 @@ export function submitCall(
   ack: number,
 ): SubmitInner {
   const checks: Check[] = [];
-  const okCheck = (name: string): void => {
-    checks.push({ name, ok: true });
+  const okCheck = (name: string, detail?: string): void => {
+    checks.push({ name, ok: true, ...(detail === undefined ? {} : { detail }) });
   };
   const result = (r: object, premises: Premise[] = []): SubmitInner => {
     const status = (r as { status?: string }).status;
@@ -272,14 +272,18 @@ export function submitCall(
     if (!repair) setState(pool, a, "needs_confirm", "T5");
     return result({ status: repair ? "go_around" : "needs_confirm", unresolved: open.map((h) => h.hn) }, premises);
   }
-  okCheck("premises_hold");
+  {
+    const seqs = new Set([...a.premises.values()].map((p) => p.seq));
+    const n = a.premises.size;
+    okCheck("premises_hold", seqs.size === 1 ? `${n} premises at seq ${[...seqs][0]}` : `${n} premises`);
+  }
 
   // CK9 — policy: the tier of the touched paths under the policy at head.
   a.tier = policyTier(head, changed);
   a.submit_id = submitIdOf(a);
   a.summary = args.summary ?? null;
   a.submitted_at = pool.now();
-  okCheck("policy");
+  okCheck("policy", a.tier ?? "auto");
   a.checks = checks;
   // The check list is the note's `checks` (3.5); meta persists it so a pool reopen keeps it.
   pool.meta.set(`checks:${a.id}`, JSON.stringify(checks));

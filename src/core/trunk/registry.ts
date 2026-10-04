@@ -631,6 +631,18 @@ function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
     summary: row.summary === null ? null : str(row.summary),
     tier: row.tier === null ? null : (str(row.tier) as Attempt["tier"]),
     approved_by: row.approved_by === null ? null : str(row.approved_by),
+    approved_at: ((): number | null => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { at: number }).at;
+    })(),
+    approved_option: ((): Attempt["approved_option"] => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { option: Attempt["approved_option"] }).option;
+    })(),
+    policy_risk: ((): Attempt["policy_risk"] => {
+      const raw = pool.meta.get(`approved:${str(row.attempt_id)}`);
+      return raw === undefined ? null : (JSON.parse(raw) as { risk: Attempt["policy_risk"] }).risk;
+    })(),
     bypass_row: bool(row.bypass_row),
     submitted_at: row.submitted_at === null ? null : num(row.submitted_at),
     validated_at: row.validated_at === null ? null : num(row.validated_at),

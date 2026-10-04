@@ -71,6 +71,9 @@ export function unvalidate(pool: Pool, a: Attempt): void {
   a.submit_id = null;
   a.validated_at = null;
   a.approved_by = null;
+  a.approved_at = null;
+  a.approved_option = null;
+  a.policy_risk = null;
   a.bypass_row = false;
   pool.dirtyAttempts.add(a.id);
 }
@@ -114,6 +117,9 @@ export function closeCard(pool: Pool, a: Attempt, action: string, by: "owner" | 
     }
   }
   a.approved_by = null;
+  a.approved_at = null;
+  a.approved_option = null;
+  a.policy_risk = null;
   pool.dirtyAttempts.add(a.id);
 }
 
@@ -255,6 +261,9 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
     summary: null,
     tier: null,
     approved_by: null,
+    approved_at: null,
+    approved_option: null,
+    policy_risk: null,
     bypass_row: false,
     submitted_at: null,
     validated_at: null,

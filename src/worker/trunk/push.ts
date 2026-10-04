@@ -102,6 +102,13 @@ function refValue(read: string | null, oldV: string, newV: string): RefValue {
   return "other";
 }
 
+/** The notes ref's LP5 value for a batch that commands no notes update (the seed): absent reads
+ * as applied — the batch asked for no notes move, and reading it as `old` would retry a command
+ * that does not exist without end. A ref that exists is `other`, genuinely diverged. */
+function notesValue(read: string | null): RefValue {
+  return read === null ? "new" : "other";
+}
+
 /** The effect's deps: the lane's adapters, swapped for fakes in tests. */
 export type PushDeps = {
   tokenSource: Parameters<typeof runPush>[1]["tokenSource"];
@@ -239,7 +246,10 @@ async function pushOutboxInner(
       return;
     }
     remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
-    remote_notes = refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
+    remote_notes =
+      outbox.new_notes === ""
+        ? notesValue(refs[NOTES_REF] ?? null)
+        : refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
     updates = updates.filter((u) => (u.ref === MAIN_REF ? remote_main : remote_notes) === "old");
     if (updates.length === 0) {
       const action = await apply("push_result", { remote_main, remote_notes });
@@ -286,8 +296,7 @@ async function pushOutboxInner(
   remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
   remote_notes =
     outbox.new_notes === ""
-      ? // A batch with no notes command (the seed): a missing or matching notes ref is "old"/"new".
-        refValue(refs[NOTES_REF] ?? null, "", "")
+      ? notesValue(refs[NOTES_REF] ?? null)
       : refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
 
   const rejected = result.kind === "rejected";

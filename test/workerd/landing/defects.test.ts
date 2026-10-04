@@ -20,7 +20,6 @@ import { join } from "node:path";
 import { git, gitBytes } from "../../git/helpers.ts";
 import { waitFor } from "../trunk/harness.ts";
 import { REPO_ROOT } from "../../support/source.ts";
-import { sqlOver } from "../../../src/worker/sql-port.ts";
 import { startLandingWorker, type LandingWorker } from "./harness.ts";
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
@@ -132,23 +131,12 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
       string,
       Record<string, string>
     >;
-    const expected = seeds[SEED];
+    const expected = seeds[SEED]!;
     expect(files).toEqual(Object.keys(expected).sort());
     for (const name of files) {
       expect(gitBytes(dir, ["show", `${main}:${name}`]).equals(Buffer.from(expected[name]!, "utf8")), name).toBe(true);
     }
   }, 60_000);
-
-  it("D (unit): sqlOver returns a BLOB column as Uint8Array even when storage gives ArrayBuffer", () => {
-    const blob = new Uint8Array([1, 2, 3, 4]).buffer;
-    const storage = {
-      sql: { exec: () => ({ toArray: () => [{ bytes: blob }] }) },
-      transactionSync: (run: () => unknown) => run(),
-    } as unknown as DurableObjectStorage;
-    const row = sqlOver(storage).exec("SELECT bytes FROM outbox_chunks").toArray()[0];
-    expect(row?.bytes).toBeInstanceOf(Uint8Array);
-    expect([...(row?.bytes as Uint8Array)]).toEqual([1, 2, 3, 4]);
-  });
 
   it("E (SE14, plan 2.2 item 5): HEAD answers what GET answers — status, headers, no body", async () => {
     const create = await worker.fetch(

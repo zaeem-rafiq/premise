@@ -65,7 +65,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
-  build: { outDir: "dist", emptyOutDir: true },
+  build: { outDir: "dist", emptyOutDir: false },
 });
 `;
 
@@ -139,6 +139,8 @@ const REMOVE_SNAIL = [
 
 const TILES = ".tiles .tiles-scroll";
 
+// fullyParallel runs beforeAll per worker: the build may overlap another worker's reads, so
+// emptyOutDir stays off — overwriting identical hashed assets is safe, wiping them mid-read is not.
 test.beforeAll(() => {
   mkdirSync(HARNESS_DIR, { recursive: true });
   writeFileSync(join(HARNESS_DIR, "index.html"), HARNESS_HTML);

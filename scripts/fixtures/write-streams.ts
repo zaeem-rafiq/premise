@@ -60,7 +60,10 @@ const TRANSITIONS: Record<string, { from: AttemptState[]; to: AttemptState[] | "
   T18: { from: ["landed"], to: ["stopped"] },
   T19: { from: ["landed"], to: ["going_around"] },
   T19s: { from: ["landed"], to: ["stopped"] },
-  T20: { from: ["opened", "working", "going_around", "needs_confirm", "submitted", "validated", "held"], to: ["stopped"] },
+  T20: {
+    from: ["opened", "working", "going_around", "needs_confirm", "submitted", "validated", "held"],
+    to: ["stopped"],
+  },
   T20r: { from: ["going_around", "needs_confirm", "working"], to: ["stopped"] },
   T21: { from: ["stopped"], to: ["going_around", "needs_confirm", "working"] },
   T22: { from: ["submitted", "validated", "held"], to: ["working"] },

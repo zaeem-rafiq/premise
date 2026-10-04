@@ -68,29 +68,9 @@ const BODY_KEYS: Record<string, string[]> = {
   "intent.created": ["intent_id", "text", "requester", "race", "prewritten"],
   "intent.state": ["intent_id", "state"],
   "attempt.opened": ["attempt_id", "intent_id", "change_id", "agent", "model", "race"],
-  "attempt.state": [
-    "attempt_id",
-    "from",
-    "to",
-    "transition",
-    "reason",
-    "go_arounds",
-    "pull_backs",
-    "right_of_way",
-  ],
+  "attempt.state": ["attempt_id", "from", "to", "transition", "reason", "go_arounds", "pull_backs", "right_of_way"],
   "attempt.reopened": ["attempt_id", "cause", "revision", "model_changed"],
-  "attempt.step": [
-    "attempt_id",
-    "step",
-    "tool",
-    "target",
-    "ok",
-    "error",
-    "ms",
-    "tokens_in",
-    "tokens_out",
-    "cost_usd",
-  ],
+  "attempt.step": ["attempt_id", "step", "tool", "target", "ok", "error", "ms", "tokens_in", "tokens_out", "cost_usd"],
   "attempt.repo": ["attempt_id", "ok", "ms", "error"],
   "premise.recorded": ["attempt_id", "premise", "tool"],
   "premise.removed": ["attempt_id", "kind", "key", "rule"],
@@ -110,17 +90,7 @@ const BODY_KEYS: Record<string, string[]> = {
   ],
   "op.recorded": ["attempt_id", "op_seq", "op", "path", "targets", "altered", "added", "removed"],
   "op.dropped": ["attempt_id", "op_seqs", "path", "rule"],
-  "headsup.sent": [
-    "attempt_id",
-    "hn",
-    "result",
-    "wake",
-    "cause",
-    "keys",
-    "items",
-    "dropped_ops",
-    "go_around",
-  ],
+  "headsup.sent": ["attempt_id", "hn", "result", "wake", "cause", "keys", "items", "dropped_ops", "go_around"],
   "headsup.resolved": ["attempt_id", "hn", "result", "go_around", "changed", "statement"],
   "submit.result": ["attempt_id", "submit_id", "status", "tier", "checks", "duplicate"],
   "card.opened": ["card"],
@@ -329,9 +299,7 @@ describe("fixture stream conformance (01-core 12.1, EV2a, EV3, 9.2)", () => {
         windows[windows.length - 1]!.start = i; // all landing.accepted of the batch come first
         return;
       }
-      const landedIdx = events.findIndex(
-        (x, j) => j > i && x.type === "landing.landed" && x.batch_id === batch,
-      );
+      const landedIdx = events.findIndex((x, j) => j > i && x.type === "landing.landed" && x.batch_id === batch);
       windows.push({ start: i, end: landedIdx === -1 ? events.length : landedIdx, batch });
     });
     for (const { start, end, batch } of windows) {

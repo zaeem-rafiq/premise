@@ -18,6 +18,7 @@ import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
 import { runPush, type PushBatch } from "./push-runner.ts";
 import { ZERO_OID } from "../../core/git/objects.ts";
+import { blobBytes } from "../../core/sync/bytes.ts";
 
 const MAIN_REF = "refs/heads/main";
 const NOTES_REF = "refs/notes/premise";
@@ -61,7 +62,7 @@ function outboxPack(ctx: DurableObjectState, batch_id: number): Uint8Array {
   const chunks = sqlOf(ctx)
     .exec("SELECT bytes FROM outbox_chunks WHERE batch_id = ? ORDER BY i", batch_id)
     .toArray()
-    .map((row) => (row.bytes instanceof Uint8Array ? row.bytes : new Uint8Array(0)));
+    .map((row) => blobBytes(row.bytes));
   const pack = new Uint8Array(chunks.reduce((n, b) => n + b.byteLength, 0));
   let off = 0;
   for (const chunk of chunks) {
@@ -155,11 +156,31 @@ export type ApplyPush = (name: "push_ok" | "push_result", input: unknown) => Pro
  * every ref reported ok; otherwise `readRefs` and `push_result` with the values. The entry's
  * answer names the next step (`repush`, `retry_main`, `retry_notes`, `mark_pushed`, `pause`).
  */
+/** The object a `pushOutbox` call owns until its LP5 decision lands — a reentrant call (the
+ * applied entry's own after-commit) returns at once, or it would re-push the same row before
+ * the outer call writes `next_try` (an unbounded hot loop, not a retry). */
+const pushing = new Set<DurableObjectState>();
+
 export async function pushOutbox(
   env: Env,
   ctx: DurableObjectState,
   apply: ApplyPush,
   deps: PushDeps = defaultDeps(env),
+): Promise<void> {
+  if (pushing.has(ctx)) return;
+  pushing.add(ctx);
+  try {
+    await pushOutboxInner(env, ctx, apply, deps);
+  } finally {
+    pushing.delete(ctx);
+  }
+}
+
+async function pushOutboxInner(
+  env: Env,
+  ctx: DurableObjectState,
+  apply: ApplyPush,
+  deps: PushDeps,
 ): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;

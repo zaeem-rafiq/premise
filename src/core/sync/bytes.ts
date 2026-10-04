@@ -9,6 +9,18 @@ export function utf8(text: string): Uint8Array {
   return encoder.encode(text);
 }
 
+/**
+ * The bytes a SQLite blob column returned. `node:sqlite` yields `Uint8Array`; the Durable
+ * Object's storage SQL yields `ArrayBuffer`; a value bound as a string comes back as text.
+ * Anything else is a driver surprise the caller's fallback handles (an empty byte string).
+ */
+export function blobBytes(value: unknown): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (typeof value === "string") return utf8(value);
+  return new Uint8Array(0);
+}
+
 /** The string held in UTF-8 bytes. */
 export function text(bytes: Uint8Array): string {
   return decoder.decode(bytes);

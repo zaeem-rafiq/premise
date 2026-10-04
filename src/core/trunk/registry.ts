@@ -30,7 +30,7 @@ import { openAttempt, type OpenArgs } from "./intents.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
 import { blobId } from "../sync/sha1.ts";
-import { utf8, text as fromUtf8 } from "../sync/bytes.ts";
+import { utf8, text as fromUtf8, blobBytes } from "../sync/bytes.ts";
 import type { GitObject } from "../git/objects.ts";
 
 export type PoolOptions = {
@@ -143,7 +143,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   pool.undoCounter = num(sql.exec("SELECT COUNT(*) AS m FROM undo_requests").toArray()[0]?.m ?? 0) + 1;
   // head files
   for (const row of sql.exec("SELECT path, mode, content FROM files").toArray()) {
-    pool.files.set(str(row.path), row.content instanceof Uint8Array ? fromUtf8(row.content) : str(row.content));
+    pool.files.set(str(row.path), fromUtf8(blobBytes(row.content)));
     pool.modes.set(str(row.path), str(row.mode));
   }
   // intents
@@ -259,7 +259,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
       .exec("SELECT bytes FROM outbox_chunks WHERE batch_id = ? ORDER BY i", pool.outbox.batch_id)
       .toArray();
     if (chunks.length > 0) {
-      const parts = chunks.map((c) => (c.bytes instanceof Uint8Array ? c.bytes : utf8(String(c.bytes))));
+      const parts = chunks.map((c) => blobBytes(c.bytes));
       const pack = new Uint8Array(parts.reduce((n, b) => n + b.byteLength, 0));
       let off = 0;
       for (const part of parts) {
@@ -424,7 +424,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
           } else {
             const row = pool.sql.exec("SELECT content FROM blobs WHERE oid = ?", fo.old_oid).toArray()[0];
             if (row === undefined) continue;
-            files.set(path, row.content instanceof Uint8Array ? fromUtf8(row.content) : str(row.content));
+            files.set(path, fromUtf8(blobBytes(row.content)));
           }
         }
       }

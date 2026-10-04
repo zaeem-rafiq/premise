@@ -115,13 +115,20 @@ export async function registerPool(env: Env, pool: string, requestId: string): P
 
   const swarm = env.SWARM as Workflow | undefined;
   if (swarm !== undefined) {
+    const id = `register-pool-${pool}-${requestId}`;
     try {
-      await swarm.create({
-        id: `register-pool-${pool}-${requestId}`,
-        params: { kind: "register_pool", pool, request_id: requestId },
-      });
+      await swarm.create({ id, params: { kind: "register_pool", pool, request_id: requestId } });
     } catch (cause) {
-      if (!isNotBuiltError(cause)) return { ok: false, target: "swarm" };
+      if (!isNotBuiltError(cause)) {
+        // 9.8: a repeated request_id names the first registration's instance, and `create`
+        // refuses the duplicate. `get` is the check that decides, not the error's text: an
+        // instance it finds is the first answer, anything else is a real failure.
+        try {
+          await swarm.get(id);
+        } catch {
+          return { ok: false, target: "swarm" };
+        }
+      }
     }
   }
   return { ok: true };

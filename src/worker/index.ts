@@ -99,7 +99,9 @@ function matchPath(template: string, path: string): Record<string, string> | nul
 }
 
 function matchRoute(route: Route, method: string, path: string): Record<string, string> | null {
-  const methodOk = route.method === "WS" ? method === "GET" : route.method === method;
+  // A HEAD runs its GET row (SE14's headers included) — the entry then answers it with no body.
+  const effective = method === "HEAD" ? "GET" : method;
+  const methodOk = route.method === "WS" ? effective === "GET" : route.method === effective;
   if (!methodOk) return null;
   for (const template of route.paths) {
     const params = matchPath(template, path);
@@ -170,24 +172,30 @@ function isWorkerPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/") || pathname === "/pool" || pathname.startsWith("/pool/");
 }
 
+function routeRequest(request: Request, env: Env): Response | Promise<Response> {
+  const { pathname } = new URL(request.url);
+  if (pathname === HEALTH_PATH && (request.method === "GET" || request.method === "HEAD")) {
+    return Response.json({ ok: true });
+  }
+  for (const route of MATCH_ORDER) {
+    const params = matchRoute(route, request.method, pathname);
+    if (params === null) continue;
+    const blocked = guard(route, request, env);
+    if (blocked !== null) return blocked;
+    const handler = ROUTE_TABLE.handlers.get(routeKey(route));
+    if (handler !== undefined) {
+      return handler({ request, env, params, route });
+    }
+    return dispatch(route, request, env, params);
+  }
+  if (isWorkerPath(pathname)) return notFound();
+  return env.ASSETS.fetch(request);
+}
+
 export default {
-  fetch(request, env): Response | Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (pathname === HEALTH_PATH && request.method === "GET") {
-      return Response.json({ ok: true });
-    }
-    for (const route of MATCH_ORDER) {
-      const params = matchRoute(route, request.method, pathname);
-      if (params === null) continue;
-      const blocked = guard(route, request, env);
-      if (blocked !== null) return blocked;
-      const handler = ROUTE_TABLE.handlers.get(routeKey(route));
-      if (handler !== undefined) {
-        return handler({ request, env, params, route });
-      }
-      return dispatch(route, request, env, params);
-    }
-    if (isWorkerPath(pathname)) return notFound();
-    return env.ASSETS.fetch(request);
+  async fetch(request, env): Promise<Response> {
+    const response = await routeRequest(request, env);
+    // HEAD answers what GET answers: the same status and headers, and no body.
+    return request.method === "HEAD" ? new Response(null, response) : response;
   },
 } satisfies ExportedHandler<Env>;

@@ -17,7 +17,7 @@ import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
 import { deliverEvents, recordTrunkError, runEffects, type EffectRef } from "./after-commit.ts";
-import { deliverHeadsUps, pushOutbox, reconcileOnStart } from "./push.ts";
+import { deliverHeadsUps, outboxRow, pushOutbox, reconcileOnStart } from "./push.ts";
 import { armAlarm, runAlarm } from "./alarm.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
 
@@ -283,15 +283,21 @@ export class Trunk extends DurableObject<Env> {
 
   /** One `pushOutbox`. True when the push's answer was applied to the engine, which is when the
    * pipeline has new work. */
-  async #pushOnce(): Promise<boolean> {
+  async #pushOnce(now?: number): Promise<boolean> {
     let applied = false;
     try {
-      await pushOutbox(this.env, this.ctx, async (name, input) => {
-        const r = await this.#callEngineEntry(name, input);
-        if ("error" in r) throw new Error(`push apply ${name} failed`);
-        applied = true;
-        return r.result;
-      });
+      await pushOutbox(
+        this.env,
+        this.ctx,
+        async (name, input) => {
+          const r = await this.#callEngineEntry(name, input);
+          if ("error" in r) throw new Error(`push apply ${name} failed`);
+          applied = true;
+          return r.result;
+        },
+        undefined,
+        now,
+      );
     } catch {
       recordTrunkError(this.ctx, "push", "transport");
     }
@@ -370,6 +376,9 @@ export class Trunk extends DurableObject<Env> {
       meta: metaAll(this.#sql),
       events_out: pendingEvents(this.#sql).map((row) => ({ ...row, body: JSON.parse(row.body) as unknown })),
       timers: timerList(this.#sql),
+      // The engine's `outbox` table exists only once `pool_create` ran (shell objects can be
+      // named anything — a state read must not 500 before the pool exists).
+      outbox: metaGet(this.#sql, "pool_id") === null ? null : outboxRow(this.ctx),
       served: Object.fromEntries(this.#served),
     });
   }
@@ -381,7 +390,11 @@ export class Trunk extends DurableObject<Env> {
       const pathname = url.pathname;
       if (pathname === "/internal/state" && request.method === "GET") return this.#state();
       if (pathname === "/internal/alarm") {
-        await this.#runAlarm();
+        // `?now=` lets a test drive the retry schedule through the alarm path without sleeping
+        // for the real backoff (LP5a): the due-check alone reads it; scheduling stays real-time.
+        const now = url.searchParams.get("now");
+        const at = now === null ? undefined : Number(now);
+        await this.#runAlarm(at !== undefined && Number.isFinite(at) ? at : undefined);
         return json({ ok: true });
       }
       const input = await this.#readInput(request, url);
@@ -408,14 +421,15 @@ export class Trunk extends DurableObject<Env> {
     }
   }
 
-  #runAlarm(): Promise<void> {
+  #runAlarm(now?: number): Promise<void> {
     return runAlarm({
       env: this.env,
       ctx: this.ctx,
       sql: this.#sql,
+      now,
       runEntry: (kind) => this.#runTimerEntry(kind),
-      push: async () => {
-        if (await this.#pushOnce()) await this.#postCommit();
+      push: async (now) => {
+        if (await this.#pushOnce(now)) await this.#postCommit();
       },
       repush: async () => {
         try {

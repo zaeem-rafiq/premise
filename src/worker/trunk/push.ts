@@ -102,6 +102,13 @@ function refValue(read: string | null, oldV: string, newV: string): RefValue {
   return "other";
 }
 
+/** The notes ref's LP5 value for a batch that commands no notes update (the seed): absent reads
+ * as applied — the batch asked for no notes move, and reading it as `old` would retry a command
+ * that does not exist without end. A ref that exists is `other`, genuinely diverged. */
+function notesValue(read: string | null): RefValue {
+  return read === null ? "new" : "other";
+}
+
 /** The effect's deps: the lane's adapters, swapped for fakes in tests. */
 export type PushDeps = {
   tokenSource: Parameters<typeof runPush>[1]["tokenSource"];
@@ -179,20 +186,29 @@ export async function pushOutbox(
   ctx: DurableObjectState,
   apply: ApplyPush,
   deps: PushDeps = defaultDeps(env),
+  /** The time the due-check reads; absent, the wall clock. The alarm's `?now=` test path hands
+   * its override through so a retry is drivable without sleeping for the real backoff. */
+  now?: number,
 ): Promise<void> {
   if (pushing.has(ctx)) return;
   pushing.add(ctx);
   try {
-    await pushOutboxInner(env, ctx, apply, deps);
+    await pushOutboxInner(env, ctx, apply, deps, now ?? Date.now());
   } finally {
     pushing.delete(ctx);
   }
 }
 
-async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPush, deps: PushDeps): Promise<void> {
+async function pushOutboxInner(
+  env: Env,
+  ctx: DurableObjectState,
+  apply: ApplyPush,
+  deps: PushDeps,
+  now: number,
+): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
-  if (outbox.next_try !== null && outbox.next_try > Date.now()) return;
+  if (outbox.next_try !== null && outbox.next_try > now) return;
   // LP5b, LP8: a pool paused for a refused or diverged push does not push again; the owner
   // rebuilds it. A pause by the owner does not stop an accepted batch (SE11).
   if (pushHalted(ctx)) return;
@@ -230,7 +246,10 @@ async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPu
       return;
     }
     remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
-    remote_notes = refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
+    remote_notes =
+      outbox.new_notes === ""
+        ? notesValue(refs[NOTES_REF] ?? null)
+        : refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
     updates = updates.filter((u) => (u.ref === MAIN_REF ? remote_main : remote_notes) === "old");
     if (updates.length === 0) {
       const action = await apply("push_result", { remote_main, remote_notes });
@@ -277,12 +296,14 @@ async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPu
   remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
   remote_notes =
     outbox.new_notes === ""
-      ? // A batch with no notes command (the seed): a missing or matching notes ref is "old"/"new".
-        refValue(refs[NOTES_REF] ?? null, "", "")
+      ? notesValue(refs[NOTES_REF] ?? null)
       : refValue(refs[NOTES_REF] ?? null, outbox.old_notes, outbox.new_notes);
 
   const rejected = result.kind === "rejected";
-  if (rejected && remote_main === "old" && remote_notes === "old") countReject(ctx, outbox);
+  // LP5b's "both refs kept their old values": for a batch that commands no notes update (the
+  // seed) the notes ref cannot have moved — the absent ref counts as unchanged here.
+  const notesUnchanged = outbox.new_notes === "" ? remote_notes !== "other" : remote_notes === "old";
+  if (rejected && remote_main === "old" && notesUnchanged) countReject(ctx, outbox);
 
   const action = await apply("push_result", { remote_main, remote_notes });
   switch (action) {

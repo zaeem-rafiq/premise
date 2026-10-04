@@ -28,6 +28,7 @@ import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { event } from "./events.ts";
 import { closeCard, frozen, inflight, isWaiting, openCard, parked, sentBack, setState, unvalidate } from "./intents.ts";
+import { syncTriageOf, triageInputOf, triageOutcome } from "../classify/triage.ts";
 
 export type Row = [string, "holds" | "info" | "confirm" | "repair" | "triage" | "delete", string];
 
@@ -576,6 +577,27 @@ export function applyClassification(
   const hItems: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
   let strongest: "info" | "confirm" | "repair" | null = null;
   const e1keys: string[] = [];
+  // S6a/TR5: when the attempt's triage is a `SyncTriage` the rows are decided inside this
+  // transaction — the pool's port (`ScriptedTriage`) for a synthetic attempt, `OffTriage`
+  // while CLEF_TRIAGE is off or the kill switch is set — one `judgeNow` per deciding attempt
+  // (QR4's decider is the landed change, not the receiver). Otherwise the premises wait on
+  // the asynchronous Clef `Triage` of TR2.
+  const deciderOf = (it: ClassifyItem): Attempt =>
+    it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a;
+  const syncOut = new Map<Attempt, { answers: Record<string, number | null>; model: string }>();
+  const syncT = syncTriageOf(pool, a);
+  if (syncT !== null) {
+    const groups = new Map<Attempt, ClassifyItem[]>();
+    for (const it of c.items) {
+      if ((it.result ?? "holds") !== "triage" || it.folded === true) continue;
+      const decider = deciderOf(it);
+      const g = groups.get(decider);
+      if (g === undefined) groups.set(decider, [it]);
+      else g.push(it);
+    }
+    for (const [decider, items] of groups)
+      syncOut.set(decider, syncT.judgeNow(triageInputOf(pool, a, decider, items, causeAttempt)));
+  }
   for (const it of c.items) {
     const p = it.p;
     const rowResult = it.result ?? "holds";
@@ -589,6 +611,12 @@ export function applyClassification(
     p.hash = cur.hash;
     p.seq = seq;
     p.members = cur.members;
+    const syncAnswer =
+      rowResult === "triage" && it.folded !== true && syncOut.has(deciderOf(it))
+        ? (syncOut.get(deciderOf(it))?.answers[`${p.kind}:${p.key}`] ?? null)
+        : undefined;
+    const outcome =
+      syncAnswer === undefined ? null : { ...triageOutcome(pool, syncAnswer), model: syncOut.get(deciderOf(it))!.model };
     const j = pool.newJudgment(a, {
       kind: p.kind,
       key: p.key,
@@ -598,47 +626,45 @@ export function applyClassification(
       cause_seq: firstCauseSeq(cause),
       rule: it.rule ?? "",
       klass: rowResult === "triage" ? "triage" : "rule",
-      result: rowResult === "triage" ? null : rowResult === "info" ? "holds" : rowResult,
-      reason: it.reason ?? "",
+      result:
+        outcome !== null
+          ? outcome.result
+          : rowResult === "triage"
+            ? null
+            : rowResult === "info"
+              ? "holds"
+              : rowResult,
+      reason: outcome?.reason ?? it.reason ?? "",
       heads_up: it.folded !== true && rowResult !== "holds",
+      ...(outcome !== null ? { clef: { model: outcome.model, p: syncAnswer ?? null, error: null } } : {}),
     });
+    if (outcome !== null) {
+      j.t_repair = pool.K.T_REPAIR;
+      j.t_confirm = pool.K.T_CONFIRM;
+      it.reason = outcome.reason;
+    }
     pool.out.judgments.push(j);
     if (it.folded === true) {
       p.status = "holds";
       continue;
     }
     if (rowResult === "triage") {
-      // SW5/TR8: a scripted agent's premise never reaches Clef. The row is answered inside this
-      // transaction by the truth list: `repair` when the premise is in the list, `holds`
-      // otherwise. For QR4 the deciding list is the landed change's (the reader), not the
-      // receiving attempt's.
-      const decider = it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a;
-      if (decider.agent_kind === "synthetic") {
-        const truth = decider.truth ?? [];
-        const result = truth.includes(`${p.kind}:${p.key}`) ? "repair" : "holds";
-        p.status = result === "repair" ? "pending_repair" : "holds";
-        j.result = result;
-        j.reason = result === "repair" ? "triage_depends" : "reaffirmed";
-        j.resolved_at = pool.now();
-        j.dirty = true;
-        event(pool, "premise.judged", {
-          attempt_id: a.id,
-          kind: p.kind,
-          key: p.key,
-          old_hash: j.old_hash,
-          new_hash: j.new_hash,
-          cause: j.cause,
-          cause_seq: j.cause_seq,
-          rule: j.rule,
-          class: "triage",
-          result,
-          reason: j.reason,
-          clef: null,
-        }, { headsup: true });
-        hItems.push(hItem(pool, a, it, result, j.cause_seq));
-        if (result === "repair") {
+      if (outcome !== null) {
+        // TR5: a synchronous decider answered inside this transaction — no pending item and
+        // no triage timer; the item is in the batch's heads-up with its final result (an
+        // info-level item for `holds`, so a re-affirmation is never silent).
+        p.status =
+          outcome.result === "repair"
+            ? "pending_repair"
+            : outcome.result === "confirm"
+              ? "pending_confirm"
+              : "holds";
+        hItems.push(hItem(pool, a, it, outcome.result, j.cause_seq));
+        if (outcome.result === "repair") {
           strongest = "repair";
           if (it.rule === "E1") e1keys.push(p.key);
+        } else if (outcome.result === "confirm") {
+          if (strongest !== "repair") strongest = "confirm";
         } else if (strongest === null) strongest = "info";
         continue;
       }

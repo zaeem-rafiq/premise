@@ -45,6 +45,7 @@ import {
   unvalidate,
 } from "./intents.ts";
 import { applyClassification, blast, classify, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 
@@ -1052,14 +1053,12 @@ export function triage(
   pool.pendingTriage.splice(i, 1);
   const a = t.a;
   const p = t.p;
-  let result: "holds" | "confirm" | "repair";
-  if (args.p === null || args.p === undefined) result = "confirm";
-  else if (args.p >= pool.K.T_REPAIR) result = "repair";
-  else if (args.p >= pool.K.T_CONFIRM) result = "confirm";
-  else result = "holds";
+  const outcome = triageOutcome(pool, args.p ?? null);
+  const result = outcome.result;
   p.status = result === "repair" ? "pending_repair" : result === "confirm" ? "pending_confirm" : "holds";
   const j = t.judgment;
   j.result = result;
+  j.reason = outcome.reason;
   j.clef_p = args.p ?? null;
   j.t_repair = pool.K.T_REPAIR;
   j.t_confirm = pool.K.T_CONFIRM;

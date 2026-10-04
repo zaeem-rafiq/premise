@@ -13,6 +13,7 @@ import { CASES_FILE, loadCases, loadRequired } from "./load.ts";
 import { runCase, sqlOver, type Pools } from "./driver.ts";
 import { DatabaseSync } from "node:sqlite";
 import { Trunk } from "../../src/core/trunk/registry.ts";
+import { ScriptedTriage } from "../../src/swarm/scripted-triage.ts";
 
 const REQUIRED_IDS = new Set(["C01", "C23", "C28"]);
 
@@ -93,5 +94,67 @@ describe("premise case vectors through the Trunk engine", () => {
     const checks = (resp.result as { checks?: Array<{ name: string; ok: boolean }> }).checks ?? [];
     expect(checks.map((c) => c.name)).toContain("policy");
     expect(checks.find((c) => c.name === "policy")?.ok).toBe(true);
+  });
+});
+
+describe("synchronous triage (01-core S6a, TR5)", () => {
+  it("C06 with CLEF_TRIAGE off answers confirm/triage_unavailable in the same heads-up", () => {
+    // Plan 2.3 item 1: the vector's steps as far as the landing, with CLEF_TRIAGE off. The
+    // OffTriage answers every premise null inside the accept transaction: the batch's own
+    // heads-up carries the final `confirm` item with reason `triage_unavailable` — no pending
+    // item and no triage timer (TR5).
+    const sql = sqlOver(new DatabaseSync(":memory:"));
+    const trunk = Trunk.create(sql, tidepool.files, {
+      switches: { CLEF_TRIAGE: "off" },
+      features: { held: true },
+      syncTriage: ScriptedTriage,
+    });
+    trunk.pushOk();
+    trunk.openAttempt("A", { intent: "a crab that hides when its energy is low" });
+    trunk.openAttempt("B", { intent: "raise the top speed to 3" });
+    trunk.tool({ attempt_id: "A", call_id: "A:1", tool: "read", args: { path: "world/movement.js", entity: "MAX_SPEED" }, ack: 0 });
+    trunk.tool({ attempt_id: "A", call_id: "A:2", tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" }, ack: 0 });
+    trunk.tool({
+      attempt_id: "A",
+      call_id: "A:3",
+      tool: "write",
+      args: {
+        path: "creatures/crab.js",
+        content:
+          'import { ENERGY_MAX } from "../world/energy.js";\n' +
+          "export function spawn() { return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX }; }\n" +
+          "export function update(crab) { crab.hiding = crab.energy < 30; }\n",
+      },
+      ack: 0,
+    });
+    trunk.tool({ attempt_id: "B", call_id: "B:1", tool: "read", args: { path: "world/movement.js", entity: "MAX_SPEED" }, ack: 0 });
+    trunk.tool({ attempt_id: "B", call_id: "B:2", tool: "replace", args: { path: "world/movement.js", old: "MAX_SPEED = 2", new: "MAX_SPEED = 3" }, ack: 0 });
+    const sub = trunk.tool({ attempt_id: "B", call_id: "B:3", tool: "submit", args: { summary: "Raise MAX_SPEED to 3" }, ack: 0 });
+    expect(sub.ok).toBe(true);
+    trunk.tick();
+
+    const pool = trunk.pool;
+    // The accept transaction's own trace (the call's `pool.out` resets per call): the
+    // heads-up the landing produced for A.
+    const sent = pool.out.heads_ups.filter((h) => h.to === "A");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.result).toBe("confirm");
+    const items = sent[0]?.items as Array<Record<string, unknown>>;
+    const e3 = items.find((i) => i.key === "world/movement.js#MAX_SPEED");
+    expect(e3).toMatchObject({ kind: "entity", rule: "E3", result: "confirm", reason: "triage_unavailable" });
+    const j = pool.out.judgments.find(
+      (x) => x.attempt_id === "A" && x.key === "world/movement.js#MAX_SPEED" && x.rule === "E3",
+    );
+    expect(j?.klass).toBe("triage");
+    expect(j?.result).toBe("confirm");
+    expect(j?.reason).toBe("triage_unavailable");
+    expect(j?.clef_model).toBe("off");
+    expect(j?.clef_p).toBeNull();
+    // TR5: nothing waits on a Clef answer.
+    expect(pool.pendingTriage).toHaveLength(0);
+    expect(pool.attempts.get("A")?.premises.get("entity|world/movement.js#MAX_SPEED")?.status).toBe("pending_confirm");
+
+    trunk.pushOk(); // the landing commits (the note route is out of scope here)
+    expect(pool.out.landed).toEqual([1]);
   });
 });

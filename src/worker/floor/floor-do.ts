@@ -17,6 +17,7 @@ import { computeMetrics, emptyFloorState, reduce } from "../../protocol/reducer/
 import { redactMatch } from "../../protocol/redact.ts";
 import { REPLAY_FORMAT, type ReplayHeader } from "../../protocol/replay.ts";
 import { MAX_SOCKETS_PER_ADDR, METRICS_EVERY_MS } from "../../protocol/constants.ts";
+import { blobId } from "../../core/sync/sha1.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
 import {
@@ -281,10 +282,11 @@ export class Floor extends DurableObject<Env> {
     const event = landingEvent(this.ctx.storage.sql, Number(segment));
     if (event === null || event.type !== "landing.landed") return jsonError("not_found", 404);
     if (typeof event.note_json !== "string") return jsonError("not_found", 404); // EV6: summary_only has no notes
-    // NT1: the blob is the canonical JSON plus exactly one LF. `note_json` carries the JSON
-    // without it, so the route's bytes are the field with the LF the blob ends in — its
-    // hash-object is then `landing.landed.note`.
-    const body = event.note_json.endsWith("\n") ? event.note_json : `${event.note_json}\n`;
+    // NT1: the blob's bytes are the canonical JSON plus exactly one LF, and `landing.landed.note`
+    // is that blob's id — so the route answers the bytes only after they hash back to `note`
+    // (a stored field that cannot be the blob is echoed as it stands).
+    const canonical = event.note_json.endsWith("\n") ? event.note_json : `${event.note_json}\n`;
+    const body = blobId(new TextEncoder().encode(canonical)) === event.note ? canonical : event.note_json;
     return new Response(body, { headers: { "content-type": "application/json" } });
   }
 

@@ -28,13 +28,11 @@ for (const size of SIZES) {
   for (const theme of THEMES) {
     test(`lead-look ${size.name} ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: size.w, height: size.h });
-      await page.addInitScript(
-        ([key, value]) => window.localStorage.setItem(key as string, value as string),
-        ["premise.theme", theme] as const,
-      );
-      await page.route("**/pool/**", (route) =>
-        route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-      );
+      await page.addInitScript(([key, value]) => window.localStorage.setItem(key as string, value as string), [
+        "premise.theme",
+        theme,
+      ] as const);
+      await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
       await page.goto("/replay/hero-c04");
       await expect(page.locator(".rail")).toBeVisible();
 

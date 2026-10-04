@@ -46,22 +46,24 @@ for (const size of [
   test.describe(`at ${size.name}`, () => {
     test.beforeEach(async ({ page }) => {
       await page.setViewportSize({ width: size.w, height: size.h });
-      await page.route("**/pool/**", (route) =>
-        route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-      );
+      await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
     });
 
-/** Dismisses the start card if it is on screen. The card mounts and unmounts as the
- * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
- * click goes through evaluate on the DOM as it stands. */
-async function dismissStart(page: Page): Promise<void> {
-  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
-  await page.evaluate(() => {
-    for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
-      if (/look/i.test(b.textContent ?? "")) b.click();
+    /** Dismisses the start card if it is on screen. The card mounts and unmounts as the
+     * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
+     * click goes through evaluate on the DOM as it stands. */
+    async function dismissStart(page: Page): Promise<void> {
+      await page
+        .locator(".start-card")
+        .first()
+        .waitFor({ state: "attached", timeout: 3000 })
+        .catch(() => {});
+      await page.evaluate(() => {
+        for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
+          if (/look/i.test(b.textContent ?? "")) b.click();
+        }
+      });
     }
-  });
-}
 
     // (b) One place draws the card sheet: the shell's SheetTarget -> the registry's
     // sheet.card binding. A tap on the tray's Open button or key N opens it; Esc closes.
@@ -81,7 +83,10 @@ async function dismissStart(page: Page): Promise<void> {
       const sheet = page.locator(".card-sheet");
       await expect(sheet).toHaveCount(1);
       await expect(sheet).toContainText("Land the change?");
-      await sheet.getByRole("button", { name: /close|Close/ }).first().click();
+      await sheet
+        .getByRole("button", { name: /close|Close/ })
+        .first()
+        .click();
       await expect(sheet).toHaveCount(0);
     });
 

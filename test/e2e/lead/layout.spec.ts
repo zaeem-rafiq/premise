@@ -31,16 +31,18 @@ const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><scri
 </script>`;
 
 async function servePoolHost(page: Page): Promise<void> {
-  await page.route("**/pool/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-  );
+  await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
 }
 
 /** Dismisses the start card if it is on screen. The card mounts and unmounts as the
  * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
  * click goes through evaluate on the DOM as it stands. */
 async function dismissStart(page: Page): Promise<void> {
-  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page
+    .locator(".start-card")
+    .first()
+    .waitFor({ state: "attached", timeout: 3000 })
+    .catch(() => {});
   await page.evaluate(() => {
     for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
       if (/look/i.test(b.textContent ?? "")) b.click();
@@ -62,9 +64,7 @@ const SIZES = [
 // 2.1/LY1: at both sizes the pool frame is 16:9 at the pool column's full width, in the
 // recording and over a live stream. The pool column uses the body's full height.
 for (const size of SIZES) {
-  test(`the pool frame is ${size.poolW}x${size.frameH} at ${size.name} in Replay (2.1/LY1)`, async ({
-    page,
-  }) => {
+  test(`the pool frame is ${size.poolW}x${size.frameH} at ${size.name} in Replay (2.1/LY1)`, async ({ page }) => {
     await page.setViewportSize({ width: size.w, height: size.h });
     await servePoolHost(page);
     await page.goto("/replay/hero-c04");
@@ -161,7 +161,15 @@ for (const size of SIZES) {
         type: "premise.recorded",
         attempt_id: "a_1",
         tool: "read",
-        premise: { kind: "entity", key: "world/energy.js#ENERGY_MAX", hash: "h0", seq: 0, read: true, edit: false, derived: false },
+        premise: {
+          kind: "entity",
+          key: "world/energy.js#ENERGY_MAX",
+          hash: "h0",
+          seq: 0,
+          read: true,
+          edit: false,
+          derived: false,
+        },
       }),
       ev(7, {
         type: "op.recorded",

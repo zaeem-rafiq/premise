@@ -24,9 +24,7 @@ for (const size of SIZES) {
         const padL = parseFloat(cs.paddingLeft);
         const padR = parseFloat(cs.paddingRight);
         const name = cell.querySelector(".strip-label")?.textContent ?? "?";
-        for (const el of cell.querySelectorAll<HTMLElement>(
-          ".strip-label, .strip-value, .strip-sub",
-        )) {
+        for (const el of cell.querySelectorAll<HTMLElement>(".strip-label, .strip-value, .strip-sub")) {
           const r = el.getBoundingClientRect();
           if (r.width === 0 && r.height === 0) continue;
           const inside =

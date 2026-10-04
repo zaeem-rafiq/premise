@@ -36,7 +36,8 @@ const TILES_CSS = `
 button.tile { cursor: pointer; }
 button.tile:hover { border-color: var(--accent, #6fd6cc); }
 .tile:focus-visible { outline: 3px solid var(--focus, #ffe08a); outline-offset: 2px; }
-.tile-name { font-size: var(--size-small, 14px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-name { font-size: var(--size-small, 14px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 8px; }
 .tile-label { background: transparent; border-style: dashed; border-color: var(--line, #3a5669); color: var(--muted, #a8bcc6); }
 .tile-marks { display: flex; align-items: center; gap: 4px; min-height: 8px; }
 .tile-mark { display: inline-block; flex: none; width: 8px; height: 8px; box-sizing: border-box; }
@@ -44,7 +45,7 @@ button.tile:hover { border-color: var(--accent, #6fd6cc); }
 .tile-mark-w { background: var(--accent, #6fd6cc); }
 .tile-more-marks { color: var(--muted, #a8bcc6); font-size: var(--size-small, 14px); }
 .tile-tag { align-self: flex-start; padding: 0 6px; border-radius: 999px; border: var(--border, 1px) solid var(--holds, #5bd68f);
-  color: var(--holds, #5bd68f); font-size: var(--size-small, 14px); line-height: 1.4; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  color: var(--holds, #5bd68f); font-size: var(--size-small, 14px); line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tile-removed { color: var(--muted, #a8bcc6); border-style: dashed; }
 .tile-removed .tile-name { text-decoration: line-through; }
 .tile-glow { animation: tile-in 2s var(--ease, ease); }
@@ -155,7 +156,10 @@ export function FileTiles(props: FileTilesProps) {
   // last, same label, aria-expanded) closes it — the pattern `banner.more` uses.
   // `reduce` mutates `FloorState` in place: `state.n` in the deps stands for "the stream
   // moved" the way the rail's `[floor, floor.n]` does — a bare `[state]` never recomputes.
-  const allCells = useMemo(() => tileCells(state, { removedPaths: gone, glowPaths: glow }), [state, state.n, gone, glow]);
+  const allCells = useMemo(
+    () => tileCells(state, { removedPaths: gone, glowPaths: glow }),
+    [state, state.n, gone, glow],
+  );
   const clipped = useMemo(
     () => tileCells(state, { capacity, removedPaths: gone, glowPaths: glow }),
     [state, state.n, capacity, gone, glow],
@@ -200,21 +204,23 @@ export function FileTiles(props: FileTilesProps) {
     const body = (
       <>
         <span className="tile-name">{tileName(file.path)}</span>
-        <span className="tile-marks">
-          {Array.from({ length: marks.readers }, (_, k) => (
-            <span key={`r${k}`} className="tile-mark tile-mark-r" />
-          ))}
-          {Array.from({ length: marks.writers }, (_, k) => (
-            <span key={`w${k}`} className="tile-mark tile-mark-w" />
-          ))}
-          {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
-        </span>
-        {file.tier === "held" && !removed && (
-          <span className="tile-tag" title={text("tile.held.tip")}>
-            {text("tile.held")}
+        <span className="tile-foot">
+          <span className="tile-marks">
+            {Array.from({ length: marks.readers }, (_, k) => (
+              <span key={`r${k}`} className="tile-mark tile-mark-r" />
+            ))}
+            {Array.from({ length: marks.writers }, (_, k) => (
+              <span key={`w${k}`} className="tile-mark tile-mark-w" />
+            ))}
+            {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
           </span>
-        )}
-        {removed && <span className="tile-tag">{text("tile.removed")}</span>}
+          {file.tier === "held" && !removed && (
+            <span className="tile-tag" title={text("tile.held.tip")}>
+              {text("tile.held")}
+            </span>
+          )}
+          {removed && <span className="tile-tag">{text("tile.removed")}</span>}
+        </span>
       </>
     );
     const cls = ["tile", removed ? "tile-removed" : "", cell.glow ? "tile-glow" : ""].filter(Boolean).join(" ");

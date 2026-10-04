@@ -409,8 +409,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     <>
       {sheet.kind === "card" &&
         call(table.entries.get("sheet.card"), { floor, card_id: sheet.card_id, onClose: closeSheet })}
-      {sheet.kind === "why" &&
-        call(table.entries.get("sheet.why"), { floor, seq: sheet.seq, onClose: closeSheet })}
+      {sheet.kind === "why" && call(table.entries.get("sheet.why"), { floor, seq: sheet.seq, onClose: closeSheet })}
       {sheet.kind === "who" &&
         call(table.entries.get("sheet.who"), {
           floor,
@@ -418,8 +417,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           key: sheet.key,
           onClose: closeSheet,
         })}
-      {sheet.kind === "undo" &&
-        call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
+      {sheet.kind === "undo" && call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
       {sheet.kind === "about" && (
         <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
       )}
@@ -532,11 +530,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                   ? (path) => openSheet({ kind: "who", kind_: "file", key: path })
                   : undefined
               }
-              onTileWhy={
-                table.entries.has("sheet.why")
-                  ? (_path, seq) => openSheet({ kind: "why", seq })
-                  : undefined
-              }
+              onTileWhy={table.entries.has("sheet.why") ? (_path, seq) => openSheet({ kind: "why", seq }) : undefined}
             />
             {!replay && quietPool(floor, clock) && !startDismissed && (
               <div className="start-overlay">

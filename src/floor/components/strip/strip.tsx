@@ -29,10 +29,7 @@ export function Strip({ cells, stale }: { cells: StripCell[]; stale: number | nu
               wraps keeps the value on its last line, so nothing is ever clipped. */}
           <div className="strip-main">
             <span className="strip-label">{cell.label}</span>{" "}
-            <span
-              className={cell.text === true ? "strip-value strip-value--text" : "strip-value"}
-              key={cell.value}
-            >
+            <span className={cell.text === true ? "strip-value strip-value--text" : "strip-value"} key={cell.value}>
               {cell.value}
             </span>
             {cell.sub !== undefined && <span className="strip-sub"> {cell.sub}</span>}

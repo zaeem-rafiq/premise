@@ -37,7 +37,11 @@ const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><scri
  * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
  * click goes through evaluate on the DOM as it stands. */
 async function dismissStart(page: Page): Promise<void> {
-  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page
+    .locator(".start-card")
+    .first()
+    .waitFor({ state: "attached", timeout: 3000 })
+    .catch(() => {});
   await page.evaluate(() => {
     for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
       if (/look/i.test(b.textContent ?? "")) b.click();
@@ -49,9 +53,7 @@ async function serveLive(page: Page, frames: object[]): Promise<void> {
   await page.route("**/floor.json", (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(FLOOR) }),
   );
-  await page.route("**/pool/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-  );
+  await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
   await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {
     ws.onMessage((message) => {
       const request = JSON.parse(message.toString()) as { hello?: number };
@@ -86,18 +88,16 @@ async function picture(page: Page) {
   }
   cards.sort((a, b) => a.intent.localeCompare(b.intent));
 
-  const tiles = await page
-    .locator(".tiles-grid .tile")
-    .evaluateAll((els) =>
-      els
-        .map((el) => ({
-          name: (el.querySelector(".tile-name")?.textContent ?? "").trim(),
-          label: el.classList.contains("tile-label"),
-          r: el.querySelectorAll(".tile-mark-r").length,
-          w: el.querySelectorAll(".tile-mark-w").length,
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    );
+  const tiles = await page.locator(".tiles-grid .tile").evaluateAll((els) =>
+    els
+      .map((el) => ({
+        name: (el.querySelector(".tile-name")?.textContent ?? "").trim(),
+        label: el.classList.contains("tile-label"),
+        r: el.querySelectorAll(".tile-mark-r").length,
+        w: el.querySelectorAll(".tile-mark-w").length,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
   return { cells, cards, tiles };
 }
 
@@ -136,9 +136,7 @@ test("AC1: live, snapshot-join and Replay draw the same page", async ({ browser 
   // 3) Replay to the end.
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-    await page.route("**/pool/**", (route) =>
-      route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-    );
+    await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
     await page.goto("/replay/hero-c04");
     await page.keyboard.press(".");
     await page.keyboard.press(".");

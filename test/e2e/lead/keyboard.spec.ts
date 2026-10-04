@@ -27,7 +27,11 @@ const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><scri
  * stream's quiet test flips, so a Playwright click can lose its element mid-action — the
  * click goes through evaluate on the DOM as it stands. */
 async function dismissStart(page: Page): Promise<void> {
-  await page.locator(".start-card").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
+  await page
+    .locator(".start-card")
+    .first()
+    .waitFor({ state: "attached", timeout: 3000 })
+    .catch(() => {});
   await page.evaluate(() => {
     for (const b of document.querySelectorAll<HTMLButtonElement>(".start-card button")) {
       if (/look/i.test(b.textContent ?? "")) b.click();
@@ -35,61 +39,59 @@ async function dismissStart(page: Page): Promise<void> {
   });
 }
 
-const REGION = [
-  ".header",
-  ".strip",
-  ".banners",
-  ".pool-column",
-  ".rail",
-  ".replay-bar",
-] as const;
+const REGION = [".header", ".strip", ".banners", ".pool-column", ".rail", ".replay-bar"] as const;
 
 async function focused(page: Page): Promise<{ rank: number; tag: string; cls: string; ring: boolean }> {
-  return page.evaluate((regions) => {
-    let el = document.activeElement as HTMLElement | null;
-    if (el === null) return { rank: -2, tag: "", cls: "", ring: false };
-    // Focus inside a frame's document leaves the page's activeElement on <body>: find the
-    // same-origin frame that holds focus and count focus as being on that frame.
-    let body = false;
-    if (el.tagName === "BODY") {
-      for (const frame of Array.from(document.querySelectorAll("iframe"))) {
-        try {
-          if (frame.contentDocument !== null && frame.contentDocument.hasFocus()) {
-            el = frame;
-            break;
+  return page.evaluate(
+    (regions) => {
+      let el = document.activeElement as HTMLElement | null;
+      if (el === null) return { rank: -2, tag: "", cls: "", ring: false };
+      // Focus inside a frame's document leaves the page's activeElement on <body>: find the
+      // same-origin frame that holds focus and count focus as being on that frame.
+      let body = false;
+      if (el.tagName === "BODY") {
+        for (const frame of Array.from(document.querySelectorAll("iframe"))) {
+          try {
+            if (frame.contentDocument !== null && frame.contentDocument.hasFocus()) {
+              el = frame;
+              break;
+            }
+          } catch {
+            /* cross-origin frame: not ours */
           }
-        } catch {
-          /* cross-origin frame: not ours */
         }
+        body = el.tagName === "BODY"; // the document's rest state at the end of the tab order
       }
-      body = el.tagName === "BODY"; // the document's rest state at the end of the tab order
-    }
-    let rank = -1;
-    regions.forEach((sel, i) => {
-      if (el.closest(sel) !== null) rank = i;
-    });
-    const ringOn = (node: Element | null) => {
-      if (node === null) return false;
-      const cs = getComputedStyle(node);
-      return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) || cs.boxShadow !== "none";
-    };
-    // An iframe's box is painted by its document: its focus ring lives on .pf-body.
-    const ring = ringOn(el) || (el.tagName === "IFRAME" && ringOn(el.parentElement));
-    return {
-      rank, body, tag: el.tagName, cls: String(el.className).slice(0, 60), ring,
-      src: el.tagName === "IFRAME" ? String((el as HTMLIFrameElement).src).slice(-40) : "",
-      matchesFocus: el.matches(":focus"),
-      parentWithin: el.parentElement?.matches(":focus-within") ?? false,
-      parentCls: String(el.parentElement?.className ?? "").slice(0, 40),
-    };
-  }, REGION as unknown as string[]);
+      let rank = -1;
+      regions.forEach((sel, i) => {
+        if (el.closest(sel) !== null) rank = i;
+      });
+      const ringOn = (node: Element | null) => {
+        if (node === null) return false;
+        const cs = getComputedStyle(node);
+        return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2) || cs.boxShadow !== "none";
+      };
+      // An iframe's box is painted by its document: its focus ring lives on .pf-body.
+      const ring = ringOn(el) || (el.tagName === "IFRAME" && ringOn(el.parentElement));
+      return {
+        rank,
+        body,
+        tag: el.tagName,
+        cls: String(el.className).slice(0, 60),
+        ring,
+        src: el.tagName === "IFRAME" ? String((el as HTMLIFrameElement).src).slice(-40) : "",
+        matchesFocus: el.matches(":focus"),
+        parentWithin: el.parentElement?.matches(":focus-within") ?? false,
+        parentCls: String(el.parentElement?.className ?? "").slice(0, 40),
+      };
+    },
+    REGION as unknown as string[],
+  );
 }
 
 test("keyboard focus order crosses every region in order (AC10)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.route("**/pool/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-  );
+  await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
   await page.goto("/replay/hero-c04");
   await expect(page.locator(".rail")).toBeVisible();
   await expect(page.locator(".replay-bar")).toBeVisible();
@@ -113,9 +115,7 @@ test("keyboard focus order crosses every region in order (AC10)", async ({ page 
   // The order never goes backwards, and every region is reached.
   const ranks = seen.map((f) => f.rank);
   for (let i = 1; i < ranks.length; i++) {
-    expect(ranks[i]!, `focus jumped back ${seen[i - 1]!.cls} -> ${seen[i]!.cls}`).toBeGreaterThanOrEqual(
-      ranks[i - 1]!,
-    );
+    expect(ranks[i]!, `focus jumped back ${seen[i - 1]!.cls} -> ${seen[i]!.cls}`).toBeGreaterThanOrEqual(ranks[i - 1]!);
   }
   for (const region of [0, 1, 3, 4, 5]) {
     expect(ranks, `region ${REGION[region]} never focused`).toContain(region);
@@ -137,9 +137,7 @@ test("the About sheet opens and closes from the keyboard", async ({ page }) => {
 
 test("a card sheet opens and closes from the keyboard", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.route("**/pool/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: POOL_PAGE }),
-  );
+  await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
   await serveStream(page, [
     poolState(1),
     intentCreated(2),

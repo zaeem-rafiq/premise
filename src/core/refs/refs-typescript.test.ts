@@ -6,6 +6,7 @@ import { describe, it } from "vitest";
 import assert from "node:assert";
 import { IMPORT_LANGUAGES } from "../keys/paths.ts";
 import { analyse, isExternalSpecifier, resolveSpecifier } from "./refs.ts";
+import { parseModule } from "../entities/entities.ts";
 
 const R = (files: ReadonlySet<string>, from: string, specifier: string) =>
   resolveSpecifier(from, specifier, IMPORT_LANGUAGES, files);
@@ -182,5 +183,13 @@ describe("analyse under a language set (LG1, LG3)", () => {
       { from: "b.js#(import ./a.ts)", to: "a.ts#x" },
       { from: "b.js#y", to: "a.ts#x" },
     ]);
+  });
+});
+
+describe("the tide-pool default every existing caller keeps (LG1)", () => {
+  it("parseModule without a language is JavaScript: TypeScript source throws and is opaque", () => {
+    assert.throws(() => parseModule("interface I { a: string }\n")); // the default is "javascript"
+    assert.equal(parseModule("const x = 1;").entities[0]?.name, "x");
+    assert.throws(() => parseModule("const V = <div />;")); // JSX is not in the default set
   });
 });

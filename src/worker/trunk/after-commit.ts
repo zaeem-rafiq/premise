@@ -20,6 +20,7 @@ import {
   pendingEvents,
   sqlOf,
   timerDelete,
+  timerGetDue,
   timerPut,
 } from "./sql.ts";
 
@@ -43,7 +44,9 @@ export function recordTrunkError(ctx: DurableObjectState, where: string, code: s
         where,
         code,
       });
-      timerPut(sql, "events", "", now);
+      // Arm the delivery timer only when none exists — a live backoff is a deliberate future due
+      // (AL2), and an in-flight one does not need a second.
+      if (timerGetDue(sql, "events", "") === null) timerPut(sql, "events", "", now);
     });
   } catch {
     // The store itself failed: nothing durable remains to write to.

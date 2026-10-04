@@ -107,6 +107,13 @@ export function timerList(sql: Sql): TimerRow[] {
     .map((row) => ({ kind: String(row.kind), key: String(row.key), due_at: Number(row.due_at) }));
 }
 
+/** The `due_at` of the one `(kind, key)` timer, or null — '' is the single-instance key (3.3). */
+export function timerGetDue(sql: Sql, kind: string, key: string): number | null {
+  const rows = sql.exec("SELECT due_at FROM timers WHERE kind = ? AND key = ?", kind, key).toArray();
+  const d = rows[0]?.due_at;
+  return d === null || d === undefined ? null : Number(d);
+}
+
 /** The timers whose `due_at` has passed, in `due_at` order (AL1). */
 export function timerDue(sql: Sql, now: number): TimerRow[] {
   return timerList(sql).filter((timer) => timer.due_at <= now);

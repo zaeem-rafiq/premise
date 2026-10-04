@@ -124,7 +124,6 @@ export class Trunk extends DurableObject<Env> {
         synthetic: "0",
         repo: create.remote,
         create_request_id: create.request_id,
-        reconciled: "1",
       })) {
         metaSet(ctx.sql, key, value);
       }
@@ -192,12 +191,14 @@ export class Trunk extends DurableObject<Env> {
 
   /**
    * LP7: on the first request after start-up — never in the constructor — reconcile the outbox with
-   * the remote through the `restart` entry when the git lane registers it. Until then, or when a
-   * fresh pool has nothing pending, this only marks `meta.reconciled`.
+   * the remote through the `restart` entry when the git lane registers it. The flag is in-memory on
+   * purpose: the check belongs to this object's start, not to the pool's life, so an evicted object
+   * reconciles again at its next start.
    */
+  #reconciled = false;
   #ensureReconciled(): void {
-    if (metaGet(this.#sql, "reconciled") === "1") return;
-    this.#sql.transaction(() => metaSet(this.#sql, "reconciled", "1"));
+    if (this.#reconciled) return;
+    this.#reconciled = true;
     if (!this.#engine.entries.has("restart")) return;
     void this.#runEntry("restart", { restart: true }, "restart", new URLSearchParams()).catch(() =>
       recordTrunkError(this.ctx, "restart", "engine_error"),
@@ -319,9 +320,11 @@ export class Trunk extends DurableObject<Env> {
     }
   }
 
-  /** The alarm override (AL1): all due timers in order, then re-arm — also on a throw (AL2). */
+  /** The alarm override (AL1): all due timers in order, then re-arm — also on a throw (AL2).
+   * LP7's reconcile runs on the first request *or alarm*, so it is ensured here too. */
   override async alarm(): Promise<void> {
     try {
+      this.#ensureReconciled();
       await this.#runAlarm();
     } finally {
       await this.#arm();

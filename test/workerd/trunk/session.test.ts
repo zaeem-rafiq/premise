@@ -9,6 +9,7 @@
 //   SE21  the session read is limited to PUBLIC_RATE_PER_MIN per client address
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PUBLIC_RATE_PER_MIN, UNLOCK_FAILS_PER_MIN } from "../../../src/protocol/constants.ts";
 import { startTrunkWorker, type TrunkWorker } from "./harness.ts";
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
@@ -118,7 +119,7 @@ describe("the session routes with a configured OWNER_KEY", () => {
   it("SE2a: the eleventh wrong key in a minute answers 429 — and so does the right key", async () => {
     const address = "10.0.0.10";
     // At most UNLOCK_FAILS_PER_MIN (10) failed unlocks are accepted per address per minute.
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < UNLOCK_FAILS_PER_MIN; i += 1) {
       const res = await worker.fetch("/api/session", post("/api/session", { key: `wrong-${i}` }, { address }));
       expect(res.status).toBe(401);
     }
@@ -138,7 +139,7 @@ describe("the session routes with a configured OWNER_KEY", () => {
 
   it("SE21: the session read is limited to PUBLIC_RATE_PER_MIN per client address", async () => {
     const address = "10.0.0.20";
-    for (let i = 0; i < 120; i += 1) {
+    for (let i = 0; i < PUBLIC_RATE_PER_MIN; i += 1) {
       const res = await worker.fetch("/api/session", { headers: { "cf-connecting-ip": address } });
       expect(res.status).toBe(200);
     }

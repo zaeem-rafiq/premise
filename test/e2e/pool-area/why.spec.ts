@@ -30,9 +30,7 @@ const C04_ALL = C04.length - 1; // last event index
 const C05_ALL = C05.length - 1;
 /** hero-c04, with every `landing.landed.note_json` empty — the stream then holds no note and the
  * card must call the note route of 03-floor 4.5. */
-const C04_NO_NOTE = C04.map((event) =>
-  event.type === "landing.landed" ? { ...event, note_json: null } : event,
-);
+const C04_NO_NOTE = C04.map((event) => (event.type === "landing.landed" ? { ...event, note_json: null } : event));
 
 /** The note the fake route answers for seq 2 — a record the stream alone never gave. */
 const NOTE_2 = {
@@ -48,10 +46,28 @@ const NOTE_2 = {
     requester: "owner",
     created_at: "2024-01-01T00:00:01Z",
   },
-  attempt: { id: "a_A", agent: "real", model: "model-a", repo: null, opened_seq: 0, steps: 2, model_calls: 2, tokens_in: 10, tokens_out: 20 },
+  attempt: {
+    id: "a_A",
+    agent: "real",
+    model: "model-a",
+    repo: null,
+    opened_seq: 0,
+    steps: 2,
+    model_calls: 2,
+    tokens_in: 10,
+    tokens_out: 20,
+  },
   summary: "Add a crab that hides when its energy is low",
   premises: [
-    { kind: "entity", key: "world/energy.js#ENERGY_MAX", hash: "h-energy-1", seq: 1, read: true, edit: false, derived: true },
+    {
+      kind: "entity",
+      key: "world/energy.js#ENERGY_MAX",
+      hash: "h-energy-1",
+      seq: 1,
+      read: true,
+      edit: false,
+      derived: true,
+    },
     { kind: "file", key: "creatures/crab.js", hash: "absent", seq: 0, read: false, edit: true, derived: false },
   ],
   writes: [{ kind: "entity", key: "creatures/crab.js#update", old: "h-crab-30", new: "h-crab-03" }],
@@ -85,7 +101,11 @@ const NOTE_2 = {
   policy: { tier: "auto", approved_by: null, approved_at: null, option: "auto", risk: null },
   pull_backs: 0,
   batch: { id: 2, index: 0, size: 1 },
-  timing: { opened_at: "2024-01-01T00:00:01Z", submitted_at: "2024-01-01T00:00:08Z", accepted_at: "2024-01-01T00:00:09Z" },
+  timing: {
+    opened_at: "2024-01-01T00:00:01Z",
+    submitted_at: "2024-01-01T00:00:08Z",
+    accepted_at: "2024-01-01T00:00:09Z",
+  },
 };
 
 // ---- The harness page: PoolArea plus the two sheets under ShellContext. ----
@@ -251,7 +271,11 @@ async function serveHarness(page: Page): Promise<void> {
     if (noteAnswer === null) {
       await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
     } else {
-      await route.fulfill({ status: noteAnswer.status, contentType: "application/json", body: JSON.stringify(noteAnswer.body) });
+      await route.fulfill({
+        status: noteAnswer.status,
+        contentType: "application/json",
+        body: JSON.stringify(noteAnswer.body),
+      });
     }
   });
   await page.route("**/harness", async (route) => {
@@ -294,9 +318,7 @@ test.describe("2.8 item 1 — the Why card (3.9, CO22)", () => {
   test("a tapped creature opens the Why card of its newest change (hero-c04)", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, C04, C04_ALL);
-    await expect
-      .poll(async () => (await poolFrame(page)?.evaluate(() => true)) ?? false)
-      .toBe(true);
+    await expect.poll(async () => (await poolFrame(page)?.evaluate(() => true)) ?? false).toBe(true);
     const frame = poolFrame(page)!;
     // The frame reports a tap on creatures/crab.js (CO22); the shell opens the newest landing.
     await frame.evaluate(() => (window as never as { __tap: (p: string) => void }).__tap("creatures/crab.js"));
@@ -328,9 +350,7 @@ test.describe("2.8 item 1 — the Why card (3.9, CO22)", () => {
   test("a tapped creature opens the Why card (hero-c05: the crab's newest change is seq 2)", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, C05, C05_ALL);
-    await expect
-      .poll(async () => (await poolFrame(page)?.evaluate(() => true)) ?? false)
-      .toBe(true);
+    await expect.poll(async () => (await poolFrame(page)?.evaluate(() => true)) ?? false).toBe(true);
     const frame = poolFrame(page)!;
     await frame.evaluate(() => (window as never as { __tap: (p: string) => void }).__tap("creatures/crab.js"));
     const sheet = page.getByRole("dialog", { name: "Why is this here?" });
@@ -419,7 +439,9 @@ test.describe("2.8 item 2 — the git drawer (3.10, CM1-CM5)", () => {
     const sheet = page.getByRole("dialog", { name: "Why is this here?" });
     // the card keeps the stream's fields, then why.partial (3.9's error row).
     await expect(sheet).toContainText('owner: "a crab that hides when its energy is low"');
-    await expect(sheet).toContainText("This is what the page received. The full record is the git note on this commit.");
+    await expect(sheet).toContainText(
+      "This is what the page received. The full record is the git note on this commit.",
+    );
     await sheet.getByRole("button", { name: "Show the git" }).click();
     const drawer = page.locator(".git-drawer");
     await expect(drawer).toContainText("The note is not loaded here. The two commands below show it.");
@@ -448,9 +470,7 @@ test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
     await expect(sheet.locator('[data-list="landed"]')).toContainText("landing 1");
     // An in-flight row opens its attempt card (the shell's callback reports it).
     await sheet.locator('[data-list="in_flight"] .who-row').click();
-    await expect
-      .poll(async () => page.evaluate(() => (window as { lastAttempt?: string }).lastAttempt))
-      .toBe("a_A");
+    await expect.poll(async () => page.evaluate(() => (window as { lastAttempt?: string }).lastAttempt)).toBe("a_A");
     // CO23b: while open, the frame gets the kinds of the listed creature files.
     const frame = () => poolFrame(page);
     await expect
@@ -467,7 +487,9 @@ test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
     await expect(page.getByRole("dialog", { name: "Why is this here?" })).toBeVisible();
     // Closing posts the empty highlight list (CO23b).
     await page.keyboard.press("Escape");
-    await expect.poll(async () => (await page.evaluate(() => (window as { sheetKind?: string | null }).sheetKind))).toBeNull();
+    await expect
+      .poll(async () => await page.evaluate(() => (window as { sheetKind?: string | null }).sheetKind))
+      .toBeNull();
     await expect
       .poll(async () =>
         frame()?.evaluate(() =>

@@ -152,7 +152,10 @@ function previousCommit(state: FloorState, seq: number): string | null {
 }
 
 /** The intent text a heads-up cause names (`cause.changes`), first landed seq first. */
-function causeIntentOf(changes: Array<{ seq: number; change_id: string; intent_text: string | null }>, seq: number | null): string | null {
+function causeIntentOf(
+  changes: Array<{ seq: number; change_id: string; intent_text: string | null }>,
+  seq: number | null,
+): string | null {
   if (seq !== null) {
     const match = changes.find((change) => change.seq === seq);
     if (match?.intent_text !== undefined && match?.intent_text !== null) return match.intent_text;
@@ -275,8 +278,7 @@ function howItLanded(state: FloorState, landing: LandingView): WhyLandedHow | nu
       const cardId = state.attempts[landing.attempt_id]?.card_id ?? null;
       const card = cardId !== null ? state.cards[cardId] : undefined;
       if (card?.card.kind === "race") n = card.card.attempt_ids.length;
-      else if (landing.intent_id !== null)
-        n = Math.max(1, state.intents[landing.intent_id]?.attempt_ids.length ?? 1);
+      else if (landing.intent_id !== null) n = Math.max(1, state.intents[landing.intent_id]?.attempt_ids.length ?? 1);
     }
     return { id: "why.landed.chosen", ts: approved.ts, n };
   }
@@ -289,7 +291,13 @@ function undoOf(state: FloorState, landing: LandingView | null, note: Note | nul
   if (requestId !== null) {
     const undo = state.undo[requestId];
     if (undo !== undefined) {
-      return { cause: undo.cause, targetSeq: undo.target_seq, tookBack: undo.reverted, reopened: undo.reopened, kept: undo.kept_readers };
+      return {
+        cause: undo.cause,
+        targetSeq: undo.target_seq,
+        tookBack: undo.reverted,
+        reopened: undo.reopened,
+        kept: undo.kept_readers,
+      };
     }
   }
   if (note?.undo !== undefined) {
@@ -367,7 +375,8 @@ export function whyCard(state: FloorState, seq: number, fetched?: Note | null): 
   const intent = landing.intent_id !== null ? state.intents[landing.intent_id] : undefined;
   card.requester = intent?.requester ?? null;
   card.intentText = intent?.text ?? null;
-  card.race = intent?.race ?? (landing.attempt_id !== null ? (state.attempts[landing.attempt_id]?.race ?? false) : false);
+  card.race =
+    intent?.race ?? (landing.attempt_id !== null ? (state.attempts[landing.attempt_id]?.race ?? false) : false);
 
   const attempt = landing.attempt_id !== null ? state.attempts[landing.attempt_id] : undefined;
   card.agent = attempt?.agent ?? null;

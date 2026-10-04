@@ -110,7 +110,12 @@ export function whoRelies(state: FloorState, target: WhoTarget): WhoResult {
     const keys = entry.digest === true ? entry.premise_keys : entry.premises;
     const matched = keys.find((premise) => premiseMatches(premise, target));
     if (matched !== undefined)
-      landed.push({ seq: entry.seq, kind: entry.kind, paths: entry.paths, matched: { kind: matched.kind, key: matched.key } });
+      landed.push({
+        seq: entry.seq,
+        kind: entry.kind,
+        paths: entry.paths,
+        matched: { kind: matched.kind, key: matched.key },
+      });
   }
 
   return { summaryOnly, windowed, inFlight, landed };

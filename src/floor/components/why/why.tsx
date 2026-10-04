@@ -100,19 +100,24 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
   }, [card.needsNote, fetched, floor.pool.id, seq, mode]);
 
   const noteState: "held" | "loading" | "none" =
-    card.note !== null ? "held" : card.needsNote && (fetching || fetched === undefined) && mode === "live" ? "loading" : "none";
+    card.note !== null
+      ? "held"
+      : card.needsNote && (fetching || fetched === undefined) && mode === "live"
+        ? "loading"
+        : "none";
 
   const checks = checkLines(card);
   const relied = reliedRows(card);
   const undo = undoLines(floor, card, shell.model);
   const risk = riskLines(card);
   const landed = landedLine(card);
-  const tooOld =
-    card.kind === "change" && floor.landed_order.indexOf(seq) >= UNDO_WINDOW;
+  const tooOld = card.kind === "change" && floor.landed_order.indexOf(seq) >= UNDO_WINDOW;
 
   return (
     <div className="sheet-backdrop why-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      {gitOpen && <GitDrawer floor={floor} card={card} noteState={noteState} note={card.note} onClose={() => setGitOpen(false)} />}
+      {gitOpen && (
+        <GitDrawer floor={floor} card={card} noteState={noteState} note={card.note} onClose={() => setGitOpen(false)} />
+      )}
       <div
         className="sheet why-sheet"
         role="dialog"
@@ -142,9 +147,30 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
         {card.status === "unwitnessed" && (
           <>
             <dl className="why-commit-lines">
-              {card.commit !== null && <><dt>commit</dt><dd dir="auto"><code>{card.commit}</code></dd></>}
-              {card.parentCommit !== null && <><dt>parent</dt><dd dir="auto"><code>{card.parentCommit}</code></dd></>}
-              {card.tree !== null && <><dt>tree</dt><dd dir="auto"><code>{card.tree}</code></dd></>}
+              {card.commit !== null && (
+                <>
+                  <dt>commit</dt>
+                  <dd dir="auto">
+                    <code>{card.commit}</code>
+                  </dd>
+                </>
+              )}
+              {card.parentCommit !== null && (
+                <>
+                  <dt>parent</dt>
+                  <dd dir="auto">
+                    <code>{card.parentCommit}</code>
+                  </dd>
+                </>
+              )}
+              {card.tree !== null && (
+                <>
+                  <dt>tree</dt>
+                  <dd dir="auto">
+                    <code>{card.tree}</code>
+                  </dd>
+                </>
+              )}
             </dl>
             <p className="why-note">{t("why.unwitnessed")}</p>
           </>
@@ -169,7 +195,9 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
             {card.intentText !== null && (
               <section className="why-section" data-section="asked">
                 <h3>{t("why.asked")}</h3>
-                <p dir="auto">{t("why.asked.line", { requester: card.requester ?? "", "intent text": card.intentText })}</p>
+                <p dir="auto">
+                  {t("why.asked.line", { requester: card.requester ?? "", "intent text": card.intentText })}
+                </p>
               </section>
             )}
 
@@ -288,7 +316,12 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
 
         <div className="sheet-actions">
           {(card.status === "live" || card.status === "unwitnessed") && (
-            <button type="button" className="why-git" onClick={() => setGitOpen((open) => !open)} aria-expanded={gitOpen}>
+            <button
+              type="button"
+              className="why-git"
+              onClick={() => setGitOpen((open) => !open)}
+              aria-expanded={gitOpen}
+            >
               {t("why.git")}
             </button>
           )}

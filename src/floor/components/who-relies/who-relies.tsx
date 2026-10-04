@@ -98,14 +98,7 @@ export function WhoSheet({ floor, kind_, whoKey, onClose, onOpenWhy, onOpenAttem
 
   return (
     <div className="sheet-backdrop who-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        className="sheet who-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        ref={dialogRef}
-        tabIndex={-1}
-      >
+      <div className="sheet who-sheet" role="dialog" aria-modal="true" aria-label={title} ref={dialogRef} tabIndex={-1}>
         <header className="who-head-row">
           <h2 className="sheet-title" dir="auto">
             {title}
@@ -146,11 +139,7 @@ export function WhoSheet({ floor, kind_, whoKey, onClose, onOpenWhy, onOpenAttem
                   const flags = lightFlagWords(row.matched);
                   return (
                     <li key={row.attempt.id}>
-                      <button
-                        type="button"
-                        className="who-row"
-                        onClick={() => onOpenAttempt?.(row.attempt.id)}
-                      >
+                      <button type="button" className="who-row" onClick={() => onOpenAttempt?.(row.attempt.id)}>
                         <span className="who-row__name" dir="auto">
                           {attemptName(floor, row.attempt)}
                         </span>
@@ -178,9 +167,7 @@ export function WhoSheet({ floor, kind_, whoKey, onClose, onOpenWhy, onOpenAttem
               </ul>
             </section>
 
-            {result.windowed && (
-              <p className="who-note who-window">{t("who.window", { FLOOR_KEEP_LANDINGS })}</p>
-            )}
+            {result.windowed && <p className="who-note who-window">{t("who.window", { FLOOR_KEEP_LANDINGS })}</p>}
           </>
         )}
       </div>

@@ -14,7 +14,9 @@ export const views: Record<string, (props: Record<string, unknown>) => ReactNode
       floor={props.floor as FloorState}
       seq={Number(props.seq ?? 0)}
       onClose={typeof props.onClose === "function" ? (props.onClose as () => void) : () => undefined}
-      onOpenWho={typeof props.onOpenWho === "function" ? (props.onOpenWho as (kind: string, key: string) => void) : undefined}
+      onOpenWho={
+        typeof props.onOpenWho === "function" ? (props.onOpenWho as (kind: string, key: string) => void) : undefined
+      }
       onOpenUndo={typeof props.onOpenUndo === "function" ? (props.onOpenUndo as (seq: number) => void) : undefined}
     />
   ),

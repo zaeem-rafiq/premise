@@ -38,7 +38,8 @@ export function whyHeadline(card: WhyCard, modelLabel: (id: string) => string): 
 
 /** The sheet's accessible title (CO31): undo/revert landings name what they took back. */
 export function whyTitle(state: FloorState, card: WhyCard): string {
-  if (card.kind === "undo" && card.undo !== null) return text("why.undo.title", { landing: landingLabel(card.undo.targetSeq) });
+  if (card.kind === "undo" && card.undo !== null)
+    return text("why.undo.title", { landing: landingLabel(card.undo.targetSeq) });
   if (card.kind === "revert" && card.undo !== null)
     return text("why.revert.title", { landings: card.undo.tookBack.map(landingLabel).join(", ") });
   if (card.kind === "undo") return text("why.undo.title", { landing: landingLabel(0) });
@@ -54,7 +55,10 @@ export function itemSentence(item: WhyItem): string {
     share: DASH,
     path: item.key,
     entity: isRefs ? keyLabel("entity", item.key.slice(5)) : keyLabel(item.kind, item.key),
-    added: item.added.length > 0 ? item.added.map((key) => keyLabel("entity", key)).join(", ") : keyLabel(item.kind, item.key),
+    added:
+      item.added.length > 0
+        ? item.added.map((key) => keyLabel("entity", key)).join(", ")
+        : keyLabel(item.kind, item.key),
     rule: item.rule,
     reason: item.reason ?? "",
   });
@@ -67,7 +71,12 @@ export function underLine(under: WhyUnder, item: WhyItem): string {
   return text("why.under.goaround", {
     n: under.n ?? 0,
     "rule sentence": sentence,
-    landing: item.causeSeq !== null ? landingLabel(item.causeSeq) : (under.causeSeq !== null ? landingLabel(under.causeSeq) : DASH),
+    landing:
+      item.causeSeq !== null
+        ? landingLabel(item.causeSeq)
+        : under.causeSeq !== null
+          ? landingLabel(under.causeSeq)
+          : DASH,
     "intent text": under.causeIntent ?? "",
   });
 }
@@ -124,12 +133,16 @@ export function undoLines(
     tookBack:
       undo.tookBack.length > 0
         ? text("why.undo.took_back", {
-            "list of landings with change names": undo.tookBack.map((seq) => landingChangeName(state, seq, modelLabel)).join(", "),
+            "list of landings with change names": undo.tookBack
+              .map((seq) => landingChangeName(state, seq, modelLabel))
+              .join(", "),
           })
         : null,
     reopened:
       undo.reopened.length > 0
-        ? text("why.undo.reopened", { list: undo.reopened.map((id) => attemptChangeName(state, id, modelLabel)).join(", ") })
+        ? text("why.undo.reopened", {
+            list: undo.reopened.map((id) => attemptChangeName(state, id, modelLabel)).join(", "),
+          })
         : null,
     kept:
       undo.kept.length > 0
@@ -147,7 +160,9 @@ export function checkLines(card: WhyCard): { count: string; labels: string[] } |
 }
 
 /** The `why.relied` rows: light, keyLabel and flags per frozen premise. */
-export function reliedRows(card: WhyCard): Array<{ id: string; label: string; flags: string[]; light: WhyCard["premises"][number]["light"]; edit: boolean }> {
+export function reliedRows(
+  card: WhyCard,
+): Array<{ id: string; label: string; flags: string[]; light: WhyCard["premises"][number]["light"]; edit: boolean }> {
   return card.premises.map((premise) => ({
     id: `${premise.kind} ${premise.key}`,
     label: keyLabel(premise.kind, premise.key),

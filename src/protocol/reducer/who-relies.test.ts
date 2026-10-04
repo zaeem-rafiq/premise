@@ -14,7 +14,9 @@ const STREAMS = join(__dirname, "../../../test/fixtures/streams");
 const ENERGY = "world/energy.js#ENERGY_MAX";
 
 function replayFile(name: string): FloorState {
-  const lines = readFileSync(join(STREAMS, name), "utf8").split("\n").filter((line) => line !== "");
+  const lines = readFileSync(join(STREAMS, name), "utf8")
+    .split("\n")
+    .filter((line) => line !== "");
   const events = lines.slice(1).map((line) => JSON.parse(line) as PoolEvent);
   const state = emptyFloorState();
   for (const event of events) reduce(state, event);
@@ -22,7 +24,9 @@ function replayFile(name: string): FloorState {
 }
 
 function replayPrefix(name: string, k: number): FloorState {
-  const lines = readFileSync(join(STREAMS, name), "utf8").split("\n").filter((line) => line !== "");
+  const lines = readFileSync(join(STREAMS, name), "utf8")
+    .split("\n")
+    .filter((line) => line !== "");
   const events = lines.slice(1).map((line) => JSON.parse(line) as PoolEvent);
   const state = emptyFloorState();
   for (const event of events.slice(0, k)) reduce(state, event);

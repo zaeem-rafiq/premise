@@ -44,7 +44,8 @@ import {
   setState,
   unvalidate,
 } from "./intents.ts";
-import { applyClassification, blast, classify, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { applyClassification, blast, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { classify } from "../classify/table.ts";
 import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
@@ -661,7 +662,7 @@ export function tick(pool: Pool): void {
         rule: "CKL",
         klass: "rule",
         result: "repair",
-        reason: "non_empty",
+        reason: "checks_failed_at_landing",
       });
       j.dirty = true;
       pool.out.judgments.push(j);
@@ -675,7 +676,7 @@ export function tick(pool: Pool): void {
               premise: { kind: "check" as Premise["kind"], key: "non_empty" },
               rule: "CKL",
               result: "repair",
-              reason: "non_empty",
+              reason: "checks_failed_at_landing",
               old_hash: "",
               new_hash: "",
               cause_seq: null,

@@ -117,29 +117,30 @@ export function FileTiles(props: FileTilesProps) {
 
   // How many cells the capped grid holds: columns from the scroll width, rows capped by
   // --tile-rows and by the room the region actually has (LY1 shrinks the frame, not the tiles,
-  // but the count still follows the measured space).
+  // but the count still follows the measured space). The row count reads the `.tiles`
+  // section's flex height: the scroll element's height follows its clipped content, and
+  // measuring it would lock the grid at the rows it happens to show now.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el === null || typeof ResizeObserver !== "function") return;
+    const section = el?.parentElement ?? null;
+    if (el === null || section === null || typeof ResizeObserver !== "function") return;
     const measure = () => {
-      const style = getComputedStyle(el);
-      const cell = (name: string) => {
-        const v = parseFloat(getComputedStyle(el.querySelector(".tiles-grid") ?? el).getPropertyValue(name));
-        return Number.isFinite(v) && v > 0 ? v : 0;
-      };
       const grid = el.querySelector(".tiles-grid");
-      const gs = grid !== null ? getComputedStyle(grid) : style;
+      const gs = getComputedStyle(grid ?? el);
       const tw = parseFloat(gs.getPropertyValue("--tile-w")) || 88;
       const th = parseFloat(gs.getPropertyValue("--tile-h")) || 48;
       const gap = parseFloat(gs.getPropertyValue("--tile-gap")) || 8;
       const cap = parseFloat(gs.getPropertyValue("--tile-rows")) || 2;
+      const toggle = section.querySelector<HTMLElement>(".tiles-toggle");
+      const toggleH = toggle !== null && toggle.offsetParent !== null ? toggle.offsetHeight + 6 : 0;
       const cols = Math.max(1, Math.floor((el.clientWidth + gap) / (tw + gap)));
-      const rowsFit = el.clientHeight <= 0 ? cap : Math.max(1, Math.floor((el.clientHeight + gap) / (th + gap)));
+      const rowsFit =
+        section.clientHeight <= 0 ? cap : Math.max(1, Math.floor((section.clientHeight - toggleH + gap) / (th + gap)));
       const rows = Math.min(cap, rowsFit);
       setCapacity(cols * rows);
     };
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(section);
     (el as unknown as { __measure: () => void }).__measure = measure;
     return () => ro.disconnect();
   }, []);

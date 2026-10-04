@@ -81,6 +81,7 @@ const FRAME_CSS = `
   border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   overflow: hidden; background: var(--bg, #0b1720); }
 .pf-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.pf-body iframe:focus { outline: 3px solid var(--focus, #ffe08a); outline-offset: -3px; }
 .pf-overlay { position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 16px;
   background: var(--bg, #0b1720); color: var(--muted, #a8bcc6);

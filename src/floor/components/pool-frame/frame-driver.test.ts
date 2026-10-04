@@ -300,3 +300,62 @@ describe("pause, visibility and highlight (CO23a, AS14, CO23b)", () => {
     ]);
   });
 });
+
+describe("the self-test badge's probe (CO25a, NP8)", () => {
+  it("with selftest on, each newly reported version gets one probe+selftest until its result arrives", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: C1 });
+    h.driver.setSelftest(true);
+    h.driver.onStats(stats("c-" + C1));
+    expect(h.ofType("probe")).toEqual([{ type: "probe", selftest: true }]);
+    // The same version does not ask twice…
+    h.driver.onStats(stats("c-" + C1));
+    expect(h.ofType("probe")).toHaveLength(1);
+    // …until its own selftest result lands.
+    h.driver.onStats(stats("c-" + C1, { selftest: { version: "c-" + C1, ok: true, failed: [] } }));
+    const v2 = "c-" + C2;
+    h.driver.onStats(stats(v2));
+    expect(h.ofType("probe")).toEqual([
+      { type: "probe", selftest: true },
+      { type: "probe", selftest: true },
+    ]);
+    h.driver.onStats(stats(v2, { selftest: { version: v2, ok: true, failed: [] } }));
+    h.driver.onStats(stats(v2));
+    expect(h.ofType("probe")).toHaveLength(2);
+  });
+
+  it("with selftest off the driver never posts probe+selftest, and lastStats follows the newest stats", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: C1 });
+    h.driver.onStats(stats("c-" + C1));
+    expect(h.ofType("probe").filter((m) => m.selftest === true)).toHaveLength(0);
+    expect(h.driver.lastStats?.version).toBe("c-" + C1);
+  });
+});
+
+describe("pause on a load in flight (AC11, 6.4)", () => {
+  it("pausing while the page still loads restarts the load with the paused parameter", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: null });
+    expect(h.loads).toEqual([`/pool/${POOL}/main/?seed=${HOST_SEED}`]);
+    h.driver.setUserPaused(true);
+    expect(h.loads).toEqual([
+      `/pool/${POOL}/main/?seed=${HOST_SEED}`,
+      `/pool/${POOL}/main/?seed=${HOST_SEED}&paused=1`,
+    ]);
+    // the parameter already announced the pause — the first stats posts nothing more
+    h.driver.onStats(stats("c-seed"));
+    expect(h.ofType("pause")).toHaveLength(0);
+  });
+
+  it("a stall watch is never armed while paused, but arms again on resume", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: null });
+    h.driver.setUserPaused(true);
+    h.driver.onStats(stats("c-seed"));
+    expect(h.armed("stall")).toBeUndefined();
+    h.driver.setUserPaused(false);
+    expect(h.ofType("resume")).toHaveLength(1);
+    expect(h.armed("stall")).toBe(POOL_STALL_MS);
+  });
+});

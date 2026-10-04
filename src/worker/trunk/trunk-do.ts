@@ -316,7 +316,10 @@ export class Trunk extends DurableObject<Env> {
     try {
       result = await Promise.resolve(entry(input, ctx));
     } catch (cause) {
-      console.error(`trunk entry ${name} failed`, cause);
+      console.error(
+        `trunk entry ${name} failed`,
+        cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown",
+      );
       recordTrunkError(this.ctx, `entry:${name}`, "engine_error");
       const detail = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
       return json({ error: { code: "internal_error", detail } }, 500);

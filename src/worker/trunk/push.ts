@@ -18,6 +18,7 @@ import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
 import { runPush, type PushBatch } from "./push-runner.ts";
 import { ZERO_OID } from "../../core/git/objects.ts";
+import { blobBytes } from "../../core/sync/bytes.ts";
 
 const MAIN_REF = "refs/heads/main";
 const NOTES_REF = "refs/notes/premise";
@@ -62,9 +63,10 @@ function outboxPack(ctx: DurableObjectState, batch_id: number): Uint8Array {
     .exec("SELECT bytes FROM outbox_chunks WHERE batch_id = ? ORDER BY i", batch_id)
     .toArray()
     .map((row) => {
+      const bytes = blobBytes(row.bytes);
       // An empty pack would be pushed as "no objects" and refused for ever: fail here instead.
-      if (!(row.bytes instanceof Uint8Array)) throw new Error("an outbox chunk is not bytes");
-      return row.bytes;
+      if (bytes.byteLength === 0) throw new Error("an outbox chunk holds no bytes");
+      return bytes;
     });
   const pack = new Uint8Array(chunks.reduce((n, b) => n + b.byteLength, 0));
   let off = 0;
@@ -167,12 +169,27 @@ export type ApplyPush = (name: "push_ok" | "push_result", input: unknown) => Pro
  * every ref reported ok; otherwise `readRefs` and `push_result` with the values. The entry's
  * answer names the next step (`repush`, `retry_main`, `retry_notes`, `mark_pushed`, `pause`).
  */
+/** The object a `pushOutbox` call owns until its LP5 decision lands — a reentrant call (the
+ * applied entry's own after-commit) returns at once, or it would re-push the same row before
+ * the outer call writes `next_try` (an unbounded hot loop, not a retry). */
+const pushing = new Set<DurableObjectState>();
+
 export async function pushOutbox(
   env: Env,
   ctx: DurableObjectState,
   apply: ApplyPush,
   deps: PushDeps = defaultDeps(env),
 ): Promise<void> {
+  if (pushing.has(ctx)) return;
+  pushing.add(ctx);
+  try {
+    await pushOutboxInner(env, ctx, apply, deps);
+  } finally {
+    pushing.delete(ctx);
+  }
+}
+
+async function pushOutboxInner(env: Env, ctx: DurableObjectState, apply: ApplyPush, deps: PushDeps): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
   if (outbox.next_try !== null && outbox.next_try > Date.now()) return;
@@ -184,7 +201,9 @@ export async function pushOutbox(
   try {
     target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
   } catch (cause) {
-    console.error("writeTarget failed", cause);
+    // BP7: an operator's line — the error's name and message, never the request or the target
+    // (which carries secret material).
+    console.error("push writeTarget failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;
@@ -227,7 +246,7 @@ export async function pushOutbox(
   try {
     outcome = await runPush(batch, { tokenSource: deps.tokenSource, pusher: deps.pusher });
   } catch (cause) {
-    console.error("push transport", cause);
+    console.error("push transport failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;

@@ -21,10 +21,10 @@ build step.
 | Generate binding types            | `npm run types` (after every change to `wrangler.jsonc`)                                           | works            |
 | Typecheck, six programs           | `npm run typecheck`                                                                                | works            |
 | Unit tests, offline               | `npm test` (`npm test -- <path filter>` narrows it)                                                | works            |
-| Cases                             | `npm run test:cases` (`CASES=list` prints the counts)                                              | lists only       |
-| Durable Objects in local workerd  | `npm run test:workerd`                                                                             | one smoke test   |
+| Cases                             | `npm run test:cases` (`CASES=list` prints the counts)                                              | works            |
+| Durable Objects in local workerd  | `npm run test:workerd`                                                                             | works            |
 | Browser                           | `npm run test:e2e` (`-- --project=deployed` runs against `PREMISE_URL`)                            | no tests yet     |
-| Integration                       | `npm run test:integration -- <names>`                                                              | no tests yet     |
+| Integration                       | `npm run test:integration -- <names>`                                                              | works            |
 | Build                             | `npm run build` (`npm run clean`, then `build:seeds`, `build:host`, `build:floor`, `build:worker`) | works            |
 | One build step                    | `npm run build:seeds`, `npm run build:host`, `npm run build:floor`, `npm run build:worker`         | works            |
 | Format                            | `npm run format`                                                                                   | works            |
@@ -36,7 +36,7 @@ build step.
 | Local run, no Cloudflare          | `npm run dev:floor`                                                                                | placeholder page |
 | Local run, real service           | `npm run dev`                                                                                      | lead only        |
 | Deploy                            | `npm run deploy:test`, `npm run deploy`                                                            | lead only        |
-| Pools                             | `npm run pool:create -- <pool> <seed>`                                                             | not built        |
+| Pools                             | `npm run pool:create -- <pool> <seed>`                                                             | works            |
 | Early model measurement           | `npm run measure:models -- --early`                                                                | not built        |
 | Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | not built        |
 | Recordings                        | `npm run record:export -- --pool <pool> --id <id>`                                                 | not built        |

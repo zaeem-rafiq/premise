@@ -125,6 +125,16 @@ beforeAll(async () => {
     }),
   );
   await miniflare.ready;
+  // The Swarm route opens the attempt at Trunk before it opens the Agent (SWR2's ordering):
+  // `it-tracer` must exist, so the deployment creates it once up front. `env.POOLS` is absent
+  // here — the seed's outbox push has no remote to reach and its scheduled retries are part of
+  // the fixture, not of the assertions.
+  const created = await miniflare.dispatchFetch("http://premise.test/api/pools", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${OWNER_KEY}` },
+    body: JSON.stringify({ pool: "it-tracer", seed: "tidepool-swarm", request_id: "workerd-pool" }),
+  });
+  if (!created.ok) throw new Error(`pool create answered ${created.status}: ${await created.text()}`);
 }, 120_000);
 
 afterAll(async () => {

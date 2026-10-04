@@ -70,6 +70,10 @@ const COMPARE_CSS = `
 .cmp-back:focus-visible { outline: 3px solid var(--focus, #ffe08a); outline-offset: 2px; }
 .cmp-thesis { color: var(--muted, #a8bcc6); }
 @media (max-width: 1099px) { .cmp { grid-template-columns: minmax(0, 1fr); } }
+/* The shell mounts view.compare as the only child of <main class="floor-body floor-compare">;
+ * that body's normal grid is pool-area + rail, so under this class it is a single column and
+ * the rail is simply not rendered (2.3). Inert until the mount exists. */
+.floor-body.floor-compare { grid-template-columns: minmax(0, 1fr); }
 `;
 
 /** The back action of the view: the host's callback when it gives one; otherwise the key C —

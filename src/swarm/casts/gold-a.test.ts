@@ -22,17 +22,36 @@ describe("gold-a (02-tidepool.md 10.5)", () => {
   it("lists, reads each file the listing names and repaints gold then #b8860b (8.2)", () => {
     const b = bag();
     expect(step(GOLD_A, b, null)).toMatchObject({ kind: "tool", tool: "list", args: { path: "creatures/" } });
-    expect(step(GOLD_A, b, ok({ entries: [{ name: "fish.js", type: "file" }, { name: "minnow.js", type: "file" }] }))).toMatchObject({
-      tool: "read", args: { path: "creatures/fish.js" },
+    expect(
+      step(
+        GOLD_A,
+        b,
+        ok({
+          entries: [
+            { name: "fish.js", type: "file" },
+            { name: "minnow.js", type: "file" },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      tool: "read",
+      args: { path: "creatures/fish.js" },
     });
     // the read's own repaints go ahead of the next file's read (the row is per-file).
     const r1 = step(GOLD_A, b, ok({ content: FISH }));
-    expect(r1).toMatchObject({ tool: "replace", args: { path: "creatures/fish.js", old: 'const BODY = "pink";', new: 'const BODY = "gold";' } });
+    expect(r1).toMatchObject({
+      tool: "replace",
+      args: { path: "creatures/fish.js", old: 'const BODY = "pink";', new: 'const BODY = "gold";' },
+    });
     const r2 = step(GOLD_A, b, ok());
-    expect(r2).toMatchObject({ tool: "replace", args: { path: "creatures/fish.js", old: 'const FIN = "pink";', new: 'const FIN = "#b8860b";' } });
+    expect(r2).toMatchObject({
+      tool: "replace",
+      args: { path: "creatures/fish.js", old: 'const FIN = "pink";', new: 'const FIN = "#b8860b";' },
+    });
     expect(step(GOLD_A, b, ok())).toMatchObject({ tool: "read", args: { path: "creatures/minnow.js" } });
-    expect(step(GOLD_A, b, ok({ content: "const BODY = \"teal\";" }))).toMatchObject({
-      tool: "replace", args: { path: "creatures/minnow.js", old: 'const BODY = "teal";', new: 'const BODY = "gold";' },
+    expect(step(GOLD_A, b, ok({ content: 'const BODY = "teal";' }))).toMatchObject({
+      tool: "replace",
+      args: { path: "creatures/minnow.js", old: 'const BODY = "teal";', new: 'const BODY = "gold";' },
     });
     expect(step(GOLD_A, b, ok())).toMatchObject({ tool: "submit" });
   });
@@ -50,7 +69,8 @@ describe("gold-a (02-tidepool.md 10.5)", () => {
     });
     expect(step(GOLD_A, b, ok())).toMatchObject({ tool: "read", args: { path: "creatures/fish.js" } });
     step(GOLD_A, b, ok({ content: FISH }));
-    step(GOLD_A, b, ok()); step(GOLD_A, b, ok());
+    step(GOLD_A, b, ok());
+    step(GOLD_A, b, ok());
     const s = step(GOLD_A, b, ok());
     expect((s as { args: { acknowledge?: number[]; statement?: string } }).args).toMatchObject({
       acknowledge: [1],
@@ -61,8 +81,12 @@ describe("gold-a (02-tidepool.md 10.5)", () => {
   it("a second `repair` stops `withdrawn` (SW7)", () => {
     const b = bag();
     step(GOLD_A, b, null);
-    step(GOLD_A, b, ok({ entries: [] }), [hu(1, "repair", [item(L("creatures/"), listingDiff(["a.js"]), "repair", "L1")])]);
-    const out = step(GOLD_A, b, ok(), [hu(2, "repair", [item(L("creatures/"), listingDiff(["b.js"]), "repair", "L1")])]);
+    step(GOLD_A, b, ok({ entries: [] }), [
+      hu(1, "repair", [item(L("creatures/"), listingDiff(["a.js"]), "repair", "L1")]),
+    ]);
+    const out = step(GOLD_A, b, ok(), [
+      hu(2, "repair", [item(L("creatures/"), listingDiff(["b.js"]), "repair", "L1")]),
+    ]);
     expect(out).toMatchObject({ kind: "stop", reason: "withdrawn" });
   });
 
@@ -72,9 +96,12 @@ describe("gold-a (02-tidepool.md 10.5)", () => {
     step(GOLD_A, b, ok({ entries: [{ name: "fish.js", type: "file" }] }));
     step(GOLD_A, b, ok({ content: FISH }));
     const out = step(GOLD_A, b, ok(), [
-      hu(1, "repair", [item(L("creatures/"), listingDiff(["seahorse.js"]), "repair", "L1")], [
-        { op_seq: 1, path: "creatures/fish.js", rule: "OP3" },
-      ]),
+      hu(
+        1,
+        "repair",
+        [item(L("creatures/"), listingDiff(["seahorse.js"]), "repair", "L1")],
+        [{ op_seq: 1, path: "creatures/fish.js", rule: "OP3" }],
+      ),
     ]);
     expect(out.kind).toBe("tool"); // the pending second repaint still runs first
     expect(step(GOLD_A, b, ok())).toMatchObject({ tool: "read", args: { path: "creatures/seahorse.js" } });

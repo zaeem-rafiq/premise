@@ -16,7 +16,9 @@ function runToSubmit(b: ReturnType<typeof bag>, energySource = POINTS): void {
   step(HERO_C, b, null); // list
   step(HERO_C, b, ok()); // GUIDE.md
   step(HERO_C, b, ok({ source: energySource })); // energy#ENERGY_MAX
-  step(HERO_C, b, ok()); step(HERO_C, b, ok()); step(HERO_C, b, ok()); // bounds, movement
+  step(HERO_C, b, ok());
+  step(HERO_C, b, ok());
+  step(HERO_C, b, ok()); // bounds, movement
 }
 
 describe("hero-c (02-tidepool.md 10.5)", () => {
@@ -36,7 +38,8 @@ describe("hero-c (02-tidepool.md 10.5)", () => {
     expect(step(HERO_C, b, null)).toMatchObject({ kind: "tool", tool: "list", args: { path: "creatures/" } });
     expect(step(HERO_C, b, ok())).toMatchObject({ tool: "read", args: { path: "GUIDE.md" } });
     expect(step(HERO_C, b, ok({ source: POINTS }))).toMatchObject({
-      tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" },
+      tool: "read",
+      args: { path: "world/energy.js", entity: "ENERGY_MAX" },
     });
     expect(step(HERO_C, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js", entity: "FLOOR_Y" } });
     expect(step(HERO_C, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js", entity: "bounce" } });
@@ -49,11 +52,12 @@ describe("hero-c (02-tidepool.md 10.5)", () => {
 
   it("an `info` item showing the fraction before the write makes the write carry `0.3`", () => {
     const b = bag();
-    step(HERO_C, b, null); step(HERO_C, b, ok());
-    step(HERO_C, b, ok({ source: POINTS }), [
-      hu(1, "info", [item(ENERGY, entityDiff(POINTS, FRACTION), "holds")]),
-    ]);
-    step(HERO_C, b, ok()); step(HERO_C, b, ok()); step(HERO_C, b, ok());
+    step(HERO_C, b, null);
+    step(HERO_C, b, ok());
+    step(HERO_C, b, ok({ source: POINTS }), [hu(1, "info", [item(ENERGY, entityDiff(POINTS, FRACTION), "holds")])]);
+    step(HERO_C, b, ok());
+    step(HERO_C, b, ok());
+    step(HERO_C, b, ok());
     const w = step(HERO_C, b, ok());
     expect((w as { args: { content: string } }).args.content).toBe(crabFile("0.3"));
   });
@@ -62,9 +66,7 @@ describe("hero-c (02-tidepool.md 10.5)", () => {
     const b = bag();
     runToSubmit(b);
     step(HERO_C, b, ok()); // write issued
-    const next = step(HERO_C, b, ok(), [
-      hu(1, "repair", [item(ENERGY, entityDiff(POINTS, FRACTION))]),
-    ]);
+    const next = step(HERO_C, b, ok(), [hu(1, "repair", [item(ENERGY, entityDiff(POINTS, FRACTION))])]);
     expect(next).toMatchObject({
       tool: "replace",
       args: { path: "creatures/crab.js", old: "crab.energy < 30", new: "crab.energy < 0.3" },

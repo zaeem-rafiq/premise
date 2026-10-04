@@ -45,23 +45,28 @@ describe("hero-h (02-tidepool.md 10.5)", () => {
 
   it("an `info` file diff showing the fraction before the write makes the write carry `0.05`", () => {
     const b = bag();
-    step(HERO_H, b, null); step(HERO_H, b, ok());
+    step(HERO_H, b, null);
+    step(HERO_H, b, ok());
     step(HERO_H, b, ok({ content: POINTS }), [
       hu(1, "info", [item(F("world/energy.js"), fileDiff(UNIFIED, ["world/energy.js#ENERGY_MAX"]), "holds")]),
     ]);
-    step(HERO_H, b, ok()); step(HERO_H, b, ok()); step(HERO_H, b, ok());
+    step(HERO_H, b, ok());
+    step(HERO_H, b, ok());
+    step(HERO_H, b, ok());
     const w = step(HERO_H, b, ok());
     expect((w as { args: { content: string } }).args.content).toBe(shrimpFile("0.05"));
   });
 
   it("an E2 `repair` after the write queues `5 -> 0.05` and acknowledges it", () => {
     const b = bag();
-    step(HERO_H, b, null); step(HERO_H, b, ok()); step(HERO_H, b, ok({ content: POINTS }));
-    step(HERO_H, b, ok()); step(HERO_H, b, ok()); step(HERO_H, b, ok());
+    step(HERO_H, b, null);
+    step(HERO_H, b, ok());
+    step(HERO_H, b, ok({ content: POINTS }));
+    step(HERO_H, b, ok());
+    step(HERO_H, b, ok());
+    step(HERO_H, b, ok());
     step(HERO_H, b, ok()); // write issued with drain(shrimp, 5)
-    const next = step(HERO_H, b, ok(), [
-      hu(1, "repair", [item(ENERGY, entityDiff(POINTS, FRACTION))]),
-    ]);
+    const next = step(HERO_H, b, ok(), [hu(1, "repair", [item(ENERGY, entityDiff(POINTS, FRACTION))])]);
     expect(next).toMatchObject({
       tool: "replace",
       args: { path: "creatures/shrimp.js", old: "drain(shrimp, 5)", new: "drain(shrimp, 0.05)" },

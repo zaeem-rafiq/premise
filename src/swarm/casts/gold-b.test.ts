@@ -22,9 +22,13 @@ describe("gold-b (02-tidepool.md 10.5)", () => {
     expect(step(GOLD_B, b, ok())).toMatchObject({ tool: "read", args: { path: "creatures/fish.js" } });
     expect(step(GOLD_B, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js" } });
     expect(step(GOLD_B, b, ok())).toMatchObject({
-      tool: "write", args: { path: "creatures/seahorse.js", content: SEAHORSE_FILE },
+      tool: "write",
+      args: { path: "creatures/seahorse.js", content: SEAHORSE_FILE },
     });
-    expect(step(GOLD_B, b, ok())).toMatchObject({ tool: "submit", args: { summary: "a seahorse that bobs up and down" } });
+    expect(step(GOLD_B, b, ok())).toMatchObject({
+      tool: "submit",
+      args: { summary: "a seahorse that bobs up and down" },
+    });
   });
 
   it("an `info` item about the repaint needs no acknowledgement (8.4)", () => {

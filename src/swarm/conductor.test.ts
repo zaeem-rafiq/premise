@@ -6,12 +6,20 @@ import { describe, expect, it } from "vitest";
 import { createConductor, heroConductor, type Conductor, type ConductorAction } from "./conductor.ts";
 
 const ATTEMPT: Record<string, string> = {
-  "hero-s": "att-s", "hero-c": "att-c", "hero-h": "att-h", "hero-j": "att-j",
+  "hero-s": "att-s",
+  "hero-c": "att-c",
+  "hero-h": "att-h",
+  "hero-j": "att-j",
 };
 
 /** Feed one event; `pattern` resolves the attempt the event belongs to. */
 function ev(c: Conductor, event: Record<string, unknown>, pattern?: string): void {
-  if (pattern !== undefined && event.attempt_id === undefined && event.card_id === undefined && event.seq === undefined) {
+  if (
+    pattern !== undefined &&
+    event.attempt_id === undefined &&
+    event.card_id === undefined &&
+    event.seq === undefined
+  ) {
     event.attempt_id = ATTEMPT[pattern];
   }
   c.observe(event);

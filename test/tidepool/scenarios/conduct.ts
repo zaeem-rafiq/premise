@@ -73,7 +73,12 @@ export function conduct(sim: SwarmSim, order: 1 | 2, seed: "tidepool" | "tidepoo
         conductor.observe({ type: "plain.updated", through_seq: through });
       }
     }
-    if (!made && out.landings.length === 0 && out.heads_ups.length === 0 && conductorPendingQuiet(sim, conductor, agents)) {
+    if (
+      !made &&
+      out.landings.length === 0 &&
+      out.heads_ups.length === 0 &&
+      conductorPendingQuiet(sim, conductor, agents)
+    ) {
       if (conductor.done) return { agents, conductor };
       throw new Error(`conduct: stalled on row ${conductor.row}`);
     }

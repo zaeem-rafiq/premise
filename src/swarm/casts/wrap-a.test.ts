@@ -16,17 +16,27 @@ const RAY_UPDATE = `export function update(ray) {
 describe("wrap-a (02-tidepool.md 10.5)", () => {
   it("carries the intent and truth list of the table", () => {
     expect(WRAP_A.id).toBe("wrap-a");
-    expect(WRAP_A.intent).toBe("make every creature that swims out one side and back in the other turn around at the walls instead");
+    expect(WRAP_A.intent).toBe(
+      "make every creature that swims out one side and back in the other turn around at the walls instead",
+    );
     expect(WRAP_A.truth).toEqual(["query:text:creatures/:wrap(", "entity:world/bounds.js#bounce"]);
   });
 
   it("searches `wrap(` then replaces the call and the import in each file found (8.6)", () => {
     const b = bag();
-    expect(step(WRAP_A, b, null)).toMatchObject({ kind: "tool", tool: "search", args: { query: "wrap(", path: "creatures/" } });
+    expect(step(WRAP_A, b, null)).toMatchObject({
+      kind: "tool",
+      tool: "search",
+      args: { query: "wrap(", path: "creatures/" },
+    });
     const next = step(WRAP_A, b, ok({ lines: [{ path: "creatures/ray.js", text: "  wrap(ray);" }] }));
-    expect(next).toMatchObject({ tool: "replace", args: { path: "creatures/ray.js", old: "wrap(ray);", new: "bounce(ray);" } });
+    expect(next).toMatchObject({
+      tool: "replace",
+      args: { path: "creatures/ray.js", old: "wrap(ray);", new: "bounce(ray);" },
+    });
     expect(step(WRAP_A, b, ok())).toMatchObject({
-      tool: "replace", args: { path: "creatures/ray.js", old: WRAP_LINE, new: 'import { bounce } from "../world/bounds.js";' },
+      tool: "replace",
+      args: { path: "creatures/ray.js", old: WRAP_LINE, new: 'import { bounce } from "../world/bounds.js";' },
     });
     expect(step(WRAP_A, b, ok())).toMatchObject({ tool: "submit" });
   });
@@ -35,11 +45,17 @@ describe("wrap-a (02-tidepool.md 10.5)", () => {
     const b = bag();
     step(WRAP_A, b, null);
     const next = step(WRAP_A, b, ok({ lines: [] }), [
-      hu(1, "repair", [item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/ray.js#update", source: RAY_UPDATE }]))]),
+      hu(1, "repair", [
+        item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/ray.js#update", source: RAY_UPDATE }])),
+      ]),
     ]);
-    expect(next).toMatchObject({ tool: "replace", args: { path: "creatures/ray.js", old: "wrap(ray)", new: "bounce(ray)" } });
+    expect(next).toMatchObject({
+      tool: "replace",
+      args: { path: "creatures/ray.js", old: "wrap(ray)", new: "bounce(ray)" },
+    });
     expect(step(WRAP_A, b, ok())).toMatchObject({
-      tool: "replace", args: { path: "creatures/ray.js", old: WRAP_LINE, new: 'import { bounce } from "../world/bounds.js";' },
+      tool: "replace",
+      args: { path: "creatures/ray.js", old: WRAP_LINE, new: 'import { bounce } from "../world/bounds.js";' },
     });
     const s = step(WRAP_A, b, ok());
     expect((s as { args: { acknowledge?: number[]; statement?: string } }).args).toMatchObject({
@@ -52,10 +68,14 @@ describe("wrap-a (02-tidepool.md 10.5)", () => {
     const b = bag();
     step(WRAP_A, b, null);
     step(WRAP_A, b, ok({ lines: [] }), [
-      hu(1, "repair", [item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/ray.js#update", source: RAY_UPDATE }]))]),
+      hu(1, "repair", [
+        item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/ray.js#update", source: RAY_UPDATE }])),
+      ]),
     ]);
     const out = step(WRAP_A, b, ok(), [
-      hu(2, "repair", [item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/eel.js#update", source: "wrap(eel);" }]))]),
+      hu(2, "repair", [
+        item(Q("text:creatures/:wrap("), queryDiff([{ key: "creatures/eel.js#update", source: "wrap(eel);" }])),
+      ]),
     ]);
     expect(out).toMatchObject({ kind: "stop", reason: "withdrawn" });
   });

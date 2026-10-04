@@ -21,8 +21,7 @@ const rules = (sim: SwarmSim, agent: AgentHandle, result: string): string[] =>
     .filter((e) => e.attempt_id === agent.id && e.result === result)
     .flatMap((e) => (e.keys as Array<{ rule: string }>).map((k) => k.rule));
 
-const goArounds = (sim: SwarmSim, agent: AgentHandle): number =>
-  sim.attempt(agent)?.go_arounds ?? -1;
+const goArounds = (sim: SwarmSim, agent: AgentHandle): number => sim.attempt(agent)?.go_arounds ?? -1;
 
 function mainTree(sim: SwarmSim): Map<string, string> {
   return new Map(sim.files());
@@ -63,7 +62,9 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
 
       // A12: on `tidepool` the held card of S's submit listed C and H under `repair`.
       if (seed === "tidepool") {
-        const card = s.eventsOf("card.opened").map((e) => e.card as { kind: string; blast_radius: Record<string, { repair: string[] }> })[0];
+        const card = s
+          .eventsOf("card.opened")
+          .map((e) => e.card as { kind: string; blast_radius: Record<string, { repair: string[] }> })[0];
         expect(card?.kind).toBe("held");
         const blast = card?.blast_radius?.[S.id]?.repair ?? [];
         expect(new Set(blast)).toEqual(new Set([C.id, H.id]));
@@ -91,9 +92,7 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
       expect(goArounds(s, S)).toBe(1);
 
       // S received `repair` with rule QR1 naming the new referrers (7.6 step 4).
-      const qr1 = s
-        .headsUps(S)
-        .find((h) => h.result === "repair" && h.items.some((i) => i.rule === "QR1"));
+      const qr1 = s.headsUps(S).find((h) => h.result === "repair" && h.items.some((i) => i.rule === "QR1"));
       expect(qr1).toBeDefined();
       const added = qr1!.items.flatMap((i) => (i.diff.kind === "query" ? i.diff.added.map((a) => a.key) : []));
       expect(added).toContain("creatures/crab.js#(import ../world/energy.js)");
@@ -105,9 +104,7 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
       expect(resolved?.statement).toBe(
         "Two new creatures used point values. Changed the crab's 30 to 0.3 and the shrimp's 5 to 0.05 in the same change.",
       );
-      const sLanding = s
-        .eventsOf("landing.accepted")
-        .find((e) => e.attempt_id === S.id);
+      const sLanding = s.eventsOf("landing.accepted").find((e) => e.attempt_id === S.id);
       expect(new Set(sLanding?.paths as string[])).toEqual(
         new Set(["world/energy.js", "creatures/crab.js", "creatures/shrimp.js"]),
       );

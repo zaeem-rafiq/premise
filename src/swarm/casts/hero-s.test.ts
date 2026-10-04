@@ -40,10 +40,12 @@ describe("hero-s (02-tidepool.md 10.5)", () => {
 
   it("visits each creature module `relied_on_by` names and fixes the canned old text (2b)", () => {
     const b = bag();
-    step(HERO_S, b, null); step(HERO_S, b, ok());
+    step(HERO_S, b, null);
+    step(HERO_S, b, ok());
     step(HERO_S, b, ok()); // the `replace` is issued; `relied_on_by` rides its answer (D2)
     expect(step(HERO_S, b, ok({ relied_on_by: REFS }))).toMatchObject({
-      tool: "read", args: { path: "creatures/crab.js", entity: "update" },
+      tool: "read",
+      args: { path: "creatures/crab.js", entity: "update" },
     });
     expect(step(HERO_S, b, ok({ source: CRAB_UPDATE }))).toMatchObject({
       tool: "replace",
@@ -54,13 +56,20 @@ describe("hero-s (02-tidepool.md 10.5)", () => {
 
   it("a QR1 `repair` fixes the gained referrers from the item's sources, no read (7.6)", () => {
     const b = bag();
-    step(HERO_S, b, null); step(HERO_S, b, ok()); step(HERO_S, b, ok());
+    step(HERO_S, b, null);
+    step(HERO_S, b, ok());
+    step(HERO_S, b, ok());
     const next = step(HERO_S, b, ok(), [
       hu(1, "repair", [
-        item(Q("refs:world/energy.js#ENERGY_MAX"), queryDiff([
-          { key: "creatures/crab.js#update", source: CRAB_UPDATE },
-          { key: "creatures/shrimp.js#update", source: "drain(shrimp, 5);" },
-        ]), "repair", "QR1"),
+        item(
+          Q("refs:world/energy.js#ENERGY_MAX"),
+          queryDiff([
+            { key: "creatures/crab.js#update", source: CRAB_UPDATE },
+            { key: "creatures/shrimp.js#update", source: "drain(shrimp, 5);" },
+          ]),
+          "repair",
+          "QR1",
+        ),
       ]),
     ]);
     expect(next).toMatchObject({
@@ -74,7 +83,8 @@ describe("hero-s (02-tidepool.md 10.5)", () => {
     const s = step(HERO_S, b, ok());
     expect((s as { args: { acknowledge?: number[]; statement?: string } }).args).toMatchObject({
       acknowledge: [1],
-      statement: "Two new creatures used point values. Changed the crab's 30 to 0.3 and the shrimp's 5 to 0.05 in the same change.",
+      statement:
+        "Two new creatures used point values. Changed the crab's 30 to 0.3 and the shrimp's 5 to 0.05 in the same change.",
     });
   });
 });

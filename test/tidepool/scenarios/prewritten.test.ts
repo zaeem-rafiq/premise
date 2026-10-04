@@ -28,10 +28,9 @@ describe("the prewritten intents equal section 9 word for word", () => {
     expect(PREWRITTEN.map((r) => r.id)).toEqual(spec.map((r) => r.id));
     for (const row of spec) {
       const got = PREWRITTEN.find((r) => r.id === row.id);
-      expect(
-        got?.text,
-        `${row.id}: spec says "${row.text}", prewritten says "${got?.text ?? "<missing>"}"`,
-      ).toBe(row.text);
+      expect(got?.text, `${row.id}: spec says "${row.text}", prewritten says "${got?.text ?? "<missing>"}"`).toBe(
+        row.text,
+      );
     }
   });
 });

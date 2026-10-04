@@ -44,7 +44,12 @@ export function err(code: string): ModelToolMessage {
 
 /** A heads-up item with only the fields a cast reads filled in. `rule` is the decision-table
  * row the engine judged (`QR1`, `L1`, `QT1`, `E2`, …): a cast repairs only on its row. */
-export function item(premise: HeadsUpItem["premise"], diff: HeadsUpItem["diff"], result: HeadsUpItem["result"] = "repair", rule = "X"): HeadsUpItem {
+export function item(
+  premise: HeadsUpItem["premise"],
+  diff: HeadsUpItem["diff"],
+  result: HeadsUpItem["result"] = "repair",
+  rule = "X",
+): HeadsUpItem {
   return {
     premise,
     rule,
@@ -59,7 +64,12 @@ export function item(premise: HeadsUpItem["premise"], diff: HeadsUpItem["diff"],
 }
 
 /** A whole heads-up. */
-export function hu(hn: number, result: HeadsUp["result"], items: HeadsUpItem[], dropped: HeadsUp["dropped_ops"] = []): HeadsUp {
+export function hu(
+  hn: number,
+  result: HeadsUp["result"],
+  items: HeadsUpItem[],
+  dropped: HeadsUp["dropped_ops"] = [],
+): HeadsUp {
   return {
     hn,
     attempt_id: "a1",
@@ -90,7 +100,10 @@ export function listingDiff(added: string[] = [], removed: string[] = []): Heads
 }
 
 /** The query diff of a QT1 item. */
-export function queryDiff(added: Array<{ key: string; source: string | null }>, context: Array<{ key: string; source: string }> = []): HeadsUpItem["diff"] {
+export function queryDiff(
+  added: Array<{ key: string; source: string | null }>,
+  context: Array<{ key: string; source: string }> = [],
+): HeadsUpItem["diff"] {
   return { kind: "query", added, removed: [], context };
 }
 

@@ -49,7 +49,6 @@ export type Conductor = {
   observe(event: Record<string, unknown>): void;
 };
 
-
 export function createConductor(script: readonly ConductorRow[]): Conductor {
   let row = 0;
   const seen: Record<string, unknown>[] = [];
@@ -87,9 +86,8 @@ export function createConductor(script: readonly ConductorRow[]): Conductor {
             k === "pattern"
               ? patterns.get(attemptOf(e) ?? "")
               : // `card.opened`/`card.updated` carry the card's fields under `card`.
-                (e[k] ?? (typeof e.card === "object" && e.card !== null
-                  ? (e.card as Record<string, unknown>)[k]
-                  : undefined));
+                (e[k] ??
+                (typeof e.card === "object" && e.card !== null ? (e.card as Record<string, unknown>)[k] : undefined));
           if (want === "*" ? have === undefined || have === null : have !== want) ok = false;
         }
         if (ok) got += 1;
@@ -175,7 +173,10 @@ export function heroScript(order: 1 | 2, seed: "tidepool" | "tidepool-auto"): Co
           { event: OP, match: { path: "creatures/shrimp.js" } },
         ],
       },
-      { actions: [{ type: "start", patterns: ["hero-s"], hold_before_submit: [] }], until: [{ event: "card.opened", match: { kind: "held" } }] },
+      {
+        actions: [{ type: "start", patterns: ["hero-s"], hold_before_submit: [] }],
+        until: [{ event: "card.opened", match: { kind: "held" } }],
+      },
       compareProbe[0]!,
       {
         actions: [{ type: "tap", option: "land" }],
@@ -237,7 +238,12 @@ export function heroScript(order: 1 | 2, seed: "tidepool" | "tidepool-auto"): Co
       },
       {
         actions: [{ type: "release", patterns: creatures }],
-        until: [landed("hero-c"), landed("hero-h"), landed("hero-j"), { event: "plain.updated", match: { through_seq: "*" } }],
+        until: [
+          landed("hero-c"),
+          landed("hero-h"),
+          landed("hero-j"),
+          { event: "plain.updated", match: { through_seq: "*" } },
+        ],
       },
       compareProbe[1]!,
     ];
@@ -249,7 +255,12 @@ export function heroScript(order: 1 | 2, seed: "tidepool" | "tidepool-auto"): Co
     },
     {
       actions: [{ type: "start", patterns: ["hero-c", "hero-h", "hero-j"], hold_before_submit: [] }],
-      until: [landed("hero-c"), landed("hero-h"), landed("hero-j"), { event: HS, match: { result: "repair", pattern: "hero-s" } }],
+      until: [
+        landed("hero-c"),
+        landed("hero-h"),
+        landed("hero-j"),
+        { event: HS, match: { result: "repair", pattern: "hero-s" } },
+      ],
     },
     { actions: [{ type: "release", patterns: ["hero-s"] }], until: [landed("hero-s")] },
   ];

@@ -19,10 +19,19 @@ describe("hero-j (02-tidepool.md 10.5)", () => {
     const b = bag();
     expect(step(HERO_J, b, null)).toMatchObject({ kind: "tool", tool: "list", args: { path: "creatures/" } });
     expect(step(HERO_J, b, ok())).toMatchObject({ tool: "read", args: { path: "GUIDE.md" } });
-    expect(step(HERO_J, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js", entity: "SURFACE_Y" } });
+    expect(step(HERO_J, b, ok())).toMatchObject({
+      tool: "read",
+      args: { path: "world/bounds.js", entity: "SURFACE_Y" },
+    });
     expect(step(HERO_J, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js", entity: "FLOOR_Y" } });
-    expect(step(HERO_J, b, ok())).toMatchObject({ tool: "write", args: { path: "creatures/jellyfish.js", content: JELLYFISH_FILE } });
-    expect(step(HERO_J, b, ok())).toMatchObject({ tool: "submit", args: { summary: "a jellyfish that drifts up and down" } });
+    expect(step(HERO_J, b, ok())).toMatchObject({
+      tool: "write",
+      args: { path: "creatures/jellyfish.js", content: JELLYFISH_FILE },
+    });
+    expect(step(HERO_J, b, ok())).toMatchObject({
+      tool: "submit",
+      args: { summary: "a jellyfish that drifts up and down" },
+    });
   });
 
   it("waits at a held submit until released (SW8/SWR3)", () => {
@@ -36,16 +45,22 @@ describe("hero-j (02-tidepool.md 10.5)", () => {
     const b = bag();
     step(HERO_J, b, null);
     // TA3: the refusal did not record the call — the same `list` is issued again.
-    expect(step(HERO_J, b, err("heads_up_first"), [hu(1, "info", [])])).toMatchObject({ tool: "list", args: { path: "creatures/" } });
+    expect(step(HERO_J, b, err("heads_up_first"), [hu(1, "info", [])])).toMatchObject({
+      tool: "list",
+      args: { path: "creatures/" },
+    });
   });
 
   it("stops `withdrawn` when a heads-up drops an op the cast cannot re-derive (SW6)", () => {
     const b = bag();
     for (const r of [null, ok(), ok(), ok(), ok(), ok()]) step(HERO_J, b, r);
     const out = step(HERO_J, b, null, [
-      hu(1, "repair", [item(E("world/bounds.js#SURFACE_Y"), entityDiff("x", "y"))], [
-        { op_seq: 1, path: "creatures/jellyfish.js", rule: "OP2" },
-      ]),
+      hu(
+        1,
+        "repair",
+        [item(E("world/bounds.js#SURFACE_Y"), entityDiff("x", "y"))],
+        [{ op_seq: 1, path: "creatures/jellyfish.js", rule: "OP2" }],
+      ),
     ]);
     expect(out).toMatchObject({ kind: "stop", reason: "withdrawn" });
   });

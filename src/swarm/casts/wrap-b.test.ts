@@ -19,7 +19,13 @@ describe("wrap-b (02-tidepool.md 10.5)", () => {
     expect(step(WRAP_B, b, ok())).toMatchObject({ tool: "read", args: { path: "GUIDE.md" } });
     expect(step(WRAP_B, b, ok())).toMatchObject({ tool: "read", args: { path: "world/bounds.js", entity: "wrap" } });
     expect(step(WRAP_B, b, ok())).toMatchObject({ tool: "read", args: { path: "world/movement.js", entity: "step" } });
-    expect(step(WRAP_B, b, ok())).toMatchObject({ tool: "write", args: { path: "creatures/ray.js", content: RAY_FILE } });
-    expect(step(WRAP_B, b, ok())).toMatchObject({ tool: "submit", args: { summary: "a ray that swims out one side and back in the other" } });
+    expect(step(WRAP_B, b, ok())).toMatchObject({
+      tool: "write",
+      args: { path: "creatures/ray.js", content: RAY_FILE },
+    });
+    expect(step(WRAP_B, b, ok())).toMatchObject({
+      tool: "submit",
+      args: { summary: "a ray that swims out one side and back in the other" },
+    });
   });
 });

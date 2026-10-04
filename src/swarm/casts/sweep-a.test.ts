@@ -40,21 +40,38 @@ describe("sweep-a (02-tidepool.md 10.5)", () => {
   it("runs the row of 9.5: reads, the search, the two energy.js replaces, the found calls", () => {
     const b = bag();
     expect(step(SWEEP_A, b, null)).toMatchObject({ kind: "tool", tool: "read", args: { path: "GUIDE.md" } });
-    expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" } });
-    expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "read", args: { path: "world/energy.js", entity: "LIVING_COST" } });
+    expect(step(SWEEP_A, b, ok())).toMatchObject({
+      tool: "read",
+      args: { path: "world/energy.js", entity: "ENERGY_MAX" },
+    });
+    expect(step(SWEEP_A, b, ok())).toMatchObject({
+      tool: "read",
+      args: { path: "world/energy.js", entity: "LIVING_COST" },
+    });
     expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "read", args: { path: "world/energy.js", entity: "drain" } });
-    expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "read", args: { path: "world/energy.js", entity: "liveOneTick" } });
+    expect(step(SWEEP_A, b, ok())).toMatchObject({
+      tool: "read",
+      args: { path: "world/energy.js", entity: "liveOneTick" },
+    });
     expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "search", args: { query: "drain(", path: "creatures/" } });
     const r1 = step(SWEEP_A, b, ok({ lines: [{ path: "creatures/fish.js", text: "  drain(fish, 0.05);" }] }));
     expect(r1).toMatchObject({ tool: "replace", args: { path: "world/energy.js", old: DRAIN_OLD, new: DRAIN_NEW } });
     expect(step(SWEEP_A, b, ok())).toMatchObject({
       tool: "replace",
-      args: { path: "world/energy.js", old: "  drain(creature, LIVING_COST);", new: "  drain(creature, (LIVING_COST / ENERGY_MAX) * 100);" },
+      args: {
+        path: "world/energy.js",
+        old: "  drain(creature, LIVING_COST);",
+        new: "  drain(creature, (LIVING_COST / ENERGY_MAX) * 100);",
+      },
     });
     expect(step(SWEEP_A, b, ok())).toMatchObject({
-      tool: "replace", args: { path: "creatures/fish.js", old: "drain(fish, 0.05)", new: "drain(fish, 5)" },
+      tool: "replace",
+      args: { path: "creatures/fish.js", old: "drain(fish, 0.05)", new: "drain(fish, 5)" },
     });
-    expect(step(SWEEP_A, b, ok())).toMatchObject({ tool: "submit", args: { summary: "Write energy costs in percent" } });
+    expect(step(SWEEP_A, b, ok())).toMatchObject({
+      tool: "submit",
+      args: { summary: "Write energy costs in percent" },
+    });
   });
 
   it("the QT1+QR1 `repair` of beat 5 rewrites the gained module once, with no read", () => {
@@ -74,7 +91,11 @@ describe("sweep-a (02-tidepool.md 10.5)", () => {
     // the script's own pending `liveOneTick` edit still runs ahead of the submit.
     expect(step(SWEEP_A, b, ok())).toMatchObject({
       tool: "replace",
-      args: { path: "world/energy.js", old: "  drain(creature, LIVING_COST);", new: "  drain(creature, (LIVING_COST / ENERGY_MAX) * 100);" },
+      args: {
+        path: "world/energy.js",
+        old: "  drain(creature, LIVING_COST);",
+        new: "  drain(creature, (LIVING_COST / ENERGY_MAX) * 100);",
+      },
     });
     const s = step(SWEEP_A, b, ok());
     expect(s).toMatchObject({ kind: "tool", tool: "submit" });

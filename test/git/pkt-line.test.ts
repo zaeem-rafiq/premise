@@ -60,8 +60,8 @@ describe("the receive-pack request (9.5, LP4)", () => {
     const head = request.subarray(0, request.byteLength - pack.byteLength);
     const lines = parsePktLines(head);
     expect(lines.map((l) => l.kind)).toEqual(["data", "data", "flush"]);
-    expect(text((lines[0] as { payload: Uint8Array }).payload)).toBe(`${ZERO} ${ONE} refs/heads/main\0report-status\n`);
-    expect(text((lines[1] as { payload: Uint8Array }).payload)).toBe(`${ZERO} ${TWO} refs/notes/premise\n`);
+    expect(text((lines[0] as { payload: Uint8Array }).payload)).toBe(`${ZERO} ${ONE} refs/heads/main\0 report-status`);
+    expect(text((lines[1] as { payload: Uint8Array }).payload)).toBe(`${ZERO} ${TWO} refs/notes/premise`);
     expect(request.subarray(request.byteLength - pack.byteLength)).toEqual(pack);
   });
 
@@ -73,7 +73,7 @@ describe("the receive-pack request (9.5, LP4)", () => {
     );
     const first = parsePktLines(request.subarray(0, request.byteLength - 1))[0]!;
     expect(first.kind).toBe("data");
-    if (first.kind === "data") expect(text(first.payload)).toContain("\0report-status atomic\n");
+    if (first.kind === "data") expect(text(first.payload)).toContain("\0 report-status atomic");
   });
 
   it("refuses an empty command list and a malformed oid", () => {
@@ -98,6 +98,26 @@ describe("the report parser (9.5)", () => {
       { ref: "refs/heads/main", ok: true },
       { ref: "refs/notes/premise", ok: false, error: "stale info" },
     ]);
+  });
+
+  it("reads a report that the server framed in side-band: band 1 carries the report (gitprotocol-pack)", () => {
+    const inner = new Uint8Array([...pktLine("unpack ok\n"), ...pktLine("ok refs/heads/main\n"), ...FLUSH_PKT]);
+    const progress = new TextEncoder().encode("Resolving deltas: done\n");
+    const framed = new Uint8Array([
+      ...pktLine(new Uint8Array([2, ...progress])),
+      ...pktLine(new Uint8Array([1, ...inner])),
+      ...FLUSH_PKT,
+    ]);
+    const parsed = parseReceivePackReport(framed);
+    expect(parsed.unpackOk).toBe(true);
+    expect(parsed.results).toEqual([{ ref: "refs/heads/main", ok: true }]);
+  });
+
+  it("reads a side-band error packet (band 3) as an unpack failure", () => {
+    const fatal = new TextEncoder().encode("fatal: bad pack\n");
+    const parsed = parseReceivePackReport(new Uint8Array([...pktLine(new Uint8Array([3, ...fatal])), ...FLUSH_PKT]));
+    expect(parsed.unpackOk).toBe(false);
+    expect(parsed.unpackError).toBe("fatal: bad pack");
   });
 
   it("reads an unpack failure", () => {

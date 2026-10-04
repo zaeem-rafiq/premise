@@ -34,8 +34,12 @@ export function buildReceivePackRequest(
     if (!OID_RE.test(command.oldOid) || !OID_RE.test(command.newOid)) {
       throw new Error(`invalid oid in command for ${command.ref}`);
     }
-    const caps = i === 0 && capabilities.length > 0 ? `\0${capabilities.join(" ")}` : "";
-    lines.push(pktLine(`${command.oldOid} ${command.newOid} ${command.ref}${caps}\n`));
+    // Written the way git's own client writes it (send-pack): the capability list follows the NUL
+    // with a leading space, and a command carries no line feed (gitprotocol-pack: `command NUL
+    // capability-list`). git's server accepts other spellings; a server that does not strip a line
+    // feed would read it into the last capability or the ref name.
+    const caps = i === 0 && capabilities.length > 0 ? `\0 ${capabilities.join(" ")}` : "";
+    lines.push(pktLine(`${command.oldOid} ${command.newOid} ${command.ref}${caps}`));
   }
   return concatBytes([...lines, FLUSH_PKT, pack]);
 }
@@ -53,11 +57,32 @@ export type ReceivePackReport = {
 };
 
 /** The report a server sends for a receive-pack request (9.5). */
+/**
+ * The report's own pkt-lines. A plain report starts with a letter ("unpack …"). A server that
+ * frames its answer in side-band (band 1 data, band 2 progress, band 3 error) starts each packet
+ * with the band number; the report is then the concatenation of the band-1 payloads. This module
+ * never asks for side-band, and still reads an answer that uses it.
+ */
+function reportStream(bytes: Uint8Array): Uint8Array {
+  const packets = parsePktLines(bytes);
+  const first = packets.find((packet) => packet.kind === "data");
+  if (first === undefined || first.kind !== "data") return bytes;
+  const band = first.payload[0];
+  if (band !== 1 && band !== 2 && band !== 3) return bytes;
+  const data: Uint8Array[] = [];
+  for (const packet of packets) {
+    if (packet.kind !== "data") continue;
+    if (packet.payload[0] === 1) data.push(packet.payload.subarray(1));
+    if (packet.payload[0] === 3) data.push(pktLine(`unpack ${text(packet.payload.subarray(1)).trim()}\n`));
+  }
+  return concatBytes(data);
+}
+
 export function parseReceivePackReport(bytes: Uint8Array): ReceivePackReport {
   let unpackOk = true;
   let unpackError: string | null = null;
   const results: RefResult[] = [];
-  for (const line of parsePktLines(bytes)) {
+  for (const line of parsePktLines(reportStream(bytes))) {
     if (line.kind === "flush") break;
     const s = text(line.payload).replace(/\n$/, "");
     if (s === "unpack ok") unpackOk = true;

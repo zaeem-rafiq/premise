@@ -47,9 +47,9 @@ function rescheduleTimer(sql: Sql, timer: TimerRow): void {
 
 /**
  * The alarm handler: every due timer in `due_at` order. The `events` timer is the outbox flush —
- * `deliverEvents` deletes or re-schedules the row itself as the Floor answers. An engine timer is
- * deleted before its entry runs, so an entry that re-arms itself is not clobbered; a throw puts the
- * row back with a backoff (AL2). The alarm is always re-armed before the handler returns (AL1).
+ * `deliverEvents` deletes or re-schedules the row itself as the Floor answers. Every other timer is
+ * deleted before its work runs, so work that re-arms itself is not clobbered; a throw puts the row
+ * back with a backoff (AL2). The alarm is always re-armed before the handler returns (AL1).
  */
 export async function runAlarm({ env, ctx, sql, runEntry, push, repush }: AlarmDeps): Promise<void> {
   const now = Date.now();
@@ -67,6 +67,10 @@ export async function runAlarm({ env, ctx, sql, runEntry, push, repush }: AlarmD
     // retry (9.6), `repush` the heads-up delivery (HU5b).
     const shellWork = timer.kind === "push" ? push : timer.kind === "repush" ? repush : undefined;
     if (shellWork !== undefined) {
+      // Deleted before the work runs, like an engine timer: the work puts the timer back itself
+      // when it has to run again (a push retry, an undelivered heads-up). A row left in place is
+      // due again at once, and the alarm then fires without end on a pool that has nothing to do.
+      sql.transaction(() => timerDelete(sql, timer.kind, timer.key));
       try {
         await shellWork();
       } catch {

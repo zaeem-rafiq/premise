@@ -86,6 +86,7 @@ import {
 import { ScriptedDriver, scriptedHeadsUpForModel, type Script } from "./scripted-driver.ts";
 import { PatternDriver } from "./pattern-driver.ts";
 import { patternById } from "../../swarm/pattern.ts";
+import { sqlOver } from "../sql-port.ts";
 
 // What a pool's launcher POSTs to the Agent's /open is `AgentOpenRequest` of
 // src/protocol/internal.ts (SW4; the swarm lane's launch call carries the same
@@ -119,11 +120,7 @@ export class Agent extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    const storage = ctx.storage;
-    this.#sql = {
-      exec: (query, ...bindings) => storage.sql.exec(query, ...bindings),
-      transaction: (run) => storage.transactionSync(run),
-    };
+    this.#sql = sqlOver(ctx.storage);
     applySchema(this.#sql);
     // A journal row at start is a call that never completed (AG2); it is
     // served again before anything else, with the same call_id.

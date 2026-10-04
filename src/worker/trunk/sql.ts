@@ -5,13 +5,11 @@
 // is built from input.
 
 import type { Sql } from "../../protocol/ports.ts";
+import { sqlOver } from "../sql-port.ts";
 
-/** The `Sql` port over a Durable Object's storage: `transaction` is `transactionSync` (SY2). */
+/** The `Sql` port of a Durable Object. */
 export function sqlOf(ctx: DurableObjectState): Sql {
-  return {
-    exec: (query, ...bindings) => ctx.storage.sql.exec(query, ...bindings),
-    transaction: (run) => ctx.storage.transactionSync(run),
-  };
+  return sqlOver(ctx.storage);
 }
 
 /** The shell's schema (01-core 3.2): `meta`, `events_out`, `timers`. `IF NOT EXISTS` leaves the

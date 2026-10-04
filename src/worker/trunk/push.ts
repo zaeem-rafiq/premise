@@ -61,7 +61,11 @@ function outboxPack(ctx: DurableObjectState, batch_id: number): Uint8Array {
   const chunks = sqlOf(ctx)
     .exec("SELECT bytes FROM outbox_chunks WHERE batch_id = ? ORDER BY i", batch_id)
     .toArray()
-    .map((row) => (row.bytes instanceof Uint8Array ? row.bytes : new Uint8Array(0)));
+    .map((row) => {
+      // An empty pack would be pushed as "no objects" and refused for ever: fail here instead.
+      if (!(row.bytes instanceof Uint8Array)) throw new Error("an outbox chunk is not bytes");
+      return row.bytes;
+    });
   const pack = new Uint8Array(chunks.reduce((n, b) => n + b.byteLength, 0));
   let off = 0;
   for (const chunk of chunks) {

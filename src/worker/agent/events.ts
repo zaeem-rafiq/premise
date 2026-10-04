@@ -13,7 +13,7 @@ import type { FloorAppendRequest, FloorAppendResponse } from "../../protocol/int
 import type { StreamSource } from "../../protocol/stream.ts";
 import { agentSourceId } from "../../protocol/stream.ts";
 import { HEADS_UP_REPUSH_MS } from "../../protocol/constants.ts";
-import { timerPut } from "../../core/agent/store.ts";
+import { metaGet, metaSet, timerPut } from "../../core/agent/store.ts";
 
 export type AgentEvent = PoolEvent extends infer E ? (E extends PoolEvent ? Omit<E, "n" | "t"> : never) : never;
 
@@ -29,8 +29,13 @@ export function ensureEventsSchema(sql: Sql): void {
 }
 
 export function appendEvent(sql: Sql, event: AgentEvent): void {
-  const rows = sql.exec("SELECT COALESCE(MAX(n), 0) AS m FROM agent_events").toArray();
-  const n = Number(rows[0]?.m ?? 0) + 1;
+  // EV2a: `source_n` is the source's own counter, kept in `meta` — it must not
+  // restart when the confirmed rows are deleted (MAX(n) over a drained outbox
+  // would hand every new event 1 again, and the Floor would drop them all as
+  // duplicates — what the first real run did to every step after the first).
+  const next = metaGet(sql, "event_n");
+  const n = next === null ? 1 : Number(next) + 1;
+  metaSet(sql, "event_n", n);
   sql.exec("INSERT INTO agent_events (n, event) VALUES (?, ?)", n, JSON.stringify(event));
 }
 

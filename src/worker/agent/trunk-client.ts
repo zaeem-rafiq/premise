@@ -22,6 +22,11 @@ export const TRUNK_PATHS = { tool: "/tool", sync: "/sync", register: "/register"
 
 export interface TrunkTransport {
   post(path: string, body: unknown): Promise<Response>;
+  /** EV6: the Agent reads the pool's `summary_only` flag from Trunk's own
+   * `/internal/state`. A transport without `get` (a bare fake) leaves the flag
+   * unknown and the Agent emits — the read is a property check, never a call
+   * the fake must answer. */
+  get?(path: string): Promise<Response>;
 }
 
 // The Durable Object fetch ignores the origin; only the path is dispatched.
@@ -36,6 +41,7 @@ export function durableObjectTransport(ns: DurableObjectNamespace, pool: string)
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
+    get: (path) => stub.fetch(TRUNK_ORIGIN + path),
   };
 }
 
@@ -47,6 +53,7 @@ export function urlTransport(base: string): TrunkTransport {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
+    get: (path) => fetch(base + path),
   };
 }
 
@@ -86,5 +93,19 @@ export class TrunkCalls {
 
   stop(reason: StopRequest["reason"]): Promise<StopResponse> {
     return this.#post<StopResponse>(TRUNK_PATHS.stop, { attempt_id: this.#attempt_id, reason });
+  }
+
+  /** EV6: `summary_only` from Trunk's `/internal/state`; `null` when the
+   * transport cannot serve the read — the flag stays unknown, not false. */
+  async summaryOnly(): Promise<boolean | null> {
+    if (this.#transport.get === undefined) return null;
+    try {
+      const res = await this.#transport.get("/internal/state");
+      if (!res.ok) return null;
+      const body = (await res.json()) as { meta?: Record<string, unknown> };
+      return body.meta?.summary_only === "1" || body.meta?.summary_only === true;
+    } catch {
+      return null;
+    }
   }
 }

@@ -3,9 +3,9 @@
 //
 // Diferente do agent-do.test.ts (que abre o Agent DO direto com fakes de Trunk
 // e Gate), aqui TUDO é real menos o modelo: Trunk DO, engine, git remoto via
-// fake-artifacts, Floor, eventos — o único fake é o FakeModel HTTP que o
-// MODEL_URL da deployment injeta no open do Agent (mesmo gancho do
-// open-attempt que o teste DO usa, agora via rota).
+// fake-artifacts, Floor, eventos — o único fake é o FakeModel HTTP atrás do
+// binding `AI` do worker de teste (fake-ai.mjs), do jeito que um deploy liga
+// o modelo de verdade.
 //
 //   item 1    POST /api/pools/{pool}/intents → real agent → landing.landed,
 //             CM1 (autor = model id), attempt.step com tokens/cost reais e o
@@ -165,7 +165,8 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
 
     // CM1: o commit da criatura tem autor = o id do modelo.
     const events = await worker.events(POOL);
-    const landed = events.find((e) => e.type === "landing.landed") as { commit: string } | undefined;
+    const landed = events.find((e) => e.type === "landing.landed") as
+      { commit: string; note_json?: string } | undefined;
     expect(landed).toBeDefined();
     const author = git(worker.repoDir(POOL), ["log", "-1", "--format=%an", landed!.commit]);
     expect(author).toBe(WORKHORSE_MODEL);
@@ -186,6 +187,26 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
     const gateRes = await worker.gate().fetch("/internal/state");
     const gate = (await gateRes.json()) as { state?: { spent_usd: number } };
     expect(gate.state!.spent_usd).toBeCloseTo(spent, 6);
+
+    // EV2a: todo attempt.step do run veio da fonte do Agent, uma vez só, em ordem.
+    const steps = events.filter((e) => e.type === "attempt.step" && e.attempt_id === attempt_id);
+    expect(steps.every((e) => e.src === "agent")).toBe(true);
+    expect(new Set(steps.map((e) => e.step)).size).toBe(steps.length);
+    const stepNumbers = steps.map((e) => Number(e.step));
+    expect([...stepNumbers].sort((a, b) => a - b)).toEqual(stepNumbers);
+
+    // TA10: a nota congela os totais que o Agent enviou — contados à mão do uso
+    // declarado do fake (1000/60 por resposta × o número de chamadas que o run fez).
+    // `landing.landed` leva `note_json` no corpo (12.1); `attempt_id` não é campo
+    // dele — a tentativa é a única do pool de teste.
+    const note = JSON.parse(landed!.note_json ?? "{}") as {
+      attempt: { steps: number; model_calls: number; tokens_in: number; tokens_out: number };
+    };
+    const calls = model.requests.length;
+    expect(note.attempt.model_calls).toBe(calls);
+    expect(note.attempt.tokens_in).toBe(1000 * calls);
+    expect(note.attempt.tokens_out).toBe(60 * calls);
+    expect(note.attempt.steps).toBe(steps.filter((e) => e.tool !== null).length);
 
     // O arquivo chegou ao repositório real via Trunk→landing.
     let fileType = "";

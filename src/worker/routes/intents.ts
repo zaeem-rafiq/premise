@@ -119,13 +119,6 @@ export const createIntent: RouteHandler = async ({ request, env, params }) => {
     driver: "model",
     model: WORKHORSE_MODEL,
   };
-  // Test hook (deployment var): the route hands the Agent the fake-model URL
-  // the same way `trunk_url` works for DO-level tests. Unbound in production.
-  const model_url = (env as { MODEL_URL?: string }).MODEL_URL;
-  if (typeof model_url === "string") open.model_url = model_url;
-  const gate_url = (env as { GATE_URL?: string }).GATE_URL;
-  if (typeof gate_url === "string") open.gate_url = gate_url;
-
   let answer: AgentOpenResponse;
   try {
     const response = await env.AGENT.get(env.AGENT.idFromName(attempt_id)).fetch(AGENT_OPEN_URL, {

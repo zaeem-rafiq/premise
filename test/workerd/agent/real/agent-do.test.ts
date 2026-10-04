@@ -47,7 +47,7 @@ beforeAll(async () => {
   trunk = new FakeTrunk();
   await model.listen();
   await trunk.listen();
-  worker = await startRealWorker({ ownerKey: KEY });
+  worker = await startRealWorker({ ownerKey: KEY, modelUrl: model.url });
 }, 60_000);
 
 afterAll(async () => {
@@ -68,7 +68,6 @@ function openReal(id: string, extra: Record<string, unknown> = {}): Promise<unkn
       driver: "model",
       model: WORKHORSE_MODEL,
       trunk_url: trunk.url,
-      model_url: model.url,
       ...extra,
     }),
   );
@@ -143,6 +142,7 @@ beforeEach(() => {
   trunk.queue = [];
   trunk.stopped = null;
   trunk.state = "working";
+  trunk.summaryOnly = false;
 });
 
 const SCRIPT_FULL = [
@@ -412,4 +412,71 @@ describe("the real Agent in workerd (05-agent)", () => {
     expect(againAnswer).toEqual({ ok: true, resume_n: 1 });
     await waitFor(async () => (await inspect("a_resume")).meta.state === "validated", 20_000);
   }, 60_000);
+
+  it("EV2: the first turns' steps are on the Floor while a later model call is in flight", async () => {
+    // Two parked answers: request 1 parks on h1, request 2 on h2 — armed before
+    // /open so which request each holds is deterministic.
+    const h1 = model.hold();
+    const h2 = model.hold();
+    model.script = [
+      { tool_calls: [{ name: "read", arguments: { path: "GUIDE.md" } }] },
+      { tool_calls: [{ name: "read", arguments: { path: "creatures/fish.js" } }] },
+      { tool_calls: [{ name: "submit", arguments: { summary: "s" } }] },
+    ];
+    await openReal("a_live");
+    await h1.seen;
+    h1.release(); // the first turn answers: model step 3, tool step 4
+    await h2.seen; // the second turn's request is now parked
+    // While call 2 is in flight the stream already holds turn 1's model step
+    // and the tool call it asked for — delivery started at each commit, not at
+    // the pump's end (what the first real run got wrong).
+    await waitFor(async () => {
+      const steps = (await floorEvents(POOL)).filter((e) => e.type === "attempt.step" && e.attempt_id === "a_live");
+      return steps.length >= 2;
+    });
+    const steps = (await floorEvents(POOL)).filter((e) => e.type === "attempt.step" && e.attempt_id === "a_live");
+    expect(steps.map((e) => e.step)).toEqual([3, 4]);
+    expect(steps.map((e) => e.tool)).toEqual([null, "read"]);
+    h2.release();
+    await waitFor(async () => (await inspect("a_live")).meta.state === "validated", 20_000);
+  }, 30_000);
+
+  it("EV6: a summary_only pool's Agent emits no attempt.step", async () => {
+    trunk.summaryOnly = true;
+    // TD5: submit before a whole-file GUIDE read is refused `guide_first`, so
+    // the script reads the guide first, like every run above.
+    model.script = [
+      { tool_calls: [{ name: "read", arguments: { path: "GUIDE.md" } }] },
+      { tool_calls: [{ name: "submit", arguments: { summary: "s" } }] },
+    ];
+    await openReal("a_so");
+    await waitFor(async () => (await inspect("a_so")).meta.state === "validated", 20_000);
+    // The flag was learned from Trunk's own /internal/state answer.
+    const s = await inspect("a_so");
+    expect(s.meta.summary_only).toBe("1");
+    expect(s.events.filter((e) => e.event.type === "attempt.step")).toEqual([]);
+    await new Promise((r) => setTimeout(r, 250));
+    const steps = (await floorEvents(POOL)).filter((e) => e.type === "attempt.step" && e.attempt_id === "a_so");
+    expect(steps).toEqual([]);
+  }, 30_000);
+
+  it("an /open carrying model_url or gate_url changes nothing: the bindings answer", async () => {
+    model.script = [
+      { tool_calls: [{ name: "read", arguments: { path: "GUIDE.md" } }] },
+      { tool_calls: [{ name: "submit", arguments: { summary: "s" } }] },
+    ];
+    // The hooks are gone: if these dead URLs were used, the loop would never
+    // see the fake's answer nor reserve at the gate — validated proves both.
+    const opened = (await openReal("a_hook", {
+      model_url: "http://127.0.0.1:1/unreachable",
+      gate_url: "http://127.0.0.1:1/unreachable",
+    })) as { ok: boolean };
+    expect(opened.ok).toBe(true);
+    await waitFor(async () => (await inspect("a_hook")).meta.state === "validated", 20_000);
+    // The model that answered is the AI binding's fake; the gate is the real
+    // object (a URL fake would have parked the first reserve forever).
+    expect(model.requests.length).toBe(2);
+    const gs = await gateState();
+    expect(Object.keys(gs.state!.reservations)).toHaveLength(0);
+  }, 30_000);
 });

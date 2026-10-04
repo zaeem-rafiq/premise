@@ -61,8 +61,30 @@ class FakeTrunk {
     release: Promise<void>;
   }[] = [];
 
+  /** EV6: answered on `GET /internal/state` — the Agent learns the flag from
+   * Trunk's own answer, the way it does against the real object. */
+  summaryOnly = false;
+
   async listen(): Promise<void> {
     this.#server = createServer((req, res) => {
+      if (req.method === "GET") {
+        if (req.url === "/internal/state") {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              pool: "test",
+              meta: { summary_only: this.summaryOnly ? "1" : "0" },
+              events_out: [],
+              timers: [],
+              outbox: null,
+              served: {},
+            }),
+          );
+        } else {
+          res.writeHead(404).end();
+        }
+        return;
+      }
       let body = "";
       req.on("data", (c: Buffer) => (body += c));
       req.on("end", () => {

@@ -88,7 +88,10 @@ export const TRUNK_SCHEMA: readonly string[] = [
     last_response   TEXT,
     ack             INTEGER NOT NULL DEFAULT 0,
     next_hn         INTEGER NOT NULL DEFAULT 1,
-    updated_at      INTEGER NOT NULL
+    updated_at      INTEGER NOT NULL,
+    model_calls     INTEGER NOT NULL DEFAULT 0,
+    tokens_in       INTEGER NOT NULL DEFAULT 0,
+    tokens_out      INTEGER NOT NULL DEFAULT 0
   ) WITHOUT ROWID`,
   `CREATE INDEX IF NOT EXISTS attempts_state ON attempts(state, validated_at)`,
   `CREATE INDEX IF NOT EXISTS attempts_intent ON attempts(intent_id)`,
@@ -319,6 +322,25 @@ export const META_KEYS = [
 
 export function applySchema(sql: Sql): void {
   for (const ddl of TRUNK_SCHEMA) sql.exec(ddl);
+  migrateSchema(sql);
+}
+
+/** Columns added after the first pools existed: `applySchema` covers a fresh database; a pool
+ * created before the columns joined `attempts` gets them here, before any `SELECT` names them
+ * (TA10: the usage totals of `ToolRequest.usage` are stored on the attempt). */
+export function migrateSchema(sql: Sql): void {
+  const exists =
+    sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'attempts'").toArray().length > 0;
+  if (!exists) return;
+  const cols = new Set(
+    sql
+      .exec("SELECT name FROM pragma_table_info('attempts')")
+      .toArray()
+      .map((r) => String(r.name)),
+  );
+  for (const c of ["model_calls", "tokens_in", "tokens_out"] as const) {
+    if (!cols.has(c)) sql.exec(`ALTER TABLE attempts ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
+  }
 }
 
 export function metaGet(sql: Sql, k: string): string | null {

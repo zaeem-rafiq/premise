@@ -80,7 +80,8 @@ export type Script = {
 /** `POST /open`: start (or idempotently re-acknowledge) an attempt's Agent (SW4, 9.8).
  * The Swarm's launch shape is the contract: `pool`, `driver`, `pattern`, `seed`, `agent_n`,
  * `truth`, `hold`, `think_ms`. The test/debug fields `script`, `trunk_url`, `pool_id`,
- * `agent_kind`, `model`, `revision`, `started_at` are accepted too. */
+ * `agent_kind`, `model`, `revision`, `started_at` are accepted too; the model and the
+ * gate are the deployment's own `AI` binding and `GATE` object, never a URL. */
 export type AgentOpenRequest = {
   attempt_id: string;
   intent_id: string;
@@ -107,10 +108,6 @@ export type AgentOpenRequest = {
   script?: Script;
   /** Point the Agent's Trunk client at an HTTP endpoint instead of the Trunk object (tests). */
   trunk_url?: string;
-  /** Point the model adapter at an HTTP endpoint instead of the `AI` binding (tests). */
-  model_url?: string;
-  /** Point the gate client at an HTTP endpoint instead of the gate object (tests). */
-  gate_url?: string;
 };
 
 export type AgentOpenResponse = { ok: true; attempt_id?: string; already?: boolean } | { ok: false; error: unknown };

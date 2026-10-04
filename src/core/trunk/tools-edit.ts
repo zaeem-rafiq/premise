@@ -102,19 +102,17 @@ export function tool(pool: Pool, req: ToolRequest): ToolResponse {
     } as ToolResponse;
   }
   markDelivered(pool, a, req.ack);
-  const step = pool.stepOf(a);
-  event(pool, "attempt.step", {
-    attempt_id: a.id,
-    step,
-    tool: req.tool,
-    target: toolTarget(req),
-    ok: true,
-    error: null,
-    ms: 0,
-    tokens_in: null,
-    tokens_out: null,
-    cost_usd: null,
-  });
+  // TA10: a real Agent's running totals ride every tool call; the last one sent is the one the
+  // note freezes (a TA2 replay repeats the same call_id and the same totals — the early return
+  // above keeps it from looking like a new reading).
+  if (req.usage !== undefined) {
+    a.model_calls = req.usage.model_calls;
+    a.tokens_in = req.usage.tokens_in;
+    a.tokens_out = req.usage.tokens_out;
+  }
+  // The note's `steps` count (TL1): one per fresh tool call. EV2a gives `attempt.step` to the
+  // Agent alone — the engine counts, it does not emit.
+  pool.stepOf(a);
   const inner = toolInner(pool, a, req);
   // EM2/TA7: every premise the response lists is recorded — a new pin, a re-pin, a flag set.
   for (const p of inner.premises) {
@@ -127,11 +125,6 @@ export function tool(pool: Pool, req: ToolRequest): ToolResponse {
   a.last_response = storable;
   pool.dirtyAttempts.add(a.id);
   return resp;
-}
-
-function toolTarget(req: ToolRequest): string | null {
-  const args = req.args as Record<string, unknown>;
-  return typeof args.path === "string" ? args.path : null;
 }
 
 function toolInner(pool: Pool, a: Attempt, req: ToolRequest): InnerOut {

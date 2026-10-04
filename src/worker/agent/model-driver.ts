@@ -98,6 +98,10 @@ export type ModelDeps = {
   secrets(): string[];
   /** Frees the real-agent slot when the loop ends or waits (MG5). */
   releaseSlot(): Promise<void>;
+  /** EV2: start the outbox's delivery to the pool's Floor — called after the
+   * transaction that appended the event commits, never inside it (an in-flight
+   * post would miss the not-yet-committed row). */
+  kickEvents(): void;
 };
 
 type ServeResult = "applied" | "waiting" | { stop: AgentStopReason };
@@ -310,6 +314,10 @@ export class ModelDriver implements Driver {
     tokens_out: number | null;
     cost_usd: number | null;
   }): void {
+    // EV6: a `summary_only` pool's stream holds no per-step events. The `step`
+    // is the transcript's row number (05-agent's "Row" line), so a `user` row
+    // leaves a number unused by the stream.
+    if (this.#meta("summary_only") === "1") return;
     appendEvent(this.#sql, {
       ts: Date.now(),
       pool: this.#deps.pool,
@@ -398,6 +406,7 @@ export class ModelDriver implements Driver {
         });
         abandonCall(this.#sql, journal.call_id);
       });
+      this.#deps.kickEvents();
       return { stop: "model_error" };
     }
     const backoff = Math.min(MODEL_RETRY_BACKOFF_MS * 2 ** (tries - 1), WAIT_BACKOFF_MAX_MS);
@@ -423,6 +432,7 @@ export class ModelDriver implements Driver {
         Date.now() + backoff,
       );
     });
+    this.#deps.kickEvents();
     return "waiting";
   }
 
@@ -543,6 +553,7 @@ export class ModelDriver implements Driver {
             cost_usd: charged,
           });
         });
+        this.#deps.kickEvents();
         return "applied";
       }
       return this.#failedTry(state, journal, { ...req, waits: 0 }, "model_bad_output", charged, ms);
@@ -575,6 +586,7 @@ export class ModelDriver implements Driver {
         });
         this.#journalUpdate(journal, { ...req, waits, waiting: true }, journal.tries, Date.now() + wait);
       });
+      this.#deps.kickEvents();
       return "waiting";
     }
 
@@ -597,6 +609,7 @@ export class ModelDriver implements Driver {
         });
         abandonCall(this.#sql, journal.call_id);
       });
+      this.#deps.kickEvents();
       return { stop: "model_error" };
     }
 

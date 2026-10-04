@@ -36,7 +36,8 @@ const TILES_CSS = `
 button.tile { cursor: pointer; }
 button.tile:hover { border-color: var(--accent, #6fd6cc); }
 .tile:focus-visible { outline: 3px solid var(--focus, #ffe08a); outline-offset: 2px; }
-.tile-name { font-size: var(--size-small, 14px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-name { font-size: var(--size-small, 14px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 8px; }
 .tile-label { background: transparent; border-style: dashed; border-color: var(--line, #3a5669); color: var(--muted, #a8bcc6); }
 .tile-marks { display: flex; align-items: center; gap: 4px; min-height: 8px; }
 .tile-mark { display: inline-block; flex: none; width: 8px; height: 8px; box-sizing: border-box; }
@@ -44,7 +45,7 @@ button.tile:hover { border-color: var(--accent, #6fd6cc); }
 .tile-mark-w { background: var(--accent, #6fd6cc); }
 .tile-more-marks { color: var(--muted, #a8bcc6); font-size: var(--size-small, 14px); }
 .tile-tag { align-self: flex-start; padding: 0 6px; border-radius: 999px; border: var(--border, 1px) solid var(--holds, #5bd68f);
-  color: var(--holds, #5bd68f); font-size: var(--size-small, 14px); line-height: 1.4; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  color: var(--holds, #5bd68f); font-size: var(--size-small, 14px); line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tile-removed { color: var(--muted, #a8bcc6); border-style: dashed; }
 .tile-removed .tile-name { text-decoration: line-through; }
 .tile-glow { animation: tile-in 2s var(--ease, ease); }
@@ -117,29 +118,30 @@ export function FileTiles(props: FileTilesProps) {
 
   // How many cells the capped grid holds: columns from the scroll width, rows capped by
   // --tile-rows and by the room the region actually has (LY1 shrinks the frame, not the tiles,
-  // but the count still follows the measured space).
+  // but the count still follows the measured space). The row count reads the `.tiles`
+  // section's flex height: the scroll element's height follows its clipped content, and
+  // measuring it would lock the grid at the rows it happens to show now.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el === null || typeof ResizeObserver !== "function") return;
+    const section = el?.parentElement ?? null;
+    if (el === null || section === null || typeof ResizeObserver !== "function") return;
     const measure = () => {
-      const style = getComputedStyle(el);
-      const cell = (name: string) => {
-        const v = parseFloat(getComputedStyle(el.querySelector(".tiles-grid") ?? el).getPropertyValue(name));
-        return Number.isFinite(v) && v > 0 ? v : 0;
-      };
       const grid = el.querySelector(".tiles-grid");
-      const gs = grid !== null ? getComputedStyle(grid) : style;
+      const gs = getComputedStyle(grid ?? el);
       const tw = parseFloat(gs.getPropertyValue("--tile-w")) || 88;
       const th = parseFloat(gs.getPropertyValue("--tile-h")) || 48;
       const gap = parseFloat(gs.getPropertyValue("--tile-gap")) || 8;
       const cap = parseFloat(gs.getPropertyValue("--tile-rows")) || 2;
+      const toggle = section.querySelector<HTMLElement>(".tiles-toggle");
+      const toggleH = toggle !== null && toggle.offsetParent !== null ? toggle.offsetHeight + 6 : 0;
       const cols = Math.max(1, Math.floor((el.clientWidth + gap) / (tw + gap)));
-      const rowsFit = el.clientHeight <= 0 ? cap : Math.max(1, Math.floor((el.clientHeight + gap) / (th + gap)));
+      const rowsFit =
+        section.clientHeight <= 0 ? cap : Math.max(1, Math.floor((section.clientHeight - toggleH + gap) / (th + gap)));
       const rows = Math.min(cap, rowsFit);
       setCapacity(cols * rows);
     };
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(section);
     (el as unknown as { __measure: () => void }).__measure = measure;
     return () => ro.disconnect();
   }, []);
@@ -152,10 +154,15 @@ export function FileTiles(props: FileTilesProps) {
 
   // CO28: `tiles.more` clips the grid and opens the full list. While open the same cell (kept
   // last, same label, aria-expanded) closes it — the pattern `banner.more` uses.
-  const allCells = useMemo(() => tileCells(state, { removedPaths: gone, glowPaths: glow }), [state, gone, glow]);
+  // `reduce` mutates `FloorState` in place: `state.n` in the deps stands for "the stream
+  // moved" the way the rail's `[floor, floor.n]` does — a bare `[state]` never recomputes.
+  const allCells = useMemo(
+    () => tileCells(state, { removedPaths: gone, glowPaths: glow }),
+    [state, state.n, gone, glow],
+  );
   const clipped = useMemo(
     () => tileCells(state, { capacity, removedPaths: gone, glowPaths: glow }),
-    [state, capacity, gone, glow],
+    [state, state.n, capacity, gone, glow],
   );
   const tail = clipped[clipped.length - 1];
   const hidden = tail?.kind === "more" ? tail.hidden : 0;
@@ -197,21 +204,23 @@ export function FileTiles(props: FileTilesProps) {
     const body = (
       <>
         <span className="tile-name">{tileName(file.path)}</span>
-        <span className="tile-marks">
-          {Array.from({ length: marks.readers }, (_, k) => (
-            <span key={`r${k}`} className="tile-mark tile-mark-r" />
-          ))}
-          {Array.from({ length: marks.writers }, (_, k) => (
-            <span key={`w${k}`} className="tile-mark tile-mark-w" />
-          ))}
-          {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
-        </span>
-        {file.tier === "held" && !removed && (
-          <span className="tile-tag" title={text("tile.held.tip")}>
-            {text("tile.held")}
+        <span className="tile-foot">
+          <span className="tile-marks">
+            {Array.from({ length: marks.readers }, (_, k) => (
+              <span key={`r${k}`} className="tile-mark tile-mark-r" />
+            ))}
+            {Array.from({ length: marks.writers }, (_, k) => (
+              <span key={`w${k}`} className="tile-mark tile-mark-w" />
+            ))}
+            {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
           </span>
-        )}
-        {removed && <span className="tile-tag">{text("tile.removed")}</span>}
+          {file.tier === "held" && !removed && (
+            <span className="tile-tag" title={text("tile.held.tip")}>
+              {text("tile.held")}
+            </span>
+          )}
+          {removed && <span className="tile-tag">{text("tile.removed")}</span>}
+        </span>
       </>
     );
     const cls = ["tile", removed ? "tile-removed" : "", cell.glow ? "tile-glow" : ""].filter(Boolean).join(" ");

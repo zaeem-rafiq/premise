@@ -23,7 +23,6 @@ import { changeName } from "../../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../../copy/format.ts";
 import { IntentBox } from "../intent-box/intent-box.tsx";
 import { Tray } from "../tray/tray.tsx";
-import { CardSheet } from "../card-sheet/card-sheet.tsx";
 
 export type RailProps = {
   floor: FloorState;
@@ -107,10 +106,8 @@ export function Rail(props: RailProps) {
   const t = shell.t;
   const { floor } = props;
   const [tab, setTab] = useState<"working" | "landed" | "stopped">("working");
-  // The card sheet opens in the rail itself: `onOpenCard` stays the prop contract, but the rail
-  // renders the `sheet.card` component so the sheet works before the shell's branch exists and
-  // stays single-rendered when it does.
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  // The card sheet is the shell's: `onOpenCard` sets `SheetTarget.card`, which `app.tsx`
+  // draws through the registered `sheet.card` entry — the one place it renders.
   const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
   const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped" && !inRaceGroup(floor, a));
@@ -156,7 +153,7 @@ export function Rail(props: RailProps) {
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
       <IntentBox floor={floor} mode={props.mode} owner={props.owner} capReached={props.capReached} />
 
-      <Tray floor={floor} onOpenCard={setOpenCardId} />
+      <Tray floor={floor} onOpenCard={props.onOpenCard} />
 
       <div className="tabs" role="tablist">
         {(
@@ -194,7 +191,7 @@ export function Rail(props: RailProps) {
                     clock={props.clock}
                     visitor={props.visitor}
                     compact={compact}
-                    onOpenCard={setOpenCardId}
+                    onOpenCard={props.onOpenCard}
                   />
                 ) : (
                   <section className="race-group" key={item.intentId}>
@@ -210,7 +207,7 @@ export function Rail(props: RailProps) {
                         clock={props.clock}
                         visitor={props.visitor}
                         compact
-                        onOpenCard={setOpenCardId}
+                        onOpenCard={props.onOpenCard}
                       />
                     ))}
                   </section>
@@ -261,12 +258,11 @@ export function Rail(props: RailProps) {
                 clock={props.clock}
                 visitor={props.visitor}
                 compact={compact}
-                onOpenCard={setOpenCardId}
+                onOpenCard={props.onOpenCard}
               />
             ))
           ))}
       </div>
-      {openCardId !== null && <CardSheet floor={floor} cardId={openCardId} onClose={() => setOpenCardId(null)} />}
     </aside>
   );
 }

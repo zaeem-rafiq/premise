@@ -21,18 +21,24 @@ export function Strip({ cells, stale }: { cells: StripCell[]; stale: number | nu
           key={cell.id}
           data-tone={cell.tone}
           title={cell.title}
-          tabIndex={cell.tip !== undefined ? 0 : undefined}
+          // AX2 puts the strip between header and banners in the focus order, so every
+          // cell is a focus stop whether or not it carries a tip.
+          tabIndex={0}
         >
-          <div className="strip-label">{cell.label}</div>
-          <div className={cell.text === true ? "strip-value strip-value--text" : "strip-value"} key={cell.value}>
-            {cell.value}
+          {/* 2.2/2.8: label, value and sub-line share one inline flow - a label that
+              wraps keeps the value on its last line, so nothing is ever clipped. */}
+          <div className="strip-main">
+            <span className="strip-label">{cell.label}</span>{" "}
+            <span className={cell.text === true ? "strip-value strip-value--text" : "strip-value"} key={cell.value}>
+              {cell.value}
+            </span>
+            {cell.sub !== undefined && <span className="strip-sub"> {cell.sub}</span>}
           </div>
           {cell.bar !== undefined && (
             <div className="strip-bar" aria-hidden="true">
               <div className="strip-bar-fill" style={{ width: `${Math.round(cell.bar * 100)}%` }} />
             </div>
           )}
-          {cell.sub !== undefined && <div className="strip-sub">{cell.sub}</div>}
           {cell.tip !== undefined && (
             <div className="strip-tip" role="note">
               {cell.tip.map((line) => (

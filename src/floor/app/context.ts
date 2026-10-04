@@ -12,31 +12,20 @@ export type Shell = {
   settings: FloorJson;
   /** CP7: true for a visitor and for every reader in Replay. */
   visitor: boolean;
-  /** `text(id, vars)` with the visitor flag folded in. */
+  /** `text(id, vars)` with the visitor flag folded in. Every variable a copy id needs
+   * is passed where it is called - the context fills none (`intent.queue`'s `{max}`
+   * comes from the caller's `floor.pool.max_real_agents`, FR26). */
   t: (id: string, vars?: CopyVars) => string;
   /** `modelName` checked against `/floor.json`'s own table first (5.2). */
   model: (id: string) => string;
 };
 
-export function makeShell(
-  settings: FloorJson,
-  owner: boolean,
-  replay: boolean,
-  /** The pool's live agent limit, read lazily. A caller that names a copy id but leaves
-   * `{max}` unfilled (the rail's `intent.queue`, FR26) means this one - every other `{max}`
-   * is passed where it is called. */
-  poolMax?: () => number,
-): Shell {
+export function makeShell(settings: FloorJson, owner: boolean, replay: boolean): Shell {
   const visitor = !owner || replay;
   return {
     settings,
     visitor,
-    t: (id, vars = {}) =>
-      text(id, {
-        visitor,
-        ...(vars.max === undefined && poolMax !== undefined ? { max: poolMax() } : {}),
-        ...vars,
-      }),
+    t: (id, vars = {}) => text(id, { visitor, ...vars }),
     model: (id) => settings.models[id] ?? modelName(id),
   };
 }

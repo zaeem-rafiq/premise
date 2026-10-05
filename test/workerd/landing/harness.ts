@@ -162,6 +162,9 @@ async function startReadServer(
           git(projectRoot, [
             "clone",
             "--quiet",
+            // The sandbox denies reads of git's template directory (the same refusal the
+            // git wrapper's `--template=` works around for `init`); a clone copies them too.
+            "--template=",
             ...(branch === null ? [] : ["--branch", branch]),
             `file://${sourceDir}`,
             target,
@@ -314,6 +317,9 @@ export async function startLandingWorker(options: {
   /** The fake model's loopback URL (the real-agent lane's FakeModel): when given, `AI` is bound
    * to the fake-ai worker exactly where a deployment binds Workers AI (06-repos step 1). */
   modelUrl?: string;
+  /** The gate's `SPEND_CAP_USD` — bound only when `modelUrl` is: the real agent's model calls
+   * go through the gate, and an absent cap fails closed (`spend_cap` on every call). */
+  spendCapUsd?: string;
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
@@ -355,7 +361,12 @@ export async function startLandingWorker(options: {
           modules: [{ type: "ESModule", path: BUNDLE }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
-          bindings: options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
+          bindings: {
+            ...(options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey }),
+            // The gate reads its cap fresh on every call: absent means 0, and every model
+            // call is refused `spend_cap` (SE7). Bound where the `AI` binding is bound.
+            ...(options.modelUrl === undefined ? {} : { SPEND_CAP_USD: options.spendCapUsd ?? "30" }),
+          },
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [
               binding,

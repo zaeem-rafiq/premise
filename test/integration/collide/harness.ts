@@ -137,9 +137,9 @@ export class SwarmSim {
   }
 
   /** Open a synthetic attempt for a pattern (SWR2: agent n is entry n of the cast). */
-  open(patternId: string, opts: { hold?: boolean } = {}): AgentHandle {
-    const pattern = patternById(patternId);
-    if (pattern === undefined) throw new Error(`unknown pattern ${patternId}`);
+  open(patternOrId: string | Pattern, opts: { hold?: boolean } = {}): AgentHandle {
+    const pattern = typeof patternOrId === "string" ? patternById(patternOrId) : patternOrId;
+    if (pattern === undefined) throw new Error(`unknown pattern ${patternOrId}`);
     const n = this.agents.length;
     const id = `a${n}`;
     this.trunk.openAttempt(id, {

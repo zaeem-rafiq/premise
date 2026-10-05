@@ -162,9 +162,11 @@ export const SAME_FILE: Pattern = {
     for (const headsUp of turn.heads_ups) answerHeadsUp(state, headsUp);
 
     // A pull-back (GA3) or a landed-time answer reopens work after a successful submit.
+    // A repair already re-armed `STEP_WRITE` for the relist's rewrite — the reopen only forces
+    // `STEP_SUBMIT` when no rewrite is pending, or the write would be submitted as nothing.
     if (state.done && (state.acks.length > 0 || state.relist)) {
       state.done = false;
-      state.step = STEP_SUBMIT;
+      if (!state.relist) state.step = STEP_SUBMIT;
     }
 
     if (state.withdrawn) {

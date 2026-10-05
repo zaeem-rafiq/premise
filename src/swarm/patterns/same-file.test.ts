@@ -116,4 +116,15 @@ describe("same-file (02-tidepool.md 10.3)", () => {
     expect(calls.map((call) => call.tool)).toEqual(["write", "list", "write", "submit", "submit"]);
     expect((calls[2] as Call).args.path).toBe("creatures/d0001.js");
   });
+
+  it("a repair that lands on a `validated` attempt rewrites, not an empty submit (F1 + OP5 pull-back)", () => {
+    // The partner's landing took the drawn name after this attempt's submit already validated
+    // (GA3): the write is dropped, so the row's answer runs again — list, write the next free
+    // name, then submit with the acknowledgement. An empty submit would answer `rejected`.
+    const inject = new Map([[3, [f1Repair(2)]]]);
+    const { calls } = run({ rand: agentRandom(7, 0), inject });
+    expect(calls.map((call) => call.tool)).toEqual(["write", "submit", "submit", "list", "write", "submit"]);
+    expect((calls[4] as Call).args.path).toBe("creatures/d0001.js");
+    expect((calls[5] as Call).args.acknowledge).toEqual([2]);
+  });
 });

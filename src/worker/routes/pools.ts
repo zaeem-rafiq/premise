@@ -125,8 +125,13 @@ const IMPORT_ERRORS: Record<string, { code: string; status: number }> = {
 async function importRemote(env: Env, pool: string, source: RepoSource): Promise<string> {
   const pools = env.POOLS as Artifacts;
   try {
+    // `branch` is left out, not sent as undefined, when the request names none: the binding
+    // then imports the remote's default branch.
     const imported = await pools.import({
-      source: { url: source.url, branch: source.branch, depth: 1 },
+      source:
+        source.branch === undefined
+          ? { url: source.url, depth: 1 }
+          : { url: source.url, branch: source.branch, depth: 1 },
       target: { name: poolRepoName(pool) },
     });
     return imported.remote;
@@ -230,6 +235,12 @@ export const createPool: RouteHandler = async ({ request, env }) => {
       remote = await importRemote(env, parsed.pool, parsed.source);
     } catch (cause) {
       const mapped = artifactsCode(cause);
+      // BP7: an operator's line — the binding's code and message, never the token or a header.
+      console.error(
+        "pool import failed",
+        mapped ?? "no code",
+        cause instanceof Error ? cause.message.slice(0, 300) : "",
+      );
       const entry = mapped !== null ? IMPORT_ERRORS[mapped] : undefined;
       if (entry !== undefined) return json({ error: { code: entry.code } }, entry.status);
       return json({ error: { code: "upstream_unavailable" } }, 502);

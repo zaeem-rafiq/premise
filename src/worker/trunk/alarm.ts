@@ -9,7 +9,7 @@ import { PUSH_BACKOFF_BASE_MS, PUSH_BACKOFF_MAX_MS } from "../../protocol/consta
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { deliverEvents, recordTrunkError } from "./after-commit.ts";
-import { metaGet, metaSet, timerDelete, timerDue, timerMin, timerPut, type TimerRow } from "./sql.ts";
+import { metaGet, metaSet, timerDelete, timerDue, timerGetDue, timerMin, timerPut, type TimerRow } from "./sql.ts";
 
 export type AlarmDeps = {
   env: Env;
@@ -52,6 +52,22 @@ function rescheduleTimer(sql: Sql, timer: TimerRow): void {
 }
 
 /**
+ * Takes a listed timer for this run: deletes its row and answers the row as it stands, or null
+ * when the row no longer names a time that has come. The handler lists the due timers once and
+ * then awaits each one's work, and during those awaits another request can rewrite a row - a
+ * push that was already in flight schedules its retry. Such a row is not the one the list saw:
+ * it stays for its own time, and a row deleted meanwhile (its work was cancelled) is not run.
+ */
+function claimDue(sql: Sql, timer: TimerRow, now: number): TimerRow | null {
+  return sql.transaction(() => {
+    const due = timerGetDue(sql, timer.kind, timer.key);
+    if (due === null || due > now) return null;
+    timerDelete(sql, timer.kind, timer.key);
+    return { ...timer, due_at: due };
+  });
+}
+
+/**
  * The alarm handler: every due timer in `due_at` order. The `events` timer is the outbox flush —
  * `deliverEvents` deletes or re-schedules the row itself as the Floor answers. Every other timer is
  * deleted before its work runs, so work that re-arms itself is not clobbered; a throw puts the row
@@ -77,7 +93,7 @@ export async function runAlarm({ env, ctx, sql, runEntry, push, repush, resume, 
       // Deleted before the work runs, like an engine timer: the work puts the timer back itself
       // when it has to run again (a push retry, an undelivered heads-up). A row left in place is
       // due again at once, and the alarm then fires without end on a pool that has nothing to do.
-      sql.transaction(() => timerDelete(sql, timer.kind, timer.key));
+      if (claimDue(sql, timer, now) === null) continue;
       try {
         await shellWork(now);
       } catch {
@@ -86,9 +102,11 @@ export async function runAlarm({ env, ctx, sql, runEntry, push, repush, resume, 
       }
       continue;
     }
-    sql.transaction(() => timerDelete(sql, timer.kind, timer.key));
+    // The engine entry reads the row as claimed: the `right_of_way` entry's grant is its `due_at`.
+    const claimed = claimDue(sql, timer, now);
+    if (claimed === null) continue;
     try {
-      const ran = await runEntry(timer.kind, { timer });
+      const ran = await runEntry(claimed.kind, { timer: claimed });
       if (ran) {
         sql.transaction(() => sql.exec("DELETE FROM meta WHERE k = ?", `timer_fails:${timer.kind}:${timer.key}`));
       } else {

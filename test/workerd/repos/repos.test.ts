@@ -29,9 +29,10 @@ const EXEC = "tools/run.sh"; // executable — managed, mode 100755 survives
 const ODD = "docs/read me.txt"; // a space in the name: outside 2.1 — unmanaged
 const SUB = "vendor/lib"; // a submodule gitlink (160000) — unmanaged
 const EDIT = "src/app.js"; // the landing's changed path
+const TSMOD = "src/config.ts"; // LG5: a TypeScript module in the imported tree
 
-/** Fill the source repository: three languages, an executable, a space path, a symlink, a
- * gitlink, and one blob over MAX_FILE_BYTES — IR step-1's fixture list. */
+/** Fill the source repository: a JavaScript, a Python, a Rust and a TypeScript module, an
+ * executable, a space path, a symlink, a gitlink, and one blob over MAX_FILE_BYTES. */
 function fillSource(dir: string): void {
   mkdirSync(join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "tools"), { recursive: true });
@@ -42,6 +43,10 @@ function fillSource(dir: string): void {
   writeFileSync(join(dir, EDIT), "export const answer = 40;\n");
   writeFileSync(join(dir, "lib/lib.py"), "def weigh(x):\n    return x * 2\n");
   writeFileSync(join(dir, "src/lib.rs"), "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n");
+  writeFileSync(
+    join(dir, TSMOD),
+    "export const CAP: number = 4;\n\nexport interface Named {\n  name: string;\n}\n\nexport type Pair = [number, number];\n",
+  );
   writeFileSync(join(dir, EXEC), "#!/bin/sh\necho run\n");
   chmodSync(join(dir, EXEC), 0o755);
   writeFileSync(join(dir, ODD), "a path 2.1 cannot name\n");
@@ -296,6 +301,19 @@ describe("06-repos step 1 in local workerd (IR1-IR8)", () => {
       }),
     });
     expect(((await outline.json()) as { error?: { code: string } }).error?.code).toBe("not_a_module");
+  });
+
+  it("LG5: `outline` lists the entities of a `.ts` module in an imported pool", async () => {
+    await openAttempt(worker, POOL, "imp-t1", { intent: "outline the TypeScript config" });
+    const out = await tool(worker, POOL, "imp-t1", { tool: "outline", args: { path: TSMOD } }, 1);
+    const entities = (out.result as { entities: Array<{ name: string; kind: string }> }).entities;
+    expect(entities.map((e) => e.name)).toEqual(expect.arrayContaining(["CAP", "Named", "Pair"]));
+    expect(entities.find((e) => e.name === "CAP")?.kind).toBe("const");
+    // LG2's TypeScript kinds reach the wire.
+    expect(entities.find((e) => e.name === "Named")?.kind).toBe("interface");
+    expect(entities.find((e) => e.name === "Pair")?.kind).toBe("type");
+    const rd = await tool(worker, POOL, "imp-t1", { tool: "read", args: { path: TSMOD, entity: "CAP" } }, 2);
+    expect(rd.result).toMatchObject({ key: "src/config.ts#CAP", kind: "const" });
   });
 
   it("IR5: a landed change differs from its parent only in the changed path — git fsck clean", async () => {

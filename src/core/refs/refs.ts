@@ -792,8 +792,10 @@ export function analyse(files: ReadonlyMap<string, string>, languages: LanguageS
     const addNamed = (from: string, specifier: string, imported: string): void => {
       const T = resolveSpecifier(path, specifier, languages, existing);
       if (T === null) {
-        if (isExternalSpecifier(specifier)) banned.push({ from, specifier });
-        else unresolved.push({ from, to: `${specifier}#${imported}` });
+        // LG3: under the imported set an external specifier is just external — nothing banned.
+        if (isExternalSpecifier(specifier)) {
+          if (languages.externalSpecifiersBanned) banned.push({ from, specifier });
+        } else unresolved.push({ from, to: `${specifier}#${imported}` });
         return;
       }
       const out: ResolveOut = { hops: new Set(), negatives: new Set() };
@@ -806,8 +808,9 @@ export function analyse(files: ReadonlyMap<string, string>, languages: LanguageS
     const addModule = (from: string, specifier: string): void => {
       const T = resolveSpecifier(path, specifier, languages, existing);
       if (T === null) {
-        if (isExternalSpecifier(specifier)) banned.push({ from, specifier });
-        else unresolved.push({ from, to: specifier });
+        if (isExternalSpecifier(specifier)) {
+          if (languages.externalSpecifiersBanned) banned.push({ from, specifier });
+        } else unresolved.push({ from, to: specifier });
         return;
       }
       refs.get(from)!.add(T);

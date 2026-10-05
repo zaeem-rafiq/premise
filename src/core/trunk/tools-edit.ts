@@ -6,7 +6,8 @@
 import type { Operation } from "../../protocol/operations.ts";
 import type { ToolError, ToolRequest, ToolResponse } from "../../protocol/tools.ts";
 import type { Attempt, Op, Pool } from "./sets.ts";
-import { curOps, entityAt, entityKeysOf, isModule, occurrences, replayOps, setsOf, targetsOf } from "./sets.ts";
+import { curOps, entityAt, entityKeysOf, occurrences, replayOps, setsOf, targetsOf } from "./sets.ts";
+import { languageOfPath } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { parseModule } from "../entities/entities.ts";
@@ -197,7 +198,7 @@ export function toolWrite(pool: Pool, a: Attempt, args: Record<string, unknown>)
   const path = args.path;
   if (typeof path !== "string" || !validPath(path)) return e("invalid_path", "bad path");
   const head = pool.files;
-  const v = replayOps(curOps(a), head).files;
+  const v = replayOps(curOps(a), head, {}, pool.languages).files;
   const deleting = args.delete === true;
   const content = deleting ? null : args.content;
   if (!deleting && typeof content !== "string") return e("invalid_args", "content required");
@@ -207,9 +208,11 @@ export function toolWrite(pool: Pool, a: Attempt, args: Record<string, unknown>)
     const shownOk = fp !== undefined && fp.read && fp.shown === blobId(utf8(head.get(path)!));
     if (!shownOk) return e("read_first", `read ${path} at head first`);
   }
-  if (content !== null && isModule(path)) {
+  // LG5/LG1: a path whose extension is a language of the pool's set must parse under it.
+  const writeLang = content === null ? null : languageOfPath(path, pool.languages);
+  if (writeLang !== null) {
     try {
-      parseModule(content as string);
+      parseModule(content as string, writeLang);
     } catch (err) {
       const se = err as { message?: string; loc?: { line: number; column: number } };
       return e("parse_error", se.message ?? "parse error", { line: se.loc?.line, column: se.loc?.column });
@@ -231,16 +234,16 @@ export function toolWrite(pool: Pool, a: Attempt, args: Record<string, unknown>)
   a.ops.push({ ...(op as Extract<Operation, { op: "write" }>), dropped: false });
   pool.dirtyAttempts.add(a.id);
   const premises = afterOp(pool, a, op, v);
-  const s = setsOf(a, head);
-  const hk = entityKeysOf(head, path) ?? [];
+  const s = setsOf(a, head, pool.languages);
+  const hk = entityKeysOf(head, path, pool.languages) ?? [];
   const result = {
     path,
     op_seq: op.op_seq,
     created: !head.has(path),
     bytes: content === null ? 0 : utf8(content as string).length,
     added: s.Added.filter((k) => k.startsWith(`${path}#`)),
-    altered: s.Altered.filter((k) => k.startsWith(`${path}#`) && entityAt(s.view, k) !== null),
-    removed: hk.filter((k) => entityAt(s.view, k) === null),
+    altered: s.Altered.filter((k) => k.startsWith(`${path}#`) && entityAt(s.view, k, pool.languages) !== null),
+    removed: hk.filter((k) => entityAt(s.view, k, pool.languages) === null),
     relied_on_by: reliedOnBy(pool, a, s.Altered),
   };
   return { ok: true, result, premises: premises.map(ref) };
@@ -251,7 +254,7 @@ export function toolReplace(pool: Pool, a: Attempt, args: Record<string, unknown
   const path = args.path;
   if (typeof path !== "string" || !validPath(path)) return e("invalid_path", "bad path");
   const head = pool.files;
-  const v = replayOps(curOps(a), head).files;
+  const v = replayOps(curOps(a), head, {}, pool.languages).files;
   const content = v.get(path);
   if (content === undefined) return e("not_found", `no such path: ${path}`);
   if (typeof args.old !== "string" || typeof args.new !== "string" || args.old.length === 0 || args.old === args.new) {
@@ -265,15 +268,16 @@ export function toolReplace(pool: Pool, a: Attempt, args: Record<string, unknown
   }
   const at = occ[0]!;
   const next = content.slice(0, at) + args.new + content.slice(at + args.old.length);
-  if (isModule(path)) {
+  const replaceLang = languageOfPath(path, pool.languages);
+  if (replaceLang !== null) {
     try {
-      parseModule(next);
+      parseModule(next, replaceLang);
     } catch (err) {
       const se = err as { message?: string; loc?: { line: number; column: number } };
       return e("parse_error", se.message ?? "parse error", { line: se.loc?.line, column: se.loc?.column });
     }
   }
-  const targets = targetsOf(v, path, at, at + args.old.length);
+  const targets = targetsOf(v, path, at, at + args.old.length, pool.languages);
   const op: Operation = { op_seq: a.opCount + 1, op: "replace", path, old: args.old, new: args.new, targets };
   const limited = opLimits(pool, a, path, op);
   if (limited !== null) return limited;
@@ -281,15 +285,15 @@ export function toolReplace(pool: Pool, a: Attempt, args: Record<string, unknown
   a.ops.push({ ...(op as Extract<Operation, { op: "replace" }>), dropped: false });
   pool.dirtyAttempts.add(a.id);
   const premises = afterOp(pool, a, op, v);
-  const s = setsOf(a, head);
-  const hk = entityKeysOf(head, path) ?? [];
+  const s = setsOf(a, head, pool.languages);
+  const hk = entityKeysOf(head, path, pool.languages) ?? [];
   const result = {
     path,
     op_seq: op.op_seq,
     targets,
-    altered: s.Altered.filter((k) => k.startsWith(`${path}#`) && entityAt(s.view, k) !== null),
+    altered: s.Altered.filter((k) => k.startsWith(`${path}#`) && entityAt(s.view, k, pool.languages) !== null),
     added: s.Added.filter((k) => k.startsWith(`${path}#`)),
-    removed: hk.filter((k) => entityAt(s.view, k) === null),
+    removed: hk.filter((k) => entityAt(s.view, k, pool.languages) === null),
     relied_on_by: reliedOnBy(pool, a, s.Altered),
   };
   return { ok: true, result, premises: premises.map(ref) };

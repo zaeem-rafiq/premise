@@ -53,6 +53,9 @@ export type LanguageSet = {
   readonly resolveReplace: Readonly<Record<string, readonly string[]>>;
   /** index files tried for a specifier that names a directory, in order (LG3). */
   readonly resolveIndex: readonly string[];
+  /** `true` when a specifier that is not relative is a `banned_import` (CK5); under the
+   * imported set it is simply external — no reference, no premise, no check failure (LG3). */
+  readonly externalSpecifiersBanned: boolean;
 };
 
 /** The tide-pool set (LG1): only `.js` and `.mjs` are modules, resolved as in 6.1. */
@@ -61,6 +64,7 @@ export const TIDEPOOL_LANGUAGES: LanguageSet = {
   resolveAppend: [],
   resolveReplace: {},
   resolveIndex: [],
+  externalSpecifiersBanned: true,
 };
 
 /** The imported-pool set (LG1): JavaScript and TypeScript. Python and Go join it in step 3. */
@@ -82,6 +86,7 @@ export const IMPORT_LANGUAGES: LanguageSet = {
     ".cjs": [".ts", ".mts", ".cts"],
   },
   resolveIndex: ["index.ts", "index.tsx", "index.js"],
+  externalSpecifiersBanned: false,
 };
 
 /**

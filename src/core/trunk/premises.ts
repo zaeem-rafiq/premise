@@ -28,7 +28,7 @@ export function pin(
   seq: number = pool.headSeq(),
 ): Premise {
   const id = pid(kind, key);
-  const h = keyHash(files, kind, key);
+  const h = keyHash(files, kind, key, pool.languages);
   let p = a.premises.get(id);
   if (p === undefined) {
     p = {
@@ -72,7 +72,7 @@ export function ref(p: Premise): PremiseRef {
  */
 export function syncPremises(pool: Pool, a: Attempt): Premise[] {
   const head = pool.files;
-  const s = setsOf(a, head);
+  const s = setsOf(a, head, pool.languages);
   const changed = new Set<Premise>();
   const flag = (kind: PremiseKind, key: string, f: "edit" | "derived"): Premise => {
     const had = a.premises.get(pid(kind, key));
@@ -92,7 +92,7 @@ export function syncPremises(pool: Pool, a: Attempt): Premise[] {
     else {
       for (const t of o.targets ?? []) {
         if (t.includes("#")) {
-          if (entityAt(head, t) !== null) wantEdit.add(pid("entity", t));
+          if (entityAt(head, t, pool.languages) !== null) wantEdit.add(pid("entity", t));
         } else if (head.has(t)) wantEdit.add(pid("file", t));
       }
     }
@@ -105,7 +105,7 @@ export function syncPremises(pool: Pool, a: Attempt): Premise[] {
   const wantDerived = new Set<string>();
   for (const K of [...s.NewRefs, ...s.ModuleRefs]) {
     if (K.includes("#")) {
-      if (entityAt(head, K) !== null || s.Negatives.has(K)) wantDerived.add(pid("entity", K));
+      if (entityAt(head, K, pool.languages) !== null || s.Negatives.has(K)) wantDerived.add(pid("entity", K));
     } else if (head.has(K)) wantDerived.add(pid("file", K));
   }
   for (const K of s.Altered) wantDerived.add(pid("query", `refs:${K}`));
@@ -150,7 +150,9 @@ export function reliedOnBy(pool: Pool, a: Attempt, altered: string[]): Record<st
   const out: Record<string, string[]> = {};
   for (const k of altered) {
     const p = a.premises.get(pid("query", `refs:${k}`));
-    out[k] = (p?.members ?? keyHash(pool.files, "query", `refs:${k}`).members ?? []).filter((m) => m.includes("#"));
+    out[k] = (p?.members ?? keyHash(pool.files, "query", `refs:${k}`, pool.languages).members ?? []).filter((m) =>
+      m.includes("#"),
+    );
   }
   return out;
 }

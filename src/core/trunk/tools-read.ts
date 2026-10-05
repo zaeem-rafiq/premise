@@ -51,7 +51,8 @@ const err = (
   premises: premises.map((p) => ("status" in p ? ref(p) : p)),
 });
 
-const view = (pool: Pool, a: Attempt): Map<string, string> => replayOps(curOps(a), pool.files).files;
+const view = (pool: Pool, a: Attempt): Map<string, string> =>
+  replayOps(curOps(a), pool.files, {}, pool.languages).files;
 
 const utf8Bytes = (s: string): number => utf8(s).length;
 
@@ -69,8 +70,8 @@ export function toolOutline(pool: Pool, a: Attempt, args: { path: string }): Too
     const p = pin(pool, a, "file", args.path, { read: true, repin: true });
     return err("too_large", `file exceeds ${MAX_FILE_BYTES} bytes`, [p]);
   }
-  if (!isModule(args.path)) return err("not_a_module", `not a module: ${args.path}`);
-  const mod = an(v).modules.get(args.path);
+  if (!isModule(args.path, pool.languages)) return err("not_a_module", `not a module: ${args.path}`);
+  const mod = an(v, pool.languages).modules.get(args.path);
   if (mod === undefined) return err("not_a_module", `opaque module: ${args.path}`);
   const p = pin(pool, a, "query", `outline:${args.path}`, { read: true, repin: true });
   const lines = content.split("\n");
@@ -147,18 +148,18 @@ export function toolRead(pool: Pool, a: Attempt, args: { path: string; entity?: 
     const p = pin(pool, a, "file", args.path, { read: true, repin: true });
     return err("not_found", `no such path: ${args.path}`, [p]);
   }
-  if (!isModule(args.path)) return err("not_a_module", `not a module: ${args.path}`);
-  const mod = an(v).modules.get(args.path);
+  if (!isModule(args.path, pool.languages)) return err("not_a_module", `not a module: ${args.path}`);
+  const mod = an(v, pool.languages).modules.get(args.path);
   if (mod === undefined) return err("not_a_module", `opaque module: ${args.path}`);
   const p = pin(pool, a, "entity", key, { read: true, repin: true });
-  const e = entityAt(v, key);
+  const e = entityAt(v, key, pool.languages);
   if (e === null) return err("not_found", `no such entity: ${key}`, [p]);
-  const headE = entityAt(head, key);
+  const headE = entityAt(head, key, pool.languages);
   const result: ReadResult = {
     key,
     kind: e.kind,
     exports: e.exports,
-    source: sourceOf(v, key) ?? "",
+    source: sourceOf(v, key, pool.languages) ?? "",
     lines: linesRange(v.get(args.path) ?? "", mod.regions, args.entity, 1),
     edited_by_you: headE === null ? false : headE.hash !== e.hash,
   };
@@ -200,12 +201,12 @@ export function toolSearch(pool: Pool, a: Attempt, args: { query: string; path?:
   }
   const p = pin(pool, a, "query", `text:${scope}:${args.query}`, { read: true, repin: true });
   const v = view(pool, a);
-  const counts = textCounts(v, scope, args.query);
+  const counts = textCounts(v, scope, args.query, pool.languages);
   const lines: SearchLine[] = [];
   let truncated = false;
   for (const [path, content] of [...v.entries()].sort(([x], [y]) => (x < y ? -1 : 1))) {
     if (!(scope === "/" || path === scope || (scope.endsWith("/") && path.startsWith(scope)))) continue;
-    const containers = matchContainers(path, content, args.query);
+    const containers = matchContainers(path, content, args.query, pool.languages);
     if (containers.size === 0) continue;
     const contentLines = content.split("\n");
     for (const off of occurrences(content, args.query)) {
@@ -213,12 +214,12 @@ export function toolSearch(pool: Pool, a: Attempt, args: { query: string; path?:
       const lineEnd = content.indexOf("\n", off);
       const lineNo = content.slice(0, off).split("\n").length;
       const container = [...containers.keys()].find((c) => {
-        const ent = c.includes("#") ? entityAt(v, c) : null;
+        const ent = c.includes("#") ? entityAt(v, c, pool.languages) : null;
         return (
           c === path ||
           (ent !== null &&
             (() => {
-              const mod = an(v).modules.get(path);
+              const mod = an(v, pool.languages).modules.get(path);
               return (
                 mod !== undefined &&
                 mod.regions.some((r) => r.names.includes(ent.name) && off >= r.start && off < r.end)

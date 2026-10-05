@@ -152,7 +152,7 @@ export function applyImportStep(pool: Pool, payload: ImportPayload): ImportResul
   metaWrite(pool, "guide_path", fin.guide ?? "");
 
   // Entities and refs of the imported modules — the same analysis the rebuild finish runs.
-  const analysis = an(pool.files);
+  const analysis = an(pool.files, pool.languages);
   sql.exec("DELETE FROM entities");
   sql.exec("DELETE FROM refs");
   for (const [path, info] of analysis.modules) {

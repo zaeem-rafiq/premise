@@ -138,7 +138,7 @@ export function submitCall(
 
   const head = pool.files;
   // CK2 — the current operations must still apply to head (OP6 on failure).
-  const rep = replayOps(curOps(a), head);
+  const rep = replayOps(curOps(a), head, {}, pool.languages);
   if (rep.failed.length > 0) {
     const dropped = dropFailed(pool, a, rep.failed);
     sendHeadsUp(pool, a, "repair", [], dropped, { type: "submit", seqs: [], changes: [] });
@@ -169,7 +169,7 @@ export function submitCall(
   }
   okCheck("fits");
 
-  const s = setsOf(a, head);
+  const s = setsOf(a, head, pool.languages);
 
   // CK4 — parse: every resulting module parses (the view already enforces this per-op; an
   // interaction could still break a neighbour module — re-analyse).
@@ -250,7 +250,7 @@ export function submitCall(
           cause_seq: null,
           diff:
             p.kind === "entity"
-              ? { kind: "entity" as const, before: null, after: sourceOf(head, p.key) }
+              ? { kind: "entity" as const, before: null, after: sourceOf(head, p.key, pool.languages) }
               : { kind: "file" as const, before_oid: "absent", after_oid: p.hash, unified: "", changed_entities: [] },
           uses: [],
         },
@@ -259,7 +259,7 @@ export function submitCall(
           key: p.key,
           rule: "B1",
           result: "confirm",
-          after: p.kind === "entity" ? sourceOf(head, p.key) : null,
+          after: p.kind === "entity" ? sourceOf(head, p.key, pool.languages) : null,
         },
       };
     });

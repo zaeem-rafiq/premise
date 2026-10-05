@@ -21,6 +21,8 @@ import {
   sourceOf,
   type ClassifyItem,
 } from "./sets.ts";
+import { TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
+import type { LanguageSet } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8, bytesToHex } from "../sync/bytes.ts";
 import { PUSH_REJECT_LIMIT, TICK_MS } from "../../protocol/constants.ts";
@@ -64,6 +66,7 @@ const utf8len = (s: string): number => utf8(s).length;
 export function writeSet(
   before: FileMap,
   after: FileMap,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
 ): {
   w: Array<{ kind: "entity" | "file" | "listing"; key: string }>;
   paths: string[];
@@ -72,11 +75,11 @@ export function writeSet(
   const paths = changedPaths(before, after);
   for (const p of paths) {
     w.push({ kind: "file", key: p });
-    const kb = entityKeysOf(before, p) ?? [];
-    const ka = entityKeysOf(after, p) ?? [];
+    const kb = entityKeysOf(before, p, languages) ?? [];
+    const ka = entityKeysOf(after, p, languages) ?? [];
     for (const k of new Set([...kb, ...ka])) {
-      const b = entityAt(before, k);
-      const c = entityAt(after, k);
+      const b = entityAt(before, k, languages);
+      const c = entityAt(after, k, languages);
       if (b === null || c === null || b.hash !== c.hash) w.push({ kind: "entity", key: k });
     }
   }
@@ -263,12 +266,12 @@ export function recordLanding(
     request_id?: string | null;
   },
 ): Landing {
-  const { w, paths } = writeSet(l.before, l.after);
+  const { w, paths } = writeSet(l.before, l.after, pool.languages);
   const writes = w.map((x) => ({
     kind: x.kind,
     key: x.key,
-    old_hash: keyHash(l.before, x.kind, x.key).hash,
-    new_hash: keyHash(l.after, x.kind, x.key).hash,
+    old_hash: keyHash(l.before, x.kind, x.key, pool.languages).hash,
+    new_hash: keyHash(l.after, x.kind, x.key, pool.languages).hash,
   }));
   const batch_id = Number(pool.meta.get("next_batch_id") ?? "1");
   // The landing commit (3.5, IR5): the tree is written from `entries` — every path the change
@@ -519,7 +522,7 @@ export function planUndo(pool: Pool, u: number, running: FileMap): UndoPlan {
         if (R.has(L.seq) || L.seq < first.seq) continue;
         const ops = L.ops.filter((o) => o.path === p);
         if (ops.length === 0) continue;
-        const r = replayOps(ops, tree, { noOP5: true });
+        const r = replayOps(ops, tree, { noOP5: true }, pool.languages);
         if (r.failed.length > 0) {
           failedLanding = L.seq;
           break;
@@ -684,7 +687,7 @@ export function tick(pool: Pool): void {
   pool.eventBuffer = [];
   for (const c of cands) {
     if (batch.length >= pool.K.MAX_BATCH) break;
-    const after = replayOps(curOps(c), running);
+    const after = replayOps(curOps(c), running, {}, pool.languages);
     // 3a right of way: another attempt with an earlier right-of-way mark blocks this candidate
     // when it would get a repair or confirm from this landing.
     let blocked: Attempt | null = null;
@@ -705,7 +708,7 @@ export function tick(pool: Pool): void {
       continue;
     }
     // 3b disjoint: a dry run over the batch's running tree.
-    const cl = classify(pool, c, pre, running, setsOf(c, pre), members);
+    const cl = classify(pool, c, pre, running, setsOf(c, pre, pool.languages), members);
     if (cl.failed.length > 0 || cl.items.some((i) => i.result !== "holds" && i.result !== "delete")) {
       pool.out.skipped[c.id] = "not_disjoint";
       event(pool, "tick.skipped", { attempt_id: c.id, why: "not_disjoint", behind: null });
@@ -773,7 +776,7 @@ export function tick(pool: Pool): void {
         event(pool, "premise.removed", { attempt_id: c.id, kind: it.p.kind, key: it.p.key, rule: it.rule ?? "" });
         continue;
       }
-      const cur = keyHash(running, it.p.kind, it.p.key);
+      const cur = keyHash(running, it.p.kind, it.p.key, pool.languages);
       it.p.hash = cur.hash;
       it.p.members = cur.members;
       it.p.seq = seq + 1;
@@ -913,7 +916,7 @@ export function tick(pool: Pool): void {
   for (const r of reopened) {
     const items: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
     for (const p of r.a.premises.values()) {
-      const cur = keyHash(running, p.kind, p.key);
+      const cur = keyHash(running, p.kind, p.key, pool.languages);
       const dep = r.plan.depKeys.get(r.x.seq)?.has(`${p.kind}|${p.key}`) === true;
       if (dep && cur.hash !== p.hash) {
         const rule = p.kind === "file" ? "F1" : p.edit ? "E1" : "E2";
@@ -929,7 +932,12 @@ export function tick(pool: Pool): void {
           oldMembers: p.members,
           before: pool.fileMapAt(r.x.seq),
           after: running,
-          after_src: p.kind === "entity" ? (entityAt(running, p.key) !== null ? sourceOf(running, p.key) : null) : null,
+          after_src:
+            p.kind === "entity"
+              ? entityAt(running, p.key, pool.languages) !== null
+                ? sourceOf(running, p.key, pool.languages)
+                : null
+              : null,
           rule,
           result: "repair",
           reason: "reopened_dep_changed",
@@ -1185,7 +1193,7 @@ export function triage(
         added: [],
         removed: [],
         context: [],
-        after_src: p.kind === "entity" ? sourceOf(pool.files, p.key) : null,
+        after_src: p.kind === "entity" ? sourceOf(pool.files, p.key, pool.languages) : null,
         rule: j.rule,
         result,
         reason: j.reason,

@@ -677,7 +677,16 @@ export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attemp
       const raw = pool.meta.get(`checks:${str(row.attempt_id)}`);
       return raw === undefined ? null : (JSON.parse(raw) as Check[]);
     })(),
-    opsFirstDone: false,
+    // PM2: whether this revision already wrote its `ops_first` row — hydrated from the table,
+    // so a pool reopen never writes a second snapshot over the first.
+    opsFirstDone:
+      pool.sql
+        .exec(
+          "SELECT 1 AS x FROM ops_first WHERE attempt_id = ? AND revision = ?",
+          str(row.attempt_id),
+          num(row.revision),
+        )
+        .toArray().length > 0,
     pending: [],
     dirtyJudgments: new Set(),
   };
@@ -791,15 +800,6 @@ function persistAttempt(pool: Pool, a: Attempt): void {
       h.statement,
       h.op_mark,
     );
-  }
-  if (!a.opsFirstDone && a.ops.length > 0) {
-    sql.exec(
-      "INSERT OR REPLACE INTO ops_first (attempt_id, revision, ops, submitted) VALUES (?, ?, ?, 0)",
-      a.id,
-      a.revision,
-      JSON.stringify(a.ops),
-    );
-    a.opsFirstDone = true;
   }
 }
 

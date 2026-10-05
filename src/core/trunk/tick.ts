@@ -591,6 +591,8 @@ export function tick(pool: Pool): void {
         });
         a.revision += 1;
         a.resumes += 1;
+        // PM2: the new revision earns its own `ops_first` row at its first `confirm`/`repair`.
+        a.opsFirstDone = false;
         unvalidate(pool, a);
         a.ops = x.ops.map((o) => ({
           ...o,

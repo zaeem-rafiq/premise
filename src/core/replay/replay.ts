@@ -25,6 +25,15 @@ export type ReplayFailure = {
 
 export type ReplayResult = { ok: true; changed: Map<string, string | null> } | ReplayFailure;
 
+export type ReplayOptions = {
+  /** OP3 (the matched span's targets differ from the recorded ones). Default true. The
+   *  plain-merge replay of 11.7 leaves OP3 out (PM3). */
+  op3?: boolean;
+  /** OP5 (a write whose base no longer matches). Default true. The revert replay of UN3
+   *  leaves OP5 out. */
+  op5?: boolean;
+};
+
 /**
  * The keys an operation records for a span (5.1, OP3): the target keys of `[start, end)` in a
  * module, `path` for any other file or for a module that does not parse.
@@ -45,7 +54,13 @@ export function spanTargets(path: string, content: string, start: number, end: n
  * changed (`null` for a deleted file). On the first operation that cannot apply, returns the
  * failing path, op_seq and the OP rule; the engine then drops every operation on that path (OP6).
  */
-export function replay(operations: readonly ReplayOperation[], tree: ReadonlyMap<string, string>): ReplayResult {
+export function replay(
+  operations: readonly ReplayOperation[],
+  tree: ReadonlyMap<string, string>,
+  options?: ReplayOptions,
+): ReplayResult {
+  const checkOp3 = options?.op3 ?? true;
+  const checkOp5 = options?.op5 ?? true;
   const work = new Map(tree);
   const changed = new Map<string, string | null>();
   const ordered = [...operations].sort((a, b) => a.op_seq - b.op_seq);
@@ -59,7 +74,7 @@ export function replay(operations: readonly ReplayOperation[], tree: ReadonlyMap
     if (op.op === "write") {
       const head = tree.get(op.path);
       const startingOid = head === undefined ? ABSENT : blobId(utf8(head));
-      if (startingOid !== op.base_oid) return fail(op, "OP5");
+      if (checkOp5 && startingOid !== op.base_oid) return fail(op, "OP5");
       if (op.content === null) {
         work.delete(op.path);
         changed.set(op.path, null);
@@ -76,7 +91,10 @@ export function replay(operations: readonly ReplayOperation[], tree: ReadonlyMap
       const start = offsets[0]!;
       const end = start + op.old.length;
       const targets = spanTargets(op.path, content, start, end);
-      if (targets.length !== op.targets.length || !targets.every((key, index) => key === op.targets[index])) {
+      if (
+        checkOp3 &&
+        (targets.length !== op.targets.length || !targets.every((key, index) => key === op.targets[index]))
+      ) {
         return fail(op, "OP3");
       }
       const replaced = content.slice(0, start) + op.new + content.slice(end);

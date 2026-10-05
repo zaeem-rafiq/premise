@@ -69,6 +69,8 @@ The three steps of the owner's decision. Each is verified by the lead on merged 
 
 **The demo repository.** The lead picks one public repository for the video: MIT or Apache-2.0, between 10 and 200 files, JavaScript or TypeScript, with at least one shared constant or function that several modules use. Its name goes into the README.
 
+Picked on 2026-10-04 and confirmed by the owner: **`ai/nanoid`** (MIT; 49 files at `bb68abc`; 19 JavaScript and TypeScript modules, every one parsed by acorn and the TypeScript plugin; executable files with mode `100755`). Its shared constant is `urlAlphabet` of `url-alphabet/index.js`, which four modules import; `index.js` relies on the alphabet having 64 characters. The backup is `sindresorhus/ky` (MIT; 104 files; TypeScript; `source/core/constants.ts` imported by eight modules; an `AGENTS.md` guide), which needs step 2 wired into the engine.
+
 ## Appendix A. Constants
 
 | Constant | Value | Rule |

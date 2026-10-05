@@ -32,6 +32,7 @@ import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
 import { armRebuild, beginRebuild, applyRebuildStep, registerDeadline } from "../rebuild/apply.ts";
+import { IMPORT_CURSOR_KEY, applyImportStep, type ImportCursor, type ImportPayload } from "./import.ts";
 import { register as registerAttempt } from "../rebuild/register.ts";
 import type { ApplyPayload } from "../rebuild/plan.ts";
 import type { RegisterRequest, RegisterResponse } from "../../protocol/tools.ts";
@@ -80,6 +81,8 @@ export function createPool(
   applySchema(sql);
   const pool = emptyPool(sql, opts);
   const seed = seedCommit(pool, new Map(Object.entries(files)));
+  // IR5's entry bookkeeping starts at creation: `entries`/`trees` mirror the seed tree (set by
+  // `seedCommit`), so a landing's tree write carries every untouched directory by object id.
   sql.transaction(() => {
     metaSet(sql, "schema_version", SCHEMA_VERSION);
     metaSet(sql, "hash_version", HASH_VERSION);
@@ -118,6 +121,9 @@ export function createPool(
         utf8(content),
       );
     }
+    for (const [dir, oid] of pool.trees) {
+      sql.exec("INSERT OR REPLACE INTO trees (dir, oid) VALUES (?, ?)", dir, oid);
+    }
     // EM1: `pool.state` is event 1 (`head_seq` 0), `pool.files` follows with the seed tree.
     pool.meta = metaAll(sql);
     pool.eventCounter = 1;
@@ -140,6 +146,72 @@ export function createPool(
   return openPool(sql, opts);
 }
 
+/**
+ * Create a pool imported from a public repository (IR2, IR3): the schema plus `meta` and the
+ * first `pool.state` — `rebuilding` with reason `import`, `head_seq` 0 — and nothing else: no
+ * files, no seed commit, no batch 0 (the imported head is the seed commit; nothing is pushed
+ * for it), no `pool.files` (EM1's pair ends the job, not starts it). `app` is "" — an imported
+ * pool has no live picture (IR8) — and `source` is `<owner>/<name>` for the prompt and the page.
+ * The import cursor and the `rebuild` timer arm the job (IR3: "like a rebuild").
+ */
+export function createImportPool(
+  sql: Sql,
+  opts: PoolOptions & {
+    pool_id: string;
+    summary_only?: boolean;
+    remote?: string;
+    source: string;
+    request_id?: string;
+    branch?: string;
+  },
+): Pool {
+  applySchema(sql);
+  const pool = emptyPool(sql, opts);
+  const cursor: ImportCursor = {
+    v: 1,
+    job: "import",
+    request_id: opts.request_id ?? `import:${opts.pool_id}`,
+    stage: "await",
+    repo: opts.pool_id,
+    branch: opts.branch ?? "",
+  };
+  sql.transaction(() => {
+    metaSet(sql, "schema_version", SCHEMA_VERSION);
+    metaSet(sql, "hash_version", HASH_VERSION);
+    metaSet(sql, "pool_id", opts.pool_id);
+    metaSet(sql, "head_seq", "0");
+    metaSet(sql, "head_commit", "");
+    metaSet(sql, "head_tree", "");
+    metaSet(sql, "notes_commit", "");
+    metaSet(sql, "green_seq", "0");
+    metaSet(sql, "green_commit", "");
+    metaSet(sql, "landed_seq", "0");
+    metaSet(sql, "landed_commit", "");
+    metaSet(sql, "pool_state", "rebuilding");
+    metaSet(sql, "pause_reason", "import");
+    metaSet(sql, "next_batch_id", "1");
+    metaSet(sql, "next_event_n", "1");
+    // EV2: source epochs count from 1 — the Floor rejects `epoch < 1`.
+    metaSet(sql, "epoch", "1");
+    metaSet(sql, "summary_only", opts.summary_only === true ? "1" : "0");
+    metaSet(sql, "synthetic", "0");
+    metaSet(sql, "remote", opts.remote ?? "");
+    metaSet(sql, "app", "");
+    metaSet(sql, "source", opts.source);
+    metaSet(sql, "real_agents", "0");
+    if (opts.request_id !== undefined) metaSet(sql, "create_request_id", opts.request_id);
+    metaSet(sql, IMPORT_CURSOR_KEY, JSON.stringify(cursor));
+    sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('rebuild', '', ?)", pool.now());
+    pool.meta = metaAll(sql);
+    pool.eventCounter = 1;
+    // IR3: event 1 is `pool.state` `rebuilding`/`import`/`head_seq` 0. `pool.files` follows the
+    // job's finish, not the create.
+    emitPoolState(pool);
+    metaSet(sql, "next_event_n", String(pool.eventCounter));
+  });
+  return openPool(sql, opts);
+}
+
 /** Rebuild the working Pool from the schema (3.6): everything the tables hold, in memory. */
 export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   // 3.6: the store may be a wiped object — `meta` itself absent. `applySchema` is idempotent
@@ -156,10 +228,26 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   );
   pool.cardCounter = num(sql.exec("SELECT COUNT(*) AS m FROM cards").toArray()[0]?.m ?? 0) + 1;
   pool.undoCounter = num(sql.exec("SELECT COUNT(*) AS m FROM undo_requests").toArray()[0]?.m ?? 0) + 1;
-  // head files
-  for (const row of sql.exec("SELECT path, mode, content FROM files").toArray()) {
-    pool.files.set(str(row.path), fromUtf8(blobBytes(row.content)));
-    pool.modes.set(str(row.path), str(row.mode));
+  // head files: every row is an entry (IR5); only a managed row joins `files` — an unmanaged
+  // path (a symbolic link, a submodule, a path outside 2.1) is stored with its mode and object
+  // id but is invisible to the tools, and a content-NULL row is the pool's `opaque` set (RB4).
+  const headEntries = pool.entries; // local: the seam guard reads `pool.entries`' writes as table writes
+  for (const row of sql.exec("SELECT path, mode, oid, content, parse_state FROM files").toArray()) {
+    const path = str(row.path);
+    headEntries.set(path, { oid: str(row.oid), mode: str(row.mode) });
+    pool.modes.set(path, str(row.mode));
+    if (str(row.parse_state) === "unmanaged") continue;
+    // RB4: a content-NULL row is an opaque blob (over MAX_FILE_BYTES) — `blobBytes` maps null to
+    // empty bytes, so the NULL itself is what names the set, not the decode.
+    if (row.content === null) {
+      pool.opaque.add(path);
+      pool.files.set(path, "");
+      continue;
+    }
+    pool.files.set(path, fromUtf8(blobBytes(row.content)));
+  }
+  for (const row of sql.exec("SELECT dir, oid FROM trees").toArray()) {
+    pool.trees.set(str(row.dir), str(row.oid));
   }
   // intents
   for (const row of sql.exec("SELECT * FROM intents").toArray()) {
@@ -319,6 +407,10 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     files: new Map<string, string>(),
     modes: new Map<string, string>(),
+    entries: new Map<string, { oid: string; mode: string }>(),
+    opaque: new Set<string>(),
+    trees: new Map<string, string>(),
+    dirtyTrees: new Set<string>(),
     attempts: new Map(),
     landings: [],
     cards: [],
@@ -1013,8 +1105,9 @@ export function persist(pool: Pool): void {
     } else {
       sql.exec(
         `INSERT OR REPLACE INTO files (path, mode, oid, content, parse_state, changed_seq)
-         VALUES (?, '100644', ?, ?, 'ok', ?)`,
+         VALUES (?, ?, ?, ?, 'ok', ?)`,
         path,
+        pool.modes.get(path) ?? "100644",
         blobId(utf8(content)),
         utf8(content),
         pool.headSeq(),
@@ -1028,6 +1121,11 @@ export function persist(pool: Pool): void {
     }
   }
   pool.filesChanged.clear();
+  for (const dir of pool.dirtyTrees) {
+    const oid = pool.trees.get(dir);
+    if (oid !== undefined) sql.exec("INSERT OR REPLACE INTO trees (dir, oid) VALUES (?, ?)", dir, oid);
+  }
+  pool.dirtyTrees.clear();
   for (const [k, v] of pool.meta) {
     if (k !== "pool_id") metaSet(sql, k, v);
   }
@@ -1076,6 +1174,26 @@ export class Trunk {
 
   static open(sql: Sql, opts: PoolOptions = {}): Trunk {
     return new Trunk(openPool(sql, opts));
+  }
+
+  /** IR2/IR3: the `pool_create` call for a `source` request — the store is born `rebuilding`. */
+  static createImported(
+    sql: Sql,
+    opts: PoolOptions & {
+      pool_id: string;
+      summary_only?: boolean;
+      remote?: string;
+      source: string;
+      request_id?: string;
+      branch?: string;
+    },
+  ): Trunk {
+    return new Trunk(createImportPool(sql, opts));
+  }
+
+  /** One import run's commit (IR3): fetched rows plus the cursor that continues the job. */
+  importStep(payload: ImportPayload): Record<string, unknown> {
+    return wrapCall(this.pool, () => applyImportStep(this.pool, payload));
   }
 
   /** Create an intent + attempt (the case's attempt ids are used verbatim). */

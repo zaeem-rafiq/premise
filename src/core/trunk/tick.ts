@@ -25,7 +25,7 @@ import { blobId } from "../sync/sha1.ts";
 import { utf8, bytesToHex } from "../sync/bytes.ts";
 import { PUSH_REJECT_LIMIT, TICK_MS } from "../../protocol/constants.ts";
 import { landingCommit, notesCommit } from "../git/commit.ts";
-import { makeTreeFromFiles } from "../git/tree-files.ts";
+import { makeTreeFromFiles, type EntryMode, type FileMode, type FileMapValue } from "../git/tree-files.ts";
 import { notesTree } from "../git/notes-tree.ts";
 import { makeBlob, makeCommit, type GitObject } from "../git/objects.ts";
 import { canonicalJson, noteBytes } from "../git/note.ts";
@@ -271,11 +271,59 @@ export function recordLanding(
     new_hash: keyHash(l.after, x.kind, x.key).hash,
   }));
   const batch_id = Number(pool.meta.get("next_batch_id") ?? "1");
-  // The landing commit (3.5).
-  const filesForTree: Record<string, string> = {};
-  for (const [p, c] of l.after) filesForTree[p] = c;
-  const { root: treeObj, objects } = makeTreeFromFiles(filesForTree);
+  // The landing commit (3.5, IR5): the tree is written from `entries` — every path the change
+  // does not touch goes by object id, unmanaged entries (a symbolic link, a submodule, a path
+  // outside 2.1) included, so the commit's tree differs from its parent only at the changed
+  // paths, and the pack holds only the objects the remote does not have yet. `fresh` names the
+  // directories the change touches — the root and every ancestor of a changed path — so a
+  // directory outside it keeps its stored tree id.
+  const changed = new Set(paths);
+  const headEntries = pool.entries; // local: the seam guard reads `pool.entries`' writes as table writes
+  const filesForTree: Record<string, FileMapValue> = {};
+  for (const [path, entry] of headEntries) {
+    if (!changed.has(path)) filesForTree[path] = { oid: entry.oid, mode: entry.mode as EntryMode };
+  }
+  for (const path of changed) {
+    const content = l.after.get(path);
+    if (content === undefined) continue; // a deleted path is simply absent
+    // A change is only ever written to a managed path: its mode is a leaf file mode (a
+    // replace keeps `100755`; a `write` of a new file is `100644`; over an existing file, its mode).
+    filesForTree[path] = { content, mode: (pool.modes.get(path) ?? "100644") as FileMode };
+  }
+  const fresh = new Set<string>([""]);
+  for (const path of changed) {
+    const segments = path.split("/");
+    for (let i = 1; i < segments.length; i++) fresh.add(segments.slice(0, i).join("/"));
+  }
+  const {
+    root: treeObj,
+    objects,
+    dirs,
+  } = makeTreeFromFiles(filesForTree, {
+    stored: pool.trees,
+    fresh,
+  });
   for (const o of objects) pool.objects.set(o.oid, o);
+  // The new head's bookkeeping: changed paths take their new object id, deleted paths leave,
+  // and the rebuilt directories' ids are the next landing's `stored`.
+  for (const path of changed) {
+    const content = l.after.get(path);
+    if (content === undefined) {
+      headEntries.delete(path);
+      pool.modes.delete(path);
+    } else {
+      const mode = pool.modes.get(path) ?? "100644";
+      pool.modes.set(path, mode);
+      headEntries.set(path, { oid: blobId(utf8(content)), mode });
+      pool.opaque.delete(path); // a landed write gives a formerly opaque blob real content
+    }
+  }
+  for (const [dir, oid] of dirs) {
+    if (pool.trees.get(dir) !== oid) {
+      pool.trees.set(dir, oid);
+      pool.dirtyTrees.add(dir);
+    }
+  }
   const parent =
     l.seq === 1
       ? (pool.meta.get("head_commit") ?? seedCommit(pool, l.before).oid)
@@ -356,8 +404,13 @@ export function recordLanding(
 export function seedCommit(pool: Pool, files: FileMap): GitObject {
   const filesForTree: Record<string, string> = {};
   for (const [p, c] of files) filesForTree[p] = c;
-  const { root, objects } = makeTreeFromFiles(filesForTree);
+  const { root, objects, dirs } = makeTreeFromFiles(filesForTree);
   for (const o of objects) pool.objects.set(o.oid, o);
+  for (const [dir, oid] of dirs) pool.trees.set(dir, oid);
+  const headEntries = pool.entries;
+  for (const [path, content] of files) {
+    headEntries.set(path, { oid: blobId(utf8(content)), mode: "100644" });
+  }
   const commit = makeCommit({
     tree: root.oid,
     parents: [],
@@ -702,7 +755,7 @@ export function tick(pool: Pool): void {
       );
       continue;
     }
-    if (policyTier(running, changed) === "held" && c.approved_by === null) {
+    if (policyTier(pool, running, changed) === "held" && c.approved_by === null) {
       pool.out.skipped[c.id] = "held";
       event(pool, "tick.skipped", { attempt_id: c.id, why: "held", behind: null });
       c.tier = "held";
@@ -971,8 +1024,11 @@ export function pushOk(pool: Pool): void {
   });
   markLanded(pool);
   // The plain-merge pool rebuilds off the landing path (11.7, PM6): the `plain` timer
-  // carries it — this transaction only arms it, the push never waits on it.
-  pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
+  // carries it — this transaction only arms it, the push never waits on it. IR7: an imported
+  // pool (`app` "") gets no plain-merge build — the timer is never armed for it.
+  if (pool.meta.get("app") !== "") {
+    pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
+  }
   pool.outbox.pushed_at = pool.now();
   pool.outbox.state = "pushed";
   pool.outbox = null;

@@ -66,12 +66,23 @@ export function metaWrite(pool: Pool, k: string, v: string | number | null): voi
 // whenever one of their fields changes (EM1) or when the visible tree or the synthetic flag does.
 
 import { MAX_REAL_AGENTS } from "../../protocol/constants.ts";
-import { policyOf, changeTier } from "../policy/policy.ts";
+import { changeTier, policyOf, type Policy } from "../policy/policy.ts";
 import type { FileMap } from "./sets.ts";
 
+/**
+ * The policy a pool applies (10.1, IR6): the repository's `.premise/policy.json` when the file is
+ * present — a malformed one fails closed (PO3). A seed pool without the file is closed (PO3);
+ * an imported pool without it opens fully: every path is `auto` (IR6).
+ */
+export function poolPolicy(pool: Pool, files: Map<string, string>): Policy {
+  const text = files.get(".premise/policy.json");
+  if (text === undefined && pool.meta.get("app") === "") return policyOf('{"v":1,"default":"auto"}');
+  return policyOf(text ?? null);
+}
+
 /** `pool.files`' rows at `files`: every path with its tier under the tree's own policy (EM1). */
-export function poolFileRows(files: FileMap): Array<{ path: string; tier: "auto" | "held" }> {
-  const policy = policyOf(files.get(".premise/policy.json") ?? null);
+export function poolFileRows(pool: Pool, files: FileMap): Array<{ path: string; tier: "auto" | "held" }> {
+  const policy = poolPolicy(pool, files);
   return [...files.keys()]
     .sort((a, b) => a.localeCompare(b))
     .map((path) => ({ path, tier: changeTier(policy, [path]) }));
@@ -117,6 +128,11 @@ export function poolStateBody(pool: Pool): Record<string, unknown> {
     max_real_agents: MAX_REAL_AGENTS,
     synthetic: meta.get("synthetic") === "1",
     summary_only: meta.get("summary_only") === "1",
+    // IR8: `"tidepool"` for a seed pool, `null` for an imported one (`app` is "" in meta); a pool
+    // that predates the field reads as a seed pool — its stream always had a live picture.
+    app: meta.get("app") === "" ? null : (meta.get("app") ?? "tidepool"),
+    // The imported repository as `owner/name` (IR11/IR12), or null for a seed pool.
+    source: meta.get("source") === "" || meta.get("source") === undefined ? null : meta.get("source"),
   };
 }
 
@@ -127,5 +143,5 @@ export function emitPoolState(pool: Pool): void {
 
 /** EM1: emit `pool.files` with the head tree's rows. */
 export function emitPoolFiles(pool: Pool): void {
-  event(pool, "pool.files", { files: poolFileRows(pool.files) });
+  event(pool, "pool.files", { files: poolFileRows(pool, pool.files) });
 }

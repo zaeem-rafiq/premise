@@ -715,8 +715,20 @@ export const ABOUT_HOW_BOXES: readonly string[] = [
  * visitor (and everyone in Replay) reads; `vars.n` of 1 picks the `one` form where the spec gives
  * one. Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
  */
+/**
+ * The copy 06-repos.md names (IR12). These ids are amendments: they are not in the tables of
+ * 03-floor section 5, so they cannot live in STRINGS (AC7 counts exactly the tables' ids there).
+ * `text()` and `template()` resolve them the same way.
+ */
+export const REPO_STRINGS: Readonly<Record<string, CopyEntry>> = {
+  // IR12: the caption bar of a pool made from a repository — it has no live picture.
+  "frame.no_app": {
+    text: "This repository has no live picture. Its files and the changes to them are below.",
+  },
+};
+
 export function text(id: string, vars: CopyVars = {}): string {
-  const entry = STRINGS[id];
+  const entry = STRINGS[id] ?? REPO_STRINGS[id];
   if (entry === undefined) throw new Error(`copy: unknown id "${id}"`);
   let template = entry.text;
   if (vars.visitor === true && entry.visitor !== undefined) template = entry.visitor;
@@ -726,5 +738,5 @@ export function text(id: string, vars: CopyVars = {}): string {
 
 /** The unfilled template of a copy id, or undefined when the id does not exist. */
 export function template(id: string): string | undefined {
-  return STRINGS[id]?.text;
+  return (STRINGS[id] ?? REPO_STRINGS[id])?.text;
 }

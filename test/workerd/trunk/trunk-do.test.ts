@@ -94,14 +94,15 @@ describe("the Trunk Durable Object in workerd", () => {
     expect(tool.status).toBe(404);
     expect(await tool.json()).toEqual({ error: { code: "pool_not_found" } });
 
-    for (const path of ["/sync", "/stop"]) {
+    // `/register` joined the built entries with the rebuild (01-core 3.6 step 6, 4.12).
+    for (const path of ["/sync", "/stop", "/register"]) {
       const res = await worker
         .trunk("t1")
         .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: { code: "pool_not_found" } });
     }
-    for (const path of ["/register", "/api/pools/t1/intents", "/api/pools/t1/undo"]) {
+    for (const path of ["/api/pools/t1/intents", "/api/pools/t1/undo"]) {
       const res = await worker
         .trunk("t1")
         .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

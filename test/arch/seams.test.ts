@@ -105,7 +105,20 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     // Worker's types are not part of this test's program (plan 1.3, mechanism 1). The entry and
     // effect names are the internal contract `src/worker/trunk/trunk-do.ts` dispatches on.
     expect([...engineTable().entries.keys()].sort()).toEqual(
-      ["open_attempt", "owner", "push_ok", "push_result", "restart", "stop", "sync", "tick", "tool", "triage"].sort(),
+      [
+        "open_attempt",
+        "owner",
+        "push_ok",
+        "push_result",
+        "restart",
+        // RW1: the `right_of_way` timer's entry (01-core 3.3).
+        "right_of_way",
+        "stop",
+        "sync",
+        "tick",
+        "tool",
+        "triage",
+      ].sort(),
     );
     expect([...engineTable().effects].sort()).toEqual(["events", "push"]);
     // The Floor's registry is filled since track 1F: floor-shell registers its views, sheets and keys.

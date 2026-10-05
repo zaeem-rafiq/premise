@@ -1,4 +1,4 @@
-// src/core/trunk/right-of-way.test.ts — RW1, RW3 and RW4 at the engine level (01-core 11.2):
+// test/cases/right-of-way.test.ts — RW1, RW3 and RW4 at the engine level (01-core 11.2):
 // the mark is a millisecond timestamp taken from the injected clock, its `right_of_way` timer
 // row is durable (AL1), the timer entry lapses only the grant its row was armed for, and a
 // tick sweeps a stale mark itself so a lost timer can never block RW3's skip for ever.
@@ -7,11 +7,11 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
-import type { Sql } from "../../protocol/ports.ts";
-import type { ToolRequest, ToolResponse } from "../../protocol/tools.ts";
-import { Trunk } from "./registry.ts";
-import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
+import { RIGHT_OF_WAY_MS } from "../../src/protocol/constants.ts";
+import type { Sql } from "../../src/protocol/ports.ts";
+import type { ToolRequest, ToolResponse } from "../../src/protocol/tools.ts";
+import { Trunk } from "../../src/core/trunk/registry.ts";
+import { ScriptedTriage } from "../../src/swarm/scripted-triage.ts";
 
 /** `node:sqlite` speaks the `Sql` port (same adapter shape the case driver uses). */
 function sqlOver(db: DatabaseSync): Sql {

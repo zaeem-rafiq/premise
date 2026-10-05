@@ -62,7 +62,7 @@ export type PoolFrameProps = {
  * .css file (the wiring module must stay importable in the Node test program), and the tokens
  * (`--bg`, `--control`, …) resolve against the shell's base.css; the fallbacks are the 6.3 dark
  * values so the frame still reads on its own. */
-const FRAME_CSS = `
+export const FRAME_CSS = `
 .pf { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .pf-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   font-size: var(--size-body, 16px); color: var(--text, #eaf2f4); }
@@ -215,12 +215,26 @@ export function PoolFrame(props: PoolFrameProps) {
     driver.setUserPaused(paused);
     driver.setHighlight(highlightKinds(props.highlight ?? []), props.highlight !== undefined);
     driver.setSelftest(props.selftest === true);
-    driver.setTarget({
-      landedCommit: state.pool.landed_commit,
-      greenCommit: state.green.commit,
-      greenSeq: state.green.seq,
-    });
-  }, [driver, paused, props.highlight, props.selftest, state.pool.landed_commit, state.green.commit, state.green.seq]);
+    // IR12: pool.state "unknown" means none has arrived yet — the app kind is undecided
+    // (an imported repository's is null) and the frame must not load an address it may
+    // have no server for. The driver's first feed waits for the stream's pool.state.
+    if (state.pool.state !== "unknown") {
+      driver.setTarget({
+        landedCommit: state.pool.landed_commit,
+        greenCommit: state.green.commit,
+        greenSeq: state.green.seq,
+      });
+    }
+  }, [
+    driver,
+    paused,
+    props.highlight,
+    props.selftest,
+    state.pool.state,
+    state.pool.landed_commit,
+    state.green.commit,
+    state.green.seq,
+  ]);
 
   useEffect(() => {
     const onBlur = () => setFrameFocus(document.activeElement === iframeRef.current);
@@ -287,7 +301,7 @@ export function PoolFrame(props: PoolFrameProps) {
   const caption = mainCaption(state, mode);
   const pending = landingPending(state);
   const poolStopped = state.pool.state === "paused" || state.pool.state === "rebuilding";
-  const compareOffered = state.pool.plain_remote !== null && props.onCompare !== undefined;
+  const compareOffered = state.pool.plain_remote !== null && state.pool.app !== null && props.onCompare !== undefined;
   const phase = driver.phase;
   const stalled = driver.stalledCaption;
 

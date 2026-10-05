@@ -146,6 +146,10 @@ export type FloorRead = {
     head_commit: string | null;
     landed_seq: number;
     landed_commit: string | null; // resolves the moving source `main`
+    /** IR7/IR8: `null` for a pool imported from a repository — the app server answers `no_app`.
+     * Absent when the Floor's projection does not carry it; the app server's own read merges
+     * the stream's `pool.state.app` over this field. */
+    app?: "tidepool" | null;
   };
   green: { seq: number | null; commit: string | null }; // resolves `green`
   plain: { commit: string; tree: string; through_seq: number } | null; // resolves `plain`

@@ -167,6 +167,8 @@ function onPoolState(state: FloorState, event: Extract<PoolEvent, { type: "pool.
   pool.max_real_agents = event.max_real_agents;
   pool.remote = event.remote;
   pool.plain_remote = event.plain_remote;
+  pool.app = event.app ?? "tidepool"; // streams from before IR8 carry no `app`
+  pool.source = event.source ?? null;
   pool.rebuild = event.rebuild;
   pool.unwitnessed = event.unwitnessed;
   if (rebuild) {

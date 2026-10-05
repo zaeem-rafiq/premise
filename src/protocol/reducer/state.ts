@@ -195,6 +195,8 @@ export type FloorState = {
     max_real_agents: number;
     remote: string | null; // clone address without credentials
     plain_remote: string | null; // null: the pool has no plain-merge repository
+    app: "tidepool" | null; // IR8: null for a pool imported from a repository
+    source: string | null; // the imported repository as `owner/name`, else null
     rebuild: { done: number; total: number } | null;
     unwitnessed: number[]; // landings whose commit has no note
   };
@@ -318,6 +320,8 @@ export function emptyFloorState(): FloorState {
       max_real_agents: 0,
       remote: null,
       plain_remote: null,
+      app: "tidepool",
+      source: null,
       rebuild: null,
       unwitnessed: [],
     },

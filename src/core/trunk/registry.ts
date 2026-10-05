@@ -25,6 +25,7 @@ import type {
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
@@ -1111,6 +1112,16 @@ export class Trunk {
 
   pushResult(remote_main: "old" | "new" | "other", remote_notes?: "old" | "new" | "other"): string {
     return wrapCall(this.pool, () => reconcile(this.pool, remote_main, remote_notes ?? remote_main));
+  }
+
+  /** 11.7's `plain` timer: the next plain-merge commit spec, or `idle` when caught up. */
+  plain(input: { parent_override?: string } = {}): PlainBuild {
+    return wrapCall(this.pool, () => plainBuild(this.pool, input));
+  }
+
+  /** PM6's `plain_done`: the pushed commit is `main` of `<pool>-plain`; emits `plain.updated`. */
+  plainDone(input: { commit: string; remote: string }): Record<string, unknown> {
+    return wrapCall(this.pool, () => plainDone(this.pool, input));
   }
 
   restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {

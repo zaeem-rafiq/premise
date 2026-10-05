@@ -108,6 +108,10 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
       [
         "open_attempt",
         "owner",
+        // 11.7: the `plain` timer's entry builds the next `<pool>-plain` commit spec,
+        // `plain_done` applies the push's answer and emits `plain.updated`.
+        "plain",
+        "plain_done",
         "push_ok",
         "push_result",
         "rebuild",

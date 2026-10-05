@@ -167,7 +167,9 @@ function onPoolState(state: FloorState, event: Extract<PoolEvent, { type: "pool.
   pool.max_real_agents = event.max_real_agents;
   pool.remote = event.remote;
   pool.plain_remote = event.plain_remote;
-  pool.app = event.app ?? "tidepool"; // streams from before IR8 carry no `app`
+  // IR8: `null` is an imported pool's answer and is kept; only a stream from before IR8, which
+  // carries no `app` at all, means a seed pool.
+  pool.app = event.app === undefined ? "tidepool" : event.app;
   pool.source = event.source ?? null;
   pool.rebuild = event.rebuild;
   pool.unwitnessed = event.unwitnessed;

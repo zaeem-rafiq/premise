@@ -132,6 +132,19 @@ describe("03-floor 4.3: pool rows", () => {
     expect(state.ts).toBe(1_100);
   });
 
+  it("IR8: pool.state's app is kept as sent — null for an imported pool, tidepool when absent", () => {
+    // The defect, seen live on an imported pool: `event.app ?? "tidepool"` turned the imported
+    // pool's `app: null` into "tidepool", so the page would draw a live frame it does not have.
+    const imported = baseState();
+    reduce(imported, ev("pool.state", { state: "ready", reason: null, epoch: 1, head_seq: 0, app: null }));
+    expect(imported.pool.app).toBeNull();
+    const seeded = baseState();
+    reduce(seeded, ev("pool.state", { state: "ready", reason: null, epoch: 1, head_seq: 0, app: "tidepool" }));
+    expect(seeded.pool.app).toBe("tidepool");
+    // A stream from before IR8 carries no `app`: its pools were all made from seeds.
+    expect(baseState().pool.app).toBe("tidepool");
+  });
+
   it("pool.state with a higher epoch closes every open card as stale by system (RB5)", () => {
     const state = baseState();
     openAttempt(state, "a1", "i1");

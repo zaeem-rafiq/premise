@@ -37,6 +37,7 @@ export const views: Record<string, (props: Record<string, unknown>) => ReactNode
     <WhySheet
       floor={props.floor as FloorState}
       seq={Number(props.seq ?? 0)}
+      mode={props.mode === "replay" ? "replay" : "live"}
       onClose={typeof props.onClose === "function" ? (props.onClose as () => void) : () => undefined}
       onOpenWho={
         typeof props.onOpenWho === "function" ? (props.onOpenWho as (kind: string, key: string) => void) : undefined
@@ -44,8 +45,8 @@ export const views: Record<string, (props: Record<string, unknown>) => ReactNode
       onOpenUndo={typeof props.onOpenUndo === "function" ? (props.onOpenUndo as (seq: number) => void) : undefined}
     />
   ),
-  /** The Who relies panel of 03-floor 3.11. The shell's `key` prop is React-reserved and never
-   * reaches the component; until the shell passes `whoKey`, the panel shows its pick/empty state. */
+  /** The Who relies panel of 03-floor 3.11. React keeps the shell's `key` prop for itself, so the
+   * shell names the panel's subject in `whoKey`. */
   "sheet.who": (props) => (
     <WhoSheet
       floor={props.floor as FloorState}

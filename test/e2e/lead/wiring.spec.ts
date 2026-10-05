@@ -1,10 +1,11 @@
 // The wiring the lanes left for this pass, on the real page:
 //  - the card sheet renders exactly once, through the registry's `sheet.card` entry and
 //    the shell's `SheetTarget` (the rail no longer draws it);
-//  - the tile menu's Who/Why entries are absent while those sheets are unregistered;
+//  - a file tile's menu opens the Who panel and the Why card through the shell;
 //  - the self-test badge shows on the main frame;
 //  - `intent.queue` fills its `{max}` from `pool.max_real_agents` (FR26).
 
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import {
   serveStream,
@@ -19,6 +20,16 @@ import {
   metrics,
   limits,
 } from "../shell/stream.ts";
+
+/** The events of a recorded fixture, served as one live stream of the shell's test pool. */
+function fixtureFrames(name: string): Record<string, unknown>[] {
+  return readFileSync(new URL(`../../fixtures/streams/${name}`, import.meta.url), "utf8")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((event) => typeof event.type === "string")
+    .map((event, i) => ev(i + 1, event));
+}
 
 const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><script>
   var part = location.pathname.split("/")[3];
@@ -90,15 +101,27 @@ for (const size of [
       await expect(sheet).toHaveCount(0);
     });
 
-    // (a) The tile menu: the Who/Why sheets are not registered, so the shell passes no
-    // callbacks and the file tiles offer no menu at all - they are inert cells.
-    test("file tiles offer no menu while Who/Why sheets are unregistered", async ({ page }) => {
-      await page.goto("/replay/hero-c04");
-      await expect(page.locator(".tiles-grid .tile").first()).toBeVisible();
-      expect(await page.locator(".tiles-grid button.tile").count()).toBe(0);
-      await page.locator('.tiles-grid .tile[title="world/energy.js"]').click({ force: true });
-      await expect(page.locator(".tile-menu")).toHaveCount(0);
-      await expect(page.locator(".card-sheet")).toHaveCount(0);
+    // (a) The tile menu (3.7): with the Who and Why sheets registered (Slice 7), a file tile
+    // opens a menu, and each entry opens its sheet in the assembled page - the Who panel names
+    // the tapped file, and the Why card opens on the file's newest landing (hero-c04: the crab
+    // landed as landing 2).
+    test("a file tile's menu opens Who relies and the Why card", async ({ page }) => {
+      await serveStream(page, fixtureFrames("hero-c04.ndjson"));
+      await page.goto("/p/testpool");
+      await dismissStart(page);
+      const crab = page.locator('.tiles-grid button.tile[title="creatures/crab.js"]');
+      await crab.click();
+      await page.getByRole("menuitem", { name: "Who relies on this" }).click();
+      const who = page.getByRole("dialog", { name: /^Who relies on .*crab/ });
+      await expect(who).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(who).toHaveCount(0);
+
+      await crab.click();
+      await page.getByRole("menuitem", { name: "Why (newest change)" }).click();
+      const why = page.getByRole("dialog", { name: "Why is this here?" });
+      await expect(why).toBeVisible();
+      await expect(why).toContainText("landing 2");
     });
 
     // (a) The self-test badge on the main frame (CO25a).

@@ -411,13 +411,28 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     <>
       {sheet.kind === "card" &&
         call(table.entries.get("sheet.card"), { floor, card_id: sheet.card_id, onClose: closeSheet })}
-      {sheet.kind === "why" && call(table.entries.get("sheet.why"), { floor, seq: sheet.seq, onClose: closeSheet })}
+      {sheet.kind === "why" &&
+        call(table.entries.get("sheet.why"), {
+          floor,
+          seq: sheet.seq,
+          mode: replay ? "replay" : "live",
+          onClose: closeSheet,
+          // 3.9: the card's `who.open` and `undo.open` buttons open the sibling sheets.
+          onOpenWho: table.entries.has("sheet.who")
+            ? (kind: string, key: string) => openSheet({ kind: "who", kind_: kind, key })
+            : undefined,
+          onOpenUndo: table.entries.has("sheet.undo") ? (seq: number) => openSheet({ kind: "undo", seq }) : undefined,
+        })}
       {sheet.kind === "who" &&
         call(table.entries.get("sheet.who"), {
           floor,
           kind_: sheet.kind_,
-          key: sheet.key,
+          // `key` is React's own prop and never reaches a component: the panel reads `whoKey`.
+          // As the element's key it also gives each subject a fresh panel.
+          key: `${sheet.kind_} ${sheet.key}`,
+          whoKey: sheet.key,
           onClose: closeSheet,
+          onOpenWhy: table.entries.has("sheet.why") ? (seq: number) => openSheet({ kind: "why", seq }) : undefined,
         })}
       {sheet.kind === "undo" && call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
       {sheet.kind === "about" && (

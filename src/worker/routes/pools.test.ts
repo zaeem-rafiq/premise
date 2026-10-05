@@ -65,23 +65,24 @@ function fakeEnv(over: {
     }),
   };
   if (over.pools !== undefined) {
+    const pools = over.pools;
     env.POOLS = {
       create: async (name: string, opts: unknown) => {
         calls.push({ kind: "pools.create", opts: { name, opts } });
-        return over.pools.create !== undefined
-          ? over.pools.create(name, opts)
+        return pools.create !== undefined
+          ? pools.create(name, opts)
           : { id: "r1", name, remote: `https://artifacts.test/${name}.git`, token: "art_v1_dropped" };
       },
       import: async (params: unknown) => {
         calls.push({ kind: "pools.import", opts: params });
-        return over.pools.import !== undefined
-          ? over.pools.import(params)
+        return pools.import !== undefined
+          ? pools.import(params)
           : { id: "r1", name: "tp-repo", remote: "https://artifacts.test/tp-repo.git", token: "art_v1_dropped" };
       },
       get: async (name: string) => {
         calls.push({ kind: "pools.get", opts: { name } });
-        return over.pools.get !== undefined
-          ? over.pools.get(name)
+        return pools.get !== undefined
+          ? pools.get(name)
           : {
               info: async () => ({ remote: `https://artifacts.test/${name}.git` }),
               [Symbol.dispose]: () => {},
@@ -235,7 +236,7 @@ describe("POST /api/pools with source (IR1, IR2)", () => {
       source: { url: "https://gitlab.com/octo/app.git", branch: "dev/x" },
       remote: "https://artifacts.test/tp-repo.git",
     });
-    expect((trunk?.init as { body: string }).body).not.toMatch(/art_v1_dropped/);
+    expect((trunk?.init as { body: string }).body).not.toContain("art_v1_dropped");
     expect(text.status).toBe(200);
   });
 

@@ -20,12 +20,13 @@ import {
   created,
   sweeping,
 } from "../trunk/sets.ts";
+import { TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 
 export type Row = [string, "holds" | "info" | "confirm" | "repair" | "triage" | "delete", string];
 
 /** The decision-table row of section 7.2 for one changed premise. */
 export function rowFor(
-  pool: Pool,
+  pool: Pool | null,
   a: Attempt,
   p: Premise,
   it: ClassifyItem,
@@ -44,8 +45,8 @@ export function rowFor(
     else row = ["E4", "delete", "reference_gone"];
   } else if (p.kind === "file") {
     const P = p.key;
-    const mb = isModule(P) ? entityKeysOf(before, P) : null;
-    const ma = isModule(P) ? entityKeysOf(after, P) : null;
+    const mb = isModule(P, s.languages) ? entityKeysOf(before, P, s.languages) : null;
+    const ma = isModule(P, s.languages) ? entityKeysOf(after, P, s.languages) : null;
     const writes = curOps(a).some((o) => o.path === P && (o.op === "write" || mb === null));
     if (p.edit && writes) row = ["F1", "repair", "write_base_changed"];
     else if (mb !== null && ma !== null) {
@@ -122,17 +123,18 @@ export type Classification = {
  * attempt's ops on `after`, which double-checks the ops still apply there.
  */
 export function classify(
-  pool: Pool,
+  pool: Pool | null,
   a: Attempt,
   before: FileMap,
   after: FileMap,
   setsOverride: Sets | null,
   landers: Array<{ premises: Premise[]; attempt_id?: string }> = [],
 ): Classification {
-  const s = setsOverride ?? setsOf(a, before);
+  const s = setsOverride ?? setsOf(a, before, pool?.languages ?? TIDEPOOL_LANGUAGES);
+  const L = s.languages;
   const items: ClassifyItem[] = [];
   for (const p of a.premises.values()) {
-    const cur = keyHash(after, p.kind, p.key);
+    const cur = keyHash(after, p.kind, p.key, L);
     if (cur.hash === p.hash) continue;
     const it: ClassifyItem = {
       p,
@@ -146,16 +148,16 @@ export function classify(
       after,
     };
     if (p.kind === "entity") {
-      it.after_src = entityAt(after, p.key) !== null ? sourceOf(after, p.key) : null;
+      it.after_src = entityAt(after, p.key, L) !== null ? sourceOf(after, p.key, L) : null;
     } else if (p.kind === "file") {
       const P = p.key;
-      const mb = isModule(P) ? entityKeysOf(before, P) : null;
-      const ma = isModule(P) ? entityKeysOf(after, P) : null;
+      const mb = isModule(P, L) ? entityKeysOf(before, P, L) : null;
+      const ma = isModule(P, L) ? entityKeysOf(after, P, L) : null;
       it.changed = [];
       if (mb !== null && ma !== null) {
         for (const k of new Set([...mb, ...ma])) {
-          const b = entityAt(before, k);
-          const c = entityAt(after, k);
+          const b = entityAt(before, k, L);
+          const c = entityAt(after, k, L);
           if (b === null || c === null || b.hash !== c.hash) it.changed.push(k);
         }
       }
@@ -187,9 +189,9 @@ export function classify(
       it.context = [];
       const mods = new Set(newM.filter(isRef).map(pathOf));
       for (const m of mods) {
-        for (const k of entityKeysOf(after, m) ?? []) {
-          const b = before.has(m) ? entityAt(before, k) : null;
-          const c = entityAt(after, k);
+        for (const k of entityKeysOf(after, m, L) ?? []) {
+          const b = before.has(m) ? entityAt(before, k, L) : null;
+          const c = entityAt(after, k, L);
           if ((b === null || (c !== null && b.hash !== c.hash)) && !it.added.includes(k)) it.context.push(k);
         }
       }
@@ -222,9 +224,9 @@ export function classify(
     }
   }
   // QR4: a landing that only read K, while this attempt alters K.
-  const rep = replayOps(curOps(a), after);
+  const rep = replayOps(curOps(a), after, {}, L);
   for (const K of s.Altered) {
-    if (entityAt(before, K) === null || rep.failed.some((f) => f.path === pathOf(K))) continue;
+    if (entityAt(before, K, L) === null || rep.failed.some((f) => f.path === pathOf(K))) continue;
     const reader = landers.find((l) =>
       l.premises.some(
         (q) =>

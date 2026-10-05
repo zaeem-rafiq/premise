@@ -16,7 +16,8 @@ import type { PremiseKind } from "../../protocol/premise.ts";
 import { ABSENT } from "../../protocol/premise.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
-import { isModulePath, parentKey } from "../keys/paths.ts";
+import { isModulePath, parentKey, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
+import type { LanguageSet } from "../keys/paths.ts";
 import { membersHash, listingMembers } from "../keys/members.ts";
 import { textMembers as textMembersOf, matchContainers, occurrences } from "../keys/search.ts";
 import { parseModule, entitySource, outlineLines, moduleHash, type ModuleInfo } from "../entities/entities.ts";
@@ -301,6 +302,9 @@ export type Pool = {
   syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   meta: Map<string, string>;
+  /** The pool's language set (LG1): the tide-pool set for a seeded pool, the imported set for
+   * one made from a repository — `meta.app` is "" exactly in the imported case. */
+  languages: LanguageSet;
   files: FileMap; // head: path -> content — MANAGED entries only (IR5)
   modes: Map<string, string>; // head: path -> mode, a mirror of the files rows
   /** Every head-tree entry — managed and unmanaged (IR5: path, mode, object id). `files`
@@ -393,33 +397,44 @@ export const dirOf = (p: string): string => parentKey(p);
 export const pathOf = (k: string): string => k.split("#")[0] ?? k;
 export const isModule = isModulePath;
 
-const moduleCache = new WeakMap<FileMap, Analysis>();
+const moduleCache = new WeakMap<FileMap, Map<LanguageSet, Analysis>>();
 
-/** The module analysis (6.2) of one file map; cached per map identity inside a call. */
-export function an(files: FileMap): Analysis {
-  const got = moduleCache.get(files);
+/** The module analysis (6.2) of one file map under `languages`; cached per map identity and
+ * set inside a call. The default is the tide-pool set, so a caller without the pool's set
+ * keeps the `.js`/`.mjs` behaviour (LG1). */
+export function an(files: FileMap, languages: LanguageSet = TIDEPOOL_LANGUAGES): Analysis {
+  let bySet = moduleCache.get(files);
+  const got = bySet?.get(languages);
   if (got !== undefined) return got;
-  const made = analyse(files);
-  moduleCache.set(files, made);
+  const made = analyse(files, languages);
+  if (bySet === undefined) {
+    bySet = new Map();
+    moduleCache.set(files, bySet);
+  }
+  bySet.set(languages, made);
   return made;
 }
 
-export function entityAt(files: FileMap, key: string) {
+export function entityAt(files: FileMap, key: string, languages: LanguageSet = TIDEPOOL_LANGUAGES) {
   const path = pathOf(key);
   const name = key.slice(key.indexOf("#") + 1);
-  const mod = an(files).modules.get(path);
+  const mod = an(files, languages).modules.get(path);
   if (mod === undefined) return null;
   return mod.entities.find((e) => e.name === name) ?? null;
 }
 
-export function entityKeysOf(files: FileMap, path: string): string[] | null {
-  const mod = an(files).modules.get(path);
+export function entityKeysOf(
+  files: FileMap,
+  path: string,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
+): string[] | null {
+  const mod = an(files, languages).modules.get(path);
   if (mod === undefined) return null;
   return mod.entities.map((e) => `${path}#${e.name}`);
 }
 
-export function moduleHashOf(files: FileMap, path: string): string {
-  const mod = an(files).modules.get(path);
+export function moduleHashOf(files: FileMap, path: string, languages: LanguageSet = TIDEPOOL_LANGUAGES): string {
+  const mod = an(files, languages).modules.get(path);
   return mod === undefined ? "" : moduleHash(mod);
 }
 
@@ -428,8 +443,14 @@ export function listingOf(files: FileMap, dir: string): string[] {
 }
 
 /** The target keys (EN6) of `[start, end)` in a module, or `[path]` for an opaque file. */
-export function targetsOf(files: FileMap, path: string, start: number, end: number): string[] {
-  const mod = isModulePath(path) ? an(files).modules.get(path) : undefined;
+export function targetsOf(
+  files: FileMap,
+  path: string,
+  start: number,
+  end: number,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
+): string[] {
+  const mod = isModulePath(path, languages) ? an(files, languages).modules.get(path) : undefined;
   if (mod === undefined) return [path];
   const names: string[] = [];
   for (const r of mod.regions) {
@@ -441,10 +462,10 @@ export function targetsOf(files: FileMap, path: string, start: number, end: numb
 }
 
 /** The source of an entity (EN7) inside one file map, or null. */
-export function sourceOf(files: FileMap, key: string): string | null {
+export function sourceOf(files: FileMap, key: string, languages: LanguageSet = TIDEPOOL_LANGUAGES): string | null {
   const path = pathOf(key);
   const name = key.slice(key.indexOf("#") + 1);
-  const mod = an(files).modules.get(path);
+  const mod = an(files, languages).modules.get(path);
   if (mod === undefined) return null;
   const content = files.get(path);
   if (content === undefined) return null;
@@ -452,11 +473,16 @@ export function sourceOf(files: FileMap, key: string): string | null {
 }
 
 /** `containers -> match count` of a literal text search over `files` under `scope` (2.6). */
-export function textCounts(files: FileMap, scope: string, needle: string): Map<string, number> {
+export function textCounts(
+  files: FileMap,
+  scope: string,
+  needle: string,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
+): Map<string, number> {
   const out = new Map<string, number>();
   for (const [path, content] of files) {
     if (!(scope === "/" || path === scope || (scope.endsWith("/") && path.startsWith(scope)))) continue;
-    for (const [container, count] of matchContainers(path, content, needle)) {
+    for (const [container, count] of matchContainers(path, content, needle, languages)) {
       out.set(container, (out.get(container) ?? 0) + count);
     }
   }
@@ -464,13 +490,17 @@ export function textCounts(files: FileMap, scope: string, needle: string): Map<s
 }
 
 /** The `refs:` query members (2.5) of `key` inside `files`. */
-export function refsMembersOf(files: FileMap, key: string): string[] {
-  return refsMembers(key, an(files));
+export function refsMembersOf(files: FileMap, key: string, languages: LanguageSet = TIDEPOOL_LANGUAGES): string[] {
+  return refsMembers(key, an(files, languages));
 }
 
 /** The `outline:` query members (2.7) of `path`, or null when `path` is absent. */
-export function outlineMembersOf(files: FileMap, path: string): string[] | null {
-  const mod = an(files).modules.get(path);
+export function outlineMembersOf(
+  files: FileMap,
+  path: string,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
+): string[] | null {
+  const mod = an(files, languages).modules.get(path);
   if (mod === undefined) return files.has(path) ? [] : null;
   return outlineLines(mod).sort();
 }
@@ -479,9 +509,14 @@ export function outlineMembersOf(files: FileMap, path: string): string[] | null 
  * The hash of one premise key inside `files` (2.5), with the members the hash was made of for
  * the listing and query kinds. `absent` is the `ABSENT` marker.
  */
-export function keyHash(files: FileMap, kind: PremiseKind, key: string): { hash: string; members: string[] | null } {
+export function keyHash(
+  files: FileMap,
+  kind: PremiseKind,
+  key: string,
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
+): { hash: string; members: string[] | null } {
   if (kind === "entity") {
-    const e = entityAt(files, key);
+    const e = entityAt(files, key, languages);
     return { hash: e === null ? ABSENT : e.hash, members: null };
   }
   if (kind === "file") {
@@ -497,12 +532,12 @@ export function keyHash(files: FileMap, kind: PremiseKind, key: string): { hash:
   if (key.startsWith("text:")) {
     const rest = key.slice(5);
     const i = rest.indexOf(":");
-    members = textMembersOf(files, rest.slice(0, i), rest.slice(i + 1));
+    members = textMembersOf(files, rest.slice(0, i), rest.slice(i + 1), languages);
   } else if (key.startsWith("refs:")) {
-    members = refsMembersOf(files, key.slice(5));
+    members = refsMembersOf(files, key.slice(5), languages);
   } else {
     const path = key.slice(8); // "outline:<path>"
-    const lines = outlineMembersOf(files, path);
+    const lines = outlineMembersOf(files, path, languages);
     if (lines === null) return { hash: ABSENT, members: [] };
     members = lines;
   }
@@ -525,6 +560,7 @@ export function replayOps(
   ops: readonly Op[],
   tree: FileMap,
   opts: { noOP5?: boolean; noOP3?: boolean } = {},
+  languages: LanguageSet = TIDEPOOL_LANGUAGES,
 ): ReplayOut {
   // `an` caches the module analysis of a file map by map identity, so the working map is
   // replaced — never mutated — and every snapshot `targetsOf` sees stays true for that object.
@@ -553,7 +589,7 @@ export function replayOps(
         if (occ.length === 0) rule = "OP1";
         else if (occ.length > 1) rule = "OP2";
         else {
-          const t = targetsOf(files, o.path, occ[0]!, occ[0]! + o.old.length);
+          const t = targetsOf(files, o.path, occ[0]!, occ[0]! + o.old.length, languages);
           if (!opts.noOP3 && JSON.stringify(t) !== JSON.stringify(o.targets)) rule = "OP3";
           else put(o.path, content.slice(0, occ[0]) + o.new + content.slice(occ[0]! + o.old.length));
         }
@@ -574,11 +610,13 @@ export function replayOps(
 }
 
 /** The attempt view (5.2): current operations replayed over `tree` (head by default). */
-export function view(a: Attempt, tree: FileMap): FileMap {
-  return replayOps(curOps(a), tree).files;
+export function view(a: Attempt, tree: FileMap, languages: LanguageSet = TIDEPOOL_LANGUAGES): FileMap {
+  return replayOps(curOps(a), tree, {}, languages).files;
 }
 
 export type Sets = {
+  /** The language set these sets were computed under (LG1): the pool's own. */
+  languages: LanguageSet;
   view: FileMap;
   Added: string[];
   Altered: string[];
@@ -593,20 +631,20 @@ export type Sets = {
 };
 
 /** The sets of 6.3 for `a`, computed on its view over `tree` (the head before the change). */
-export function setsOf(a: Attempt, tree: FileMap): Sets {
-  const v = view(a, tree);
-  const A = an(v);
-  const Hd = an(tree);
+export function setsOf(a: Attempt, tree: FileMap, languages: LanguageSet = TIDEPOOL_LANGUAGES): Sets {
+  const v = view(a, tree, languages);
+  const A = an(v, languages);
+  const Hd = an(tree, languages);
   const added: string[] = [];
   const altered: string[] = [];
   const removed: string[] = [];
   const paths = new Set(curOps(a).map((o) => o.path));
   for (const p of paths) {
-    const hk = entityKeysOf(tree, p) ?? [];
-    const vk = entityKeysOf(v, p) ?? [];
+    const hk = entityKeysOf(tree, p, languages) ?? [];
+    const vk = entityKeysOf(v, p, languages) ?? [];
     for (const k of vk) {
-      const eb = hk.includes(k) ? entityAt(tree, k) : null;
-      const ev = entityAt(v, k);
+      const eb = hk.includes(k) ? entityAt(tree, k, languages) : null;
+      const ev = entityAt(v, k, languages);
       if (eb === null) added.push(k);
       else if (ev !== null && ev.hash !== eb.hash) altered.push(k);
     }
@@ -634,7 +672,7 @@ export function setsOf(a: Attempt, tree: FileMap): Sets {
     }
   }
   for (const p of paths) {
-    for (const k of entityKeysOf(v, p) ?? []) {
+    for (const k of entityKeysOf(v, p, languages) ?? []) {
       for (const r of A.refs.get(k) ?? []) {
         if (!added.includes(r) && !newRefs.has(r)) moduleRefs.add(r);
       }
@@ -647,6 +685,7 @@ export function setsOf(a: Attempt, tree: FileMap): Sets {
   const edited = new Set(Altered);
   for (const p of a.premises.values()) if (p.edit) edited.add(p.key);
   return {
+    languages,
     view: v,
     Added: added,
     Altered,
@@ -681,7 +720,7 @@ export function literalNames(a: Attempt, s: Sets): Set<string> {
     }
   };
   for (const k of [...s.Added, ...s.Altered]) {
-    const e = entityAt(s.view, k);
+    const e = entityAt(s.view, k, s.languages);
     if (e) e.nodes.forEach(walk);
   }
   return names;

@@ -36,6 +36,7 @@ import { IMPORT_CURSOR_KEY, applyImportStep, type ImportCursor, type ImportPaylo
 import { register as registerAttempt } from "../rebuild/register.ts";
 import type { ApplyPayload } from "../rebuild/plan.ts";
 import type { RegisterRequest, RegisterResponse } from "../../protocol/tools.ts";
+import { IMPORT_LANGUAGES, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8, text as fromUtf8, blobBytes } from "../sync/bytes.ts";
 import type { GitObject } from "../git/objects.ts";
@@ -219,6 +220,9 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
+  // LG1: an imported pool (`app` "", 06-repos IR2/IR8) works in IMPORT_LANGUAGES; the tide
+  // pool and any other seeded pool keep 2.1's set.
+  pool.languages = pool.meta.get("app") === "" ? IMPORT_LANGUAGES : TIDEPOOL_LANGUAGES;
   pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");
   for (const [k, v] of pool.meta) {
     if (k.startsWith("steps:")) pool.steps.set(k.slice(6), Number(v));
@@ -405,6 +409,9 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
+    // `openPool` re-derives this from `meta.app` once the store is read; a fresh map starts
+    // at the tide-pool set until then (a seed pool keeps it; an imported create sets `app` "").
+    languages: TIDEPOOL_LANGUAGES,
     files: new Map<string, string>(),
     modes: new Map<string, string>(),
     entries: new Map<string, { oid: string; mode: string }>(),

@@ -58,13 +58,13 @@ export function triageInputOf(
   items: ClassifyItem[],
   causeAttempt: Attempt | null,
 ): TriageInput {
-  const view = replayOps(curOps(decider), pool.files);
+  const view = replayOps(curOps(decider), pool.files, {}, pool.languages);
   const patch: Array<{ key: string; source: string }> = [];
   for (const path of view.files.keys()) {
-    for (const key of entityKeysOf(view.files, path) ?? []) {
-      const source = sourceOf(view.files, key);
+    for (const key of entityKeysOf(view.files, path, pool.languages) ?? []) {
+      const source = sourceOf(view.files, key, pool.languages);
       // added and altered entities of the decider's view: absent or different at head.
-      if (source !== null && source !== sourceOf(pool.files, key)) patch.push({ key, source });
+      if (source !== null && source !== sourceOf(pool.files, key, pool.languages)) patch.push({ key, source });
     }
   }
   const intentOf = (x: Attempt): string => pool.intents.get(x.intent_id)?.text ?? "";
@@ -78,19 +78,19 @@ export function triageInputOf(
       rule: it.rule ?? "",
       read_then:
         p.kind === "entity"
-          ? sourceOf(it.before, p.key)
+          ? sourceOf(it.before, p.key, pool.languages)
           : p.kind === "file"
             ? (it.before.get(p.key) ?? null)
             : JSON.stringify(it.oldMembers ?? []),
       is_now:
         p.kind === "entity"
-          ? (it.after_src ?? sourceOf(it.after, p.key))
+          ? (it.after_src ?? sourceOf(it.after, p.key, pool.languages))
           : p.kind === "file"
             ? (it.after.get(p.key) ?? null)
             : JSON.stringify(it.members ?? []),
       changed_by_intent: qr4 ? intentOf(a) : causeAttempt === null ? null : intentOf(causeAttempt),
       ...(it.added !== undefined && it.added.length > 0
-        ? { added: it.added.map((key) => ({ key, source: sourceOf(it.after, key) })) }
+        ? { added: it.added.map((key) => ({ key, source: sourceOf(it.after, key, pool.languages) })) }
         : {}),
       changed: p.kind === "file" ? (it.changed ?? []) : [],
     };

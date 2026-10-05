@@ -65,7 +65,11 @@ export function hItem(
   let diff: HeadsUpItem["diff"];
   const trace: Record<string, unknown> = { kind: p.kind, key: p.key, rule: it.rule, result, reason: it.reason ?? "" };
   if (p.kind === "entity") {
-    diff = { kind: "entity", before: sourceOf(it.before, p.key), after: it.after_src ?? sourceOf(it.after, p.key) };
+    diff = {
+      kind: "entity",
+      before: sourceOf(it.before, p.key, pool.languages),
+      after: it.after_src ?? sourceOf(it.after, p.key, pool.languages),
+    };
     trace.after = it.after_src ?? null;
   } else if (p.kind === "file") {
     const bc = it.before.get(p.key);
@@ -84,9 +88,9 @@ export function hItem(
   } else if (p.key.startsWith("refs:") || p.key.startsWith("outline:")) {
     diff = {
       kind: "query",
-      added: (it.added ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k) })),
+      added: (it.added ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k, pool.languages) })),
       removed: it.removed ?? [],
-      context: (it.context ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k) ?? "" })),
+      context: (it.context ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k, pool.languages) ?? "" })),
     };
     trace.added = it.added ?? [];
     trace.removed = it.removed ?? [];
@@ -94,7 +98,7 @@ export function hItem(
   } else if (p.key.startsWith("text:")) {
     diff = {
       kind: "query",
-      added: (it.added ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k) })),
+      added: (it.added ?? []).map((k) => ({ key: k, source: sourceOf(it.after, k, pool.languages) })),
       removed: it.removed ?? [],
       context: [],
     };
@@ -415,7 +419,7 @@ export function applyClassification(
       pool.dropPendingItem(a, p);
       continue;
     }
-    const cur = keyHash(after, p.kind, p.key);
+    const cur = keyHash(after, p.kind, p.key, pool.languages);
     p.hash = cur.hash;
     p.seq = seq;
     p.members = cur.members;
@@ -504,7 +508,7 @@ function firstCauseSeq(cause: HeadsUpCause): number | null {
 
 /** V7: a pending triage is evaluated again after every operation, on the frozen maps. */
 export function reevaluate(pool: Pool, a: Attempt): void {
-  const s = setsOf(a, pool.files);
+  const s = setsOf(a, pool.files, pool.languages);
   const items: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
   let strongest: "confirm" | "repair" | null = null;
   const e1keys: string[] = [];
@@ -616,15 +620,16 @@ export function afterOp(pool: Pool, a: Attempt, op: Operation, pre: FileMap): Pr
   // `added`/`removed` are the op's own delta on the attempt view; `altered` is a key that was at
   // head and whose content this op changed.
   const head = pool.files;
-  const post = replayOps(curOps(a), head).files;
-  const keysOf = (m: FileMap): string[] => entityKeysOf(m, op.path) ?? (m.has(op.path) ? [op.path] : []);
+  const post = replayOps(curOps(a), head, {}, pool.languages).files;
+  const keysOf = (m: FileMap): string[] =>
+    entityKeysOf(m, op.path, pool.languages) ?? (m.has(op.path) ? [op.path] : []);
   const preKeys = keysOf(pre);
   const postKeys = keysOf(post);
   const preSet = new Set(preKeys);
   const postSet = new Set(postKeys);
-  const atHead = (k: string): boolean => (k.includes("#") ? entityAt(head, k) !== null : head.has(k));
+  const atHead = (k: string): boolean => (k.includes("#") ? entityAt(head, k, pool.languages) !== null : head.has(k));
   const hashOf = (m: FileMap, k: string): string =>
-    k.includes("#") ? (entityAt(m, k)?.hash ?? "") : blobId(utf8(m.get(k) ?? ""));
+    k.includes("#") ? (entityAt(m, k, pool.languages)?.hash ?? "") : blobId(utf8(m.get(k) ?? ""));
   event(pool, "op.recorded", {
     attempt_id: a.id,
     op_seq: op.op_seq,
@@ -645,7 +650,7 @@ export function blast(
   pool: Pool,
   a: Attempt,
 ): { repair: string[]; confirm: string[]; triage: string[]; right_of_way: string[] } {
-  const after = replayOps(curOps(a), pool.files).files;
+  const after = replayOps(curOps(a), pool.files, {}, pool.languages).files;
   const out = { repair: [] as string[], confirm: [] as string[], triage: [] as string[], right_of_way: [] as string[] };
   for (const o of inflight(pool)) {
     if (o === a) continue;

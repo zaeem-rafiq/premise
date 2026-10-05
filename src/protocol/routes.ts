@@ -150,8 +150,19 @@ export type KillRequest = { killed: boolean; landings?: boolean };
 /** `POST /api/pools/{pool}/rebuild` (RB1). */
 export type RebuildRequest = { request_id: string };
 
-/** `POST /api/pools` (PL1). `seed` names a seed tree built into the deployment; returns no token. */
-export type CreatePoolRequest = { pool: string; seed: string; summary_only?: boolean; request_id: string };
+/**
+ * `POST /api/pools` (PL1, IR1): exactly one of `seed` (a seed tree built into the deployment)
+ * or `source` (a public git repository). `source.url` is `https://<host>/<owner>/<name>` —
+ * optionally `.git`-suffixed — with `<host>` one of `github.com`, `gitlab.com`, `codeberg.org`;
+ * `branch` names the imported branch (the remote's default when absent). Returns no token.
+ */
+export type CreatePoolRequest = {
+  pool: string;
+  seed?: string;
+  source?: { url: string; branch?: string };
+  summary_only?: boolean;
+  request_id: string;
+};
 
 /** `POST /api/pools/{pool}/read-token` (SE5c): a read token for the pool repository, minted with
  * explicit scope `read` and a lifetime of `READ_TOKEN_TTL_S`, returned to the owner only. */

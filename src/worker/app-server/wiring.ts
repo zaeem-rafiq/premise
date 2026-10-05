@@ -11,12 +11,28 @@ import { HOST_BUILD, HOST_SOURCE } from "./host-bundle.ts";
 import { RateLimiter } from "./respond.ts";
 
 /** The pool's Floor state (FS2): the DO's `/internal/state` endpoint. A non-200 or a transport
- * failure throws; the app maps it to 503 (AS4). */
+ * failure throws; the app maps it to 503 (AS4). `pool.app` is merged in from the stream itself:
+ * the Floor's `/internal/state` projection predates IR8, so the last `pool.state` line of
+ * `replay.ndjson` carries it (`"tidepool"` — or `null`, the no-app mark of an imported pool). */
 async function floorState(env: Env, pool: string): Promise<FloorRead> {
   const stub = env.FLOOR.get(env.FLOOR.idFromName(pool));
   const response = await stub.fetch("https://floor.internal/internal/state");
   if (!response.ok) throw new Error(`floor state: ${response.status}`);
-  return (await response.json()) as FloorRead;
+  const read = (await response.json()) as FloorRead;
+  if (read.pool.app !== undefined) return read;
+  let app: "tidepool" | null = "tidepool";
+  const replay = await stub.fetch(`https://floor.internal/api/pools/${pool}/replay.ndjson`);
+  if (replay.ok) {
+    for (const line of (await replay.text()).split("\n")) {
+      try {
+        const ev = JSON.parse(line) as { type?: string; app?: "tidepool" | null };
+        if (ev.type === "pool.state" && ev.app !== undefined) app = ev.app;
+      } catch {
+        /* header and partial lines are skipped */
+      }
+    }
+  }
+  return { ...read, pool: { ...read.pool, app } };
 }
 
 export function wire(table: RouteTable): void {

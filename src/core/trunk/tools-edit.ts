@@ -135,6 +135,9 @@ function toolInner(pool: Pool, a: Attempt, req: ToolRequest): InnerOut {
   if (isWriteTool && a.heads.some((h) => h.hn > req.ack))
     return e("heads_up_first", "acknowledge the pending heads-ups first");
   const poolState = pool.meta.get("pool_state") ?? "ready";
+  // RB3/IR3: while the pool rebuilds — including an imported pool's ingestion — no tool call
+  // answers from a partial tree; all seven fail `pool_not_ready` (LP7a's read path is `paused`).
+  if (poolState === "rebuilding") return e("pool_not_ready", `pool is ${poolState}`);
   if (isWriteTool && toolName !== "submit" && poolState !== "ready") return e("pool_not_ready", `pool is ${poolState}`);
   if (toolName === "submit" && poolState !== "ready" && !["accepted", "landed", "stopped"].includes(a.state)) {
     return e("pool_not_ready", `pool is ${poolState}`);

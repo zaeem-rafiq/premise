@@ -63,6 +63,10 @@ export function createApp(deps: AppDeps) {
 
   const notFound = (request: Request) =>
     answer(request, 404, NOT_FOUND_BODY, "text/plain; charset=utf-8", CACHE_NO_STORE);
+  /** IR7: a pool whose `pool.state.app` is `null` has no live picture — every `/pool/<pool>/…`
+   * route answers 404 with code `no_app`. */
+  const noApp = (request: Request) =>
+    answer(request, 404, JSON.stringify({ error: { code: "no_app" } }), "application/json", CACHE_NO_STORE);
   const unavailable = (request: Request) =>
     answer(request, 503, UNAVAILABLE_BODY, "text/plain; charset=utf-8", CACHE_NO_STORE);
   const rateLimited = (request: Request) =>
@@ -81,8 +85,12 @@ export function createApp(deps: AppDeps) {
    * commit sources need no resolution — a `null` seq is corrected only where `seq` is served
    * (`~head.js` uses `resolveForModule`, which reads the state for `landings_by_commit`).
    */
-  const resolve = async (pool: string, source: string): Promise<Resolved | null> =>
-    resolveSource(await deps.floorState(pool), source);
+  const NO_APP = "no_app" as const;
+  const resolve = async (pool: string, source: string): Promise<Resolved | null | typeof NO_APP> => {
+    const read = await deps.floorState(pool);
+    if (read.pool.app === null) return NO_APP;
+    return resolveSource(read, source);
+  };
 
   // ---- The route rows of 4.2 plus the `/pool/{rest}` catch-all ----
 
@@ -97,12 +105,13 @@ export function createApp(deps: AppDeps) {
     }
     if (!publicRateOk(request)) return rateLimited(request);
     const pool = params.pool ?? "";
-    let resolved: Resolved | null;
+    let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, params.source ?? "");
     } catch {
       return unavailable(request);
     }
+    if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
     try {
       const file = await deps.pools.read(pool, resolved.version, "index.html");
@@ -118,12 +127,13 @@ export function createApp(deps: AppDeps) {
     if (!publicRateOk(request)) return rateLimited(request);
     const pool = params.pool ?? "";
     const source = params.source ?? "";
-    let resolved: Resolved | null;
+    let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, source);
     } catch {
       return unavailable(request);
     }
+    if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
     return answer(request, 200, headModule(pool, source, resolved), TYPE_JS, CACHE_NO_STORE, true);
   };
@@ -133,12 +143,13 @@ export function createApp(deps: AppDeps) {
     if (!publicRateOk(request)) return rateLimited(request);
     if (deps.host === null) return unavailable(request);
     const pool = params.pool ?? "";
-    let resolved: Resolved | null;
+    let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, params.source ?? "");
     } catch {
       return unavailable(request);
     }
+    if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
     return answer(request, 200, bootModule(deps.host.build), TYPE_JS, CACHE_NO_STORE, true);
   };
@@ -152,6 +163,7 @@ export function createApp(deps: AppDeps) {
     } catch {
       return unavailable(request);
     }
+    if (read.pool.app === null) return noApp(request);
     let module: string | null;
     try {
       module = await registryModule(deps.pools, pool, version, read.paths);
@@ -169,6 +181,12 @@ export function createApp(deps: AppDeps) {
     if (!isVersionToken(version) || !isServablePath(path)) return notFound(request);
     const type = contentTypeOf(path);
     if (type === null) return notFound(request);
+    // IR7: an imported pool has no live picture — its files are not served, whatever the token.
+    try {
+      if ((await deps.floorState(pool)).pool.app === null) return noApp(request);
+    } catch {
+      return unavailable(request);
+    }
     let bytes: Uint8Array;
     try {
       const found = await deps.pools.read(pool, version, path);
@@ -189,7 +207,16 @@ export function createApp(deps: AppDeps) {
   /** `/pool/{rest}` — nested repo paths (`<pool>/v/<version>/<dir>/<file>`); all else is 404. */
   const rest = async ({ request, params }: AppInput): Promise<Response> => {
     const segments = (params.rest ?? "").split("/");
-    if (segments.length < 4 || segments[1] !== "v") return notFound(request);
+    if (segments.length < 4 || segments[1] !== "v") {
+      // IR7: `/pool/<pool>/` and every malformed shape under an imported pool's name is still a
+      // pool-scoped answer — `no_app`, not the generic 404. A missing pool keeps `not_found`.
+      try {
+        if ((await deps.floorState(segments[0] ?? "")).pool.app === null) return noApp(request);
+      } catch {
+        /* a pool that is not there answers 404 as before */
+      }
+      return notFound(request);
+    }
     return fileChecked(request, segments[0] ?? "", segments[2] ?? "", segments.slice(3).join("/"));
   };
 

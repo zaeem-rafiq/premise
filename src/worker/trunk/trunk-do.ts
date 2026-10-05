@@ -23,6 +23,7 @@ import { armAlarm, runAlarm } from "./alarm.ts";
 import { deliverResumes } from "./resume.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
 import { runRebuildJob } from "./rebuild-job.ts";
+import { runImportJob } from "./import-job.ts";
 import { runPlainJob } from "./plain-runner.ts";
 import { poolRepoName } from "../repos.ts";
 
@@ -62,15 +63,18 @@ function normalizeResult(result: unknown): { response: unknown; status: number; 
   return { response: result ?? { ok: true }, status: 200, effects: [] };
 }
 
-/** `input` of `pool_create` — forwarded by `POST /api/pools` (PL1), with the seed's whole tree. */
+/** `input` of `pool_create` — forwarded by `POST /api/pools` (PL1/IR1): either `seed` with the
+ * seed's whole tree, or `source` with the imported repository's address (IR2/IR3). */
 type CreatePoolInput = {
   pool: string;
-  seed: string;
   summary_only: boolean;
   request_id: string;
   remote: string;
-  /** When absent, the object reads the named seed through ASSETS before the transaction (PL1). */
+  seed?: string;
+  /** When absent and `source` is too, the object reads the named seed through ASSETS (PL1). */
   files?: Record<string, string>;
+  /** IR1: the imported repository — `url`/`branch` as validated by the route. */
+  source?: { url: string; branch?: string };
 };
 
 function asCreatePoolInput(input: unknown): CreatePoolInput | null {
@@ -78,7 +82,6 @@ function asCreatePoolInput(input: unknown): CreatePoolInput | null {
   const body = input as Partial<CreatePoolInput>;
   if (
     typeof body.pool !== "string" ||
-    typeof body.seed !== "string" ||
     typeof body.summary_only !== "boolean" ||
     typeof body.request_id !== "string" ||
     typeof body.remote !== "string" ||
@@ -88,6 +91,18 @@ function asCreatePoolInput(input: unknown): CreatePoolInput | null {
         !Object.values(body.files).every((v) => typeof v === "string")))
   ) {
     return null;
+  }
+  // IR1: exactly one of `seed`, `source` — the route validates `source`'s shape; here presence is
+  // all the object re-checks.
+  const seeded = body.seed !== undefined;
+  const imported = body.source !== undefined;
+  if (seeded === imported) return null;
+  if (seeded && typeof body.seed !== "string") return null;
+  if (imported) {
+    const source = body.source as { url?: unknown; branch?: unknown };
+    if (typeof source.url !== "string" || (source.branch !== undefined && typeof source.branch !== "string")) {
+      return null;
+    }
   }
   return body as CreatePoolInput;
 }
@@ -151,7 +166,25 @@ export class Trunk extends DurableObject<Env> {
           ? { response: { ok: true, already: true } }
           : { response: { error: { code: "pool_exists" } }, status: 409 };
       }
-      const files = create.files ?? (await seedFiles(ctx.env, create.seed));
+      if (create.source !== undefined) {
+        // IR2/IR3: the route already ran the binding's `import` — the repository is filled and
+        // the remote is the clone address without credentials. The store is born `rebuilding`
+        // with reason `import` (event 1, IR3) and the `rebuild` timer runs the ingestion.
+        const url = new URL(create.source.url);
+        const repo = url.pathname.replace(/^\//, "").replace(/\.git$/, "");
+        TrunkEngine.createImported(ctx.sql, {
+          pool_id: create.pool,
+          summary_only: create.summary_only,
+          remote: create.remote,
+          source: repo,
+          request_id: create.request_id,
+          branch: create.source.branch,
+          syncTriage: ScriptedTriage,
+          now: () => ctx.now,
+        });
+        return { response: { ok: true, pool: create.pool } };
+      }
+      const files = create.files ?? (await seedFiles(ctx.env, create.seed!));
       if (files === null) return { response: { error: { code: "seed_unavailable" } }, status: 502 };
       if (files === undefined) return { response: { error: { code: "invalid_args" } }, status: 400 };
       TrunkEngine.create(ctx.sql, files, {
@@ -552,17 +585,23 @@ export class Trunk extends DurableObject<Env> {
       // backoff (AL2). The transport answers are handled inside `deliverResumes`.
       resume: (now) => deliverResumes(this.env, this.ctx, now),
       rebuild: async (now) => {
-        await runRebuildJob(
-          this.env,
-          this.ctx,
-          async (name, input) => {
-            const r = await this.#callEngineEntry(name, input, now);
-            if ("error" in r) throw new Error(`rebuild apply ${name} failed`);
-            return r.result;
-          },
-          undefined,
-          now,
-        );
+        // IR3: the import job shares the `rebuild` timer and the `rebuild_cursor` row — the
+        // cursor's `job` field decides which runner takes this due row (the claim rule already
+        // ran in the alarm).
+        const raw = metaGet(this.#sql, "rebuild_cursor");
+        let isImport = false;
+        try {
+          isImport = raw !== null && (JSON.parse(raw) as { job?: unknown }).job === "import";
+        } catch {
+          isImport = false;
+        }
+        const apply = async (name: string, input: unknown) => {
+          const r = await this.#callEngineEntry(name, input, now);
+          if ("error" in r) throw new Error(`${name} failed`);
+          return r.result;
+        };
+        if (isImport) await runImportJob(this.env, this.ctx, apply, undefined);
+        else await runRebuildJob(this.env, this.ctx, apply, undefined, now);
         await this.#postCommit();
       },
       // PM7: a plain run's failure is swallowed by the job itself or re-armed by the alarm's

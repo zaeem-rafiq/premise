@@ -9,8 +9,8 @@ import { submitId as makeSubmitId } from "../../protocol/ids.ts";
 import { H } from "../sync/h.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
-import { changeTier, policyOf } from "../policy/policy.ts";
-import { event } from "./events.ts";
+import { changeTier } from "../policy/policy.ts";
+import { event, poolPolicy } from "./events.ts";
 import { blast, dropFailed, lateSweep, sendHeadsUp } from "./landing.ts";
 import { openCard, setState, isWaiting } from "./intents.ts";
 import { ref, syncPremises } from "./premises.ts";
@@ -30,10 +30,9 @@ export function submitIdOf(a: Attempt): string {
   });
 }
 
-/** The tier of `paths` under the policy of `files` (10.2); no policy file means `auto`. */
-export function policyTier(files: Map<string, string>, paths: Iterable<string>): "auto" | "held" {
-  const policy = policyOf(files.get(".premise/policy.json") ?? null);
-  return changeTier(policy, [...paths]);
+/** The tier of `paths` under the pool's policy at `files` (10.2). */
+export function policyTier(pool: Pool, files: Map<string, string>, paths: Iterable<string>): "auto" | "held" {
+  return changeTier(poolPolicy(pool, files), [...paths]);
 }
 
 /** The paths whose blob ids differ between `before` and `after` (CK3's non_empty). */
@@ -189,21 +188,28 @@ export function submitCall(
   okCheck("imports_resolve");
 
   // CK6 — globals_allowed: free globals of added/altered entities are in the policy's list.
-  let allow = DEFAULT_GLOBALS;
-  try {
-    const pol = JSON.parse(head.get(".premise/policy.json") ?? "") as { globals?: string[] };
-    if (Array.isArray(pol.globals)) allow = pol.globals;
-  } catch {
-    /* no policy file: the default list applies */
-  }
-  for (const k of [...s.Added, ...s.Altered]) {
-    for (const g of s.A.globals.get(k) ?? []) {
-      if (!allow.includes(g)) {
-        return result({ status: "rejected", errors: [{ code: "banned_global", detail: { entity: k, name: g } }] });
+  // IR7: skipped for an imported pool (`app` "") — its code never runs inside Premise's host, so
+  // the tide pool's globals allow-list does not apply. The 4.9 checks around it still run.
+  if (pool.meta.get("app") !== "") {
+    let allow = DEFAULT_GLOBALS;
+    try {
+      const pol = JSON.parse(head.get(".premise/policy.json") ?? "") as { globals?: string[] };
+      if (Array.isArray(pol.globals)) allow = pol.globals;
+    } catch {
+      /* no policy file: the default list applies */
+    }
+    for (const k of [...s.Added, ...s.Altered]) {
+      for (const g of s.A.globals.get(k) ?? []) {
+        if (!allow.includes(g)) {
+          return result({
+            status: "rejected",
+            errors: [{ code: "banned_global", detail: { entity: k, name: g } }],
+          });
+        }
       }
     }
+    okCheck("globals_allowed");
   }
-  okCheck("globals_allowed");
 
   // CK7 — derived premises again (D1/D1b/D2), late sweep (L1), blind spots (6.4).
   const premises = syncPremises(pool, a);
@@ -279,7 +285,7 @@ export function submitCall(
   }
 
   // CK9 — policy: the tier of the touched paths under the policy at head.
-  a.tier = policyTier(head, changed);
+  a.tier = policyTier(pool, head, changed);
   a.submit_id = submitIdOf(a);
   a.summary = args.summary ?? null;
   a.submitted_at = pool.now();

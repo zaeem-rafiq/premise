@@ -63,6 +63,12 @@ export function toolOutline(pool: Pool, a: Attempt, args: { path: string }): Too
     const p = pin(pool, a, "file", args.path, { read: true, repin: true });
     return err("not_found", `no such path: ${args.path}`, [p]);
   }
+  // RB4: an imported blob over MAX_FILE_BYTES is stored without content — `too_large`, never
+  // an empty parse.
+  if (pool.opaque.has(args.path) && !curOps(a).some((o) => o.op === "write" && o.path === args.path)) {
+    const p = pin(pool, a, "file", args.path, { read: true, repin: true });
+    return err("too_large", `file exceeds ${MAX_FILE_BYTES} bytes`, [p]);
+  }
   if (!isModule(args.path)) return err("not_a_module", `not a module: ${args.path}`);
   const mod = an(v).modules.get(args.path);
   if (mod === undefined) return err("not_a_module", `opaque module: ${args.path}`);
@@ -120,6 +126,10 @@ export function toolRead(pool: Pool, a: Attempt, args: { path: string; entity?: 
     const p = pin(pool, a, "file", args.path, { read: true, repin: true });
     const content = v.get(args.path);
     if (content === undefined) return err("not_found", `no such path: ${args.path}`, [p]);
+    // RB4: an imported blob over MAX_FILE_BYTES has no stored content — `too_large`, unless the
+    // attempt replaced it (then the view's content is its own write).
+    const wroteIt = curOps(a).some((o) => o.op === "write" && o.path === args.path);
+    if (pool.opaque.has(args.path) && !wroteIt) return err("too_large", `file exceeds ${MAX_FILE_BYTES} bytes`, [p]);
     if (utf8Bytes(content) > MAX_FILE_BYTES) return err("too_large", `file exceeds ${MAX_FILE_BYTES} bytes`, [p]);
     const headContent = head.get(args.path);
     const result: ReadResult = {

@@ -28,6 +28,7 @@ export type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/interna
 const REQUESTER = "swarm";
 
 const AGENT_OPEN_URL = "https://agent/open";
+const TRUNK_STATE_URL = "https://trunk/internal/state";
 const AGENT_RELEASE_URL = "https://agent/release";
 const TRUNK_OPEN_ATTEMPT_URL = "https://trunk/internal/open-attempt";
 const TRUNK_SWARM_HOLD_URL = "https://trunk/internal/swarm-hold";
@@ -139,6 +140,19 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
   const { request } = checked;
   if (answeredRequests.has(request.request_id)) {
     return Response.json({ ok: true, already: true, launched: [], released: [] });
+  }
+
+  // IR7: no Swarm for a pool imported from a repository — `meta.source` names it. A state read
+  // that fails does not block the launch: the `open_attempt` call below reports a missing or
+  // unready pool exactly as before.
+  try {
+    const state = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(TRUNK_STATE_URL);
+    if (state.ok) {
+      const meta = ((await state.json()) as { meta?: Record<string, string> }).meta ?? {};
+      if ((meta.source ?? "") !== "") return badRequest("invalid_args");
+    }
+  } catch {
+    /* a transport failure leaves the launch to its own checks */
   }
 
   const launched: string[] = [];

@@ -61,6 +61,8 @@ const BODY_KEYS: Record<string, string[]> = {
     "max_real_agents",
     "synthetic",
     "summary_only",
+    "app",
+    "source",
   ],
   "pool.files": ["files"],
   "pool.paused": ["reason", "detail"],

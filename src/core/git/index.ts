@@ -30,4 +30,12 @@ export {
   type RefCommand,
   type RefResult,
 } from "./receive-pack.ts";
-export { makeTreeFromFiles, type FileMapValue, type FileMode, type FileSpec } from "./tree-files.ts";
+export {
+  makeTreeFromFiles,
+  type EntryMode,
+  type EntryRef,
+  type FileMapValue,
+  type FileMode,
+  type FileSpec,
+  type TreeOverlay,
+} from "./tree-files.ts";

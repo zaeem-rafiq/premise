@@ -80,6 +80,12 @@ export type PoolEvent = EventBase &
         epoch: number;
         remote: string; // the pool repo's address, without credentials
         plain_remote: string | null;
+        /** IR8: `"tidepool"` for a seed pool (a live picture exists), `null` for an imported
+         * pool. Optional in the type: streams recorded before IR8 do not carry it — the wire
+         * always does. */
+        app?: "tidepool" | null;
+        /** The imported repository as `owner/name`, or null for a seed pool (IR11/IR12). */
+        source?: string | null;
         rebuild: { done: number; total: number } | null;
         unwitnessed: number[];
         real_agents: number;

@@ -127,7 +127,7 @@ export function classify(
   before: FileMap,
   after: FileMap,
   setsOverride: Sets | null,
-  landers: Array<{ premises: Premise[] }> = [],
+  landers: Array<{ premises: Premise[]; attempt_id?: string }> = [],
 ): Classification {
   const s = setsOverride ?? setsOf(a, before);
   const items: ClassifyItem[] = [];
@@ -225,7 +225,7 @@ export function classify(
   const rep = replayOps(curOps(a), after);
   for (const K of s.Altered) {
     if (entityAt(before, K) === null || rep.failed.some((f) => f.path === pathOf(K))) continue;
-    const reader = landers.some((l) =>
+    const reader = landers.find((l) =>
       l.premises.some(
         (q) =>
           q.read &&
@@ -237,7 +237,7 @@ export function classify(
               !l.premises.some((r) => r.kind === "entity" && r.key === K && (r.edit || r.derived)))),
       ),
     );
-    if (!reader) continue;
+    if (reader === undefined) continue;
     const p = a.premises.get(`query|refs:${K}`);
     if (p === undefined) continue;
     let it = items.find((x) => x.p === p);
@@ -262,6 +262,8 @@ export function classify(
     it.rule = "QR4";
     it.result = "triage";
     it.reason = "reader_landed";
+    // TR8: the reader decides the triage of QR4 (its truth list, its frozen premise on K).
+    if (reader.attempt_id !== undefined) it.decider = reader.attempt_id;
   }
   return { items, failed: rep.failed, sets: s };
 }

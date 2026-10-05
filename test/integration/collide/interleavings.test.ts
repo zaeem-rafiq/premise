@@ -257,9 +257,7 @@ function aDisturbance(pa: string, pb: string, k: number): Disturbance {
   if (pb === "reader") {
     // QR4: a landing that only read `world/energy.js` lands while the rescale alters
     // ENERGY_MAX. TR8 gives the landed change's list — the reader's — which names no
-    // `query:` key: `holds`, sent as `info`. The cell is `it.fails`: the engine asks the
-    // receiver's list unless an E1 item rides in the batch, and the rescale's list names
-    // `query:refs:world/energy.js#ENERGY_MAX`, so it answers `repair`.
+    // `query:` key: `holds`, sent as `info`.
     return k <= 1 ? "none" : "info";
   }
   // sweep-search and edit-creature alter creature entities only; same-file and blind add
@@ -365,19 +363,6 @@ function checkInterleaving(pa: string, pb: string, k: number, hold: boolean): vo
   expect(energy.match(/const ENERGY_MAX\s*=/g) ?? []).toHaveLength(1);
 }
 
-/**
- * The QR4 disagreement (01-core 7.2 row QR4, TR8): the decider is the landed change's list —
- * the reader's, which names no `query:` key, so the scripted answer is `holds` (sent as
- * `info`). The engine asks the receiver's list unless an E1 item rides in the batch
- * (src/core/trunk/tick.ts, the E1 loop before `applyClassification`), and the rescale's list
- * names `query:refs:world/energy.js#ENERGY_MAX`, so it answers `repair`. The cell is
- * `it.fails` — marked where the disturbed attempt is a `rescale-energy` parked behind a
- * landing `reader`, with the `refs:` premise standing (k >= 2, after its `replace`).
- */
-function qr4Differs(disturbed: string, landing: string, k: number): boolean {
-  return disturbed === "rescale-energy" && landing === "reader" && k >= 2;
-}
-
 describe("interleavings (02-tidepool 10.3): a heads-up at every point of every script", () => {
   for (const [x, y] of PAIRS) {
     for (const [pa, pb] of [
@@ -393,7 +378,7 @@ describe("interleavings (02-tidepool 10.3): a heads-up at every point of every s
           const name = `a=${pa} b=${pb} k=${k} ${hold ? "held" : "running"}`;
           // The disturbed attempt is A while it is parked (held); once A ran its script and
           // lands first (running), the parked B is the one the heads-up reaches.
-          const runner = (hold ? qr4Differs(pa, pb, k) : qr4Differs(pb, pa, SCRIPT_LEN[pb] as number)) ? it.fails : it;
+          const runner = it;
           runner(name, () => {
             checkInterleaving(pa, pb, k, hold);
           });

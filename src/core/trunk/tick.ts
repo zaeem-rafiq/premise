@@ -627,7 +627,7 @@ export function tick(pool: Pool): void {
         (x.validated_at ?? 0) - (y.validated_at ?? 0),
     );
   const inBatch = new Set<Attempt>();
-  const members: Array<{ premises: Premise[] }> = [];
+  const members: Array<{ premises: Premise[]; attempt_id: string }> = [];
   pool.eventBuffer = [];
   for (const c of cands) {
     if (batch.length >= pool.K.MAX_BATCH) break;
@@ -752,7 +752,7 @@ export function tick(pool: Pool): void {
       accepted_at: pool.now(),
     });
     batch.push(landing);
-    members.push({ premises: landing.premises });
+    members.push({ premises: landing.premises, attempt_id: c.id });
     inBatch.add(c);
     pool.out.accepted.push(c.id);
     pool.out.landings.push({ seq, attempt: c.id, kind: "change" });

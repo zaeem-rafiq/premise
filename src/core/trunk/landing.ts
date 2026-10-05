@@ -385,7 +385,13 @@ export function applyClassification(
   // while CLEF_TRIAGE is off or the kill switch is set — one `judgeNow` per deciding attempt
   // (QR4's decider is the landed change, not the receiver). Otherwise the premises wait on
   // the asynchronous Clef `Triage` of TR2.
-  const deciderOf = (it: ClassifyItem): Attempt => (it.rule === "QR4" && causeAttempt !== null ? causeAttempt : a);
+  const deciderOf = (it: ClassifyItem): Attempt => {
+    if (it.rule !== "QR4") return a;
+    // TR8/SW5: for QR4 the landed change that read the key decides. The classifier names it;
+    // the batch's E1 cause is the fallback for a landing that came without one.
+    const reader = it.decider === undefined ? undefined : pool.attempts.get(it.decider);
+    return reader ?? causeAttempt ?? a;
+  };
   const syncOut = new Map<Attempt, { answers: Record<string, number | null>; model: string }>();
   const syncT = syncTriageOf(pool, a);
   if (syncT !== null) {

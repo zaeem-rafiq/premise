@@ -256,6 +256,9 @@ export type ClassifyItem = {
   result?: "holds" | "info" | "confirm" | "repair" | "triage" | "delete";
   reason?: string;
   folded?: boolean;
+  /** Row QR4: the attempt of the landed change that read the key. Its truth list and its frozen
+   * premise decide the triage, not the receiver's (01-core TR8, SW5). */
+  decider?: string;
 };
 
 /** The per-call result surface a driver or caller inspects (mirrors Appendix A's `expect`). */

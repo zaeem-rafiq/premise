@@ -25,9 +25,11 @@ export const parked = (pool: Pool): Attempt[] =>
   [...pool.attempts.values()].filter(
     (a) => a.state === "stopped" && pool.cards.some((c) => c.open && c.kind === "choice" && c.attempt_ids[0] === a.id),
   );
-/** A landing's frozen premise set, the shape QR4's `landers` reads (7.2). */
-export const frozen = (a: Attempt): { premises: Premise[] } => ({
+/** A landing's frozen premise set, the shape QR4's `landers` reads (7.2), with the attempt that
+ * holds it: for row QR4 the landed change decides the triage (TR8). */
+export const frozen = (a: Attempt): { premises: Premise[]; attempt_id: string } => ({
   premises: [...a.premises.values()].map((p) => ({ ...p })),
+  attempt_id: a.id,
 });
 
 /** `a.go_arounds + a.pull_backs` — the count that drives GO_AROUND_LIMIT and STARVATION_AFTER. */

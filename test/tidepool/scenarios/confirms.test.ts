@@ -150,35 +150,29 @@ describe("10.3 rule-based confirms (A22)", () => {
   // 02-tidepool.md 10.3: "a `reader` | `rescale-energy` in flight | `refs:…#ENERGY_MAX` | QR4,
   // scripted `holds`". TR8 (01-core.md): for QR4 "the input's `truth` is the landed change's list"
   // — the reader's `[bounce, step, wander]` does not name the query, so the scripted answer is
-  // `holds`. The engine answers `repair` (`triage_depends`, p = 1) with a `repair` heads-up:
-  // `applyClassification` falls back to the RECEIVER's truth because `causeAttempt` is only set
-  // when the classification holds an E1 item (src/core/trunk/tick.ts, the E1 loop before
-  // `applyClassification`), so QR4's decider is never the landed change without an E1.
-  it.fails(
-    "a `reader` lands while `rescale-energy` is in flight: QR4 triage, answered `holds`",
-    { timeout: 30_000 },
-    () => {
-      const s = sim();
-      const rescale = s.open("rescale-energy", { hold: true });
-      drive(s, rescale);
-      const reader = s.open("reader");
-      landNow(s, reader);
+  // `holds`. (Until 2026-10-05 the engine asked the receiver's list unless an E1 item rode in
+  // the batch, and answered `repair`; the classifier now names the reader as QR4's decider.)
+  it("a `reader` lands while `rescale-energy` is in flight: QR4 triage, answered `holds`", { timeout: 30_000 }, () => {
+    const s = sim();
+    const rescale = s.open("rescale-energy", { hold: true });
+    drive(s, rescale);
+    const reader = s.open("reader");
+    landNow(s, reader);
 
-      expect(
-        judgmentsOf(s, rescale).some(
-          (j) =>
-            j.rule === "QR4" &&
-            j.klass === "triage" &&
-            j.result === "holds" &&
-            j.key === "refs:world/energy.js#ENERGY_MAX",
-        ),
-      ).toBe(true);
-      // A triage answer of `holds` arrives as an `info` heads-up (HU2a).
-      const hus = s.headsUps(rescale);
-      expect(hus).toHaveLength(1);
-      expect(hus[0]!.result).toBe("info");
-    },
-  );
+    expect(
+      judgmentsOf(s, rescale).some(
+        (j) =>
+          j.rule === "QR4" &&
+          j.klass === "triage" &&
+          j.result === "holds" &&
+          j.key === "refs:world/energy.js#ENERGY_MAX",
+      ),
+    ).toBe(true);
+    // A triage answer of `holds` arrives as an `info` heads-up (HU2a).
+    const hus = s.headsUps(rescale);
+    expect(hus).toHaveLength(1);
+    expect(hus[0]!.result).toBe("info");
+  });
 
   it(
     "a T-plain file lands while `sweep-search` has altered three containers: QT1 `repair`",

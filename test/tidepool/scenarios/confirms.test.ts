@@ -191,7 +191,52 @@ const SWEEP_SEARCH = cannedCast({
   },
 });
 
-// --- A22's six scenarios, on seed `tidepool-swarm` ------------------------------------------
+/** `retune` of `energy#REST_TICKS` that answers its E1 (OP1) as its row says: `read` the entity
+ * again, `replace` from the new current value (the cycle 300 -> 240 -> 360 -> 300), acknowledge. */
+const RETUNE_ADAPT = cannedCast({
+  id: "retune",
+  intent: "retune REST_TICKS",
+  truth: ["entity:world/energy.js#REST_TICKS"],
+  script: [
+    { tool: "read", args: { path: "world/energy.js", entity: "REST_TICKS" }, why: "read" },
+    {
+      tool: "replace",
+      args: { path: "world/energy.js", old: "export const REST_TICKS = 300;", new: "export const REST_TICKS = 240;" },
+      why: "edit",
+    },
+  ],
+  onResult(s, call, result) {
+    if (call.why === "reread") {
+      const source = (result as { source?: unknown }).source;
+      const m = typeof source === "string" ? /REST_TICKS = (\d+)/.exec(source) : null;
+      if (m !== null) s.data.rest_ticks = Number(m[1]);
+    }
+  },
+  onHeadsUp(s, hu, ack) {
+    if (hu.dropped_ops.length === 0) return;
+    // E1 + OP1: the queued replace no longer applies. `read` it again, `replace` from the new
+    // current value to the next of the cycle (10.3's `retune` row).
+    s.queue.push({ tool: "read", args: { path: "world/energy.js", entity: "REST_TICKS" }, why: "reread" });
+    s.queue.push({
+      tool: "replace",
+      args: (s) => {
+        const cycle = [300, 240, 360];
+        const cur = (s.data.rest_ticks ?? 300) as number;
+        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+        return {
+          path: "world/energy.js",
+          old: `export const REST_TICKS = ${cur};`,
+          new: `export const REST_TICKS = ${next};`,
+        };
+      },
+      why: "repair",
+    });
+    ack.statement = "rescaled from the new current value";
+    ack.dropped = "handled";
+  },
+});
+
+// --- A22's scenarios, on seed `tidepool-swarm` ----------------------------------------------
 
 describe("10.3 rule-based confirms (A22)", () => {
   it(
@@ -359,6 +404,29 @@ describe("10.3 rule-based confirms (A22)", () => {
       s.release(sweep);
       landNow(s, sweep);
       expect(s.files().get(added)).toContain("wander(creature, 0.1)");
+    },
+  );
+
+  it(
+    "a `retune` of REST_TICKS lands while another `retune` of it is in flight: E1 with a QR1m item in the same heads-up",
+    { timeout: 30_000 },
+    () => {
+      const s = sim();
+      const a = s.open(RETUNE_ADAPT, { hold: true });
+      drive(s, a); // its `replace` 300 -> 240 is recorded
+      const b = s.open(RETUNE_REST_TICKS);
+      landNow(s, b);
+
+      const hus = s.headsUps(a);
+      expect(hus).toHaveLength(1);
+      const hu = hus[0]!;
+      expect(hu.result).toBe("repair");
+      expect(itemKeys(hu)).toEqual(["E1:world/energy.js#REST_TICKS", "QR1m:refs:world/energy.js#REST_TICKS"]);
+      expect(hu.dropped_ops.length).toBe(1);
+      // Its row's answer: read again, replace from the new current value (240 -> 360), land.
+      s.release(a);
+      landNow(s, a);
+      expect(s.files().get("world/energy.js")).toContain("export const REST_TICKS = 360;");
     },
   );
 });

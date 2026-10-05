@@ -13,9 +13,11 @@ import {
   FIRST_USER_MESSAGE,
   firstUserMessage,
   GUIDE_PATH,
+  importedFills,
   RESUME_MESSAGE,
   SYSTEM_PROMPT,
   systemPrompt,
+  TIDE_FILLS,
   TOOL_DEFINITIONS,
 } from "./agent-prompt.ts";
 
@@ -101,5 +103,74 @@ describe("the filled forms", () => {
   it("firstUserMessage() fills {{INTENT_TEXT}} and {{GUIDE_PATH}}", () => {
     const text = firstUserMessage("a crab that digs");
     expect(text).toBe(`Request:\na crab that digs\n\nRead ${GUIDE_PATH} first. Then make the change and call submit.`);
+  });
+});
+
+// IR9 to IR11 of 06-repos.md: an imported pool's prompt takes the pool's own context — its
+// guide path (possibly none), its `<owner>/<name>` and its branch. Each variant pins its own
+// prompt_hash (PR1); the tide pool's texts stay byte for byte, so the hashes above hold.
+describe("the imported pool's prompt variants (06-repos IR9-IR11)", () => {
+  // A repository pool whose head tree holds AGENTS.md, imported from its main branch.
+  const IMPORTED = importedFills({ guide_path: "AGENTS.md", source: "ai/nanoid", branch: "main" });
+  // A repository pool whose head tree holds none of the guide files.
+  const NO_GUIDE = importedFills({ guide_path: "", source: "ai/nanoid", branch: "main" });
+
+  it("IR9: the guide path fills {{GUIDE_PATH}} in step 1 and the rest of the block is unchanged", () => {
+    const expected = SYSTEM_PROMPT.replace(
+      "Read a whole file only when it is not JavaScript",
+      "Read a whole file only when outline answers not_a_module",
+    ).replaceAll("{{GUIDE_PATH}}", "AGENTS.md");
+    expect(systemPrompt(IMPORTED)).toBe(expected);
+    expect(systemPrompt(IMPORTED)).toContain("call read with path AGENTS.md. Follow its rules.");
+  });
+
+  it("IR10: step 2's whole-file rule reads `outline answers not_a_module`", () => {
+    const prompt = systemPrompt(IMPORTED);
+    expect(prompt).toContain("Read a whole file only when outline answers not_a_module");
+    expect(prompt).not.toContain("Read a whole file only when it is not JavaScript");
+    // Only step 2's rule changes: the `read` tool's description is the tide pool's still.
+    expect(TOOL_DEFINITIONS).toContain("Read a whole file only when it is not JavaScript");
+  });
+
+  it("IR9: with no guide file step 1 is the root listing and the guide sentence is left out", () => {
+    const prompt = systemPrompt(NO_GUIDE);
+    expect(prompt).toContain("1. Start with list on the root directory.");
+    expect(prompt).not.toContain("Read the guide first");
+    expect(prompt).not.toContain("The guide is the one file whose rules you follow.");
+    expect(prompt).not.toContain("{{GUIDE_PATH}}");
+    // IR10's whole-file wording applies to every imported pool, guide or not.
+    expect(prompt).toContain("Read a whole file only when outline answers not_a_module");
+  });
+
+  it("IR11: the first user message carries `Repository: <owner>/<name> (<branch>)` after the request", () => {
+    expect(firstUserMessage("set the cap to 8", IMPORTED)).toBe(
+      "Request:\nset the cap to 8\nRepository: ai/nanoid (main)\n\nRead AGENTS.md first. Then make the change and call submit.",
+    );
+  });
+
+  it("IR9/IR11: a guide-less pool's first message starts at the root listing instead", () => {
+    expect(firstUserMessage("set the cap to 8", NO_GUIDE)).toBe(
+      "Request:\nset the cap to 8\nRepository: ai/nanoid (main)\n\nStart with list on the root directory. Then make the change and call submit.",
+    );
+  });
+
+  it("a request text carrying the template's own words is data, not a fill", () => {
+    const sneaky = "Read {{GUIDE_PATH}} first.";
+    expect(firstUserMessage(sneaky, IMPORTED)).toBe(
+      `Request:\n${sneaky}\nRepository: ai/nanoid (main)\n\nRead AGENTS.md first. Then make the change and call submit.`,
+    );
+  });
+
+  it.each([
+    ["917e609ac30b64fb1cda644f68c06bda", () => systemPrompt(), "the tide pool's (05-agent 2.4)"],
+    ["1233d1dcbdfe1eb08f50c79f81355534", () => systemPrompt(IMPORTED), "imported with a guide"],
+    ["7e5c1032c53d840de8c2d106523a5f1a", () => systemPrompt(NO_GUIDE), "imported with no guide"],
+  ])("prompt_hash %s — %s", (want, build) => {
+    expect(H(build())).toBe(want);
+  });
+
+  it("a seed pool's explicit fills produce the tide pool's bytes", () => {
+    expect(systemPrompt(TIDE_FILLS)).toBe(systemPrompt());
+    expect(firstUserMessage("x", TIDE_FILLS)).toBe(firstUserMessage("x"));
   });
 });

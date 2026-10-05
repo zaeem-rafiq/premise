@@ -1,7 +1,8 @@
 // The texts a model receives, exactly as the five blocks of 05-agent.md give them. `{{GUIDE_PATH}}`
 // and `{{INTENT_TEXT}}` are the placeholders of 05-agent 2; the caller computes `prompt_hash`,
 // `tools_hash` and `texts_hash` over these with H (05-agent 2.4).
-// Source: 05-agent 2 (blocks), Appendix A (AGENT_SPEC, GUIDE_PATH).
+// Source: 05-agent 2 (blocks), Appendix A (AGENT_SPEC, GUIDE_PATH); the fills of a pool
+// made from a repository (06-repos IR9 to IR11) join the blocks below.
 //
 // GENERATED from docs/spec/05-agent.md by the Slice 0b build; the test agent-prompt.test.ts keeps it
 // equal to the marked blocks. Do not edit by hand: regenerate or update the spec.
@@ -252,14 +253,61 @@ export const AGENT_TEXTS = `{
   }
 }`;
 
-/** The system prompt as sent: the block with `{{GUIDE_PATH}}` filled (05-agent 2.1). `prompt_hash`
- * is H of this string. */
-export function systemPrompt(): string {
-  return SYSTEM_PROMPT.replaceAll("{{GUIDE_PATH}}", GUIDE_PATH);
+/** The pool context one attempt's prompt is built from (06-repos IR9 to IR11): the guide file
+ * `{{GUIDE_PATH}}` resolves to — `null` for an imported pool whose head tree holds none of the
+ * guide files — and, for an imported pool, the repository's `<owner>/<name>` and branch. A seed
+ * pool's fills are `TIDE_FILLS` and every text of 05-agent 2 stays byte for byte (PR1). */
+export type PromptFills = {
+  guide: string | null;
+  repository: { source: string; branch: string } | null;
+};
+
+/** A seed pool's fills (05-agent Appendix A): `GUIDE.md`, no repository line. */
+export const TIDE_FILLS: PromptFills = { guide: GUIDE_PATH, repository: null };
+
+/** An imported pool's fills, from the context Trunk's open-attempt answer carries (IR9 to IR11):
+ * `guide_path` is "" when the head tree holds no guide file, `source` is `<owner>/<name>`. */
+export function importedFills(pool: { guide_path: string; source: string; branch: string }): PromptFills {
+  return {
+    guide: pool.guide_path === "" ? null : pool.guide_path,
+    repository: { source: pool.source, branch: pool.branch },
+  };
+}
+
+/** The system prompt as sent: the block filled by the pool's own guide path (05-agent 2.1,
+ * 06-repos IR9/IR10). `prompt_hash` is H of this string; each imported variant pins its own
+ * (PR1). */
+export function systemPrompt(fills: PromptFills = TIDE_FILLS): string {
+  if (fills.repository === null) return SYSTEM_PROMPT.replaceAll("{{GUIDE_PATH}}", GUIDE_PATH);
+  // IR10: step 2's whole-file rule names the module check, not the file's language.
+  let text = SYSTEM_PROMPT.replace(
+    "Read a whole file only when it is not JavaScript",
+    "Read a whole file only when outline answers not_a_module",
+  );
+  if (fills.guide === null) {
+    // IR9: no guide file — step 1 starts at the root listing, and the last paragraph's
+    // guide sentence goes out with it.
+    text = text
+      .replace(
+        "1. Read the guide first: call read with path {{GUIDE_PATH}}. Follow its rules.",
+        "1. Start with list on the root directory.",
+      )
+      .replace(" The guide is the one file whose rules you follow.", "");
+    return text;
+  }
+  return text.replaceAll("{{GUIDE_PATH}}", fills.guide);
 }
 
 /** The first user message as sent: the block with `{{INTENT_TEXT}}` and `{{GUIDE_PATH}}` filled
- * (05-agent 2.2). */
-export function firstUserMessage(intentText: string): string {
-  return FIRST_USER_MESSAGE.replaceAll("{{INTENT_TEXT}}", intentText).replaceAll("{{GUIDE_PATH}}", GUIDE_PATH);
+ * (05-agent 2.2) — for an imported pool the request gains the `Repository:` line (IR11) and,
+ * when the pool holds no guide file, the first step is the root listing as in the system prompt
+ * (IR9). The step's line is replaced before the request goes in: request text that happens to
+ * carry the same words is data, never the template's line. */
+export function firstUserMessage(intentText: string, fills: PromptFills = TIDE_FILLS): string {
+  if (fills.repository === null) {
+    return FIRST_USER_MESSAGE.replaceAll("{{INTENT_TEXT}}", intentText).replaceAll("{{GUIDE_PATH}}", GUIDE_PATH);
+  }
+  const request = `${intentText}\nRepository: ${fills.repository.source} (${fills.repository.branch})`;
+  const first = fills.guide === null ? "Start with list on the root directory." : `Read ${fills.guide} first.`;
+  return FIRST_USER_MESSAGE.replace("Read {{GUIDE_PATH}} first.", first).replace("{{INTENT_TEXT}}", request);
 }

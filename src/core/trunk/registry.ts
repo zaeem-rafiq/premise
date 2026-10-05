@@ -141,7 +141,9 @@ export function createPool(
 
 /** Rebuild the working Pool from the schema (3.6): everything the tables hold, in memory. */
 export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
-  migrateSchema(sql);
+  // 3.6: the store may be a wiped object — `meta` itself absent. `applySchema` is idempotent
+  // (CREATE TABLE IF NOT EXISTS), so the ordinary open is unchanged.
+  applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
   pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");

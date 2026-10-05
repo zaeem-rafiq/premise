@@ -157,6 +157,18 @@ async function runInner(
       refs: [MAIN_REF, NOTES_REF, GREEN_REF],
       signal: AbortSignal.timeout(30_000),
     });
+    if (refs[MAIN_REF] === undefined || refs[MAIN_REF] === null) {
+      // The repository answers but has no `main` — a repo created and never seeded, or a name
+      // that is no pool at all. There is nothing to rebuild: the arm is released (a wiped store
+      // re-arms on the next probe; a live pool keeps its pause for the owner). When the Floor
+      // knows this pool the loss is real and gets its `trunk.error` mark (SE5b).
+      sql.transaction(() => {
+        sql.exec("DELETE FROM meta WHERE k = 'rebuild_cursor'");
+        sql.exec("DELETE FROM timers WHERE kind = 'rebuild' AND key = ''");
+      });
+      if (floor !== null) recordTrunkError(ctx, "rebuild", "remote_empty");
+      return;
+    }
     const begin = (await apply("rebuild_begin", {
       epoch: (floor?.epoch ?? 0) + 1,
       pool_id: pool,
@@ -245,10 +257,10 @@ async function runInner(
             continue;
           }
           cursor.notes_root = head.treeHash;
-          const root = await call(() => repo.readTree(head.treeHash));
-          cursor.dirs = (root ?? [])
-            .filter((e) => e.type === "tree" && /^[0-9a-f]{2}$/.test(e.name))
-            .map((e): [string, string] => [e.name, e.hash]);
+          // The queue walks tree dirs by path prefix: Trunk writes notes in two-level fanout
+          // (`f3/aa83…`) while a `git notes` rewrite can flatten them to `f3aa83…` at the root —
+          // only the joined 40-hex name decides, never the depth.
+          cursor.dirs = [["", head.treeHash]];
           cursor.notes_map = {};
         }
         const next = cursor.dirs?.shift();
@@ -262,8 +274,11 @@ async function runInner(
         }
         const entries = await call(() => repo.readTree(next[1]));
         for (const e of entries ?? []) {
-          if (e.type === "blob" && /^[0-9a-f]{38}$/.test(e.name)) {
-            cursor.notes_map![`${next[0]}${e.name}`] = e.hash;
+          const full = `${next[0]}${e.name}`;
+          if (e.type === "blob" && /^[0-9a-f]{40}$/.test(full)) {
+            cursor.notes_map![full] = e.hash;
+          } else if (e.type === "tree" && /^[0-9a-f]{1,40}$/.test(e.name)) {
+            cursor.dirs!.push([full, e.hash]);
           }
         }
         continue;
@@ -405,10 +420,9 @@ async function runInner(
         const headSeq = Math.max(0, commits.length - 1);
         const head = commits[headSeq];
         const greenSeq = commits.findIndex((c) => c.hash === cursor.green_commit);
-        let maxBatch = 0;
+        // `max_batch` rides the cursor, so a job whose landings spanned runs keeps the high mark.
+        let maxBatch = cursor.max_batch ?? 0;
         for (const l of pending.landings ?? []) maxBatch = Math.max(maxBatch, l.landing.batch_id);
-        const prior = Number(metaGet(sql, "rebuild_max_batch") ?? "0");
-        maxBatch = Math.max(maxBatch, prior);
         await apply("rebuild_step", {
           request_id: cursor.request_id,
           cursor: null,

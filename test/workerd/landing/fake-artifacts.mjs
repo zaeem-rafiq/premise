@@ -18,6 +18,11 @@ class Repo extends RpcTarget {
     this.env = env;
   }
   async info() {
+    // The real binding's `get` throws NOT_FOUND for a missing repository. An error's `code`
+    // does not cross this service binding, so the stand-in's miss throws `NOT_FOUND:` as a
+    // message prefix — the wipe probe (`#probeEmptyPool`) reads either shape.
+    const exists = await fetch(`${this.env.READ_ORIGIN}/exists/${this.name}`);
+    if (exists.status === 404) throw new Error(`NOT_FOUND: ${this.name}`);
     return { remote: `${this.env.GIT_ORIGIN}/${this.name}` };
   }
   async createToken(scope) {
@@ -36,6 +41,21 @@ class Repo extends RpcTarget {
     const response = await fetch(`${this.env.READ_ORIGIN}/commit/${this.name}/${hash}`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`readCommit: ${response.status}`);
+    return await response.json();
+  }
+  async readBlob(hash) {
+    const response = await fetch(`${this.env.READ_ORIGIN}/blob/${this.name}/${hash}`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`readBlob: ${response.status}`);
+    return await response.blob();
+  }
+  // The platform's `log`: first-parent, newest first, `offset`/`limit` paged.
+  async log(opts = {}) {
+    const params = new URLSearchParams();
+    if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+    const response = await fetch(`${this.env.READ_ORIGIN}/log/${this.name}/${opts.ref ?? "HEAD"}?${params}`);
+    if (!response.ok) return [];
     return await response.json();
   }
   async readTree(hash) {

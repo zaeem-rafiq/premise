@@ -110,6 +110,14 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         "owner",
         "push_ok",
         "push_result",
+        "rebuild",
+        // 3.6/RB3: the rebuild job's entries (`rebuild` arms; `rebuild_begin`/`rebuild_step`
+        // commit the resumable runs; `rebuild_lost` is step 8's deadline) and `register`, the
+        // Agent's post-rebuild re-registration (4.12).
+        "rebuild_begin",
+        "rebuild_lost",
+        "rebuild_step",
+        "register",
         "restart",
         // RW1: the `right_of_way` timer's entry (01-core 3.3).
         "right_of_way",

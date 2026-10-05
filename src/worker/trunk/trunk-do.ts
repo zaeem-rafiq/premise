@@ -206,14 +206,19 @@ export class Trunk extends DurableObject<Env> {
    * object reconciles again at its next start.
    */
   #reconciled = false;
-  #ensureReconciled(): void {
+  #ensureReconciled(forPath?: string): void {
     if (this.#reconciled) return;
     this.#reconciled = true;
     // 3.6: an empty store on an object whose Artifacts repository exists is a lost pool —
     // arm the rebuild job and let the `rebuild` timer run it. A name no repository answers
-    // is not a pool: nothing is armed (and no `trunk.error` precedes `pool.state`, EM1).
+    // is not a pool: nothing is armed (and no `trunk.error` may precede `pool.state`, EM1).
+    // The pool's own birth (`/internal/create-pool`) is the one caller the probe skips — its
+    // `seedFiles` await is exactly the gap in which a probe would arm a rebuild on the pool
+    // being created.
     if (metaGet(this.#sql, "pool_id") === null) {
-      void this.#probeEmptyPool().catch(() => recordTrunkError(this.ctx, "rebuild", "transport"));
+      if (forPath !== "/internal/create-pool") {
+        void this.#probeEmptyPool().catch(() => recordTrunkError(this.ctx, "rebuild", "transport"));
+      }
       return;
     }
     void reconcileOnStart(this.env, this.ctx, async (input) => {
@@ -382,8 +387,23 @@ export class Trunk extends DurableObject<Env> {
    */
   async #probeEmptyPool(): Promise<void> {
     if (metaGet(this.#sql, "pool_id") !== null) return;
-    const repo = await this.env.POOLS.get(poolRepoName(this.#pool));
-    await repo.info(); // throws NOT_FOUND when no such repository exists
+    // A deployment with no Artifacts binding cannot rebuild — there is nothing to mark either:
+    // the store stays empty exactly as before the probe existed.
+    if (this.env.POOLS === undefined) return;
+    try {
+      const repo = await this.env.POOLS.get(poolRepoName(this.#pool));
+      await repo.info(); // throws NOT_FOUND when no such repository exists
+    } catch (error) {
+      // No repository behind the name is the ordinary "not a pool" answer — nothing armed, and
+      // no `trunk.error` precedes a later `pool.state` (EM1). The binding reports it as a `code`
+      // of NOT_FOUND; a service-bound fake can only pass the message. Any other failure is a
+      // transport fault: the wipe is real, so it is marked and the next object start retries.
+      const code = (error as { code?: unknown })?.code;
+      const message = String((error as { message?: unknown })?.message ?? error);
+      if (code === "NOT_FOUND" || message.startsWith("NOT_FOUND")) return;
+      recordTrunkError(this.ctx, "rebuild", "transport");
+      return;
+    }
     if (metaGet(this.#sql, "pool_id") !== null) return; // created meanwhile
     const r = await this.#callEngineEntry("rebuild", { request_id: `auto:${crypto.randomUUID()}` });
     if (!("error" in r)) await this.#postCommit();
@@ -428,14 +448,20 @@ export class Trunk extends DurableObject<Env> {
       // The engine's `outbox` table exists only once `pool_create` ran (shell objects can be
       // named anything — a state read must not 500 before the pool exists).
       outbox: metaGet(this.#sql, "pool_id") === null ? null : outboxRow(this.ctx),
+      // The landings table (3.6's rebuilt rows are asserted through it: seq, commit and the
+      // note blob oid the job read off the remote's notes tree).
+      landings:
+        metaGet(this.#sql, "pool_id") === null
+          ? []
+          : this.#sql.exec("SELECT seq, kind, commit_oid, note_oid, undone_by FROM landings ORDER BY seq").toArray(),
       served: Object.fromEntries(this.#served),
     });
   }
 
   override async fetch(request: Request): Promise<Response> {
     try {
-      this.#ensureReconciled();
       const url = new URL(request.url);
+      this.#ensureReconciled(url.pathname);
       const pathname = url.pathname;
       if (pathname === "/internal/state" && request.method === "GET") return this.#state();
       if (pathname === "/internal/alarm") {

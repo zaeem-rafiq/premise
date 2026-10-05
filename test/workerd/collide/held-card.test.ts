@@ -94,7 +94,18 @@ describe("item 7 (HD1, CD3, CD4): the held card and its route, in local workerd"
     const source = git(worker.repoDir("held-land"), ["show", "refs/heads/main:world/energy.js"]);
     expect(source).toContain("ENERGY_MAX = 1");
 
-    // 9.8: the same request_id replays the stored answer and emits nothing new.
+    // 9.8: the same request_id replays the stored answer and emits nothing new. Work that runs
+    // after each push on its own schedule (the plain-merge build of 11.7 and its `plain.updated`)
+    // may add events meanwhile, so the check counts the events a card action can cause.
+    const CARD_EFFECTS = new Set([
+      "card.opened",
+      "card.closed",
+      "attempt.state",
+      "submit.result",
+      "landing.accepted",
+      "landing.landed",
+      "headsup.sent",
+    ]);
     const before = await worker.events("held-land");
     const again = await worker.fetch(`/api/pools/held-land/cards/${card.card_id}`, {
       method: "POST",
@@ -103,7 +114,11 @@ describe("item 7 (HD1, CD3, CD4): the held card and its route, in local workerd"
     });
     expect(again.status).toBe(200);
     const after = await worker.events("held-land");
-    expect(after.length).toBe(before.length);
+    const added = after.slice(before.length);
+    expect(
+      added.filter((e) => CARD_EFFECTS.has(String(e.type))),
+      `events after the repeat: ${added.map((e) => e.type).join(", ")}`,
+    ).toEqual([]);
   }, 120_000);
 
   it("decline stops the attempt declined (T14) and nothing lands", async () => {

@@ -1,0 +1,71 @@
+/* The Who relies panel (2.5): the same right-edge slot and width as the Why sheet. */
+
+.who-backdrop {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.who-sheet {
+  width: min(760px, 100%);
+  margin: 0;
+  border-radius: 0;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.who-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.who-pick ul,
+.who-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.who-list {
+  margin: 16px 0;
+}
+
+.who-list > h3 {
+  margin: 0 0 6px;
+  font-size: var(--size-label, 0.85em);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim, inherit);
+}
+
+.who-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: start;
+}
+
+.who-row__status,
+.who-row__flags,
+.who-note {
+  color: var(--text-dim, inherit);
+}
+
+.who-window {
+  margin-top: 16px;
+}
+
+@media (max-width: 979px) {
+  .who-sheet {
+    width: 100%;
+  }
+}

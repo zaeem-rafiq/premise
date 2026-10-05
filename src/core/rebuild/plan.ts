@@ -64,6 +64,12 @@ export type RebuildCursor = {
   // landings
   seq?: number; // the next landing seq to process (1-based)
   unwitnessed?: number[];
+  /** `undone_by` links collected as the job walks — applied by the finishing step. */
+  undone?: Array<{ seq: number; undone_by: number }>;
+  /** Old-oid blob reads the rebuilt `blobs` rows need (fileMapAt), deduped: oid -> {seq}. */
+  blob_map?: Record<string, { seq: number }>;
+  /** The largest `batch.id` a parsed note named — the finish's `next_batch_id` base. */
+  max_batch?: number;
   // diffs — the resumable tree walk of one unwitnessed commit and its parent
   diff?: {
     seq: number;

@@ -799,7 +799,11 @@ export function tick(pool: Pool): void {
   for (const p of changedPaths(pre, running)) pool.filesChanged.add(p);
   pool.setHead(seq, running);
   // The notes tree and the batch's notes commit (9.5).
-  const mappings = pool.landings.map((l) => ({ commit: l.commit_oid, blob: l.note_oid }));
+  // Unwitnessed landings (a rebuilt pool keeps them, `note_oid` "") have no note to map —
+  // and an empty blob id would throw inside `notesTree`'s oid check.
+  const mappings = pool.landings
+    .filter((l) => l.note_oid !== "")
+    .map((l) => ({ commit: l.commit_oid, blob: l.note_oid }));
   const nt = notesTree(mappings);
   for (const o of nt.objects) pool.objects.set(o.oid, o);
   const notes = notesCommit({

@@ -414,8 +414,7 @@ describe("the register entry (3.6 steps 6-8)", () => {
     expect(a?.state).toBe("going_around");
     expect(a?.go_arounds).toBe(1);
     const h = a?.heads[a.heads.length - 1];
-    expect(h?.body.reason ?? h?.body.result).toBeTruthy();
     const items = (h?.body.items ?? []) as Array<{ result?: string; reason?: string }>;
-    expect(items.some((i) => i.reason === "push_lost")).toBe(true);
+    expect(items.some((i) => i.result === "repair" && i.reason === "push_lost")).toBe(true);
   });
 });

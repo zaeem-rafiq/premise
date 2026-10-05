@@ -22,6 +22,8 @@ import { deliverHeadsUps, outboxRow, pushOutbox, reconcileOnStart } from "./push
 import { armAlarm, runAlarm } from "./alarm.ts";
 import { deliverResumes } from "./resume.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
+import { runRebuildJob } from "./rebuild-job.ts";
+import { poolRepoName } from "../repos.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -108,6 +110,9 @@ async function seedFiles(env: Env, seed: string): Promise<Record<string, string>
   if (!Object.values(files).every((v) => typeof v === "string")) return undefined;
   return files as Record<string, string>;
 }
+
+/** The entries a `pool_id`-less store may run — the rebuild job's arm and applies (3.6). */
+const REBUILD_ENTRIES = new Set(["rebuild", "rebuild_begin", "rebuild_step", "rebuild_lost"]);
 
 export class Trunk extends DurableObject<Env> {
   readonly #sql: Sql;
@@ -204,8 +209,13 @@ export class Trunk extends DurableObject<Env> {
   #ensureReconciled(): void {
     if (this.#reconciled) return;
     this.#reconciled = true;
-    // No pool yet: nothing to reconcile — and no `trunk.error` may precede `pool.state` (EM1).
-    if (metaGet(this.#sql, "pool_id") === null) return;
+    // 3.6: an empty store on an object whose Artifacts repository exists is a lost pool —
+    // arm the rebuild job and let the `rebuild` timer run it. A name no repository answers
+    // is not a pool: nothing is armed (and no `trunk.error` precedes `pool.state`, EM1).
+    if (metaGet(this.#sql, "pool_id") === null) {
+      void this.#probeEmptyPool().catch(() => recordTrunkError(this.ctx, "rebuild", "transport"));
+      return;
+    }
     void reconcileOnStart(this.env, this.ctx, async (input) => {
       const r = await this.#callEngineEntry("restart", input);
       if ("error" in r) return;
@@ -250,7 +260,10 @@ export class Trunk extends DurableObject<Env> {
   ): Promise<{ result: unknown } | { error: Response }> {
     const entry = this.#engine.entries.get(name);
     if (entry === undefined) return { error: notBuilt() };
-    if (metaGet(this.#sql, "pool_id") === null) {
+    // The rebuild entries are the wiped pool's way back (3.6): they run before `pool_id`
+    // exists — `rebuild` arms the cursor, `rebuild_begin` writes it. Every other entry serves
+    // a pool that is there.
+    if (metaGet(this.#sql, "pool_id") === null && !REBUILD_ENTRIES.has(name)) {
       return { error: json({ error: { code: "pool_not_found" } }, 404) };
     }
     try {
@@ -362,6 +375,20 @@ export class Trunk extends DurableObject<Env> {
     return json(response, status);
   }
 
+  /**
+   * The wipe probe of `#ensureReconciled`: `info()` answers the repository exists, so the
+   * pool's landing history survives and this object rebuilds from it (3.6). The arm is the
+   * `rebuild` entry itself — same cursor, same timer, same idempotency as the route's.
+   */
+  async #probeEmptyPool(): Promise<void> {
+    if (metaGet(this.#sql, "pool_id") !== null) return;
+    const repo = await this.env.POOLS.get(poolRepoName(this.#pool));
+    await repo.info(); // throws NOT_FOUND when no such repository exists
+    if (metaGet(this.#sql, "pool_id") !== null) return; // created meanwhile
+    const r = await this.#callEngineEntry("rebuild", { request_id: `auto:${crypto.randomUUID()}` });
+    if (!("error" in r)) await this.#postCommit();
+  }
+
   /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
    * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
   async #runTimerEntry(kind: string, input: unknown, now?: number): Promise<boolean> {
@@ -463,6 +490,20 @@ export class Trunk extends DurableObject<Env> {
       // A throw means the store itself failed: the alarm's own catch re-arms the row at a
       // backoff (AL2). The transport answers are handled inside `deliverResumes`.
       resume: (now) => deliverResumes(this.env, this.ctx, now),
+      rebuild: async (now) => {
+        await runRebuildJob(
+          this.env,
+          this.ctx,
+          async (name, input) => {
+            const r = await this.#callEngineEntry(name, input, now);
+            if ("error" in r) throw new Error(`rebuild apply ${name} failed`);
+            return r.result;
+          },
+          undefined,
+          now,
+        );
+        await this.#postCommit();
+      },
     });
   }
 

@@ -24,6 +24,19 @@ export const TEXTS: AgentTexts = {
   ),
 };
 
+/** The pool's own table (06-repos IR9): `TEXTS` when the guide is the tide pool's — and when a
+ * guide-less imported pool has no `guide_first` sentence to render at all — else the same table
+ * with `{GUIDE_PATH}` filled by the imported pool's guide path. */
+export function textsForGuide(guide: string | null): AgentTexts {
+  if (guide === null || guide === GUIDE_PATH) return TEXTS;
+  return {
+    ...parsed,
+    errors: Object.fromEntries(
+      Object.entries(parsed.errors).map(([code, text]) => [code, text.replaceAll("{GUIDE_PATH}", guide)]),
+    ),
+  };
+}
+
 /** Fill the `{name}` holes of a template (MR7/MR8 use `{thing}`, `{list}`, `{code}`, `{n}`). */
 export function fill(template: string, holes: Record<string, string>): string {
   return template.replaceAll(/\{(\w+)\}/g, (match, name: string) => holes[name] ?? match);

@@ -7,7 +7,7 @@ import { newLoopState } from "./state.ts";
 import { appendRow } from "./state.ts";
 import type { LoopState } from "./state.ts";
 import type { ToolCall } from "./rows.ts";
-import { GUIDE_PATH, systemPrompt, firstUserMessage } from "../../../protocol/agent-prompt.ts";
+import { GUIDE_PATH, importedFills, systemPrompt, firstUserMessage } from "../../../protocol/agent-prompt.ts";
 import { CONTEXT_TARGET_CHARS, CONTEXT_HARD_CHARS, CONTEXT_KEEP_TURNS } from "../../../protocol/constants.ts";
 import { TEXTS } from "./texts.ts";
 
@@ -220,6 +220,59 @@ describe("CX3 pins", () => {
     if (!out.ok) return;
     const elided = JSON.parse((out.messages[3] as { content: string }).content) as Record<string, unknown>;
     expect(elided.result).toEqual({ elided: true, tool: "read", target: `${GUIDE_PATH}#(top)`, note: TEXTS.elided });
+  });
+});
+
+describe("CX3 on an imported pool (06-repos IR9)", () => {
+  // The pool's guide is the path the import found — here AGENTS.md; a pool with no guide file
+  // pins nothing.
+  const IMPORTED = importedFills({ guide_path: "AGENTS.md", source: "ai/nanoid", branch: "main" });
+  const NO_GUIDE = importedFills({ guide_path: "", source: "ai/nanoid", branch: "main" });
+
+  it("the newest answered whole-file read of the pool's guide_path is pinned", () => {
+    const state = newLoopState(IMPORTED);
+    start(state);
+    turn(state, "read", { path: "AGENTS.md" }, { path: "AGENTS.md", content: BIG }); // turn 1: guide pin
+    turn(state, "read", { path: "a.js" }, { content: BIG }); // turn 2: unpinned
+    turn(state, "read", { path: "b.js" }, { content: BIG }); // turn 3: pinned
+    turn(state, "read", { path: "c.js" }, { content: BIG }); // turn 4: pinned
+    turn(state, "read", { path: "d.js" }, { content: BIG }); // turn 5: pinned
+    const out = assembleMessages(state);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const guideMsg = out.messages[3] as { content: string };
+    expect(guideMsg.content).toContain(BIG);
+    const elided = JSON.parse((out.messages[5] as { content: string }).content) as Record<string, unknown>;
+    expect(elided.result).toEqual({ elided: true, tool: "read", target: "a.js", note: TEXTS.elided });
+  });
+
+  it("a whole-file read of GUIDE.md is not the imported pool's guide pin", () => {
+    const state = newLoopState(IMPORTED);
+    start(state);
+    turn(state, "read", { path: GUIDE_PATH }, { path: GUIDE_PATH, content: BIG }); // not the guide
+    turn(state, "read", { path: "a.js" }, { content: BIG });
+    turn(state, "read", { path: "b.js" }, { content: BIG });
+    turn(state, "read", { path: "c.js" }, { content: BIG });
+    const out = assembleMessages(state);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    // The GUIDE.md read is the oldest elidable row and nothing pins it.
+    const elided = JSON.parse((out.messages[3] as { content: string }).content) as Record<string, unknown>;
+    expect(elided.result).toEqual({ elided: true, tool: "read", target: GUIDE_PATH, note: TEXTS.elided });
+  });
+
+  it("a guide-less imported pool pins no guide read", () => {
+    const state = newLoopState(NO_GUIDE);
+    start(state);
+    turn(state, "read", { path: "AGENTS.md" }, { path: "AGENTS.md", content: BIG }); // no pin for it
+    turn(state, "read", { path: "a.js" }, { content: BIG });
+    turn(state, "read", { path: "b.js" }, { content: BIG });
+    turn(state, "read", { path: "c.js" }, { content: BIG });
+    const out = assembleMessages(state);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const elided = JSON.parse((out.messages[3] as { content: string }).content) as Record<string, unknown>;
+    expect(elided.result).toEqual({ elided: true, tool: "read", target: "AGENTS.md", note: TEXTS.elided });
   });
 });
 

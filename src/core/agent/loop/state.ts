@@ -3,6 +3,7 @@
 // model_calls, nudges, spend, and the mirrored attempt state (TL11). Pure data.
 
 import type { HeadsUp } from "../../../protocol/headsup.ts";
+import { TIDE_FILLS, type PromptFills } from "../../../protocol/agent-prompt.ts";
 import type { Row } from "./rows.ts";
 
 export type InboxEntry = {
@@ -32,6 +33,10 @@ export type LoopState = {
   meta: LoopMeta;
   /** MR4: a gap in the inbox or a `heads_ups_more` asked for a `sync` before the next model call. */
   syncNeeded: boolean;
+  /** The pool context the prompt and the `guide_first` rule fill from (06-repos IR9 to IR11):
+   * the tide pool's for a seed pool, the imported repository's own guide path — possibly none —
+   * for a pool made from one. */
+  fills: PromptFills;
 };
 
 export function newLoopMeta(): LoopMeta {
@@ -50,8 +55,8 @@ export function newLoopMeta(): LoopMeta {
   };
 }
 
-export function newLoopState(): LoopState {
-  return { rows: [], inbox: [], meta: newLoopMeta(), syncNeeded: false };
+export function newLoopState(fills: PromptFills = TIDE_FILLS): LoopState {
+  return { rows: [], inbox: [], meta: newLoopMeta(), syncNeeded: false, fills };
 }
 
 /** Append a row; its `step` is the next row number (rows are 1-indexed, with no gap). */

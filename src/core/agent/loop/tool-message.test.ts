@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { toolMessageFor, renderToolMessage, errorForModel } from "./tool-message.ts";
+import { textsForGuide } from "./texts.ts";
 import { AGENT_TEXTS } from "../../../protocol/agent-prompt.ts";
 
 const ERRORS = (JSON.parse(AGENT_TEXTS) as { errors: Record<string, string> }).errors;
@@ -51,5 +52,12 @@ describe("MR3: the error a model reads", () => {
   });
   it("guide_first's sentence names GUIDE.md", () => {
     expect(errorForModel("guide_first").message).toContain("GUIDE.md");
+  });
+  it("guide_first's sentence names the imported pool's guide_path (06-repos IR9)", () => {
+    const texts = textsForGuide("AGENTS.md");
+    expect(errorForModel("guide_first", undefined, texts).message).toContain("AGENTS.md");
+    expect(errorForModel("guide_first", undefined, texts).message).not.toContain("GUIDE.md");
+    // The tide pool's table is the default's and a guide-less pool's alike.
+    expect(textsForGuide("GUIDE.md")).toBe(textsForGuide(null));
   });
 });

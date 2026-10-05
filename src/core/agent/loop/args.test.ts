@@ -12,7 +12,7 @@ import {
   guideRead,
 } from "./args.ts";
 import { newLoopState, appendRow, type LoopState } from "./state.ts";
-import { GUIDE_PATH } from "../../../protocol/agent-prompt.ts";
+import { GUIDE_PATH, importedFills } from "../../../protocol/agent-prompt.ts";
 import { MAX_STATEMENT_CHARS } from "../../../protocol/constants.ts";
 import type { ToolCall } from "./rows.ts";
 
@@ -238,6 +238,73 @@ describe("TD5 guide_first: write, replace and submit before an answered whole-fi
       ended_at: 0,
     });
     expect(guideRead(state)).toBe(true);
+  });
+});
+
+// 06-repos IR9: `guide_first` asks for the imported pool's own guide — the path the import
+// found, or no rule at all when the head tree held none.
+describe("TD5 on an imported pool: the guide is the pool's guide_path", () => {
+  // An imported pool whose head tree held AGENTS.md, and one that held no guide file.
+  const IMPORTED = importedFills({ guide_path: "AGENTS.md", source: "ai/nanoid", branch: "main" });
+  const NO_GUIDE = importedFills({ guide_path: "", source: "ai/nanoid", branch: "main" });
+
+  function readRow(state: LoopState, path: string, entity?: string): void {
+    appendRow(state, {
+      role: "tool",
+      content: JSON.stringify({
+        message: { result: entity === undefined ? { path } : { key: `${path}#${entity}` } },
+        trunk_error: null,
+        args: entity === undefined ? { path } : { path, entity },
+        model_call_id: "call_1",
+      }),
+      tool: "read",
+      call_id: "a_t:1",
+      model: null,
+      tokens_in: null,
+      tokens_out: null,
+      started_at: 0,
+      ended_at: 0,
+    });
+  }
+
+  it.each(["write", "replace", "submit"])("%s is refused with the pool's own guide path", (tool) => {
+    const args =
+      tool === "write"
+        ? { path: "src/config.ts", content: "x" }
+        : tool === "replace"
+          ? { path: "src/config.ts", old: "x", new: "y" }
+          : { summary: "s" };
+    const out = processCall(newLoopState(IMPORTED), callOf(tool, args), null);
+    expect(out).toEqual({ kind: "error", code: "guide_first", detail: { path: "AGENTS.md" } });
+  });
+
+  it("a whole-file read of the pool's guide satisfies the rule; a read of GUIDE.md does not", () => {
+    const state = newLoopState(IMPORTED);
+    readRow(state, GUIDE_PATH);
+    expect(guideRead(state)).toBe(false);
+    const withGuide = newLoopState(IMPORTED);
+    readRow(withGuide, "AGENTS.md");
+    expect(guideRead(withGuide)).toBe(true);
+    const out = processCall(withGuide, callOf("write", { path: "src/config.ts", content: "x" }), null);
+    expect(out.kind).toBe("request");
+  });
+
+  it("an entity read of the pool's guide does not satisfy TD5", () => {
+    const state = newLoopState(IMPORTED);
+    readRow(state, "AGENTS.md", "(top)");
+    expect(guideRead(state)).toBe(false);
+  });
+
+  it("a pool with no guide file has no guide rule: write, replace and submit go at once", () => {
+    const state = newLoopState(NO_GUIDE);
+    expect(guideRead(state)).toBe(true);
+    for (const [tool, args] of [
+      ["write", { path: "src/config.ts", content: "x" }],
+      ["replace", { path: "src/config.ts", old: "x", new: "y" }],
+      ["submit", { summary: "s" }],
+    ] as const) {
+      expect(processCall(state, callOf(tool, args), null).kind).toBe("request");
+    }
   });
 });
 

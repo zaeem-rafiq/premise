@@ -51,6 +51,23 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
+/**
+ * The prompt context the open-attempt answer carries for an imported pool (06-repos IR9 to
+ * IR11): the guide file the import found in the head tree ("" for none), the repository's
+ * `<owner>/<name>` and the branch it was imported from. Null for a seed pool (`app` is not
+ * the imported marker), whose prompt stays the tide pool's.
+ */
+function importedPrompt(sql: Sql): { guide_path: string; source: string; branch: string } | null {
+  if (metaGet(sql, "app") !== "") return null;
+  const source = metaGet(sql, "source");
+  if (source === null || source === "") return null;
+  return {
+    guide_path: metaGet(sql, "guide_path") ?? "",
+    source,
+    branch: metaGet(sql, "branch") ?? "",
+  };
+}
+
 function normalizeResult(result: unknown): { response: unknown; status: number; effects: EffectRef[] } {
   if (
     typeof result === "object" &&
@@ -388,7 +405,14 @@ export class Trunk extends DurableObject<Env> {
     if (this.#engine.entries.has(name)) {
       const r = await this.#callEngineEntry(name, input);
       if ("error" in r) return r.error;
-      const { response, status, effects } = normalizeResult(r.result);
+      const { response: raw, status, effects } = normalizeResult(r.result);
+      // IR9 to IR11: an imported pool's prompt context rides the open-attempt answer, so the
+      // intents route hands it to the Agent's open. A seed pool's answer is unchanged.
+      const imported = name === "open_attempt" ? importedPrompt(this.#sql) : null;
+      const response =
+        imported !== null && typeof raw === "object" && raw !== null && (raw as { ok?: unknown }).ok === true
+          ? { ...(raw as Record<string, unknown>), imported }
+          : raw;
       await runEffects(this.env, this.ctx, effects);
       await this.#postCommit();
       return json(response, status);

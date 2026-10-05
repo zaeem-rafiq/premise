@@ -196,9 +196,9 @@ export function toolBudgetOk(state: LoopState): boolean {
 
 // ---- Pure effects: writing rows ----
 
-/** The first two rows of a fresh attempt (SP1, SP2). */
+/** The first two rows of a fresh attempt (SP1, SP2) — filled by the pool's context. */
 export function startAttempt(state: LoopState, intentText: string, startedAt: number): void {
-  for (const row of firstRows(intentText)) {
+  for (const row of firstRows(intentText, state.fills)) {
     appendRow(state, {
       role: row.role,
       content: row.content,

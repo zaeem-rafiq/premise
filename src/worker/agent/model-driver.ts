@@ -35,6 +35,8 @@ import {
   WAIT_BACKOFF_MAX_MS,
 } from "../../protocol/constants.ts";
 import { MODEL_OPTIONS, MODEL_PLAN } from "../../config/model-plan.ts";
+import { importedFills, TIDE_FILLS } from "../../protocol/agent-prompt.ts";
+import type { ImportedPrompt } from "../../protocol/internal.ts";
 import { redact } from "../../protocol/redact.ts";
 import { callModel, type AiBinding } from "../adapters/model/workers-ai.ts";
 import { GateCalls } from "./gate-client.ts";
@@ -59,6 +61,7 @@ import {
   nextAction,
   parseModelAnswer,
   processCall,
+  textsForGuide,
   toHeadsUpForModel,
   toolBudgetOk,
   toolMessageFor,
@@ -172,9 +175,14 @@ export function loadLoopState(sql: Sql): LoopState {
     tokens: Math.max(0, num("token_limit") - MAX_ATTEMPT_TOKENS),
     usd: Math.max(0, num("usd_limit") - MAX_ATTEMPT_USD),
   };
+  // IR9 to IR11: the pool's prompt context, stored at open — a seed pool's meta carries no
+  // `imported`, so the rebuilt loop's fills are the tide pool's. A restart re-reads it (kept
+  // across eviction), and a resumed attempt keeps the prompt it opened with.
+  const imported = m.imported;
   const state: LoopState = {
     rows,
     inbox,
+    fills: imported === undefined ? TIDE_FILLS : importedFills(JSON.parse(imported) as ImportedPrompt),
     meta: {
       step: num("step"),
       tool_steps: num("tool_steps") - ext.steps,
@@ -623,8 +631,9 @@ export class ModelDriver implements Driver {
   async next(input: { last: unknown; state: unknown }): Promise<Decision> {
     void input;
     const s = loadLoopState(this.#sql);
+    const texts = textsForGuide(s.fills.guide);
     for (;;) {
-      const action = nextAction(s, { model: this.#modelCfg() });
+      const action = nextAction(s, { model: this.#modelCfg(), texts });
       switch (action.type) {
         case "stop": {
           await this.#deps.releaseSlot();
@@ -664,6 +673,7 @@ export class ModelDriver implements Driver {
                 message: toolMessageFor({
                   error: { code: "not_run", detail: { reason: action.reason } },
                   heads_ups: unshownRun(s).show.map((hu) => toHeadsUpForModel(hu)),
+                  texts,
                 }),
                 counts_step: false,
                 started_at: now,
@@ -686,6 +696,7 @@ export class ModelDriver implements Driver {
               message: toolMessageFor({
                 error: { code: outcome.code, detail: outcome.detail },
                 heads_ups: unshownRun(s).show.map((hu) => toHeadsUpForModel(hu)),
+                texts,
               }),
               counts_step: false,
               started_at: now,

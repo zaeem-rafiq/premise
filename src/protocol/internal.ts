@@ -52,8 +52,23 @@ export type TrunkOpenAttemptRequest = {
   requester?: string;
 };
 
+/** The imported pool's prompt context, as Trunk's open-attempt answer and the Agent's open
+ * request carry it (06-repos IR9 to IR11): `guide_path` is the guide file the import found in
+ * the head tree — "" for none — `source` the repository's `<owner>/<name>`, `branch` the branch
+ * it was imported from. A seed pool's answer and open send none: the Agent's prompt stays the
+ * tide pool's, byte for byte. */
+export type ImportedPrompt = { guide_path: string; source: string; branch: string };
+
 export type TrunkOpenAttemptResponse =
-  | { ok: true; attempt_id: string; change_id: string; intent_id: string; already?: boolean }
+  | {
+      ok: true;
+      attempt_id: string;
+      change_id: string;
+      intent_id: string;
+      already?: boolean;
+      /** Present only on an imported pool: the context the agent's prompt fills take. */
+      imported?: ImportedPrompt;
+    }
   | { ok: false; error: string };
 
 // ---- Agent Durable Object (the launcher and the heads-up push) ----
@@ -108,6 +123,9 @@ export type AgentOpenRequest = {
   script?: Script;
   /** Point the Agent's Trunk client at an HTTP endpoint instead of the Trunk object (tests). */
   trunk_url?: string;
+  /** The imported pool's prompt context, forwarded from the open-attempt answer (IR9 to IR11).
+   * A seed pool's open sends none and the prompt stays the tide pool's. */
+  imported?: ImportedPrompt;
 };
 
 export type AgentOpenResponse = { ok: true; attempt_id?: string; already?: boolean } | { ok: false; error: unknown };

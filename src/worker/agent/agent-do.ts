@@ -364,9 +364,12 @@ export class Agent extends DurableObject<Env> {
         case "/internal/recover":
           await this.#recover();
           return json({ ok: true });
-        case "/internal/alarm":
-          await this.alarm();
+        case "/internal/alarm": {
+          // `?now=` drives the timers at a chosen time without sleeping, as Trunk's test path does.
+          const at = Number(url.searchParams.get("now") ?? Number.NaN);
+          await this.#runAlarm(Number.isFinite(at) ? at : Date.now());
           return json({ ok: true });
+        }
         default:
           if (/^\/api\/pools\/[^/]+\/attempts\/[^/]+\/stop$/.test(url.pathname)) {
             return await this.#ownerStop();
@@ -1340,7 +1343,10 @@ export class Agent extends DurableObject<Env> {
   // -- alarms (AL1, AL2, AG3) ------------------------------------------------------
 
   override async alarm(): Promise<void> {
-    const now = Date.now();
+    await this.#runAlarm(Date.now());
+  }
+
+  async #runAlarm(now: number): Promise<void> {
     try {
       for (const t of timerDue(this.#sql, now)) {
         try {
@@ -1405,8 +1411,15 @@ export class Agent extends DurableObject<Env> {
       const hu = this.#headsUp(hn);
       return hu !== null && hu.wake === true;
     });
+    // SW8: a scripted agent held before its `submit` waits for the launcher's release (SWR3),
+    // as an attempt on a card waits for the owner — an exempt wait, not a stall.
+    const heldForRelease = this.#meta("hold") === "1" && this.#meta("released") !== "1";
     const exempt =
-      TERMINAL_STATES.has(state) || WAIT_STATES.has(state) || this.#meta("pending_stop") !== null || wakePending;
+      TERMINAL_STATES.has(state) ||
+      WAIT_STATES.has(state) ||
+      this.#meta("pending_stop") !== null ||
+      wakePending ||
+      heldForRelease;
     const step = this.#int("step");
     if (exempt || step !== this.#int("wd_step")) {
       this.#set("wd_step", step);

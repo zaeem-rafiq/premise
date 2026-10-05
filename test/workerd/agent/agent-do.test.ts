@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AttemptState } from "../../../src/protocol/attempt.ts";
 import type { HeadsUp } from "../../../src/protocol/headsup.ts";
 import type { ToolRequest, ToolResponse } from "../../../src/protocol/tools.ts";
+import { AGENT_WATCHDOG_MS } from "../../../src/protocol/constants.ts";
 import { startWorker, type LocalWorker } from "../../support/workerd.ts";
 
 type RecordedRequest = { path: string; body: Record<string, unknown> };
@@ -278,9 +279,10 @@ describe("the Agent Durable Object in workerd", () => {
     await fake.close();
   });
 
-  function openAttempt(id: string, script: object): Promise<unknown> {
+  function openAttempt(id: string, script: object, extra: Record<string, unknown> = {}): Promise<unknown> {
     const q = encodeURIComponent(
       JSON.stringify({
+        ...extra,
         attempt_id: id,
         intent_id: "i_t",
         change_id: "c_t",
@@ -380,6 +382,56 @@ describe("the Agent Durable Object in workerd", () => {
     expect(s.transcript.map((r) => r.step)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(s.meta.state).toBe("validated");
     expect(s.meta.shown_hn).toBe("0");
+  });
+
+  it("AG3 + SW8: a scripted agent held before its submit is not stalled while it waits for its release", async () => {
+    // The defect: a live run of the hero conflict lost its held cast to the watchdog — every
+    // agent stopped `stalled` while it waited for the held card. SW8's wait is exempt (AG3).
+    // Holding is the pattern driver's (SW8), so this agent is opened as the Swarm route opens one:
+    // a registered pattern, its seed and number, and `hold`.
+    const q0 = encodeURIComponent(
+      JSON.stringify({
+        attempt_id: "a_held",
+        intent_id: "i_t",
+        change_id: "c_t",
+        pool: "p_t",
+        pool_id: "p_t",
+        intent_text: "test",
+        requester: "swarm",
+        agent_kind: "synthetic",
+        driver: "scripted",
+        model: null,
+        revision: 1,
+        trunk_url: fake.url,
+        pattern: "add-plain",
+        seed: 1,
+        agent_n: 0,
+        truth: ADD_PLAIN.truth,
+        hold: true,
+        think_ms: [0, 0],
+      }),
+    );
+    expect(await (await worker.fetchDurableObject("AGENT", "a_held", `/open?q=${q0}`)).json()).toMatchObject({
+      ok: true,
+    });
+    // SW8: every call of the script up to its `submit`, then it waits.
+    await waitFor(async () => (await inspect("a_held")).transcript.length === 6);
+    const t0 = Date.now();
+    // Three watchdog runs with no progress: AG3 stops a non-exempt attempt at the second.
+    for (let k = 1; k <= 3; k += 1) {
+      await worker.fetchDurableObject("AGENT", "a_held", `/internal/alarm?now=${t0 + k * (AGENT_WATCHDOG_MS + 1_000)}`);
+    }
+    const held = await inspect("a_held");
+    expect(held.meta.pending_stop ?? null).toBeNull();
+    expect(held.meta.state).toBe("working");
+    const submits = () =>
+      fake.requests.filter((r) => r.path === "/tool" && r.body.attempt_id === "a_held" && r.body.tool === "submit");
+    expect(submits()).toEqual([]);
+    // SWR3: the release lets it submit.
+    const q = encodeURIComponent(JSON.stringify({ attempt_id: "a_held" }));
+    await worker.fetchDurableObject("AGENT", "a_held", `/release?q=${q}`);
+    await waitFor(async () => (await inspect("a_held")).meta.state === "validated");
+    expect(submits()).toHaveLength(1);
   });
 
   it("TA9: the owner stop ends the attempt with the reason cancelled", async () => {

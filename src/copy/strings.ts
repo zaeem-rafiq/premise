@@ -711,11 +711,6 @@ export const ABOUT_HOW_BOXES: readonly string[] = [
 ];
 
 /**
- * `text(id, vars)` gives the string of a copy id, filled. `vars.visitor` picks the CP7 form a
- * visitor (and everyone in Replay) reads; `vars.n` of 1 picks the `one` form where the spec gives
- * one. Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
- */
-/**
  * The copy 06-repos.md names (IR12). These ids are amendments: they are not in the tables of
  * 03-floor section 5, so they cannot live in STRINGS (AC7 counts exactly the tables' ids there).
  * `text()` and `template()` resolve them the same way.
@@ -727,6 +722,11 @@ export const REPO_STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
 };
 
+/**
+ * `text(id, vars)` gives the string of a copy id, filled. `vars.visitor` picks the CP7 form a
+ * visitor (and everyone in Replay) reads; `vars.n` of 1 picks the `one` form where the spec gives
+ * one. Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
+ */
 export function text(id: string, vars: CopyVars = {}): string {
   const entry = STRINGS[id] ?? REPO_STRINGS[id];
   if (entry === undefined) throw new Error(`copy: unknown id "${id}"`);

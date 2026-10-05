@@ -27,6 +27,8 @@ export type AlarmDeps = {
   resume?: (now: number) => Promise<void>;
   /** The `rebuild` timer's work (3.6, RB3): one run of the resumable Artifacts job. */
   rebuild?: (now: number) => Promise<void>;
+  /** The `plain` timer's work (11.7): one run of the plain-merge build and push. */
+  plain?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -84,6 +86,7 @@ export async function runAlarm({
   repush,
   resume,
   rebuild,
+  plain,
   now: at,
 }: AlarmDeps): Promise<void> {
   const now = at ?? Date.now();
@@ -98,7 +101,8 @@ export async function runAlarm({
       continue;
     }
     // The shell's own timer kinds run their handler, not an engine entry: `push` is the outbox's
-    // retry (9.6), `repush` the heads-up delivery (HU5b), `resume` the resume cycle (RS1).
+    // retry (9.6), `repush` the heads-up delivery (HU5b), `resume` the resume cycle (RS1),
+    // `plain` the plain-merge build and push (11.7), `rebuild` the resumable job (3.6).
     const shellWork =
       timer.kind === "push"
         ? push
@@ -108,7 +112,9 @@ export async function runAlarm({
             ? resume
             : timer.kind === "rebuild"
               ? rebuild
-              : undefined;
+              : timer.kind === "plain"
+                ? plain
+                : undefined;
     if (shellWork !== undefined) {
       // Deleted before the work runs, like an engine timer: the work puts the timer back itself
       // when it has to run again (a push retry, an undelivered heads-up). A row left in place is

@@ -591,6 +591,8 @@ export function tick(pool: Pool): void {
         });
         a.revision += 1;
         a.resumes += 1;
+        // PM2: the new revision earns its own `ops_first` row at its first `confirm`/`repair`.
+        a.opsFirstDone = false;
         unvalidate(pool, a);
         a.ops = x.ops.map((o) => ({
           ...o,
@@ -968,6 +970,9 @@ export function pushOk(pool: Pool): void {
     ms: pool.now() - pool.outbox.created_at,
   });
   markLanded(pool);
+  // The plain-merge pool rebuilds off the landing path (11.7, PM6): the `plain` timer
+  // carries it — this transaction only arms it, the push never waits on it.
+  pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   pool.outbox.pushed_at = pool.now();
   pool.outbox.state = "pushed";
   pool.outbox = null;

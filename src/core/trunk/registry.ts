@@ -25,6 +25,7 @@ import type {
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
@@ -677,7 +678,16 @@ export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attemp
       const raw = pool.meta.get(`checks:${str(row.attempt_id)}`);
       return raw === undefined ? null : (JSON.parse(raw) as Check[]);
     })(),
-    opsFirstDone: false,
+    // PM2: whether this revision already wrote its `ops_first` row — hydrated from the table,
+    // so a pool reopen never writes a second snapshot over the first.
+    opsFirstDone:
+      pool.sql
+        .exec(
+          "SELECT 1 AS x FROM ops_first WHERE attempt_id = ? AND revision = ?",
+          str(row.attempt_id),
+          num(row.revision),
+        )
+        .toArray().length > 0,
     pending: [],
     dirtyJudgments: new Set(),
   };
@@ -791,15 +801,6 @@ function persistAttempt(pool: Pool, a: Attempt): void {
       h.statement,
       h.op_mark,
     );
-  }
-  if (!a.opsFirstDone && a.ops.length > 0) {
-    sql.exec(
-      "INSERT OR REPLACE INTO ops_first (attempt_id, revision, ops, submitted) VALUES (?, ?, ?, 0)",
-      a.id,
-      a.revision,
-      JSON.stringify(a.ops),
-    );
-    a.opsFirstDone = true;
   }
 }
 
@@ -1111,6 +1112,16 @@ export class Trunk {
 
   pushResult(remote_main: "old" | "new" | "other", remote_notes?: "old" | "new" | "other"): string {
     return wrapCall(this.pool, () => reconcile(this.pool, remote_main, remote_notes ?? remote_main));
+  }
+
+  /** 11.7's `plain` timer: the next plain-merge commit spec, or `idle` when caught up. */
+  plain(input: { parent_override?: string } = {}): PlainBuild {
+    return wrapCall(this.pool, () => plainBuild(this.pool, input));
+  }
+
+  /** PM6's `plain_done`: the pushed commit is `main` of `<pool>-plain`; emits `plain.updated`. */
+  plainDone(input: { commit: string; remote: string }): Record<string, unknown> {
+    return wrapCall(this.pool, () => plainDone(this.pool, input));
   }
 
   restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {

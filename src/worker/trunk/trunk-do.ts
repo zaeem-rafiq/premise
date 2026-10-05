@@ -23,6 +23,7 @@ import { armAlarm, runAlarm } from "./alarm.ts";
 import { deliverResumes } from "./resume.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
 import { runRebuildJob } from "./rebuild-job.ts";
+import { runPlainJob } from "./plain-runner.ts";
 import { poolRepoName } from "../repos.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
@@ -523,6 +524,22 @@ export class Trunk extends DurableObject<Env> {
           async (name, input) => {
             const r = await this.#callEngineEntry(name, input, now);
             if ("error" in r) throw new Error(`rebuild apply ${name} failed`);
+            return r.result;
+          },
+          undefined,
+          now,
+        );
+        await this.#postCommit();
+      },
+      // PM7: a plain run's failure is swallowed by the job itself or re-armed by the alarm's
+      // catch — it never throws into the landing path, and the pool never pauses for it.
+      plain: async (now) => {
+        await runPlainJob(
+          this.env,
+          this.ctx,
+          async (name, input) => {
+            const r = await this.#callEngineEntry(name, input, now);
+            if ("error" in r) throw new Error(`plain apply ${name} failed`);
             return r.result;
           },
           undefined,

@@ -51,8 +51,19 @@ const WIPE_TABLES = [
   "events_out",
 ] as const;
 
-/** The transient `meta` prefixes a rebuild drops (per-attempt caches, timer failure counts). */
-const TRANSIENT_META = ["steps:", "checks:", "approved:", "timer_fails:", "events_tries", "register_expect"];
+/** The transient `meta` prefixes a rebuild drops (per-attempt caches, timer failure counts,
+ * the plain pool's in-flight build — `plain_commit`/`plain_through_seq`/`plain_remote` stay:
+ * they name what the remote still holds, and the finish's `plain` arm verifies it). */
+const TRANSIENT_META = [
+  "steps:",
+  "checks:",
+  "approved:",
+  "timer_fails:",
+  "events_tries",
+  "register_expect",
+  "plain_pending",
+  "plain_tries",
+];
 
 /** `meta` has no tombstones: the row and the in-memory copy go together. */
 function metaDelete(pool: Pool, key: string): void {
@@ -488,6 +499,9 @@ export function applyRebuildStep(pool: Pool, payload: ApplyPayload): Record<stri
     "INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('rebuild_lost', '', ?)",
     pool.now() + REGISTER_TIMEOUT_MS,
   );
+  // 11.7: the rebuilt landing set re-runs the plain replay once — idle when the remote's
+  // `plain_commit` already covers it, one re-anchored commit when it moved (RB3's crash gap).
+  sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   emitPoolState(pool);
   emitPoolFiles(pool);
   return { ok: true, done: true };

@@ -216,6 +216,20 @@ export function pushHeadsUp(
     op_mark: a.opCount,
   };
   a.heads.push(h);
+  // PM2: the first `confirm`/`repair` heads-up of a revision freezes `ops_first` — the
+  // operations the attempt held at this moment, with this heads-up's OP6 drops still held —
+  // and whether a submit had already passed (`submitted`, `validated` or `held`, PM4).
+  if ((result === "confirm" || result === "repair") && !a.opsFirstDone) {
+    const undrop = new Set(dropped.map((d) => d.op_seq));
+    pool.sql.exec(
+      "INSERT OR REPLACE INTO ops_first (attempt_id, revision, ops, submitted) VALUES (?, ?, ?, ?)",
+      a.id,
+      a.revision,
+      JSON.stringify(a.ops.map((o) => (undrop.has(o.op_seq) ? { ...o, dropped: false } : o))),
+      a.submitted_at === null ? 0 : 1,
+    );
+    a.opsFirstDone = true;
+  }
   pool.dirtyAttempts.add(a.id);
   pool.out.heads_ups.push({
     to: a.id,

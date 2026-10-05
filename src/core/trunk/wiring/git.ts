@@ -23,4 +23,8 @@ export function wire(table: EngineTable): void {
   table.entries.set("rebuild_step", (input, ctx) => trunk(ctx).rebuildStep(input as ApplyPayload));
   table.entries.set("rebuild_lost", (_input, ctx) => trunk(ctx).rebuildLost());
   table.entries.set("register", (input, ctx) => trunk(ctx).register(input as RegisterRequest));
+  // The plain-merge pool (11.7): `plain` on its timer builds the next commit spec, `plain_done`
+  // applies the push's answer.
+  table.entries.set("plain", (input, ctx) => trunk(ctx).plain(input as { parent_override?: string }));
+  table.entries.set("plain_done", (input, ctx) => trunk(ctx).plainDone(input as { commit: string; remote: string }));
 }

@@ -93,8 +93,26 @@ export function poolStateBody(pool: Pool): Record<string, unknown> {
     remote: meta.get("remote") ?? "",
     plain_remote:
       meta.get("plain_remote") === undefined || meta.get("plain_remote") === "" ? null : meta.get("plain_remote"),
-    rebuild: null,
-    unwitnessed: [],
+    rebuild: (() => {
+      // RB3: the running job's cursor carries {done,total}; absent, no job runs.
+      const raw = meta.get("rebuild_cursor");
+      if (raw === undefined || raw === "") return null;
+      try {
+        const c = JSON.parse(raw) as { done?: unknown; total?: unknown };
+        return { done: Number(c.done ?? 0), total: Number(c.total ?? 0) };
+      } catch {
+        return null;
+      }
+    })(),
+    unwitnessed: (() => {
+      const raw = meta.get("unwitnessed");
+      if (raw === undefined || raw === "") return [];
+      try {
+        return (JSON.parse(raw) as unknown[]).map((s) => Number(s));
+      } catch {
+        return [];
+      }
+    })(),
     real_agents: num("real_agents"),
     max_real_agents: MAX_REAL_AGENTS,
     synthetic: meta.get("synthetic") === "1",

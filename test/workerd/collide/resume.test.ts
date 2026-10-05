@@ -14,7 +14,7 @@
 // the third and fourth sent-backs the limit's `sentBack >= GO_AROUND_LIMIT` check needs.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { HEADS_UP_REPUSH_MS, RESUME_ACK_TIMEOUT_MS } from "../../../src/protocol/constants.ts";
+import { HEADS_UP_REPUSH_MS, RESUME_ACK_TIMEOUT_MS, RIGHT_OF_WAY_MS } from "../../../src/protocol/constants.ts";
 import { startLandingWorker, type LandingWorker } from "../landing/harness.ts";
 import { createPool, deliver, eventsOf, openAttempt, tool, waitFor } from "./helpers.ts";
 
@@ -168,15 +168,21 @@ async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: 
   return opened.card.card_id;
 }
 
-/** A lone victim's side of the same production, stopped before the right-of-way wall — the
- * `it.fails` below documents what the engine does with the landing that would be its third. */
+const CRAB = (name: string): string =>
+  'import { ENERGY_MAX } from "../world/energy.js";\n\n' +
+  `export function spawn_${name.replaceAll("-", "_")}() {\n  return { x: 20, y: 180, en: ENERGY_MAX };\n}\n`;
+
+/** A lone victim's side of the same production, stopped at the right-of-way wall: `a` reads
+ * `ENERGY_MAX` and writes a *new* file that imports it, so each breaker landing is an E2
+ * repair whose heads-up the victim acknowledges — while its own `write` op keeps applying,
+ * keeping the premise live. At sent_back 2 the victim holds the mark (RW1). */
 async function produceTwoGoArounds(worker: LandingWorker, pool: string, a: string): Promise<void> {
-  await openAttempt(worker, pool, a, { intent: `${a} lowers the energy cap`, truth: TRUTH });
-  await replaceEnergy(worker, pool, a, 100, 93, 1, 0);
+  await openAttempt(worker, pool, a, { intent: `${a} adds a crab`, truth: TRUTH });
+  await tool(worker, pool, a, { tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" } }, 1, 0);
+  await tool(worker, pool, a, { tool: "write", args: { path: `creatures/${a}-crab.js`, content: CRAB(a) } }, 2, 0);
   await landEnergy(worker, pool, `${a}-d-90`, 100, 90, 1);
   await waitFor(async () => (await headsupCount(worker, pool, a)) >= 1, 60_000);
   await deliver(worker, pool, a);
-  await replaceEnergy(worker, pool, a, 90, 93, 2, 1);
   await landEnergy(worker, pool, `${a}-d-80`, 90, 80, 2);
   await waitFor(async () => (await headsupCount(worker, pool, a)) >= 2, 60_000);
 }
@@ -209,11 +215,9 @@ describe("item 9 (RS1-RS4, T21, T20r): resume delivery to a stub Agent, in local
     await worker?.dispose();
   });
 
-  it.fails(
-    "a lone victim cannot reach the limit: RW1 grants right of way at sent_back 2 " +
-      "(STARVATION_AFTER) and the `right_of_way` timer the spec gives it (RW1, " +
-      "RIGHT_OF_WAY_MS = 120000) is never armed — the constant has no reader — so RW3 " +
-      'skips every landing that would give the third repair: `tick.skipped {why: "right_of_way"}` forever',
+  it(
+    "right of way lapses (RW1): the waiting landing goes after RIGHT_OF_WAY_MS and the " +
+      "victim's next sent-backs reach the go-around-limit card (RW3, GL1)",
     async () => {
       const a = "a-gal";
       await produceTwoGoArounds(worker, "resume-gal", a);
@@ -228,15 +232,40 @@ describe("item 9 (RS1-RS4, T21, T20r): resume delivery to a stub Agent, in local
           ),
         30_000,
       );
-      // GL1/T15: at sent_back 3 the attempt would stop `go_around_limit` with the card.
-      // What happened instead: sent_back stays 2, the mark never lapses, no card opens.
+      // RW1: the mark lapses RIGHT_OF_WAY_MS after the grant — driven through the alarm's
+      // `?now=` hook. The `right_of_way` timer's own pass clears the grant and runs the tick
+      // that lands d-70; the alarm's driven `now` is the engine clock for that call, so a
+      // merely re-armed `tick` row would sit in the future. The repair joins `a`'s still-open
+      // go-around (T10: its earlier heads-up was never delivered), so the limit is two more
+      // breakers away — each counts only once the previous heads-up is delivered (GA1).
+      await worker.runAlarm("resume-gal", Date.now() + RIGHT_OF_WAY_MS + 1_000);
+      await waitFor(async () => (await eventsOf(worker, "resume-gal", "landing.landed")).length >= 3, 60_000);
+      // No right of way now: each breaker lands, `a` goes around once more, and sent_back 3
+      // trips GL1 — `a` stops `go_around_limit` with its choice card.
+      await deliver(worker, "resume-gal", a);
+      await landEnergy(worker, "resume-gal", `${a}-d-60`, 70, 60, 4);
       await waitFor(
         async () =>
-          (await eventsOf(worker, "resume-gal", "card.opened")).some(
-            (e) => (e.card as { reason?: string })?.reason === "go_around_limit",
+          (await eventsOf(worker, "resume-gal", "attempt.state")).some(
+            (e) => e.attempt_id === a && e.to === "going_around" && e.go_arounds === 3,
           ),
-        5_000,
+        30_000,
       );
+      await deliver(worker, "resume-gal", a);
+      await landEnergy(worker, "resume-gal", `${a}-d-50`, 60, 50, 5);
+      await waitFor(
+        async () =>
+          (await eventsOf(worker, "resume-gal", "attempt.state")).some(
+            (e) => e.attempt_id === a && e.to === "stopped" && e.reason === "go_around_limit",
+          ),
+        30_000,
+      );
+      const opened = (await eventsOf(worker, "resume-gal", "card.opened")).find(
+        (e) => (e.card as { reason?: string })?.reason === "go_around_limit",
+      ) as { card: { kind: string; options: Array<{ id: string }> } } | undefined;
+      expect(opened).toBeDefined();
+      expect(opened!.card.kind).toBe("choice");
+      expect(opened!.card.options.map((o) => o.id)).toContain("retry");
     },
     300_000,
   );

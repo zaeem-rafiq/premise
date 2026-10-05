@@ -28,7 +28,19 @@ import {
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { event } from "./events.ts";
-import { closeCard, frozen, inflight, isWaiting, openCard, parked, sentBack, setState, unvalidate } from "./intents.ts";
+import {
+  closeCard,
+  frozen,
+  grantRightOfWay,
+  hasRightOfWay,
+  inflight,
+  isWaiting,
+  openCard,
+  parked,
+  sentBack,
+  setState,
+  unvalidate,
+} from "./intents.ts";
 import { syncTriageOf, triageInputOf, triageOutcome } from "../classify/triage.ts";
 import { classify, rowFor } from "../classify/table.ts";
 import type { Classification, Row } from "../classify/table.ts";
@@ -265,7 +277,7 @@ export function sendHeadsUp(
         return;
       }
       a.pull_backs += 1;
-      if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
+      if (sentBack(a) === pool.K.STARVATION_AFTER) grantRightOfWay(pool, a);
       setState(pool, a, "needs_confirm", "T11");
       unvalidate(pool, a);
     }
@@ -323,7 +335,7 @@ export function enterRepair(
   }
   a.go_arounds += 1;
   a.op_mark = a.opCount; // HU12: where this go-around started
-  if (sentBack(a) === pool.K.STARVATION_AFTER) a.right_of_way_at = ++pool.order;
+  if (sentBack(a) === pool.K.STARVATION_AFTER) grantRightOfWay(pool, a);
   sent();
   if (a.state !== "going_around") setState(pool, a, "going_around", "T8");
   else
@@ -622,8 +634,9 @@ export function blast(
   }
   // 10.2 step 4: the entries that hold right of way — `land_now` joins the card's options
   // while one of them sits under `repair` or `confirm`.
-  out.right_of_way = [...out.repair, ...out.confirm, ...out.triage].filter(
-    (id) => (pool.attempts.get(id)?.right_of_way_at ?? null) !== null,
-  );
+  out.right_of_way = [...out.repair, ...out.confirm, ...out.triage].filter((id) => {
+    const x = pool.attempts.get(id);
+    return x !== undefined && hasRightOfWay(pool, x);
+  });
   return out;
 }

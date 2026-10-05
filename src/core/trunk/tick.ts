@@ -32,8 +32,11 @@ import { canonicalJson, noteBytes } from "../git/note.ts";
 import { event, emitPoolFiles, emitPoolState, flushEvents } from "./events.ts";
 import { buildPack } from "../git/pack.ts";
 import {
+  clearRightOfWay,
   closeCard,
   frozen,
+  grantRightOfWay,
+  hasRightOfWay,
   scheduleTick,
   inflight,
   isWaiting,
@@ -522,6 +525,11 @@ function batchCause(batch: Landing[], type: "landing" | "undo" | "revert"): Head
 /** The accept transaction of 9.4: undo requests, then validated candidates in order. */
 export function tick(pool: Pool): void {
   if ((pool.meta.get("pool_state") ?? "ready") !== "ready" || pool.outbox !== null) return;
+  // RW1: a mark RIGHT_OF_WAY_MS old has lapsed even if its timer row never fired — the tick
+  // sweeps stale grants before it orders candidates, so none can hold RW3's skip open.
+  for (const a of pool.attempts.values()) {
+    if (!hasRightOfWay(pool, a)) clearRightOfWay(pool, a);
+  }
   const pre = pool.files;
   let running = new Map(pre);
   let seq = pool.headSeq();
@@ -573,7 +581,7 @@ export function tick(pool: Pool): void {
       } else {
         // T19: a dependent landing's attempt is reopened with its frozen state.
         a.go_arounds += 1;
-        a.right_of_way_at = null;
+        clearRightOfWay(pool, a);
         setState(pool, a, "going_around", "T19");
         event(pool, "attempt.reopened", {
           attempt_id: a.id,
@@ -928,7 +936,7 @@ export function markLanded(pool: Pool, transition: "T16" | "T17a" = "T16"): void
           setState(pool, a, "landed", transition);
           setIntentState(pool, a.intent_id, "landed"); // T16/T17a effect: intent -> landed
         }
-        a.right_of_way_at = null;
+        clearRightOfWay(pool, a);
         pool.dirtyAttempts.add(a.id);
       }
     }
@@ -1314,7 +1322,7 @@ export function owner(
     closeOwned(card, "retry");
     a.go_arounds = 0;
     a.pull_backs = 0;
-    a.right_of_way_at = ++pool.order;
+    grantRightOfWay(pool, a);
     a.stop_reason = null;
     const open = a.heads.filter((h) => h.resolved_at === null);
     if (open.some((h) => h.result === "repair")) {

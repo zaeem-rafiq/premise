@@ -51,6 +51,15 @@ export function wireEngineEntries(table: EngineTable): void {
     trunk(ctx).triage(input as Parameters<Trunk["triage"]>[0]);
   });
   table.entries.set("restart", (input, ctx) => trunk(ctx).restart(input as Parameters<Trunk["restart"]>[0]));
+  // RW1's lapse (3.3): the row's `due_at` identifies the grant it was armed for — the entry
+  // clears only a mark still holding that grant, then runs the tick that lands what waited.
+  table.entries.set("right_of_way", (input, ctx) => {
+    const t = (input as { timer?: { key?: unknown; due_at?: unknown } }).timer;
+    trunk(ctx).expireRightOfWay({
+      attempt_id: typeof t?.key === "string" ? t.key : "",
+      due_at: typeof t?.due_at === "number" ? t.due_at : 0,
+    });
+  });
   table.entries.set("owner", (input, ctx) => trunk(ctx).owner(input as Parameters<Trunk["owner"]>[0]));
   // The effects the worker runs after a transaction (12.4): the EV2 event delivery and the LP6
   // push outbox — the kinds `src/worker/trunk/effects.ts` registers handlers under.

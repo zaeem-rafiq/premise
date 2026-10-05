@@ -7,6 +7,7 @@ import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
 import { CARD_TEMPLATES, type CardTemplateId } from "../../copy/cards.ts";
 import type { Attempt, CardRec, IntentRec, Pool, Premise } from "./sets.ts";
 import { event, emitPoolState } from "./events.ts";
+import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
 export const IN_FLIGHT: readonly AttemptState[] = [
@@ -32,6 +33,41 @@ export const frozen = (a: Attempt): { premises: Premise[] } => ({
 /** `a.go_arounds + a.pull_backs` — the count that drives GO_AROUND_LIMIT and STARVATION_AFTER. */
 export const sentBack = (a: Attempt): number => a.go_arounds + a.pull_backs;
 
+/** RW1's grant: the mark is the engine clock's `now` in ms — never below another live mark, so
+ * grant order survives a shared millisecond (RW4) — and the `right_of_way` timer row (3.3) is
+ * the alarm's durable record of when the grant lapses. */
+export function grantRightOfWay(pool: Pool, a: Attempt): void {
+  if (a.right_of_way_at !== null) return;
+  let at = pool.now();
+  for (const x of pool.attempts.values()) {
+    if (x.right_of_way_at !== null) at = Math.max(at, x.right_of_way_at + 1);
+  }
+  a.right_of_way_at = at;
+  pool.sql.exec(
+    "INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('right_of_way', ?, ?)",
+    a.id,
+    at + RIGHT_OF_WAY_MS,
+  );
+  pool.dirtyAttempts.add(a.id);
+}
+
+/** Every other end of RW1 — landing, stop, reopen (T19) or the timer — drops mark and row. */
+export function clearRightOfWay(pool: Pool, a: Attempt): void {
+  if (a.right_of_way_at === null) return;
+  a.right_of_way_at = null;
+  pool.sql.exec("DELETE FROM timers WHERE kind = 'right_of_way' AND key = ?", a.id);
+  // The mark's end can unblock an RW3-skipped candidate: a stop or reopen outside a tick
+  // leaves nothing armed otherwise, so the grant's end wakes the tick itself.
+  scheduleTick(pool);
+  pool.dirtyAttempts.add(a.id);
+}
+
+/** A live mark (RW1): granted less than RIGHT_OF_WAY_MS ago on the engine's clock. The tick
+ * checks this so a grant whose timer row was lost still lapses on time. */
+export function hasRightOfWay(pool: Pool, a: Attempt): boolean {
+  return a.right_of_way_at !== null && a.right_of_way_at + RIGHT_OF_WAY_MS > pool.now();
+}
+
 /** A state transition (9.2): emits `attempt.state`, records `stop_reason` when given. */
 export function setState(
   pool: Pool,
@@ -43,6 +79,8 @@ export function setState(
   if (a.state !== to) {
     const from = a.state;
     a.state = to;
+    // RW1: landing or stopping ends the grant — its timer row goes with it (AL1).
+    if (to === "stopped" || to === "landed") clearRightOfWay(pool, a);
     event(pool, "attempt.state", {
       attempt_id: a.id,
       from,

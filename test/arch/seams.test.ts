@@ -106,6 +106,8 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     // effect names are the internal contract `src/worker/trunk/trunk-do.ts` dispatches on.
     expect([...engineTable().entries.keys()].sort()).toEqual(
       [
+        // IR3: the import job's slices commit through `import_step` on the `rebuild` timer.
+        "import_step",
         "open_attempt",
         "owner",
         // 11.7: the `plain` timer's entry builds the next `<pool>-plain` commit spec,

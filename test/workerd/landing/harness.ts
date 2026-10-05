@@ -56,6 +56,10 @@ export type LandingWorker = {
   /** The read sidecar's fault hook: a test fails `log`/`tree`/`blob` reads to wedge the rebuild
    * job between its committed runs (RB3). Default is forward. */
   setReadFault(fault: ReadFault): void;
+  /** Arms the fake binding's next `import` failure: an IR2 code name ("REMOTE_AUTH_REQUIRED",
+   * "NOT_FOUND", "MEMORY_LIMIT", "UPSTREAM_UNAVAILABLE", "INVALID_URL", "INVALID_INPUT"), or
+   * null to clear. */
+  setImportFault(code: string | null): void;
   /** Arms the Artifacts scope check on the stand-in git server (SE5c): a `read` token answers
    * upload-pack (fetch/clone) only; every `git-receive-pack` path takes the `write` token; any
    * other credential — or none — is refused (401 on a read path, 403 on a write path). This is
@@ -98,10 +102,16 @@ export function createNamedRepo(projectRoot: string, name: string): string {
 export type ReadFault =
   ((request: { path: string }) => { action: "forward" } | { action: "answer"; status: number }) | null;
 
+/** The code a test arms for the next `import` the fake binding receives (IR2's table): the
+ * stand-in reports it as `CODE: detail` because an error's `code` does not cross the service
+ * binding — the route maps either shape. */
+export type ImportFault = { current: string | null };
+
 async function startReadServer(
   projectRoot: string,
-): Promise<{ origin: string; fault: { current: ReadFault }; close(): Promise<void> }> {
+): Promise<{ origin: string; fault: { current: ReadFault }; importFault: ImportFault; close(): Promise<void> }> {
   const fault: { current: ReadFault } = { current: null };
+  const importFault: ImportFault = { current: null };
   const server: Server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const [, kind, name, ...rest] = url.pathname.split("/");
@@ -113,6 +123,56 @@ async function startReadServer(
       const verdict = fault.current?.({ path: url.pathname });
       if (verdict !== undefined && verdict.action === "answer") {
         response.writeHead(verdict.status).end();
+        return;
+      }
+      if (kind === "import-fault") {
+        // The fake binding asks before every `import`: a code armed here becomes its thrown
+        // `CODE: name` (the service binding cannot carry a `.code`, so the text carries it).
+        const code = importFault.current;
+        if (code === null) response.writeHead(204).end();
+        else response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ code }));
+        return;
+      }
+      if (kind === "import") {
+        // The stand-in's `import` (IR2): `git clone` a local source repo into the pool's
+        // repo name — a worktree clone, since every read path keys on `<name>/.git`.
+        // `from`/`name` are the harness's own directory names, never a client string.
+        const from = url.searchParams.get("from") ?? "";
+        const branch = url.searchParams.get("branch");
+        const target = name ?? "";
+        if (
+          !/^[a-z0-9][a-z0-9-]{0,62}$/.test(target) ||
+          !/^[a-z0-9][a-z0-9-]{0,62}$/.test(from) ||
+          (branch !== null && !/^[A-Za-z0-9._/-]+$/.test(branch))
+        ) {
+          response.writeHead(400).end();
+          return;
+        }
+        const sourceDir = join(projectRoot, from);
+        if (!existsSync(join(sourceDir, ".git"))) {
+          response.writeHead(404).end();
+          return;
+        }
+        if (ok) {
+          response.writeHead(409).end(); // ALREADY_EXISTS
+          return;
+        }
+        try {
+          git(projectRoot, [
+            "clone",
+            "--quiet",
+            ...(branch === null ? [] : ["--branch", branch]),
+            `file://${sourceDir}`,
+            target,
+          ]);
+          // The pool's repo accepts pushes like every created repo.
+          git(join(projectRoot, target), ["config", "http.receivepack", "true"]);
+          git(join(projectRoot, target), ["config", "receive.denyCurrentBranch", "ignore"]);
+        } catch {
+          response.writeHead(502).end();
+          return;
+        }
+        response.writeHead(200).end();
         return;
       }
       if (kind === "exists") {
@@ -191,8 +251,8 @@ async function startReadServer(
           .filter((line) => line !== "")
           .map((line) => {
             const [meta, entryName] = line.split("\t");
-            const [, type, hash] = (meta ?? "").split(" ");
-            return { name: entryName, type, hash };
+            const [mode, type, hash] = (meta ?? "").split(" ");
+            return { name: entryName, type, hash, mode };
           });
         response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(entries));
       } else {
@@ -208,6 +268,7 @@ async function startReadServer(
   return {
     origin: `http://127.0.0.1:${port}`,
     fault,
+    importFault,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }
@@ -236,12 +297,18 @@ export async function startLandingWorker(options: {
    * (2.3 item 9's "a stub Agent bound in place of the real one"): `/resume` calls are logged
    * and answered by the mode the test sets through `/internal/mode`. */
   agentStub?: boolean;
+  /** Local repositories the fake Artifacts `import` clones from (IR1/IR2's stand-in): each name
+   * is a repo under the test root the test fills itself — `repoDir(name)` reaches it. The fake
+   * maps a source url's last path segment to the same name. */
+  importSources?: string[];
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
   }
   const projectRoot = mkdtempSync(join(tmpdir(), "premise-landing-repos-"));
-  const directories = new Map(options.repos.map((name) => [name, createNamedRepo(projectRoot, name)]));
+  const directories = new Map(
+    [...options.repos, ...(options.importSources ?? [])].map((name) => [name, createNamedRepo(projectRoot, name)]),
+  );
   // A refusal by real git: the hook declines the request before a command is checked. Hooks live
   // beside `.git` on `core.hooksPath` — this sandbox denies direct writes under any `.git/` path.
   for (const name of options.refuseRepos ?? []) {
@@ -373,13 +440,22 @@ export async function startLandingWorker(options: {
     floor: (pool) => object("FLOOR", pool),
     events,
     eventTypes: async (pool) => (await events(pool)).map((event) => String(event.type)),
-    repoDir: (repo) => directories.get(repo) ?? "",
+    repoDir: (repo) => {
+      const known = directories.get(repo);
+      if (known !== undefined) return known;
+      // The fake's `import` clones into the same root — a clone-made repo answers by name too.
+      const dir = join(projectRoot, repo);
+      return existsSync(join(dir, ".git")) ? dir : "";
+    },
     gitRequests: () => gitServer.requests,
     setGitFault: (fault) => {
       gitServer.fault = fault ?? (() => ({ action: "forward" }));
     },
     setReadFault: (fault) => {
       readServer.fault.current = fault;
+    },
+    setImportFault: (code) => {
+      readServer.importFault.current = code;
     },
     enforceTokenScopes: ({ read, write }) => {
       gitServer.fault = (request) => {

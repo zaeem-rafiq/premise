@@ -22,6 +22,9 @@ export function wire(table: EngineTable): void {
   );
   table.entries.set("rebuild_step", (input, ctx) => trunk(ctx).rebuildStep(input as ApplyPayload));
   table.entries.set("rebuild_lost", (_input, ctx) => trunk(ctx).rebuildLost());
+  // IR3's ingestion: the `rebuild` timer's runs of the import job commit through this entry —
+  // same resumable shape as `rebuild_step` (RB3/RB4), on a pool born `rebuilding` (IR3).
+  table.entries.set("import_step", (input, ctx) => trunk(ctx).importStep(input as Parameters<Trunk["importStep"]>[0]));
   table.entries.set("register", (input, ctx) => trunk(ctx).register(input as RegisterRequest));
   // The plain-merge pool (11.7): `plain` on its timer builds the next commit spec, `plain_done`
   // applies the push's answer.

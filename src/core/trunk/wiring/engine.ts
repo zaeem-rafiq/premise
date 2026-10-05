@@ -27,6 +27,12 @@ export function wireEngineEntries(table: EngineTable): void {
     const req = input as TrunkOpenAttemptRequest;
     const t = trunk(ctx);
     const already = t.pool.attempts.has(req.attempt_id);
+    // IR3/RB3: an intent for a pool still rebuilding — an imported pool's ingestion included —
+    // is refused `pool_not_ready`. Idempotency first: a retry of an attempt the pool already
+    // holds answers it, whatever the state.
+    if (!already && (t.pool.meta.get("pool_state") ?? "ready") !== "ready") {
+      return { ok: false, error: "pool_not_ready" };
+    }
     const a = t.openAttempt(req.attempt_id, req);
     return { ok: true, attempt_id: a.id, change_id: a.change_id, intent_id: a.intent_id, already };
   });

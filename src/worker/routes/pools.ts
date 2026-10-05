@@ -66,9 +66,17 @@ function parseCreate(body: unknown): ParsedPool | null {
 }
 
 function artifactsCode(cause: unknown): string | null {
-  if (typeof cause !== "object" || cause === null || !("code" in cause)) return null;
-  const code = (cause as { code: unknown }).code;
-  return typeof code === "string" ? code : null;
+  if (typeof cause === "object" && cause !== null && "code" in cause) {
+    const code = (cause as { code: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  // A thrown error's `code` does not cross the service binding — the stand-in reports it as a
+  // `CODE: detail` message prefix instead (same convention as the Trunk object's wipe probe).
+  if (cause instanceof Error) {
+    const prefix = /^([A-Z_]+):/.exec(cause.message);
+    if (prefix !== null) return prefix[1] ?? null;
+  }
+  return null;
 }
 
 /**

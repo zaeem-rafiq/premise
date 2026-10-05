@@ -143,6 +143,12 @@ export function beginRebuild(
   }
   pool.files = new Map();
   pool.modes = new Map();
+  // IR5's whole-tree bookkeeping is wiped with `files`/`trees`: the rebuilt rows re-populate
+  // entries and directory ids from the remote's head tree.
+  pool.entries = new Map();
+  pool.opaque = new Set();
+  pool.trees = new Map();
+  pool.dirtyTrees = new Set();
   pool.attempts = new Map();
   pool.intents = new Map();
   pool.landings = [];
@@ -398,7 +404,9 @@ export function applyRebuildStep(pool: Pool, payload: ApplyPayload): Record<stri
   for (const plan of payload.landings ?? []) applyLandingPlan(pool, plan);
   for (const t of payload.trees ?? []) {
     sql.exec("INSERT OR REPLACE INTO trees (dir, oid) VALUES (?, ?)", t.dir, t.oid);
+    pool.trees.set(t.dir, t.oid);
   }
+  const headEntries = pool.entries; // local: the seam guard reads `pool.entries`' writes as table writes
   for (const f of payload.files ?? []) {
     sql.exec(
       "INSERT OR REPLACE INTO files (path, mode, oid, content, parse_state, changed_seq) VALUES (?, ?, ?, ?, 'opaque', 0)",
@@ -409,6 +417,9 @@ export function applyRebuildStep(pool: Pool, payload: ApplyPayload): Record<stri
     );
     pool.files.set(f.path, f.content ?? "");
     pool.modes.set(f.path, f.mode);
+    headEntries.set(f.path, { oid: f.oid, mode: f.mode });
+    if (f.content === null) pool.opaque.add(f.path);
+    else pool.opaque.delete(f.path);
   }
   for (const b of payload.blobs ?? []) {
     sql.exec("INSERT OR IGNORE INTO blobs (oid, content, seq) VALUES (?, ?, ?)", b.oid, utf8(b.content), b.seq);
@@ -508,7 +519,10 @@ export function applyRebuildStep(pool: Pool, payload: ApplyPayload): Record<stri
   );
   // 11.7: the rebuilt landing set re-runs the plain replay once — idle when the remote's
   // `plain_commit` already covers it, one re-anchored commit when it moved (RB3's crash gap).
-  sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
+  // IR7: an imported pool never gets a plain-merge build, so the timer is never armed for it.
+  if (pool.meta.get("app") !== "") {
+    sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
+  }
   emitPoolState(pool);
   emitPoolFiles(pool);
   return { ok: true, done: true };

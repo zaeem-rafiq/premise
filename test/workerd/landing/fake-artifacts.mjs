@@ -79,4 +79,28 @@ export default class FakeArtifacts extends WorkerEntrypoint {
   async get(name) {
     return new Repo(name, this.env);
   }
+  // The stand-in's `import` (IR2): the read sidecar clones the named local repository bare into
+  // the target name — `source.url`'s last segment is the source's directory name, `depth` is
+  // honoured by the `file://` transport. An IR2 fault armed on `/import-fault` throws first, as
+  // `CODE: <name>` — an error's `code` does not cross the service binding, so the text carries
+  // it and the route maps either shape.
+  async import({ source, target }) {
+    const fault = await fetch(`${this.env.READ_ORIGIN}/import-fault/x`);
+    if (fault.status === 200) {
+      const { code } = await fault.json();
+      throw new Error(`${code}: ${source.url}`);
+    }
+    const name = new URL(source.url).pathname
+      .replace(/\/$/, "")
+      .split("/")
+      .pop()
+      .replace(/\.git$/, "");
+    const params = new URLSearchParams({ from: name });
+    if (source.branch !== undefined) params.set("branch", source.branch);
+    const response = await fetch(`${this.env.READ_ORIGIN}/import/${target.name}?${params}`);
+    if (response.status === 409) throw new Error(`ALREADY_EXISTS: ${target.name}`);
+    if (response.status === 404) throw new Error(`NOT_FOUND: ${source.url}`);
+    if (!response.ok) throw new Error(`UPSTREAM_UNAVAILABLE: ${response.status}`);
+    return { remote: `${this.env.GIT_ORIGIN}/${target.name}` };
+  }
 }

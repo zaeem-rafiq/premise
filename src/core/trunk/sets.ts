@@ -301,8 +301,19 @@ export type Pool = {
   syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   meta: Map<string, string>;
-  files: FileMap; // head: path -> content
-  modes: Map<string, string>; // head: path -> mode
+  files: FileMap; // head: path -> content — MANAGED entries only (IR5)
+  modes: Map<string, string>; // head: path -> mode, a mirror of the files rows
+  /** Every head-tree entry — managed and unmanaged (IR5: path, mode, object id). `files`
+   * holds the managed half; a landing's tree is built from `entries`, so unmanaged paths
+   * (a symbolic link, a submodule, a path outside 2.1) survive every commit untouched. */
+  entries: Map<string, { oid: string; mode: string }>;
+  /** Managed paths whose imported blob exceeded MAX_FILE_BYTES (RB4): content NULL, tools
+   * answer `too_large`. They appear in `files` with empty content; this set is the mark. */
+  opaque: Set<string>;
+  /** The `trees` table in memory: directory ("" is the root, "a/b" a nested one) -> the tree
+   * object id at head — the landing overlay's store of unchanged subtrees (IR5). */
+  trees: Map<string, string>;
+  dirtyTrees: Set<string>; // dirs whose `trees` row must be written
   attempts: Map<string, Attempt>;
   landings: Landing[];
   cards: CardRec[];

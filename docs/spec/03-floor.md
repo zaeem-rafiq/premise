@@ -80,7 +80,7 @@ Attempt repos are provisioned off the landing path (`01-core.md` AG5), so nothin
 Rules for the recording:
 
 - **BS1.** One session on the deployed system, in a browser, with no terminal. Cuts remove waiting only. The run clock is on screen in every shot, so every cut is visible.
-- **BS2.** Beat 0 is a cut forward from beat 4 of the same session. Its caption ("From later in this recording.") is added in the video edit. It is not text of the page, so it has no copy id.
+- **BS2.** Beat 0 is a cut forward from beat 4 of the same session. Its caption ("From later in this recording.") is added in the video edit. It is not text of the page, so it has no copy id. The owner confirmed this opening on 2026-10-04 ("cut forward").
 - **BS3 (the owner sets the pace).** Both catches are paced by cards, not by luck. A change that waits on a card keeps its premises live (`01-core.md` 10.2, RC2). So the owner first lets the changes that will be caught wait on a card, and then lands the change that moves the code under them. No beat depends on two agents finishing in a lucky order.
 - **BS4.** The voiceover reads measured numbers from the screen. Where the script says *[read the number]* no number is written in advance.
 - **BS5.** If a card closes as out of date before the owner taps it, that is the same catch in the other landing order (`01-core.md` 6.5). The script has a line for it.

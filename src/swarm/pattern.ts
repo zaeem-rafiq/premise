@@ -20,8 +20,15 @@ import { WRAP_B } from "./casts/wrap-b.ts";
 import { ADD_ENERGY } from "./patterns/add-energy.ts";
 import { ADD_PLAIN } from "./patterns/add-plain.ts";
 import { ADD_RELATIVE } from "./patterns/add-relative.ts";
+import { BLIND } from "./patterns/blind.ts";
 import { COSMETIC } from "./patterns/cosmetic.ts";
+import { EDIT_CREATURE } from "./patterns/edit-creature.ts";
+import { READER } from "./patterns/reader.ts";
 import { RESCALE_ENERGY } from "./patterns/rescale-energy.ts";
+import { RETUNE } from "./patterns/retune.ts";
+import { SAME_FILE } from "./patterns/same-file.ts";
+import { SWEEP_COLOUR } from "./patterns/sweep-colour.ts";
+import { SWEEP_SEARCH } from "./patterns/sweep-search.ts";
 
 /** What a pattern asks for at one turn. The three kinds mirror `Driver.next` of `ports.ts`. */
 export type PatternStep =
@@ -53,6 +60,14 @@ export type Pattern = {
   readonly intent: string;
   /** The truth list (TR8): `<kind>:<key>` strings the canned change truly depends on. */
   readonly truth: readonly string[];
+  /**
+   * The truth list when it depends on the agent's draws — `retune`'s `entity:<path>#<name>` of
+   * the picked constant, `edit-creature`'s `entity:creatures/s000<k>.js#SPEED`, `same-file`'s
+   * `file:creatures/d<number>.js` (10.3). Given the agent's fresh stream `agentRandom(seed, n)`,
+   * it draws exactly what the pattern's first `rand` draws, so the list names the same target
+   * the script will touch (SW1).
+   */
+  readonly truthOf?: (rand: () => number) => readonly string[];
   /** The next synchronous step. */
   next(turn: PatternTurn): PatternStep;
 };
@@ -63,7 +78,14 @@ const PATTERNS: readonly Pattern[] = [
   ADD_ENERGY,
   ADD_RELATIVE,
   RESCALE_ENERGY,
+  RETUNE,
+  EDIT_CREATURE,
+  SWEEP_COLOUR,
+  SWEEP_SEARCH,
+  SAME_FILE,
   COSMETIC,
+  READER,
+  BLIND,
   // The canned casts of 02-tidepool.md 10.5, in the table's order.
   HERO_S,
   HERO_C,

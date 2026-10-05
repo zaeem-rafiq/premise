@@ -1,14 +1,12 @@
 // Appendix A, row A22: the rule-based `confirm` items of 10.3's third table, each observed on
 // seed `tidepool-swarm` through the real `Trunk` engine, and the `acknowledges with no edit`
-// each canned pattern gives them. The patterns the row names but `src/swarm` does not carry —
-// `retune`, `reader`, `sweep-colour`, `edit-creature` and `sweep-search` — are written here as
-// ad-hoc canned casts, faithful to their 10.3 rows, on the seed they were designed for.
+// each canned pattern gives them. Every agent runs the registered pattern of `src/swarm` —
+// `retune`, `reader`, `sweep-colour`, `edit-creature` and `sweep-search` included. The `n`
+// overrides pin the draw positions the row needs (SW1): agent 0's first draw picks 2 of 4 —
+// `retune` of `energy#REST_TICKS` — and agent 5's picks 0 of 4 — `edit-creature` of `s0000`.
 
 import { describe, expect, it } from "vitest";
 import type { HeadsUp } from "../../../src/protocol/headsup.ts";
-import { cannedCast, type CastCall } from "../../../src/swarm/casts/runner.ts";
-import { fileNamesOf, freshName } from "../../../src/swarm/scripted.ts";
-import { PALETTE, tPlain } from "../../../src/swarm/templates.ts";
 import { SwarmSim, swarmFiles, type AgentHandle } from "../../integration/collide/harness.ts";
 
 function sim(): SwarmSim {
@@ -39,204 +37,7 @@ function judgmentsOf(s: SwarmSim, agent: AgentHandle): Array<Record<string, unkn
 
 const itemKeys = (hu: HeadsUp): string[] => hu.items.map((i) => `${i.rule}:${i.premise.key}`);
 
-// --- The ad-hoc casts of 10.3, on `tidepool-swarm` -------------------------------------------
-
-/** `retune` of `energy#REST_TICKS`: read the entity, cycle 300 -> 240, submit. */
-const RETUNE_REST_TICKS = cannedCast({
-  id: "retune",
-  intent: "retune REST_TICKS",
-  truth: ["entity:world/energy.js#REST_TICKS"],
-  script: [
-    { tool: "read", args: { path: "world/energy.js", entity: "REST_TICKS" }, why: "read" },
-    {
-      tool: "replace",
-      args: { path: "world/energy.js", old: "export const REST_TICKS = 300;", new: "export const REST_TICKS = 240;" },
-      why: "edit",
-    },
-  ],
-});
-
-/** `reader`: a whole-file `read` of `world/energy.js`, then `add-plain`'s body. */
-const READER = cannedCast({
-  id: "reader",
-  intent: "add a creature",
-  truth: ["entity:world/bounds.js#bounce", "entity:world/movement.js#step", "entity:world/movement.js#wander"],
-  script: [
-    { tool: "read", args: { path: "world/energy.js" }, why: "wide-read" },
-    { tool: "list", args: { path: "creatures/" }, why: "list" },
-    { tool: "read", args: { path: "GUIDE.md" }, why: "read" },
-    { tool: "read", args: { path: "world/bounds.js", entity: "bounce" }, why: "read" },
-    { tool: "read", args: { path: "world/movement.js", entity: "step" }, why: "read" },
-    { tool: "read", args: { path: "world/movement.js", entity: "wander" }, why: "read" },
-    (s) => {
-      const entries = (s.data.entries ?? ["s0000.js"]) as string[];
-      const name = freshName(entries);
-      // The palette/speed draws `add-plain` makes; a fixed pick keeps this cast deterministic.
-      s.data.name = name;
-      return { tool: "write", args: { path: name, content: tPlain("purple", 2) }, why: "write" };
-    },
-  ],
-  onResult(s, call, result) {
-    if (call.why === "list") s.data.entries = fileNamesOf(result);
-  },
-});
-
-/** `edit-creature` of `s0000`: read `creatures/s0000.js#SPEED`, cycle 1 -> 1.5, submit. */
-const EDIT_CREATURE_S0000 = cannedCast({
-  id: "edit-creature",
-  intent: "speed up s0000",
-  truth: ["entity:creatures/s0000.js#SPEED"],
-  script: [
-    { tool: "read", args: { path: "creatures/s0000.js", entity: "SPEED" }, why: "read" },
-    {
-      tool: "replace",
-      args: { path: "creatures/s0000.js", old: "const SPEED = 1;", new: "const SPEED = 1.5;" },
-      why: "edit",
-    },
-  ],
-});
-
-/** `sweep-colour`: list `creatures/`; for each of the first four kinds in name order read the
- * file and `replace` its first colour constant with the next palette name; submit. */
-const SWEEP_COLOUR = cannedCast({
-  id: "sweep-colour",
-  intent: "repaint the first four creatures",
-  truth: ["listing:creatures/"],
-  secondRepairWithdraws: true,
-  script: [
-    { tool: "list", args: { path: "creatures/" }, why: "list" },
-    (s) =>
-      ((s.data.first4 ?? []) as string[]).map((path) => ({
-        tool: "read" as const,
-        args: { path },
-        why: `read:${path}`,
-      })),
-    (s) => {
-      const calls: CastCall[] = [];
-      const texts = (s.data.texts ?? {}) as Record<string, string>;
-      const colours = new Set<string>(PALETTE);
-      for (const path of (s.data.first4 ?? []) as string[]) {
-        // The first colour constant: the first `const NAME = "<a palette colour>";`.
-        const match = /const (\w+) = "(\w+)";/.exec(texts[path] ?? "");
-        if (match === null || !colours.has(match[2] as string)) continue;
-        const next = PALETTE[(PALETTE.indexOf(match[2] as (typeof PALETTE)[number]) + 1) % PALETTE.length];
-        calls.push({
-          tool: "replace",
-          args: { path, old: match[0], new: `const ${match[1]} = "${next}";` },
-          why: `edit:${path}`,
-        });
-      }
-      return calls;
-    },
-  ],
-  onResult(s, call, result) {
-    if (call.why === "list") {
-      const entries = fileNamesOf(result).sort();
-      s.data.first4 = entries.slice(0, 4).map((name) => `creatures/${name}`);
-      return;
-    }
-    if (call.why?.startsWith("read:")) {
-      const path = call.why.slice("read:".length);
-      const text = (result as { content?: unknown }).content;
-      const texts = (s.data.texts ??= {}) as Record<string, string>;
-      if (typeof text === "string") texts[path] = text;
-    }
-  },
-});
-
-/** `sweep-search`: `search` for `wander(creature, 0.05)` in `creatures/`; for the first three
- * containers: `read`, `replace` with `wander(creature, 0.1)`; submit. */
-const SWEEP_SEARCH = cannedCast({
-  id: "sweep-search",
-  intent: "widen the wander",
-  truth: ["query:text:creatures/:wander(creature, 0.05)"],
-  secondRepairWithdraws: true,
-  script: [
-    { tool: "search", args: { query: "wander(creature, 0.05)", path: "creatures/" }, why: "search" },
-    (s) =>
-      ((s.data.containers ?? []) as string[]).slice(0, 3).map((path) => ({
-        tool: "read" as const,
-        args: { path },
-        why: `read:${path}`,
-      })),
-    (s) =>
-      ((s.data.containers ?? []) as string[]).slice(0, 3).map((path) => ({
-        tool: "replace" as const,
-        args: { path, old: "wander(creature, 0.05)", new: "wander(creature, 0.1)" },
-        why: `edit:${path}`,
-      })),
-  ],
-  onResult(s, call, result) {
-    if (call.why === "search") {
-      const containers = (result as { containers?: unknown }).containers;
-      s.data.containers = Array.isArray(containers)
-        ? containers.filter((c): c is string => typeof c === "string").map((c) => c.split("#")[0] as string)
-        : [];
-    }
-  },
-  onHeadsUp(s, hu, ack) {
-    // QT1 `repair`: the same edit in each added container; no read is needed (the source rides
-    // the diff's `added` entries).
-    for (const item of hu.items) {
-      if (item.rule !== "QT1" || item.diff.kind !== "query") continue;
-      for (const added of item.diff.added) {
-        s.queue.push({
-          tool: "replace",
-          args: { path: added.key.split("#")[0], old: "wander(creature, 0.05)", new: "wander(creature, 0.1)" },
-          why: "repair",
-        });
-      }
-    }
-    ack.statement = "widened the wander in the new file too";
-  },
-});
-
-/** `retune` of `energy#REST_TICKS` that answers its E1 (OP1) as its row says: `read` the entity
- * again, `replace` from the new current value (the cycle 300 -> 240 -> 360 -> 300), acknowledge. */
-const RETUNE_ADAPT = cannedCast({
-  id: "retune",
-  intent: "retune REST_TICKS",
-  truth: ["entity:world/energy.js#REST_TICKS"],
-  script: [
-    { tool: "read", args: { path: "world/energy.js", entity: "REST_TICKS" }, why: "read" },
-    {
-      tool: "replace",
-      args: { path: "world/energy.js", old: "export const REST_TICKS = 300;", new: "export const REST_TICKS = 240;" },
-      why: "edit",
-    },
-  ],
-  onResult(s, call, result) {
-    if (call.why === "reread") {
-      const source = (result as { source?: unknown }).source;
-      const m = typeof source === "string" ? /REST_TICKS = (\d+)/.exec(source) : null;
-      if (m !== null) s.data.rest_ticks = Number(m[1]);
-    }
-  },
-  onHeadsUp(s, hu, ack) {
-    if (hu.dropped_ops.length === 0) return;
-    // E1 + OP1: the queued replace no longer applies. `read` it again, `replace` from the new
-    // current value to the next of the cycle (10.3's `retune` row).
-    s.queue.push({ tool: "read", args: { path: "world/energy.js", entity: "REST_TICKS" }, why: "reread" });
-    s.queue.push({
-      tool: "replace",
-      args: (s) => {
-        const cycle = [300, 240, 360];
-        const cur = (s.data.rest_ticks ?? 300) as number;
-        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
-        return {
-          path: "world/energy.js",
-          old: `export const REST_TICKS = ${cur};`,
-          new: `export const REST_TICKS = ${next};`,
-        };
-      },
-      why: "repair",
-    });
-    ack.statement = "rescaled from the new current value";
-    ack.dropped = "handled";
-  },
-});
-
-// --- A22's scenarios, on seed `tidepool-swarm` ----------------------------------------------
+// --- A22's scenarios, on seed `tidepool-swarm`, over the registered patterns -----------------
 
 describe("10.3 rule-based confirms (A22)", () => {
   it(
@@ -246,7 +47,7 @@ describe("10.3 rule-based confirms (A22)", () => {
       const s = sim();
       const rescale = s.open("rescale-energy", { hold: true });
       drive(s, rescale); // has read ENERGY_MAX and replaced it; its `refs:` premise stands
-      const retune = s.open(RETUNE_REST_TICKS);
+      const retune = s.open("retune", { n: 0 }); // agent 0's draw picks `energy#REST_TICKS`
       landNow(s, retune);
 
       const hus = s.headsUps(rescale);
@@ -291,7 +92,7 @@ describe("10.3 rule-based confirms (A22)", () => {
       const s = sim();
       const rescale = s.open("rescale-energy", { hold: true });
       const addEnergy = s.open("add-energy", { hold: true });
-      const reader = s.open(READER, { hold: true });
+      const reader = s.open("reader", { hold: true });
       drive(s, rescale);
       drive(s, addEnergy);
       drive(s, reader);
@@ -313,9 +114,9 @@ describe("10.3 rule-based confirms (A22)", () => {
     { timeout: 30_000 },
     () => {
       const s = sim();
-      const edit = s.open(EDIT_CREATURE_S0000, { hold: true });
+      const edit = s.open("edit-creature", { hold: true, n: 5 }); // agent 5's draw picks `s0000`
       drive(s, edit); // has replaced `const SPEED = 1;` with `1.5`
-      const sweep = s.open(SWEEP_COLOUR);
+      const sweep = s.open("sweep-colour");
       landNow(s, sweep);
 
       const hus = s.headsUps(edit);
@@ -332,9 +133,9 @@ describe("10.3 rule-based confirms (A22)", () => {
     { timeout: 30_000 },
     () => {
       const s = sim();
-      const sweep = s.open(SWEEP_COLOUR, { hold: true });
+      const sweep = s.open("sweep-colour", { hold: true });
       drive(s, sweep); // has replaced the BODY of s0000.js (among its first four)
-      const edit = s.open(EDIT_CREATURE_S0000);
+      const edit = s.open("edit-creature", { n: 5 }); // agent 5's draw picks `s0000`
       landNow(s, edit);
 
       const hus = s.headsUps(sweep);
@@ -360,7 +161,7 @@ describe("10.3 rule-based confirms (A22)", () => {
       const s = sim();
       const rescale = s.open("rescale-energy", { hold: true });
       drive(s, rescale);
-      const reader = s.open(READER);
+      const reader = s.open("reader");
       landNow(s, reader);
 
       expect(
@@ -384,7 +185,7 @@ describe("10.3 rule-based confirms (A22)", () => {
     { timeout: 30_000 },
     () => {
       const s = sim();
-      const sweep = s.open(SWEEP_SEARCH, { hold: true });
+      const sweep = s.open("sweep-search", { hold: true });
       drive(s, sweep); // its three replaces on the first containers stand
       const add = s.open("add-plain");
       landNow(s, add);
@@ -412,9 +213,9 @@ describe("10.3 rule-based confirms (A22)", () => {
     { timeout: 30_000 },
     () => {
       const s = sim();
-      const a = s.open(RETUNE_ADAPT, { hold: true });
+      const a = s.open("retune", { hold: true, n: 0 }); // agent 0's draw picks REST_TICKS
       drive(s, a); // its `replace` 300 -> 240 is recorded
-      const b = s.open(RETUNE_REST_TICKS);
+      const b = s.open("retune", { n: 0 }); // the same stream position draws the same constant
       landNow(s, b);
 
       const hus = s.headsUps(a);

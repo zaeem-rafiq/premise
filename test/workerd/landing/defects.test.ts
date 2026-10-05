@@ -59,19 +59,24 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
     // LP5a: the first rejection already left one push.retry inside the request's post-commit.
     await waitFor(async () => (await worker.events(REFUSE)).some((e) => e.type === "push.retry"), 30_000);
 
-    // Drive the retries through the alarm test path until the pool pauses (LP5b, limit 5).
-    for (let i = 0; i < 8; i++) {
+    // Drive the retries through the alarm test path until the pool pauses (LP5b, limit 5). The
+    // real alarm also pushes at each backoff, and a run that finds that push still in flight does
+    // nothing: on a loaded machine a fixed count of runs can end before the fifth refusal, so the
+    // loop is bounded by time instead. Every refusal, whoever drives it, is checked below.
+    const until = Date.now() + 30_000;
+    while (Date.now() < until) {
       const meta = (await worker.trunk(REFUSE).state()).meta as Record<string, string>;
       if (meta.pool_state === "paused") break;
       await worker.runAlarm(REFUSE, FAR());
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const state = (await worker.trunk(REFUSE).state()) as {
       meta: Record<string, string>;
       timers: Array<{ kind: string; key: string; due_at: number }>;
       outbox: unknown;
     };
-    // This assertion failed once under a loaded full suite and has not been reproduced since:
-    // on a failure, name what the pool did so the cause can be read off the report.
+    // On a failure, name what the pool did so the cause can be read off the report. (These lines
+    // found the lost retry timer of `alarm.ts` - see `src/worker/trunk/alarm.test.ts`.)
     const seen = (await worker.events(REFUSE))
       .filter((e) => e.type === "push.retry" || e.type === "pool.paused" || e.type === "trunk.error")
       .map((e) => JSON.stringify(e));
@@ -105,7 +110,7 @@ describe("defects A-D of the first live run (Slice 3, part 1)", () => {
     const after = (await worker.trunk(REFUSE).state()) as { timers: Array<{ kind: string; due_at: number }> };
     expect(after.timers.filter((t) => t.kind === "push" || t.kind === "repush")).toHaveLength(0);
     expect(after.timers.filter((t) => t.due_at < Date.now())).toHaveLength(0);
-  }, 60_000);
+  }, 90_000);
 
   it("C (AL1): an alarm run on a fresh object with nothing pending leaves the timers table empty", async () => {
     const res = await worker.trunk("it-empty").fetch("/internal/alarm", { method: "POST" });

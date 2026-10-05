@@ -30,6 +30,8 @@ const REQUESTER = "swarm";
 const AGENT_OPEN_URL = "https://agent/open";
 const AGENT_RELEASE_URL = "https://agent/release";
 const TRUNK_OPEN_ATTEMPT_URL = "https://trunk/internal/open-attempt";
+const TRUNK_SWARM_HOLD_URL = "https://trunk/internal/swarm-hold";
+const TRUNK_SWARM_HELD_URL = "https://trunk/internal/swarm-held";
 
 /** ULID's Crockford base32 alphabet, in order. */
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -56,20 +58,6 @@ export function launchAttemptId(requestId: string, n: number): string {
 
 /** Request ids this isolate has already answered (SWR4; DO idempotency covers restarts). */
 const answeredRequests = new Set<string>();
-
-/** Which attempts were launched per `pool` and pattern, so `release` (SWR3) finds them. */
-const launchedAgents = new Map<string, Map<string, string[]>>();
-
-function recordLaunch(pool: string, pattern: string, attemptId: string): void {
-  let byPattern = launchedAgents.get(pool);
-  if (byPattern === undefined) {
-    byPattern = new Map();
-    launchedAgents.set(pool, byPattern);
-  }
-  const ids = byPattern.get(pattern) ?? [];
-  if (!ids.includes(attemptId)) ids.push(attemptId);
-  byPattern.set(pattern, ids);
-}
 
 function badRequest(code: string): Response {
   return Response.json({ error: { code } }, { status: 400 });
@@ -223,14 +211,38 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
       if (!answer.ok) {
         return Response.json({ error: { code: "agent_open_failed", detail: answer.error } }, { status: 502 });
       }
-      recordLaunch(request.pool, pattern.id, attemptId);
+      // SWR3: a held agent is recorded with the pool, so that a release reaching any isolate
+      // finds it (the pool's Trunk keeps the list; this isolate's memory does not last).
+      if (hold.has(pattern.id)) {
+        try {
+          const recorded = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
+            TRUNK_SWARM_HOLD_URL,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ pattern: pattern.id, attempt_id: attemptId }),
+            },
+          );
+          if (!recorded.ok) return Response.json({ error: { code: "trunk_hold_failed" } }, { status: 502 });
+        } catch {
+          return Response.json({ error: { code: "trunk_hold_failed" } }, { status: 502 });
+        }
+      }
       if (answer.already !== true) launched.push(attemptId);
     }
   }
 
   // SWR3: a release names held patterns whose agents may now call `submit`.
   for (const id of request.release ?? []) {
-    const ids = launchedAgents.get(request.pool)?.get(id) ?? [];
+    let ids: string[];
+    try {
+      const held = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
+        `${TRUNK_SWARM_HELD_URL}?pattern=${encodeURIComponent(id)}`,
+      );
+      ids = ((await held.json()) as { attempts?: string[] }).attempts ?? [];
+    } catch {
+      return Response.json({ error: { code: "agent_release_failed" } }, { status: 502 });
+    }
     for (const attemptId of ids) {
       try {
         await input.env.AGENT.get(input.env.AGENT.idFromName(attemptId)).fetch(AGENT_RELEASE_URL, {

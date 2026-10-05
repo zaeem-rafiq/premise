@@ -47,6 +47,8 @@ class FakeAgentNamespace {
  *  pool's Trunk before its agent). */
 class FakeTrunkNamespace {
   readonly opens: Array<{ pool: string; payload: Record<string, unknown> }> = [];
+  /** SWR3: the held attempts per pool and pattern, as the real Trunk keeps them in `meta`. */
+  readonly held = new Map<string, string[]>();
   idFromName(name: string): string {
     return name;
   }
@@ -65,6 +67,17 @@ class FakeTrunkNamespace {
               intent_id: payload.intent_id,
             }),
           );
+        }
+        if (path === "/internal/swarm-hold") {
+          const { pattern, attempt_id } = JSON.parse(String(init?.body)) as { pattern: string; attempt_id: string };
+          const key = `${id}:${pattern}`;
+          const ids = this.held.get(key) ?? [];
+          if (!ids.includes(attempt_id)) this.held.set(key, [...ids, attempt_id]);
+          return Promise.resolve(Response.json({ ok: true }));
+        }
+        if (path === "/internal/swarm-held") {
+          const pattern = new URL(String(input)).searchParams.get("pattern") ?? "";
+          return Promise.resolve(Response.json({ attempts: this.held.get(`${id}:${pattern}`) ?? [] }));
         }
         return Promise.resolve(new Response("not found", { status: 404 }));
       },

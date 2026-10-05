@@ -410,6 +410,37 @@ export class Trunk extends DurableObject<Env> {
     if (!("error" in r)) await this.#postCommit();
   }
 
+  /**
+   * SWR3: the held scripted attempts of each pattern, kept with the pool so that a release finds
+   * them from any Worker isolate. The Swarm route records a held launch here and reads the list
+   * back on `release`; its own memory does not outlive the isolate that launched the agents.
+   * `POST /internal/swarm-hold` `{ pattern, attempt_id }` adds one; `GET /internal/swarm-held?pattern=`
+   * answers `{ attempts }`. The rows live in `meta` under `swarm_hold:<pattern>`.
+   */
+  async #swarmHold(request: Request, url: URL): Promise<Response> {
+    if (url.pathname === "/internal/swarm-held") {
+      const raw = metaGet(this.#sql, `swarm_hold:${url.searchParams.get("pattern") ?? ""}`);
+      return json({ attempts: raw === null ? [] : (JSON.parse(raw) as string[]) });
+    }
+    if (request.method !== "POST") return json({ error: { code: "invalid_args" } }, 400);
+    let body: { pattern?: unknown; attempt_id?: unknown };
+    try {
+      body = (await request.json()) as { pattern?: unknown; attempt_id?: unknown };
+    } catch {
+      return json({ error: { code: "bad_json" } }, 400);
+    }
+    const { pattern, attempt_id } = body;
+    if (typeof pattern !== "string" || pattern === "" || typeof attempt_id !== "string" || attempt_id === "") {
+      return json({ error: { code: "invalid_args" } }, 400);
+    }
+    this.#sql.transaction(() => {
+      const key = `swarm_hold:${pattern}`;
+      const ids = JSON.parse(metaGet(this.#sql, key) ?? "[]") as string[];
+      if (!ids.includes(attempt_id)) metaSet(this.#sql, key, JSON.stringify([...ids, attempt_id]));
+    });
+    return json({ ok: true });
+  }
+
   /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
    * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
   async #runTimerEntry(kind: string, input: unknown, now?: number): Promise<boolean> {
@@ -472,6 +503,9 @@ export class Trunk extends DurableObject<Env> {
         const at = now === null ? undefined : Number(now);
         await this.#runAlarm(at !== undefined && Number.isFinite(at) ? at : undefined);
         return json({ ok: true });
+      }
+      if (pathname === "/internal/swarm-hold" || pathname === "/internal/swarm-held") {
+        return await this.#swarmHold(request, url);
       }
       const input = await this.#readInput(request, url);
       if (input === BAD_JSON) return json({ error: { code: "bad_json" } }, 400);

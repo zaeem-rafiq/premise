@@ -299,8 +299,10 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           openSheet({ kind: "about" });
           break;
         case "view-compare":
-          // 2.3: Compare exists only for a pool with a plain-merge pool beside it.
-          if (session.floor.pool.plain_remote !== null) setView((v) => (v === "compare" ? "floor" : "compare"));
+          // 2.3: Compare exists only for a pool with a plain-merge pool beside it — and a
+          // live picture: an imported pool (app null, IR12) never enters the view.
+          if (session.floor.pool.plain_remote !== null && session.floor.pool.app !== null)
+            setView((v) => (v === "compare" ? "floor" : "compare"));
           break;
         case "needs-you":
           openNeeds();
@@ -361,6 +363,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     [
       session.player,
       session.floor.pool.plain_remote,
+      session.floor.pool.app,
       sheet.kind,
       view,
       owner,
@@ -378,6 +381,11 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   // ---- render ----
   const floor = session.floor;
+  // IR12: an imported pool has no live picture and no pool name of its own in the header —
+  // it is named by the repository it came from (`<owner>/<name>`); a seed pool keeps its
+  // pool name. `source` is null until a pool.state arrives, so the route's name is the
+  // fallback while the kind is undecided.
+  const headerPool = floor.pool.app === null && floor.pool.source !== null ? floor.pool.source : pool;
   const clock = session.clock.time();
   const needs = floor.open_cards.filter((id) => {
     const card = floor.cards[id]?.card;
@@ -519,7 +527,12 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         )}
       </main>
     );
-  } else if (view === "compare" && floor.pool.plain_remote !== null && table.entries.has("view.compare")) {
+  } else if (
+    view === "compare" &&
+    floor.pool.plain_remote !== null &&
+    floor.pool.app !== null &&
+    table.entries.has("view.compare")
+  ) {
     // 2.3: the Compare view - the main pool and the plain-merge pool side by side. The pool area
     // lane registers it; the shell owns the view state, the frames' pause and the way back.
     body = (
@@ -547,8 +560,10 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
               mode={replay ? "replay" : "live"}
               paused={framesPaused}
               onPausedChange={setFramesPaused}
-              onCompare={floor.pool.plain_remote !== null ? () => setView("compare") : undefined}
-              selftest
+              onCompare={
+                floor.pool.plain_remote !== null && floor.pool.app !== null ? () => setView("compare") : undefined
+              }
+              selftest={floor.pool.app !== null}
               onTapped={
                 table.entries.has("sheet.why")
                   ? (path) => {
@@ -609,7 +624,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         data-state={session.connection === "lost" ? "offline" : undefined}
       >
         <Header
-          pool={pool}
+          pool={headerPool}
           view={view}
           mode={replay ? "replay" : "live"}
           needs={needs}
@@ -617,8 +632,9 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           killed={floor.limits?.killed === true}
           offline={offline}
           onView={(v) => {
-            if (v === "compare") setView((old) => (old === "compare" ? "floor" : "compare"));
-            else setView(v);
+            if (v === "compare" && floor.pool.plain_remote !== null && floor.pool.app !== null)
+              setView((old) => (old === "compare" ? "floor" : "compare"));
+            else if (v !== "compare") setView(v);
           }}
           onReplayMenu={() => {
             void getIndex();

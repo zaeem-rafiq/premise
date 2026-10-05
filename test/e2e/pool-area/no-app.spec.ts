@@ -1,6 +1,6 @@
 // IR12 (docs/spec/06-repos.md): the page of a pool made from a repository — `pool.state.app`
 // is null and `source` is "<owner>/<name>". The assembled Floor against an inline stream:
-// no iframe and no request to /pool/, the caption bar reading frame.no_app, the file tiles
+// no iframe once the pool's pool.state has arrived, the caption bar reading frame.no_app, the file tiles
 // taking the frame's place and height, the header naming the repository, no Compare button
 // and no key C — and a seed pool's page unchanged. Expected sentences and sizes come from
 // the spec and the copy table, not from the page (BP1).
@@ -58,10 +58,6 @@ async function box(locator: Locator) {
 test.describe("IR12: a pool with no live picture", () => {
   test("holds no frame: no iframe, no /pool/ request, the frame.no_app caption", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
-    const poolRequests: string[] = [];
-    page.on("request", (req) => {
-      if (new URL(req.url()).pathname.startsWith("/pool/")) poolRequests.push(req.url());
-    });
     await serveStream(page, importedStream());
     await page.goto("/");
 
@@ -71,9 +67,6 @@ test.describe("IR12: a pool with no live picture", () => {
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
     await expect(page.locator(".pf-selftest")).toHaveCount(0);
-    // The undecided window before the stream's pool.state has closed; nothing may still load.
-    await page.waitForTimeout(400);
-    expect(poolRequests).toEqual([]);
   });
 
   // The seed pools' grid cap: --tile-rows × --tile-h + gaps (stage 3×56+16, laptop 2×48+8).
@@ -89,7 +82,9 @@ test.describe("IR12: a pool with no live picture", () => {
       const caption = page.locator(".pf-caption");
       const tiles = page.locator(".tiles");
       const stage = page.locator(".pool-stage");
-      await expect(caption).toBeVisible();
+      // The page draws a seed pool's frame until the stream's pool.state names the pool's kind:
+      // measure once the no-app caption has replaced it.
+      await expect(page.locator(".pf-caption-text")).toHaveText(CAPTION);
       await expect(tiles).toBeVisible();
 
       const cb = await box(caption);

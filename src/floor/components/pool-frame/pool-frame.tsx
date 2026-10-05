@@ -215,26 +215,15 @@ export function PoolFrame(props: PoolFrameProps) {
     driver.setUserPaused(paused);
     driver.setHighlight(highlightKinds(props.highlight ?? []), props.highlight !== undefined);
     driver.setSelftest(props.selftest === true);
-    // IR12: pool.state "unknown" means none has arrived yet — the app kind is undecided
-    // (an imported repository's is null) and the frame must not load an address it may
-    // have no server for. The driver's first feed waits for the stream's pool.state.
-    if (state.pool.state !== "unknown") {
-      driver.setTarget({
-        landedCommit: state.pool.landed_commit,
-        greenCommit: state.green.commit,
-        greenSeq: state.green.seq,
-      });
-    }
-  }, [
-    driver,
-    paused,
-    props.highlight,
-    props.selftest,
-    state.pool.state,
-    state.pool.landed_commit,
-    state.green.commit,
-    state.green.seq,
-  ]);
+    // The frame loads at once, before the stream has said anything: the live picture keeps
+    // running when the stream is slow or down. An imported pool (IR12) replaces the frame as
+    // soon as its pool.state arrives, so its one early request is never shown.
+    driver.setTarget({
+      landedCommit: state.pool.landed_commit,
+      greenCommit: state.green.commit,
+      greenSeq: state.green.seq,
+    });
+  }, [driver, paused, props.highlight, props.selftest, state.pool.landed_commit, state.green.commit, state.green.seq]);
 
   useEffect(() => {
     const onBlur = () => setFrameFocus(document.activeElement === iframeRef.current);

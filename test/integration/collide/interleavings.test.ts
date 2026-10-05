@@ -391,11 +391,9 @@ describe("interleavings (02-tidepool 10.3): a heads-up at every point of every s
         const holds = k === len ? [true, false] : [true];
         for (const hold of holds) {
           const name = `a=${pa} b=${pb} k=${k} ${hold ? "held" : "running"}`;
-          const runner = // The disturbed attempt is A while it is parked (held); once A ran its script and
+          // The disturbed attempt is A while it is parked (held); once A ran its script and
           // lands first (running), the parked B is the one the heads-up reaches.
-          (hold ? qr4Differs(pa, pb, k) : qr4Differs(pb, pa, SCRIPT_LEN[pb] as number))
-            ? it.fails
-            : it;
+          const runner = (hold ? qr4Differs(pa, pb, k) : qr4Differs(pb, pa, SCRIPT_LEN[pb] as number)) ? it.fails : it;
           runner(name, () => {
             checkInterleaving(pa, pb, k, hold);
           });

@@ -136,16 +136,20 @@ export class SwarmSim {
     this.seed = opts.seed;
   }
 
-  /** Open a synthetic attempt for a pattern (SWR2: agent n is entry n of the cast). */
-  open(patternOrId: string | Pattern, opts: { hold?: boolean } = {}): AgentHandle {
+  /** Open a synthetic attempt for a pattern (SWR2: agent n is entry n of the cast, unless
+   * `opts.n` overrides the draw position — two entries with the same `n` share one stream,
+   * which is how a `same-file` pair draws the same name).
+   * A pattern whose truth list depends on its draws (`retune`, `edit-creature`, `same-file`)
+   * names it through `truthOf` on a fresh stream at the same positions (SW1). */
+  open(patternOrId: string | Pattern, opts: { hold?: boolean; n?: number } = {}): AgentHandle {
     const pattern = typeof patternOrId === "string" ? patternById(patternOrId) : patternOrId;
     if (pattern === undefined) throw new Error(`unknown pattern ${patternOrId}`);
-    const n = this.agents.length;
-    const id = `a${n}`;
+    const n = opts.n ?? this.agents.length;
+    const id = `a${this.agents.length}`;
     this.trunk.openAttempt(id, {
       intent: pattern.intent,
       agent_kind: "synthetic",
-      truth: [...pattern.truth],
+      truth: [...(pattern.truthOf?.(agentRandom(this.seed, n)) ?? pattern.truth)],
       model: null,
     });
     const agent: AgentHandle = {

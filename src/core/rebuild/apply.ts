@@ -109,6 +109,13 @@ export function beginRebuild(
 ): Record<string, unknown> {
   const cursor = rebuildCursorOf(pool);
   if (cursor === null || cursor.stage !== "await") return { ok: false, error: { code: "not_awaited" } };
+  // LP8: a pool paused for a refused or diverged push never reconciles its outbox, and the
+  // owner's rebuild is what resolves that pause: the halted row is closed as `diverged` (the
+  // remote is the truth; step 7 settles the batch's accepted attempts).
+  const reason = pool.meta.get("pause_reason") ?? "";
+  if (pool.meta.get("pool_state") === "paused" && (reason === "push_rejected" || reason === "diverged")) {
+    pool.sql.exec("UPDATE outbox SET state = 'diverged' WHERE state IN ('pending', 'notes_pending')");
+  }
   // RB1: the outbox must first reconcile to `pushed` or `diverged` — never wiped mid-flight.
   const openOutbox = pool.sql
     .exec("SELECT batch_id FROM outbox WHERE state IN ('pending', 'notes_pending') LIMIT 1")

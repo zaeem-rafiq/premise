@@ -12,10 +12,15 @@
 // reads the contents the rebuilt tables need, and `finish` is the last apply: heads, indexes,
 // `register_expect`, `ready`.
 
-import { PUSH_BACKOFF_BASE_MS, REBUILD_CALLS_PER_RUN, UNDO_WINDOW } from "../../protocol/constants.ts";
+import {
+  PUSH_BACKOFF_BASE_MS,
+  PUSH_BACKOFF_MAX_MS,
+  REBUILD_CALLS_PER_RUN,
+  UNDO_WINDOW,
+} from "../../protocol/constants.ts";
 import type { Env } from "../env.ts";
-import { metaGet, sqlOf, timerPut } from "./sql.ts";
-import { outboxRow, type PushDeps } from "./push.ts";
+import { metaDelete, metaGet, metaSet, sqlOf, timerPut } from "./sql.ts";
+import { outboxRow, pushHalted, type PushDeps } from "./push.ts";
 import { recordTrunkError } from "./after-commit.ts";
 import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
@@ -128,6 +133,15 @@ class BudgetExceeded extends Error {}
 
 export type RebuildApply = (name: "rebuild_begin" | "rebuild_step", input: unknown) => Promise<unknown>;
 
+/** RB1's wait for the outbox, on the push backoff: 250 ms, doubling, at most 30 s. */
+function waitAndRetry(sql: ReturnType<typeof sqlOf>, now: number): void {
+  const tries = Number(metaGet(sql, "rebuild_wait_tries") ?? "0") + 1;
+  sql.transaction(() => {
+    metaSet(sql, "rebuild_wait_tries", tries);
+    timerPut(sql, "rebuild", "", now + Math.min(PUSH_BACKOFF_BASE_MS * 2 ** tries, PUSH_BACKOFF_MAX_MS));
+  });
+}
+
 /** A throw of this marks a transport fault: the row stays due and the alarm retries (AL2). */
 async function runInner(
   env: Env,
@@ -139,11 +153,15 @@ async function runInner(
   const sql = sqlOf(ctx);
   let cursor = cursorOf(sql);
   if (cursor === null) return;
-  // RB1: a pending outbox reconciles first — the push timer owns that work; wait a beat.
-  if (outboxRow(ctx) !== null) {
-    timerPut(sql, "rebuild", "", now + PUSH_BACKOFF_BASE_MS);
+  // RB1: a pending outbox reconciles first — the push timer owns that work; wait, backing off.
+  // A pool whose pushing is halted (LP8: paused for push_rejected or diverged) never reconciles:
+  // the owner's rebuild is what resolves it, so the job does not wait (`rebuild_begin` closes
+  // the row). Without this the job re-armed itself every 250 ms for as long as the pause lasted.
+  if (outboxRow(ctx) !== null && !pushHalted(ctx)) {
+    waitAndRetry(sql, now);
     return;
   }
+  metaDelete(sql, "rebuild_wait_tries");
   const pool = ctx.id.name ?? "";
   const repoName = poolRepoName(pool);
 
@@ -184,7 +202,7 @@ async function runInner(
     if (!begin.ok) {
       if (begin.error?.code === "busy") {
         // The outbox filled meanwhile: wait for the reconcile, then resume (RB1).
-        timerPut(sql, "rebuild", "", now + PUSH_BACKOFF_BASE_MS);
+        waitAndRetry(sql, now);
         return;
       }
       throw new Error(`rebuild_begin: ${begin.error?.code ?? "failed"}`);

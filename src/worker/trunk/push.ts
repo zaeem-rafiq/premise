@@ -153,7 +153,7 @@ function scheduleRetry(
 }
 
 /** True while the pool is paused with a reason only "Rebuild from Artifacts" resolves (LP8). */
-function pushHalted(ctx: DurableObjectState): boolean {
+export function pushHalted(ctx: DurableObjectState): boolean {
   const sql = sqlOf(ctx);
   if (metaGet(sql, "pool_state") !== "paused") return false;
   const reason = metaGet(sql, "pause_reason");

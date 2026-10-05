@@ -3,7 +3,7 @@
 // is at or under CONTEXT_TARGET_CHARS, and CX5's hard limit stops the attempt instead.
 
 import { CONTEXT_HARD_CHARS, CONTEXT_KEEP_TURNS, CONTEXT_TARGET_CHARS } from "../../../protocol/constants.ts";
-import { firstUserMessage, GUIDE_PATH, systemPrompt } from "../../../protocol/agent-prompt.ts";
+import { firstUserMessage, systemPrompt, TIDE_FILLS, type PromptFills } from "../../../protocol/agent-prompt.ts";
 import { TEXTS, type AgentTexts } from "./texts.ts";
 import { decodeAssistant, decodeToolRow, type Row } from "./rows.ts";
 import { renderToolMessage } from "./tool-message.ts";
@@ -77,10 +77,10 @@ function sameCall(a: Row, b: Row): boolean {
   return a.tool === b.tool && JSON.stringify(bodyA.args ?? {}) === JSON.stringify(bodyB.args ?? {});
 }
 
-function isGuideRead(row: Row): boolean {
+function isGuideRead(row: Row, guide: string): boolean {
   if (row.tool !== "read") return false;
   const args = (decodeToolRow(row) as { args?: Record<string, unknown> }).args ?? {};
-  return args.path === GUIDE_PATH && args.entity === undefined;
+  return args.path === guide && args.entity === undefined;
 }
 
 export type Assembled =
@@ -100,15 +100,19 @@ export function assembleMessages(state: LoopState, texts: AgentTexts = TEXTS): A
   const rows = state.rows;
   const replaced = new Set<number>();
 
-  // CX3 (pins): the newest answered whole-file read of GUIDE_PATH, and every read result of the
-  // last CONTEXT_KEEP_TURNS turns. A turn is one assistant row and the tool rows that follow it,
-  // so "the last N turns" is the tail after the Nth assistant row from the end.
+  // CX3 (pins): the newest answered whole-file read of the pool's guide — the imported
+  // repository's own `guide_path` (IR9); a guide-less pool pins nothing — and every read result
+  // of the last CONTEXT_KEEP_TURNS turns. A turn is one assistant row and the tool rows that
+  // follow it, so "the last N turns" is the tail after the Nth assistant row from the end.
   const pinned = new Set<number>();
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const row = rows[i];
-    if (row !== undefined && isGuideRead(row) && elidable(row)) {
-      pinned.add(row.step);
-      break;
+  const guide = state.fills.guide;
+  if (guide !== null) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      if (row !== undefined && isGuideRead(row, guide) && elidable(row)) {
+        pinned.add(row.step);
+        break;
+      }
     }
   }
   let turns = 0;
@@ -161,10 +165,14 @@ export function assembleMessages(state: LoopState, texts: AgentTexts = TEXTS): A
   return { ok: true, messages: out, elided_steps: [...replaced].sort((a, b) => a - b) };
 }
 
-/** CX1 of a fresh attempt: the first two rows — system prompt, then the request (SP1, SP2). */
-export function firstRows(intentText: string): Array<{ role: "system" | "user"; content: string }> {
+/** CX1 of a fresh attempt: the first two rows — system prompt, then the request (SP1, SP2),
+ * filled by the pool's own context (IR9 to IR11); a seed pool's rows are the tide pool's. */
+export function firstRows(
+  intentText: string,
+  fills: PromptFills = TIDE_FILLS,
+): Array<{ role: "system" | "user"; content: string }> {
   return [
-    { role: "system", content: systemPrompt() },
-    { role: "user", content: firstUserMessage(intentText) },
+    { role: "system", content: systemPrompt(fills) },
+    { role: "user", content: firstUserMessage(intentText, fills) },
   ];
 }

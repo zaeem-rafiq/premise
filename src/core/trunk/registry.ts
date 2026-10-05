@@ -199,6 +199,10 @@ export function createImportPool(
     metaSet(sql, "remote", opts.remote ?? "");
     metaSet(sql, "app", "");
     metaSet(sql, "source", opts.source);
+    // IR10/IR11: the branch the pool was imported from — the request's `branch`, or the remote's
+    // default the route resolved off the binding's `import` answer. The prompt's
+    // `Repository: <owner>/<name> (<branch>)` line reads it.
+    metaSet(sql, "branch", opts.branch ?? "");
     metaSet(sql, "real_agents", "0");
     if (opts.request_id !== undefined) metaSet(sql, "create_request_id", opts.request_id);
     metaSet(sql, IMPORT_CURSOR_KEY, JSON.stringify(cursor));

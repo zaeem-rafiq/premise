@@ -94,7 +94,15 @@ import { appendEvent, deliverEvents, ensureEventsSchema, pendingEvents } from ".
 import { MODEL_PLAN } from "../../config/model-plan.ts";
 import { RESUME_MESSAGE } from "../../protocol/agent-prompt.ts";
 import { firstRows } from "../../core/agent/loop/context.ts";
-import { callTarget, headsUpUserMessage, messageForResponse, writeToolRow } from "../../core/agent/loop/index.ts";
+import { importedFills, TIDE_FILLS, type PromptFills } from "../../protocol/agent-prompt.ts";
+import type { ImportedPrompt } from "../../protocol/internal.ts";
+import {
+  callTarget,
+  headsUpUserMessage,
+  messageForResponse,
+  textsForGuide,
+  writeToolRow,
+} from "../../core/agent/loop/index.ts";
 
 // What a pool's launcher POSTs to the Agent's /open is `AgentOpenRequest` of
 // src/protocol/internal.ts (SW4; the swarm lane's launch call carries the same
@@ -400,6 +408,22 @@ export class Agent extends DurableObject<Env> {
     if (body.agent_kind !== undefined && body.agent_kind !== "synthetic" && !isReal) {
       return notBuilt();
     }
+    // The imported pool's prompt context (IR9 to IR11): the open-attempt answer forwards it as
+    // `imported` — `{ guide_path, source, branch }`; a seed pool's open carries none.
+    let fills: PromptFills = TIDE_FILLS;
+    if (body.imported !== undefined) {
+      const imp = body.imported;
+      if (
+        !isRecord(imp) ||
+        typeof imp.guide_path !== "string" ||
+        typeof imp.source !== "string" ||
+        imp.source === "" ||
+        typeof imp.branch !== "string"
+      ) {
+        return invalid("imported must be { guide_path, source, branch }");
+      }
+      fills = importedFills(imp as unknown as ImportedPrompt);
+    }
     if (isReal) {
       // A real attempt needs the model driver, a model id of the plan and the
       // intent's text — the first two transcript rows are built from it (SP1, SP2).
@@ -467,6 +491,9 @@ export class Agent extends DurableObject<Env> {
         resume_show: "0",
       };
       if (hasScript) init.script = JSON.stringify(body.script);
+      // IR9 to IR11: the prompt context persists with the attempt — a restart rebuilds the same
+      // fills from `meta.imported` (loadLoopState), so a resumed attempt keeps its prompt.
+      if (body.imported !== undefined) init.imported = JSON.stringify(body.imported);
       if (pattern !== undefined) {
         init.pattern = pattern.id;
         init.seed = Number(body.seed ?? 0);
@@ -478,8 +505,9 @@ export class Agent extends DurableObject<Env> {
       if (typeof body.trunk_url === "string") init.trunk_url = body.trunk_url;
       for (const [k, v] of Object.entries(init)) metaSet(this.#sql, k, v);
       if (isReal) {
-        // SP1/SP2: the system prompt and the first user message — rows 1 and 2.
-        for (const [i, row] of firstRows(String(body.intent_text)).entries()) {
+        // SP1/SP2: the system prompt and the first user message — rows 1 and 2, filled by the
+        // pool's own context (the tide pool's for a seed pool, IR9 to IR11's for an imported).
+        for (const [i, row] of firstRows(String(body.intent_text), fills).entries()) {
           transcriptAppend(this.#sql, {
             step: i + 1,
             role: row.role,
@@ -1065,7 +1093,7 @@ export class Agent extends DurableObject<Env> {
     }
 
     const s = loadLoopState(this.#sql);
-    const { message, needsSync } = messageForResponse(s, response);
+    const { message, needsSync } = messageForResponse(s, response, textsForGuide(s.fills.guide));
     const row = writeToolRow(s, {
       tool: request.tool,
       call_id: journal.call_id,

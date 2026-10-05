@@ -119,14 +119,16 @@ const IMPORT_ERRORS: Record<string, { code: string; status: number }> = {
 /**
  * The pool repo of an imported pool (IR2): the binding's `import` fills the repo named after
  * the pool from the public remote at `depth: 1`. The creation token of the result is
- * discarded where it is returned (SE5); `remote` is all Trunk is told. A repo that already
+ * discarded where it is returned (SE5); `remote` and the resolved branch — the request's, or
+ * the remote's default the binding reports — are all Trunk is told. A repo that already
  * exists — a retried create — is read for its remote, as `poolRemote` does for seeds.
  */
-async function importRemote(env: Env, pool: string, source: RepoSource): Promise<string> {
+async function importRemote(env: Env, pool: string, source: RepoSource): Promise<{ remote: string; branch: string }> {
   const pools = env.POOLS as Artifacts;
   try {
     // `branch` is left out, not sent as undefined, when the request names none: the binding
-    // then imports the remote's default branch.
+    // then imports the remote's default branch and names it in `defaultBranch` (IR10/IR11 —
+    // the pool records the branch it was actually imported from).
     const imported = await pools.import({
       source:
         source.branch === undefined
@@ -134,13 +136,14 @@ async function importRemote(env: Env, pool: string, source: RepoSource): Promise
           : { url: source.url, branch: source.branch, depth: 1 },
       target: { name: poolRepoName(pool) },
     });
-    return imported.remote;
+    return { remote: imported.remote, branch: source.branch ?? imported.defaultBranch };
   } catch (cause) {
     if (artifactsCode(cause) !== "ALREADY_EXISTS") throw cause;
   }
   const repo = await pools.get(poolRepoName(pool));
   try {
-    return (await repo.info()).remote;
+    const info = await repo.info();
+    return { remote: info.remote, branch: source.branch ?? info.defaultBranch };
   } finally {
     repo[Symbol.dispose]();
   }
@@ -221,6 +224,7 @@ export const createPool: RouteHandler = async ({ request, env }) => {
   if (parsed === null) return json({ error: { code: "invalid_args" } }, 400);
 
   let remote: string;
+  let branch: string | undefined;
   if ("seed" in parsed) {
     try {
       remote = await poolRemote(env, parsed.pool);
@@ -232,7 +236,9 @@ export const createPool: RouteHandler = async ({ request, env }) => {
     // deployment) answers like the other unbuilt surfaces.
     if ((env.POOLS as Artifacts | undefined) === undefined) return notBuilt();
     try {
-      remote = await importRemote(env, parsed.pool, parsed.source);
+      const imported = await importRemote(env, parsed.pool, parsed.source);
+      remote = imported.remote;
+      branch = imported.branch;
     } catch (cause) {
       const mapped = artifactsCode(cause);
       // BP7: an operator's line — the binding's code and message, never the token or a header.
@@ -254,7 +260,9 @@ export const createPool: RouteHandler = async ({ request, env }) => {
     body: JSON.stringify({
       pool: parsed.pool,
       seed: "seed" in parsed ? parsed.seed : undefined,
-      source: "source" in parsed ? parsed.source : undefined,
+      // The resolved branch joins the source address: the pool's meta records the branch it
+      // was imported from (IR10/IR11), which the request may have left to the remote's default.
+      source: "source" in parsed ? { ...parsed.source, branch } : undefined,
       summary_only: parsed.summary_only,
       request_id: parsed.request_id,
       remote,

@@ -118,6 +118,9 @@ export const createIntent: RouteHandler = async ({ request, env, params }) => {
     agent_kind: "real",
     driver: "model",
     model: WORKHORSE_MODEL,
+    // IR9 to IR11: an imported pool's answer carries its prompt context (guide path, repository,
+    // branch); a seed pool's carries none and the field stays out of the request.
+    ...(trunkAnswer.imported !== undefined ? { imported: trunkAnswer.imported } : {}),
   };
   let answer: AgentOpenResponse;
   try {

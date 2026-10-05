@@ -27,6 +27,7 @@ const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
 const FAKE_ARTIFACTS = join(REPO_ROOT, "test/workerd/landing/fake-artifacts.mjs");
 const STUB_AGENT = join(REPO_ROOT, "test/workerd/landing/stub-agent.mjs");
+const FAKE_AI = join(REPO_ROOT, "test/workerd/agent/real/fake-ai.mjs");
 const TRUNK_DOWN = join(REPO_ROOT, "test/workerd/reads/trunk-down.mjs");
 const ORIGIN = "http://premise.test";
 
@@ -161,6 +162,9 @@ async function startReadServer(
           git(projectRoot, [
             "clone",
             "--quiet",
+            // The sandbox denies reads of git's template directory (the same refusal the
+            // git wrapper's `--template=` works around for `init`); a clone copies them too.
+            "--template=",
             ...(branch === null ? [] : ["--branch", branch]),
             `file://${sourceDir}`,
             target,
@@ -172,7 +176,16 @@ async function startReadServer(
           response.writeHead(502).end();
           return;
         }
-        response.writeHead(200).end();
+        // The clone's checked-out branch is the binding's `defaultBranch` answer — the request's
+        // branch when one rode the URL, else the source's default the clone picked (IR10/IR11).
+        const resolved = git(join(projectRoot, target), ["symbolic-ref", "--short", "HEAD"]);
+        response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ branch: resolved }));
+        return;
+      }
+      if (kind === "branch") {
+        // The repository's default branch — `symbolic-ref HEAD` — for the fake binding's `info`.
+        const head = git(directory, ["symbolic-ref", "--short", "HEAD"]);
+        response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ branch: head }));
         return;
       }
       if (kind === "exists") {
@@ -301,6 +314,12 @@ export async function startLandingWorker(options: {
    * is a repo under the test root the test fills itself — `repoDir(name)` reaches it. The fake
    * maps a source url's last path segment to the same name. */
   importSources?: string[];
+  /** The fake model's loopback URL (the real-agent lane's FakeModel): when given, `AI` is bound
+   * to the fake-ai worker exactly where a deployment binds Workers AI (06-repos step 1). */
+  modelUrl?: string;
+  /** The gate's `SPEND_CAP_USD` — bound only when `modelUrl` is: the real agent's model calls
+   * go through the gate, and an absent cap fails closed (`spend_cap` on every call). */
+  spendCapUsd?: string;
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
@@ -342,7 +361,12 @@ export async function startLandingWorker(options: {
           modules: [{ type: "ESModule", path: BUNDLE }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
-          bindings: options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },
+          bindings: {
+            ...(options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey }),
+            // The gate reads its cap fresh on every call: absent means 0, and every model
+            // call is refused `spend_cap` (SE7). Bound where the `AI` binding is bound.
+            ...(options.modelUrl === undefined ? {} : { SPEND_CAP_USD: options.spendCapUsd ?? "30" }),
+          },
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [
               binding,
@@ -359,7 +383,10 @@ export async function startLandingWorker(options: {
                 workflowExports: { SwarmWorkflow: { name: "premise-swarm" } },
               }
             : {}),
-          serviceBindings: { POOLS: { name: "fake-artifacts" } },
+          serviceBindings: {
+            POOLS: { name: "fake-artifacts" },
+            ...(options.modelUrl === undefined ? {} : { AI: { name: "fake-ai", entrypoint: "AiBinding" } }),
+          },
           assets: {
             directory: CLIENT,
             binding: "ASSETS",
@@ -374,6 +401,17 @@ export async function startLandingWorker(options: {
           compatibilityFlags: ["nodejs_compat"],
           bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
         },
+        ...(options.modelUrl === undefined
+          ? []
+          : [
+              {
+                name: "fake-ai",
+                modules: [{ type: "ESModule" as const, path: FAKE_AI }],
+                compatibilityDate: "2026-10-01",
+                compatibilityFlags: ["nodejs_compat"],
+                bindings: { MODEL_UPSTREAM: options.modelUrl },
+              },
+            ]),
         ...(options.agentStub === true
           ? [
               {

@@ -23,7 +23,11 @@ class Repo extends RpcTarget {
     // message prefix — the wipe probe (`#probeEmptyPool`) reads either shape.
     const exists = await fetch(`${this.env.READ_ORIGIN}/exists/${this.name}`);
     if (exists.status === 404) throw new Error(`NOT_FOUND: ${this.name}`);
-    return { remote: `${this.env.GIT_ORIGIN}/${this.name}` };
+    // `defaultBranch` is the clone's checked-out branch; a sidecar without /branch (the
+    // real-agent lane's leaner one) answers 404 and the stand-in's repos are all `main`.
+    const branch = await fetch(`${this.env.READ_ORIGIN}/branch/${this.name}`);
+    const defaultBranch = branch.ok ? (await branch.json()).branch : "main";
+    return { remote: `${this.env.GIT_ORIGIN}/${this.name}`, defaultBranch };
   }
   async createToken(scope) {
     return {
@@ -101,6 +105,9 @@ export default class FakeArtifacts extends WorkerEntrypoint {
     if (response.status === 409) throw new Error(`ALREADY_EXISTS: ${target.name}`);
     if (response.status === 404) throw new Error(`NOT_FOUND: ${source.url}`);
     if (!response.ok) throw new Error(`UPSTREAM_UNAVAILABLE: ${response.status}`);
-    return { remote: `${this.env.GIT_ORIGIN}/${target.name}` };
+    // The real binding reports the branch it imported as `defaultBranch`; the sidecar names the
+    // clone's checked-out branch — the request's `branch`, or the source's default when none rode.
+    const { branch } = await response.json();
+    return { remote: `${this.env.GIT_ORIGIN}/${target.name}`, defaultBranch: branch };
   }
 }

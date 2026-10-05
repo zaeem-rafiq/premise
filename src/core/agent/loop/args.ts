@@ -2,7 +2,7 @@
 // the three normalizations N1 to N3, the calls the Agent refuses itself, and the envelope.
 // Pure functions; they decide, the caller sends.
 
-import { GUIDE_PATH } from "../../../protocol/agent-prompt.ts";
+import { GUIDE_PATH } from "../../../protocol/agent-prompt.ts"; // the tide pool's guide; imported pools carry their own in `state.fills`
 import { MAX_STATEMENT_CHARS, MODEL_MAX_TOKENS } from "../../../protocol/constants.ts";
 import { PATH_PATTERN } from "../../../protocol/premise.ts";
 import { TOOL_NAMES, type ToolName } from "../../../protocol/tools.ts";
@@ -116,14 +116,18 @@ export function validateArgs(
 }
 
 /**
- * TD5, derived from the transcript: whether a whole-file `read` of `GUIDE_PATH` was answered by
- * Trunk — the file or an error both count; a TD4 refusal row (no `call_id`) does not.
+ * TD5, derived from the transcript: whether a whole-file `read` of the pool's guide — the tide
+ * pool's `GUIDE.md` or the imported repository's own `guide_path` (06-repos IR9) — was answered
+ * by Trunk. The file or an error both count; a TD4 refusal row (no `call_id`) does not. An
+ * imported pool with no guide file has no guide rule: the rule reads satisfied for it.
  */
 export function guideRead(state: LoopState): boolean {
+  const guide = state.fills.guide;
+  if (guide === null) return true;
   for (const row of state.rows) {
     if (row.role !== "tool" || row.tool !== "read" || row.call_id === null) continue;
     const args = (JSON.parse(row.content) as { args?: Record<string, unknown> }).args ?? {};
-    if (args.path === GUIDE_PATH && args.entity === undefined) return true;
+    if (args.path === guide && args.entity === undefined) return true;
   }
   return false;
 }
@@ -190,7 +194,7 @@ export function processCall(state: LoopState, call: ToolCall, finishReason: stri
     return { kind: "error", code: "bad_arguments", detail: problem };
   }
   if ((name === "write" || name === "replace" || name === "submit") && !guideRead(state)) {
-    return { kind: "error", code: "guide_first", detail: { path: GUIDE_PATH } };
+    return { kind: "error", code: "guide_first", detail: { path: state.fills.guide } };
   }
   const out: Record<string, unknown> = { ...normalized };
   if (name === "submit") {

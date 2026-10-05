@@ -35,6 +35,7 @@ export function moduleOf(files: ReadonlyMap<string, string>, path: string): Reco
     let body = text.replace(IMPORT_LINE, (_m, names: string, spec: string) => {
       for (const entry of names.split(",")) {
         const [imported, local] = entry.trim().split(/\s+as\s+/);
+        if (imported === undefined) continue;
         imports.push({ local: (local ?? imported).trim(), exported: imported.trim(), spec });
       }
       return "";

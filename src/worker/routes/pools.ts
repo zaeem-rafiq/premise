@@ -9,7 +9,7 @@ import { READ_TOKEN_TTL_S } from "../../protocol/constants.ts";
 import { SEEDS } from "../../config/pools.ts";
 import type { CreatePoolRequest, ReadTokenResponse } from "../../protocol/routes.ts";
 import { notBuilt } from "../not-built.ts";
-import { poolRepoName } from "../repos.ts";
+import { parseRepoSource, poolRepoName } from "../repos.ts";
 import type { RouteHandler } from "../index.ts";
 import type { Env } from "../env.ts";
 
@@ -23,25 +23,43 @@ function json(body: unknown, status = 200): Response {
 /** Pool names: a Durable Object name and an Artifacts repo name both take them — lowercase, short. */
 const POOL_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-type ParsedPool = { pool: string; seed: string; summary_only: boolean; request_id: string };
+type RepoSource = { url: string; branch?: string };
 
+type ParsedPool = { pool: string; summary_only: boolean; request_id: string } & (
+  { seed: string } | { source: RepoSource }
+);
+
+/** IR1: the request names exactly one of `seed` and `source`, never both, never neither. The
+ * `source` address is checked by `parseRepoSource`; the seed by the deployment's list (PL1). */
 function parseCreate(body: unknown): ParsedPool | null {
   if (typeof body !== "object" || body === null) return null;
   const request = body as Partial<CreatePoolRequest>;
+  const seedGiven = request.seed !== undefined;
+  const sourceGiven = request.source !== undefined;
   if (
     typeof request.pool !== "string" ||
     !POOL_NAME.test(request.pool) ||
-    typeof request.seed !== "string" ||
-    !(SEEDS as readonly string[]).includes(request.seed) ||
+    seedGiven === sourceGiven ||
     typeof request.request_id !== "string" ||
     request.request_id.length === 0 ||
     (request.summary_only !== undefined && typeof request.summary_only !== "boolean")
   ) {
     return null;
   }
+  if (seedGiven) {
+    if (typeof request.seed !== "string" || !(SEEDS as readonly string[]).includes(request.seed)) return null;
+    return {
+      pool: request.pool,
+      seed: request.seed,
+      summary_only: request.summary_only ?? false,
+      request_id: request.request_id,
+    };
+  }
+  const source = parseRepoSource(request.source);
+  if (source === null) return null;
   return {
     pool: request.pool,
-    seed: request.seed,
+    source,
     summary_only: request.summary_only ?? false,
     request_id: request.request_id,
   };
@@ -78,6 +96,43 @@ async function poolRemote(env: Env, pool: string): Promise<string> {
 
 /** What a not-yet-built registration target answers (Slice 0 stubs): the pool create ignores it
  * until the emitter is built (the track's acceptance); every other failure then fails creation. */
+/** IR2's table: each code the binding's `import` can throw to the route's answer. Codes it
+ * does not list (an internal failure, an in-progress answer of `get` on the retry path) fall
+ * to `upstream_unavailable`. */
+const IMPORT_ERRORS: Record<string, { code: string; status: number }> = {
+  REMOTE_AUTH_REQUIRED: { code: "repo_private", status: 400 },
+  NOT_FOUND: { code: "repo_not_found", status: 404 },
+  MEMORY_LIMIT: { code: "repo_too_large", status: 413 },
+  UPSTREAM_UNAVAILABLE: { code: "upstream_unavailable", status: 502 },
+  INVALID_URL: { code: "invalid_args", status: 400 },
+  INVALID_INPUT: { code: "invalid_args", status: 400 },
+};
+
+/**
+ * The pool repo of an imported pool (IR2): the binding's `import` fills the repo named after
+ * the pool from the public remote at `depth: 1`. The creation token of the result is
+ * discarded where it is returned (SE5); `remote` is all Trunk is told. A repo that already
+ * exists — a retried create — is read for its remote, as `poolRemote` does for seeds.
+ */
+async function importRemote(env: Env, pool: string, source: RepoSource): Promise<string> {
+  const pools = env.POOLS as Artifacts;
+  try {
+    const imported = await pools.import({
+      source: { url: source.url, branch: source.branch, depth: 1 },
+      target: { name: poolRepoName(pool) },
+    });
+    return imported.remote;
+  } catch (cause) {
+    if (artifactsCode(cause) !== "ALREADY_EXISTS") throw cause;
+  }
+  const repo = await pools.get(poolRepoName(pool));
+  try {
+    return (await repo.info()).remote;
+  } finally {
+    repo[Symbol.dispose]();
+  }
+}
+
 function isNotBuiltBody(body: unknown): boolean {
   return (
     typeof body === "object" && body !== null && (body as { error?: { code?: unknown } }).error?.code === "not_built"
@@ -153,10 +208,24 @@ export const createPool: RouteHandler = async ({ request, env }) => {
   if (parsed === null) return json({ error: { code: "invalid_args" } }, 400);
 
   let remote: string;
-  try {
-    remote = await poolRemote(env, parsed.pool);
-  } catch (cause) {
-    return json({ error: { code: artifactsCode(cause)?.toLowerCase() ?? "upstream" } }, 502);
+  if ("seed" in parsed) {
+    try {
+      remote = await poolRemote(env, parsed.pool);
+    } catch (cause) {
+      return json({ error: { code: artifactsCode(cause)?.toLowerCase() ?? "upstream" } }, 502);
+    }
+  } else {
+    // Without the binding there is no way to fill the repo — the unbuilt case (a local test
+    // deployment) answers like the other unbuilt surfaces.
+    if ((env.POOLS as Artifacts | undefined) === undefined) return notBuilt();
+    try {
+      remote = await importRemote(env, parsed.pool, parsed.source);
+    } catch (cause) {
+      const mapped = artifactsCode(cause);
+      const entry = mapped !== null ? IMPORT_ERRORS[mapped] : undefined;
+      if (entry !== undefined) return json({ error: { code: entry.code } }, entry.status);
+      return json({ error: { code: "upstream_unavailable" } }, 502);
+    }
   }
 
   const trunk = env.TRUNK as DurableObjectNamespace;
@@ -165,7 +234,8 @@ export const createPool: RouteHandler = async ({ request, env }) => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       pool: parsed.pool,
-      seed: parsed.seed,
+      seed: "seed" in parsed ? parsed.seed : undefined,
+      source: "source" in parsed ? parsed.source : undefined,
       summary_only: parsed.summary_only,
       request_id: parsed.request_id,
       remote,

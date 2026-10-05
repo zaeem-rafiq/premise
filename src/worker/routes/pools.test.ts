@@ -12,6 +12,13 @@ const KEY = "owner-key-for-tests-0123456789abcdef";
 
 type Call = { kind: string; url?: string; init?: unknown; opts?: unknown };
 
+/** An ArtifactsError-shaped failure the fake POOLS throws: only `.code` is read. */
+function artifactsError(code: string): Error {
+  const cause = new Error(`artifacts ${code}`);
+  (cause as { code?: string }).code = code;
+  return cause;
+}
+
 function fakeEnv(over: {
   gateResponse?: Response;
   gateThrows?: boolean;
@@ -20,6 +27,11 @@ function fakeEnv(over: {
   noSwarm?: boolean;
   trunkResponse?: Response;
   repoToken?: string;
+  pools?: {
+    create?: (name: string, opts: unknown) => Promise<unknown>;
+    import?: (params: unknown) => Promise<unknown>;
+    get?: (name: string) => Promise<unknown>;
+  };
 }): { env: Env; calls: Call[] } {
   const calls: Call[] = [];
   const env: Record<string, unknown> = { OWNER_KEY: KEY };
@@ -52,6 +64,31 @@ function fakeEnv(over: {
       },
     }),
   };
+  if (over.pools !== undefined) {
+    env.POOLS = {
+      create: async (name: string, opts: unknown) => {
+        calls.push({ kind: "pools.create", opts: { name, opts } });
+        return over.pools.create !== undefined
+          ? over.pools.create(name, opts)
+          : { id: "r1", name, remote: `https://artifacts.test/${name}.git`, token: "art_v1_dropped" };
+      },
+      import: async (params: unknown) => {
+        calls.push({ kind: "pools.import", opts: params });
+        return over.pools.import !== undefined
+          ? over.pools.import(params)
+          : { id: "r1", name: "tp-repo", remote: "https://artifacts.test/tp-repo.git", token: "art_v1_dropped" };
+      },
+      get: async (name: string) => {
+        calls.push({ kind: "pools.get", opts: { name } });
+        return over.pools.get !== undefined
+          ? over.pools.get(name)
+          : {
+              info: async () => ({ remote: `https://artifacts.test/${name}.git` }),
+              [Symbol.dispose]: () => {},
+            };
+      },
+    };
+  }
   if (over.repoToken !== undefined) {
     env.POOLS = {
       get: async () => ({
@@ -172,6 +209,165 @@ describe("POST /api/pools (PL1, SE5)", () => {
     const failed = await createPool(input(post("/api/pools", good), broken.env));
     expect(failed.status).toBe(502);
     expect(await failed.json()).toEqual({ error: { code: "registration_failed", target: "gate" } });
+  });
+});
+
+describe("POST /api/pools with source (IR1, IR2)", () => {
+  const good = { pool: "tp-repo", source: { url: "https://github.com/octo/app" }, request_id: "r9" };
+
+  it("imports through the binding at depth 1 under the pool's repo name, drops the token", async () => {
+    const { env, calls } = fakeEnv({ pools: {} });
+    const res = await createPool(
+      input(post("/api/pools", { ...good, source: { url: "https://gitlab.com/octo/app.git", branch: "dev/x" } }), env),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pool: "tp-repo" });
+    const imp = calls.find((c) => c.kind === "pools.import");
+    expect(imp?.opts).toEqual({
+      source: { url: "https://gitlab.com/octo/app.git", branch: "dev/x", depth: 1 },
+      target: { name: "tp-repo" },
+    });
+    // SE5: the creation token is nowhere in the response or the Trunk call.
+    const text = await createPool(input(post("/api/pools", good), fakeEnv({ pools: {} }).env));
+    const trunk = calls.find((c) => c.kind === "trunk");
+    expect(JSON.parse((trunk?.init as { body: string }).body)).toMatchObject({
+      pool: "tp-repo",
+      source: { url: "https://gitlab.com/octo/app.git", branch: "dev/x" },
+      remote: "https://artifacts.test/tp-repo.git",
+    });
+    expect((trunk?.init as { body: string }).body).not.toMatch(/art_v1_dropped/);
+    expect(text.status).toBe(200);
+  });
+
+  it("accepts every supported host and owner/name character of IR1", async () => {
+    const { env, calls } = fakeEnv({ pools: {} });
+    for (const url of [
+      "https://github.com/o/r",
+      "https://gitlab.com/a.b/c_d",
+      "https://codeberg.org/a-b/c.d_e",
+      "https://github.com/O123/r-.git",
+    ]) {
+      const res = await createPool(
+        input(post("/api/pools", { pool: "tp-repo", source: { url }, request_id: "r" }), env),
+      );
+      expect(res.status, url).toBe(200);
+    }
+    expect(calls.filter((c) => c.kind === "pools.import")).toHaveLength(4);
+  });
+
+  it("refuses every other address form of IR1 with 400 invalid_args", async () => {
+    const { env, calls } = fakeEnv({ pools: {} });
+    const bad = [
+      "http://github.com/o/r", // not https
+      "https://bitbucket.org/o/r", // unsupported host
+      "https://user@github.com/o/r", // user name
+      "https://user:pw@github.com/o/r", // password
+      "https://github.com:8443/o/r", // port
+      "https://github.com:443/o/r", // even the default port
+      "https://github.com/o/r?x=1", // query
+      "https://github.com/o/r#frag", // fragment
+      "https://github.com/o/r/extra", // a third segment
+      "https://github.com/o", // one segment
+      "https://github.com/o/", // a missing name
+      "https://github.com/o//r", // an empty segment
+      "https://github.com/o has space/r", // a bad owner
+      "https://github.com/o/r!bang", // a bad name
+      "https://github.com/o/%2e%2e", // an encoded name
+      "git@github.com:o/r.git", // not https at all
+      "https://github.com/o/r/", // a trailing slash
+      "",
+    ];
+    for (const url of bad) {
+      const res = await createPool(
+        input(post("/api/pools", { pool: "tp-repo", source: { url }, request_id: "r" }), env),
+      );
+      expect(res.status, url).toBe(400);
+      expect(await res.json(), url).toEqual({ error: { code: "invalid_args" } });
+    }
+    // Bad branches of IR1.
+    for (const branch of ["a..b", "no space", "", "a:b"]) {
+      const res = await createPool(
+        input(
+          post("/api/pools", { pool: "tp-repo", source: { url: "https://github.com/o/r", branch }, request_id: "r" }),
+          env,
+        ),
+      );
+      expect(res.status, branch).toBe(400);
+      expect(await res.json(), branch).toEqual({ error: { code: "invalid_args" } });
+    }
+    // seed and source together, or neither.
+    for (const body of [
+      { pool: "tp-repo", seed: "tidepool", source: { url: "https://github.com/o/r" }, request_id: "r" },
+      { pool: "tp-repo", request_id: "r" },
+      { pool: "tp-repo", source: "https://github.com/o/r", request_id: "r" },
+      { pool: "tp-repo", source: { url: 42 }, request_id: "r" },
+    ]) {
+      const res = await createPool(input(post("/api/pools", body), env));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: { code: "invalid_args" } });
+    }
+    expect(calls.filter((c) => c.kind === "pools.import")).toHaveLength(0);
+  });
+
+  it("maps every binding error of IR2 to its code and status", async () => {
+    const table: [string, number, string][] = [
+      ["REMOTE_AUTH_REQUIRED", 400, "repo_private"],
+      ["NOT_FOUND", 404, "repo_not_found"],
+      ["MEMORY_LIMIT", 413, "repo_too_large"],
+      ["UPSTREAM_UNAVAILABLE", 502, "upstream_unavailable"],
+      ["INVALID_URL", 400, "invalid_args"],
+      ["INVALID_INPUT", 400, "invalid_args"],
+    ];
+    for (const [code, status, want] of table) {
+      const { env } = fakeEnv({
+        pools: {
+          import: async () => {
+            throw artifactsError(code);
+          },
+        },
+      });
+      const res = await createPool(input(post("/api/pools", good), env));
+      expect(res.status, code).toBe(status);
+      expect(await res.json(), code).toEqual({ error: { code: want } });
+    }
+    // An unlisted code is an upstream failure, not a 400.
+    const { env } = fakeEnv({
+      pools: {
+        import: async () => {
+          throw artifactsError("INTERNAL_ERROR");
+        },
+      },
+    });
+    const res = await createPool(input(post("/api/pools", good), env));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: { code: "upstream_unavailable" } });
+  });
+
+  it("a retried create (repo already imported) reads the remote like the seed path", async () => {
+    const { env, calls } = fakeEnv({
+      pools: {
+        import: async () => {
+          throw artifactsError("ALREADY_EXISTS");
+        },
+      },
+    });
+    const res = await createPool(input(post("/api/pools", good), env));
+    expect(res.status).toBe(200);
+    expect(calls.some((c) => c.kind === "pools.get")).toBe(true);
+    const trunk = calls.find((c) => c.kind === "trunk");
+    expect(JSON.parse((trunk?.init as { body: string }).body)).toMatchObject({
+      remote: "https://artifacts.test/tp-repo.git",
+    });
+  });
+
+  it("a Trunk pool_exists answers 409 to a second request_id for the pool", async () => {
+    const { env } = fakeEnv({
+      pools: {},
+      trunkResponse: new Response(JSON.stringify({ error: { code: "pool_exists" } }), { status: 409 }),
+    });
+    const res = await createPool(input(post("/api/pools", good), env));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: { code: "pool_exists" } });
   });
 });
 

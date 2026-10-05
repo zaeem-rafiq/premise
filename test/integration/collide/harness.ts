@@ -75,6 +75,13 @@ export function tidepoolFiles(): Record<string, string> {
   return Object.fromEntries(tree);
 }
 
+/** The files of the generated seed `tidepool-auto` (02-tidepool.md 6: `world/*.js` is auto). */
+export function tidepoolAutoFiles(): Record<string, string> {
+  const tree = buildSeeds().get("tidepool-auto");
+  if (tree === undefined) throw new Error("buildSeeds: no tidepool-auto seed");
+  return Object.fromEntries(tree);
+}
+
 export type AgentHandle = {
   id: string;
   pattern: Pattern;
@@ -110,10 +117,15 @@ export class SwarmSim {
   readonly agents: AgentHandle[] = [];
   private readonly seed: number;
 
-  constructor(files: Record<string, string>, opts: { seed: number; summary_only?: boolean }) {
+  constructor(
+    files: Record<string, string>,
+    opts: { seed: number; summary_only?: boolean; synthetic?: boolean; features_held?: boolean },
+  ) {
     this.db = new DatabaseSync(":memory:");
     this.trunk = Trunk.create(sqlOver(this.db), files, {
       summary_only: opts.summary_only === true,
+      synthetic: opts.synthetic === true,
+      features: { held: opts.features_held === true },
       // S6a/TR8: the pool's `SyncTriage` port is the one scripted implementation; every agent
       // the harness opens is synthetic, so its truth list answers the triage rows.
       syncTriage: ScriptedTriage,
@@ -378,6 +390,20 @@ export class SwarmSim {
   /** SWR3's `/release`: the flag is read live at the next turn (PatternDriver). */
   release(agent: AgentHandle): void {
     agent.released = true;
+  }
+
+  /** The owner's tap on the attempt's open card (CD4): `land`, `land_now`, `decline`, and on
+   * a card already closed as `stale` the same call does nothing. */
+  tap(agent: AgentHandle, option: string): Record<string, unknown> {
+    const out = this.trunk.owner({ action: option, attempt: agent.id });
+    this.pushAll();
+    return out;
+  }
+
+  /** The attempt's open card body, or `undefined` when it holds none. */
+  cardOf(agent: AgentHandle): Record<string, unknown> | undefined {
+    const c = this.trunk.pool.cards.find((x) => x.open && x.attempt_ids.includes(agent.id));
+    return c === undefined ? undefined : (c.body as Record<string, unknown>);
   }
 
   pause(agent: AgentHandle): void {

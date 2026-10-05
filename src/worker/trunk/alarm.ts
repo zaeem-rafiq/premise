@@ -44,6 +44,11 @@ export async function armAlarm(ctx: DurableObjectState, sql: Sql): Promise<void>
   await ctx.storage.setAlarm(min);
 }
 
+/** A thrown value as one short line for the operator's log: its name and message only. */
+function describe(cause: unknown): string {
+  return cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 300) : "unknown";
+}
+
 /** AL2: a failed (or unhandled) timer keeps its row at a backoff — never dropped, never retried in
  * a hot loop — and the failure leaves a `trunk.error` event with a fixed code (SE5b). */
 function rescheduleTimer(sql: Sql, timer: TimerRow): void {
@@ -122,7 +127,9 @@ export async function runAlarm({
       if (claimDue(sql, timer, now) === null) continue;
       try {
         await shellWork(now);
-      } catch {
+      } catch (cause) {
+        // BP7: an operator's line — the error's name and message, never a request or a token.
+        console.error(`trunk timer ${timer.kind} failed`, describe(cause));
         rescheduleTimer(sql, timer);
         recordTrunkError(ctx, `timer:${timer.kind}`, "timer_failed");
       }
@@ -139,7 +146,8 @@ export async function runAlarm({
         rescheduleTimer(sql, timer);
         recordTrunkError(ctx, `timer:${timer.kind}`, "timer_unhandled");
       }
-    } catch {
+    } catch (cause) {
+      console.error(`trunk timer ${timer.kind} failed`, describe(cause));
       rescheduleTimer(sql, timer);
       recordTrunkError(ctx, `timer:${timer.kind}`, "timer_failed");
     }

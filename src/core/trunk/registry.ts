@@ -30,6 +30,10 @@ import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
+import { armRebuild, beginRebuild, applyRebuildStep, registerDeadline } from "../rebuild/apply.ts";
+import { register as registerAttempt } from "../rebuild/register.ts";
+import type { ApplyPayload } from "../rebuild/plan.ts";
+import type { RegisterRequest, RegisterResponse } from "../../protocol/tools.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8, text as fromUtf8, blobBytes } from "../sync/bytes.ts";
 import type { GitObject } from "../git/objects.ts";
@@ -137,7 +141,9 @@ export function createPool(
 
 /** Rebuild the working Pool from the schema (3.6): everything the tables hold, in memory. */
 export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
-  migrateSchema(sql);
+  // 3.6: the store may be a wiped object — `meta` itself absent. `applySchema` is idempotent
+  // (CREATE TABLE IF NOT EXISTS), so the ordinary open is unchanged.
+  applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
   pool.eventCounter = Number(pool.meta.get("next_event_n") ?? "1");
@@ -611,7 +617,7 @@ function outboxFromRow(row: Record<string, unknown>): OutboxRow {
   };
 }
 
-function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
+export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
   const intent = pool.intents.get(str(row.intent_id));
   return {
     id: str(row.attempt_id),
@@ -1139,6 +1145,44 @@ export class Trunk {
     reason?: string;
   }): Record<string, unknown> {
     return wrapCall(this.pool, () => owner(this.pool, args));
+  }
+
+  /** 13.6 `rebuild`: park the job cursor and arm the `rebuild` timer (idempotent, 9.8). */
+  rebuild(requestId: string): Record<string, unknown> {
+    return wrapCall(this.pool, () => armRebuild(this.pool, requestId));
+  }
+
+  /** 3.6 begin: the job's first commit — wipe, new epoch (RB5), `rebuilding`, first pool.state. */
+  rebuildBegin(begin: {
+    epoch: number;
+    pool_id?: string;
+    remote?: string;
+    summary_only?: boolean;
+    synthetic?: boolean;
+    head_commit: string;
+    notes_commit: string | null;
+    green_commit: string | null;
+  }): Record<string, unknown> {
+    return wrapCall(this.pool, () => {
+      if (begin.summary_only !== undefined) metaSet(this.pool.sql, "summary_only", begin.summary_only ? "1" : "0");
+      if (begin.synthetic !== undefined) metaSet(this.pool.sql, "synthetic", begin.synthetic ? "1" : "0");
+      return beginRebuild(this.pool, begin);
+    });
+  }
+
+  /** One job run's commit (RB3): fetched rows plus the cursor that continues the job. */
+  rebuildStep(payload: ApplyPayload): Record<string, unknown> {
+    return wrapCall(this.pool, () => applyRebuildStep(this.pool, payload));
+  }
+
+  /** Step 8's `rebuild_lost` timer entry: missing agents are recorded `stopped`/`lost` (T20). */
+  rebuildLost(): void {
+    wrapCall(this.pool, () => registerDeadline(this.pool));
+  }
+
+  /** 4.12 `register`: an Agent's post-rebuild re-registration (3.6 steps 6-8, T17/T17a). */
+  register(req: RegisterRequest): RegisterResponse {
+    return wrapCall(this.pool, () => registerAttempt(this.pool, req));
   }
 
   /** TA9 `stop`: the Agent ends its own attempt. */

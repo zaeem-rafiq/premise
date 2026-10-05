@@ -22,6 +22,8 @@ import { deliverHeadsUps, outboxRow, pushOutbox, reconcileOnStart } from "./push
 import { armAlarm, runAlarm } from "./alarm.ts";
 import { deliverResumes } from "./resume.ts";
 import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, timerList, timerPut } from "./sql.ts";
+import { runRebuildJob } from "./rebuild-job.ts";
+import { poolRepoName } from "../repos.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -108,6 +110,9 @@ async function seedFiles(env: Env, seed: string): Promise<Record<string, string>
   if (!Object.values(files).every((v) => typeof v === "string")) return undefined;
   return files as Record<string, string>;
 }
+
+/** The entries a `pool_id`-less store may run — the rebuild job's arm and applies (3.6). */
+const REBUILD_ENTRIES = new Set(["rebuild", "rebuild_begin", "rebuild_step", "rebuild_lost"]);
 
 export class Trunk extends DurableObject<Env> {
   readonly #sql: Sql;
@@ -201,11 +206,21 @@ export class Trunk extends DurableObject<Env> {
    * object reconciles again at its next start.
    */
   #reconciled = false;
-  #ensureReconciled(): void {
+  #ensureReconciled(forPath?: string): void {
     if (this.#reconciled) return;
     this.#reconciled = true;
-    // No pool yet: nothing to reconcile — and no `trunk.error` may precede `pool.state` (EM1).
-    if (metaGet(this.#sql, "pool_id") === null) return;
+    // 3.6: an empty store on an object whose Artifacts repository exists is a lost pool —
+    // arm the rebuild job and let the `rebuild` timer run it. A name no repository answers
+    // is not a pool: nothing is armed (and no `trunk.error` may precede `pool.state`, EM1).
+    // The pool's own birth (`/internal/create-pool`) is the one caller the probe skips — its
+    // `seedFiles` await is exactly the gap in which a probe would arm a rebuild on the pool
+    // being created.
+    if (metaGet(this.#sql, "pool_id") === null) {
+      if (forPath !== "/internal/create-pool") {
+        void this.#probeEmptyPool().catch(() => recordTrunkError(this.ctx, "rebuild", "transport"));
+      }
+      return;
+    }
     void reconcileOnStart(this.env, this.ctx, async (input) => {
       const r = await this.#callEngineEntry("restart", input);
       if ("error" in r) return;
@@ -250,7 +265,10 @@ export class Trunk extends DurableObject<Env> {
   ): Promise<{ result: unknown } | { error: Response }> {
     const entry = this.#engine.entries.get(name);
     if (entry === undefined) return { error: notBuilt() };
-    if (metaGet(this.#sql, "pool_id") === null) {
+    // The rebuild entries are the wiped pool's way back (3.6): they run before `pool_id`
+    // exists — `rebuild` arms the cursor, `rebuild_begin` writes it. Every other entry serves
+    // a pool that is there.
+    if (metaGet(this.#sql, "pool_id") === null && !REBUILD_ENTRIES.has(name)) {
       return { error: json({ error: { code: "pool_not_found" } }, 404) };
     }
     try {
@@ -362,6 +380,35 @@ export class Trunk extends DurableObject<Env> {
     return json(response, status);
   }
 
+  /**
+   * The wipe probe of `#ensureReconciled`: `info()` answers the repository exists, so the
+   * pool's landing history survives and this object rebuilds from it (3.6). The arm is the
+   * `rebuild` entry itself — same cursor, same timer, same idempotency as the route's.
+   */
+  async #probeEmptyPool(): Promise<void> {
+    if (metaGet(this.#sql, "pool_id") !== null) return;
+    // A deployment with no Artifacts binding cannot rebuild — there is nothing to mark either:
+    // the store stays empty exactly as before the probe existed.
+    if (this.env.POOLS === undefined) return;
+    try {
+      const repo = await this.env.POOLS.get(poolRepoName(this.#pool));
+      await repo.info(); // throws NOT_FOUND when no such repository exists
+    } catch (error) {
+      // No repository behind the name is the ordinary "not a pool" answer — nothing armed, and
+      // no `trunk.error` precedes a later `pool.state` (EM1). The binding reports it as a `code`
+      // of NOT_FOUND; a service-bound fake can only pass the message. Any other failure is a
+      // transport fault: the wipe is real, so it is marked and the next object start retries.
+      const code = (error as { code?: unknown })?.code;
+      const message = String((error as { message?: unknown })?.message ?? error);
+      if (code === "NOT_FOUND" || message.startsWith("NOT_FOUND")) return;
+      recordTrunkError(this.ctx, "rebuild", "transport");
+      return;
+    }
+    if (metaGet(this.#sql, "pool_id") !== null) return; // created meanwhile
+    const r = await this.#callEngineEntry("rebuild", { request_id: `auto:${crypto.randomUUID()}` });
+    if (!("error" in r)) await this.#postCommit();
+  }
+
   /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
    * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
   async #runTimerEntry(kind: string, input: unknown, now?: number): Promise<boolean> {
@@ -401,14 +448,20 @@ export class Trunk extends DurableObject<Env> {
       // The engine's `outbox` table exists only once `pool_create` ran (shell objects can be
       // named anything — a state read must not 500 before the pool exists).
       outbox: metaGet(this.#sql, "pool_id") === null ? null : outboxRow(this.ctx),
+      // The landings table (3.6's rebuilt rows are asserted through it: seq, commit and the
+      // note blob oid the job read off the remote's notes tree).
+      landings:
+        metaGet(this.#sql, "pool_id") === null
+          ? []
+          : this.#sql.exec("SELECT seq, kind, commit_oid, note_oid, undone_by FROM landings ORDER BY seq").toArray(),
       served: Object.fromEntries(this.#served),
     });
   }
 
   override async fetch(request: Request): Promise<Response> {
     try {
-      this.#ensureReconciled();
       const url = new URL(request.url);
+      this.#ensureReconciled(url.pathname);
       const pathname = url.pathname;
       if (pathname === "/internal/state" && request.method === "GET") return this.#state();
       if (pathname === "/internal/alarm") {
@@ -463,6 +516,20 @@ export class Trunk extends DurableObject<Env> {
       // A throw means the store itself failed: the alarm's own catch re-arms the row at a
       // backoff (AL2). The transport answers are handled inside `deliverResumes`.
       resume: (now) => deliverResumes(this.env, this.ctx, now),
+      rebuild: async (now) => {
+        await runRebuildJob(
+          this.env,
+          this.ctx,
+          async (name, input) => {
+            const r = await this.#callEngineEntry(name, input, now);
+            if ("error" in r) throw new Error(`rebuild apply ${name} failed`);
+            return r.result;
+          },
+          undefined,
+          now,
+        );
+        await this.#postCommit();
+      },
     });
   }
 

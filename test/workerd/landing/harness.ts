@@ -53,6 +53,9 @@ export type LandingWorker = {
   gitRequests(): RecordedRequest[];
   /** The fault hook of the local git server (LP5 rows): assigned per test. */
   setGitFault(fault: ((request: RecordedRequest & { body?: Buffer }) => GitFault) | null): void;
+  /** The read sidecar's fault hook: a test fails `log`/`tree`/`blob` reads to wedge the rebuild
+   * job between its committed runs (RB3). Default is forward. */
+  setReadFault(fault: ReadFault): void;
   /** Arms the Artifacts scope check on the stand-in git server (SE5c): a `read` token answers
    * upload-pack (fetch/clone) only; every `git-receive-pack` path takes the `write` token; any
    * other credential — or none — is refused (401 on a read path, 403 on a write path). This is
@@ -92,13 +95,26 @@ export function createNamedRepo(projectRoot: string, name: string): string {
 
 /** The read sidecar: `git show`, `git cat-file` and `git ls-tree` over HTTP, plus `/exists` for
  * the fake binding's `get`/`create` existence checks. Same repositories as the git server. */
-async function startReadServer(projectRoot: string): Promise<{ origin: string; close(): Promise<void> }> {
+export type ReadFault =
+  ((request: { path: string }) => { action: "forward" } | { action: "answer"; status: number }) | null;
+
+async function startReadServer(
+  projectRoot: string,
+): Promise<{ origin: string; fault: { current: ReadFault }; close(): Promise<void> }> {
+  const fault: { current: ReadFault } = { current: null };
   const server: Server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const [, kind, name, ...rest] = url.pathname.split("/");
     const directory = join(projectRoot, name ?? "");
     const ok = existsSync(join(directory, ".git"));
     try {
+      // The fault hook lets a test fail object reads mid-rebuild — the wedge that proves the
+      // durable cursor resumes where the last committed run stopped (3.6, RB3).
+      const verdict = fault.current?.({ path: url.pathname });
+      if (verdict !== undefined && verdict.action === "answer") {
+        response.writeHead(verdict.status).end();
+        return;
+      }
       if (kind === "exists") {
         response.writeHead(ok ? 200 : 404).end();
       } else if (!ok) {
@@ -110,8 +126,64 @@ async function startReadServer(projectRoot: string): Promise<{ origin: string; c
       } else if (kind === "commit") {
         const type = git(directory, ["cat-file", "-t", rest[0] ?? ""]);
         if (type !== "commit") throw new Error("not a commit");
-        const tree = git(directory, ["rev-parse", `${rest[0]}^{tree}`]);
-        response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ treeHash: tree }));
+        // The platform's `readCommit`/`log` row: %x1f field separators, %B last.
+        const raw = gitBytes(directory, [
+          "show",
+          "-s",
+          "--format=%H%x1f%T%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%P%x1f%ct%x1f%B",
+          rest[0] ?? "",
+        ]);
+        const parts = Buffer.from(raw).toString("utf8").split("\x1f");
+        const meta = {
+          hash: parts[0],
+          treeHash: parts[1],
+          author: { name: parts[2], email: parts[3] },
+          committer: { name: parts[4], email: parts[5] },
+          parents: (parts[6] ?? "").trim() === "" ? [] : parts[6]!.trim().split(" "),
+          committedAt: Number(parts[7]),
+          message: (parts[8] ?? "").replace(/\n$/, ""),
+        };
+        response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(meta));
+      } else if (kind === "blob") {
+        const type = git(directory, ["cat-file", "-t", rest[0] ?? ""]);
+        if (type !== "blob") throw new Error("not a blob");
+        const bytes = gitBytes(directory, ["cat-file", "blob", rest[0] ?? ""]);
+        response.writeHead(200, { "content-type": "application/octet-stream" }).end(new Uint8Array(bytes));
+      } else if (kind === "log") {
+        // First-parent, newest first — the platform's `log` (S7): the rebuild's walk.
+        const ref = rest[0] ?? "HEAD";
+        const limit = Number(url.searchParams.get("limit") ?? "50");
+        const offset = Number(url.searchParams.get("offset") ?? "0");
+        let out;
+        try {
+          out = gitBytes(directory, [
+            "log",
+            ref,
+            "--first-parent",
+            `--max-count=${limit}`,
+            `--skip=${offset}`,
+            "--format=%H%x1f%T%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%P%x1f%ct%x1f%B%x1e",
+          ]);
+        } catch {
+          out = Buffer.from("");
+        }
+        const commits = Buffer.from(out)
+          .toString("utf8")
+          .split("\x1e")
+          .filter((r) => r.trim() !== "")
+          .map((record) => {
+            const parts = record.replace(/^\n/, "").split("\x1f");
+            return {
+              hash: parts[0],
+              treeHash: parts[1],
+              author: { name: parts[2], email: parts[3] },
+              committer: { name: parts[4], email: parts[5] },
+              parents: (parts[6] ?? "").trim() === "" ? [] : parts[6]!.trim().split(" "),
+              committedAt: Number(parts[7]),
+              message: (parts[8] ?? "").replace(/\n$/, ""),
+            };
+          });
+        response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(commits));
       } else if (kind === "tree") {
         const lines = git(directory, ["ls-tree", rest[0] ?? ""]);
         const entries = lines
@@ -135,6 +207,7 @@ async function startReadServer(projectRoot: string): Promise<{ origin: string; c
   const { port } = server.address() as AddressInfo;
   return {
     origin: `http://127.0.0.1:${port}`,
+    fault,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }
@@ -304,6 +377,9 @@ export async function startLandingWorker(options: {
     gitRequests: () => gitServer.requests,
     setGitFault: (fault) => {
       gitServer.fault = fault ?? (() => ({ action: "forward" }));
+    },
+    setReadFault: (fault) => {
+      readServer.fault.current = fault;
     },
     enforceTokenScopes: ({ read, write }) => {
       gitServer.fault = (request) => {

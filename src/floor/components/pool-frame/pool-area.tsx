@@ -3,11 +3,14 @@
 // green line under the region; nothing of the shell sits between the frame and the tiles.
 // LY1: the frame keeps 16:9 at the area's full width unless the tiles would get less than their
 // one guaranteed row (64 high) — then the frame shrinks and centres.
+// IR12: a pool made from a repository (`pool.app` null) has no live picture — the area holds
+// no frame at all, its caption bar reads `frame.no_app`, and the tiles take the frame's place.
 
 import { useEffect, useRef } from "react";
-import { PoolFrame } from "./pool-frame.tsx";
+import { PoolFrame, FRAME_CSS } from "./pool-frame.tsx";
 import type { PoolFrameProps } from "./pool-frame.tsx";
 import { FileTiles } from "../tiles/tiles.tsx";
+import { text } from "../../../copy/strings.ts";
 
 /** The tiles region never drops below one row (LY1). */
 const TILES_MIN_PX = 64;
@@ -15,6 +18,9 @@ const TILES_MIN_PX = 64;
 const AREA_CSS = `
 .pool-area { display: flex; flex-direction: column; gap: 8px; min-width: 0; height: 100%; min-height: 0; }
 .pool-area[data-tight="true"] .pf-body { width: auto; height: var(--pf-body-h); margin-inline: auto; flex: none; }
+/* IR12: with no frame the tiles fill the region — lift the grid's row cap so the cells use
+ * the frame's height rather than folding behind the more-cell. */
+.pool-area[data-app="none"] .tiles { --tile-rows: 99; }
 `;
 
 export type PoolAreaProps = PoolFrameProps & {
@@ -38,6 +44,12 @@ export function PoolArea(props: PoolAreaProps) {
     const el = areaRef.current;
     if (el === null || typeof ResizeObserver !== "function") return;
     const measure = () => {
+      // IR12: a no-app area holds no frame body — the LY1 shrink math has nothing to move.
+      if (el.querySelector(".pf-body") === null) {
+        delete el.dataset.tight;
+        el.style.removeProperty("--pf-body-h");
+        return;
+      }
       const caption = el.querySelector(".pf-caption");
       const captionH = caption?.getBoundingClientRect().height ?? 0;
       const gaps = 8; // .pool-area gap (the caption sits on the frame: .pf gap is 0)
@@ -56,10 +68,24 @@ export function PoolArea(props: PoolAreaProps) {
     return () => ro.disconnect();
   }, []);
 
+  // IR12 (06-repos): `pool.app` is null only after the stream's pool.state says so —
+  // the pool then gets no frame, no frame request, no Pause, no Compare and no self-test
+  // badge. Before that event the kind is undecided; the frame holds its first load.
+  const noApp = props.state.pool.app === null;
+
   return (
-    <div className="pool-area" ref={areaRef}>
+    <div className="pool-area" ref={areaRef} data-app={noApp ? "none" : undefined}>
       <style>{AREA_CSS}</style>
-      <PoolFrame {...frameProps} />
+      {noApp ? (
+        <div className="pf">
+          <style>{FRAME_CSS}</style>
+          <div className="pf-caption">
+            <span className="pf-caption-text">{text("frame.no_app")}</span>
+          </div>
+        </div>
+      ) : (
+        <PoolFrame {...frameProps} />
+      )}
       <FileTiles state={props.state} onTileWho={onTileWho} onTileWhy={onTileWhy} />
     </div>
   );

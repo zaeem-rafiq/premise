@@ -12,6 +12,7 @@ import type { HeadsUp } from "../../protocol/headsup.ts";
 import { energyMaxOf, sourceOf } from "../scripted.ts";
 import { crabFile, crabThreshold } from "./canned.ts";
 import { cannedCast, type CastCall, type CastState } from "./runner.ts";
+import type { Pattern } from "../pattern.ts";
 
 const ENERGY_KEY = "world/energy.js#ENERGY_MAX";
 const PATH = "creatures/crab.js";
@@ -49,48 +50,57 @@ function takeEnergyValue(s: CastState, hu: HeadsUp, ack: { statement: string }):
   }
 }
 
-export const HERO_C = cannedCast({
-  id: "hero-c",
-  intent: "a crab that hides in its shell when its energy drops below 30",
-  truth: [
-    `entity:${ENERGY_KEY}`,
-    "entity:world/bounds.js#FLOOR_Y",
-    "entity:world/bounds.js#bounce",
-    "entity:world/movement.js#step",
-  ],
-  script: [
-    { tool: "list", args: { path: "creatures/" }, why: "list" },
-    { tool: "read", args: { path: "GUIDE.md" }, why: "guide" },
-    { tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" }, why: "energy" },
-    { tool: "read", args: { path: "world/bounds.js", entity: "FLOOR_Y" }, why: "read" },
-    { tool: "read", args: { path: "world/bounds.js", entity: "bounce" }, why: "read" },
-    { tool: "read", args: { path: "world/movement.js", entity: "step" }, why: "read" },
-    {
-      tool: "write",
-      args: (s) => {
-        s.data.pending = threshold(s); // the text issued; `write` adopts it when confirmed
-        return { path: PATH, content: crabFile(s.data.pending as string) };
+/** `hero-c` as a function of one point of its script: `withEnergyRead` false is the variant
+ * of 7.5's 1c — the crab's agent never reads `ENERGY_MAX`, so only a `derived` premise keeps
+ * it honest (A10, vectors C10/C30). */
+export function heroCCast(withEnergyRead: boolean): Pattern {
+  return cannedCast({
+    id: "hero-c",
+    intent: "a crab that hides in its shell when its energy drops below 30",
+    truth: [
+      `entity:${ENERGY_KEY}`,
+      "entity:world/bounds.js#FLOOR_Y",
+      "entity:world/bounds.js#bounce",
+      "entity:world/movement.js#step",
+    ],
+    script: [
+      { tool: "list", args: { path: "creatures/" }, why: "list" },
+      { tool: "read", args: { path: "GUIDE.md" }, why: "guide" },
+      ...(withEnergyRead
+        ? [{ tool: "read" as const, args: { path: "world/energy.js", entity: "ENERGY_MAX" }, why: "energy" }]
+        : []),
+      { tool: "read", args: { path: "world/bounds.js", entity: "FLOOR_Y" }, why: "read" },
+      { tool: "read", args: { path: "world/bounds.js", entity: "bounce" }, why: "read" },
+      { tool: "read", args: { path: "world/movement.js", entity: "step" }, why: "read" },
+      {
+        tool: "write",
+        args: (s) => {
+          s.data.pending = threshold(s); // the text issued; `write` adopts it when confirmed
+          return { path: PATH, content: crabFile(s.data.pending as string) };
+        },
+        why: "write",
       },
-      why: "write",
+    ],
+
+    onResult(s, call, result) {
+      if (call.why === "energy") {
+        const v = energyMaxOf(sourceOf(result));
+        if (v !== null) s.data.v = v;
+        return;
+      }
+      if (call.why === "write") {
+        // The file now holds the threshold it was written with; chained repairs chain off it.
+        s.data.threshold = s.data.pending;
+        return;
+      }
     },
-  ],
 
-  onResult(s, call, result) {
-    if (call.why === "energy") {
-      const v = energyMaxOf(sourceOf(result));
-      if (v !== null) s.data.v = v;
-      return;
-    }
-    if (call.why === "write") {
-      // The file now holds the threshold it was written with; chained repairs chain off it.
-      s.data.threshold = s.data.pending;
-      return;
-    }
-  },
+    onHeadsUp(s, hu, ack) {
+      if (hu.result === "info" || hu.result === "confirm" || hu.result === "repair") {
+        takeEnergyValue(s, hu, ack);
+      }
+    },
+  });
+}
 
-  onHeadsUp(s, hu, ack) {
-    if (hu.result === "info" || hu.result === "confirm" || hu.result === "repair") {
-      takeEnergyValue(s, hu, ack);
-    }
-  },
-});
+export const HERO_C: Pattern = heroCCast(true);

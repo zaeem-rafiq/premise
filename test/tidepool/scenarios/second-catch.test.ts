@@ -7,6 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { HeadsUp } from "../../../src/protocol/headsup.ts";
 import { SwarmSim, tidepoolFiles, type AgentHandle } from "../../integration/collide/harness.ts";
+import { verdictOf } from "./eval.ts";
+import { specBlock } from "../spec.ts";
 
 function sim(): SwarmSim {
   return new SwarmSim(tidepoolFiles(), { seed: 7, synthetic: true, features_held: true });
@@ -31,6 +33,16 @@ function landNow(s: SwarmSim, agent: AgentHandle): void {
 }
 
 const rulesOf = (h: HeadsUp): string[] => h.items.map((i) => i.rule);
+
+/** The seeded generator of HO2, taken from the specification text and built by evaluating it. */
+function makeReseed(): (n: number) => void {
+  const source = specBlock("replace `Math.random` with the generator below", "```js");
+  const build = new Function(`${source}\nreturn mulberry32;`) as () => (seed: number) => () => number;
+  const mulberry32 = build();
+  return (n: number): void => {
+    Math.random = mulberry32(n);
+  };
+}
 
 describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", () => {
   it("order 1 (8.3): L1 repair catches the seahorse; every creature ends gold", { timeout: 30_000 }, () => {
@@ -74,6 +86,10 @@ describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", 
       expect(src).toMatch(/"gold"/);
     }
     expect(files.get("creatures/seahorse.js")).toContain('const BODY = "gold";');
+
+    // A6: the "all gold" pool's own self-test passes on the produced tree.
+    const verdict = verdictOf(files, makeReseed());
+    expect(verdict.ok).toBe(true);
   });
 
   it(
@@ -100,6 +116,10 @@ describe("the second catch: a listing gains a match (8.3, 8.4; A13, A14, A16)", 
       // B is not forced to be gold (8.4): the seahorse lands pink.
       expect(s.files().get("creatures/seahorse.js")).toContain('const BODY = "pink";');
       expect(s.files().get("creatures/fish.js")).toContain('const BODY = "gold";');
+
+      // A6: the "all gold but the seahorse" pool's own self-test passes as well.
+      const verdict = verdictOf(s.files(), makeReseed());
+      expect(verdict.ok).toBe(true);
     },
   );
 });

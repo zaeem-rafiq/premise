@@ -12,6 +12,7 @@
 // (SW7): `stop` `withdrawn`.
 
 import { cannedCast, type CastCall, type CastState } from "./runner.ts";
+import type { Pattern } from "../pattern.ts";
 
 const DRAIN_OLD = `// Take energy away. \`amount\` is in the same unit as ENERGY_MAX.
 export function drain(creature, amount) {
@@ -47,76 +48,85 @@ function drainToPercent(s: CastState, path: string, text: string): void {
   }
 }
 
-export const SWEEP_A = cannedCast({
-  id: "sweep-a",
-  intent:
-    "write every energy cost in percent of a full tank: change the drain rule so that 5 means five percent, and update every creature that drains energy",
-  summary: "Write energy costs in percent",
-  truth: [
-    "query:text:creatures/:drain(",
-    "query:refs:world/energy.js#drain",
-    "entity:world/energy.js#ENERGY_MAX",
-    "entity:world/energy.js#LIVING_COST",
-  ],
-  secondRepairWithdraws: true,
-  script: [
-    { tool: "read", args: { path: "GUIDE.md" }, why: "guide" },
-    { tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" }, why: "read" },
-    { tool: "read", args: { path: "world/energy.js", entity: "LIVING_COST" }, why: "read" },
-    { tool: "read", args: { path: "world/energy.js", entity: "drain" }, why: "read" },
-    { tool: "read", args: { path: "world/energy.js", entity: "liveOneTick" }, why: "read" },
-    { tool: "search", args: { query: "drain(", path: "creatures/" }, why: "search" },
-    (s) => {
-      const calls: CastCall[] = [
-        { tool: "replace", args: { path: "world/energy.js", old: DRAIN_OLD, new: DRAIN_NEW }, why: "edit" },
-        { tool: "replace", args: { path: "world/energy.js", old: TICK_OLD, new: TICK_NEW }, why: "edit" },
-      ];
-      // "update every creature that drains energy": each search line's number becomes percent.
-      const lines = (s.data.lines ?? []) as Array<{ path: string; text: string }>;
-      const staged: CastCall[] = [];
-      for (const line of lines) {
-        for (const match of line.text.matchAll(DRAIN_CALL)) {
-          staged.push({
-            tool: "replace",
-            args: {
-              path: line.path,
-              old: match[0],
-              new: `drain(${match[1]}, ${percentText(Number(match[2]))})`,
-            },
-            why: "edit",
-          });
+/** `sweep-a` as a function of one point of its script: `withEnergyRead` false is A20's B1
+ * variant — the same cast minus the `read` of `energy#ENERGY_MAX`, so the new `drain`'s
+ * reference to it is a blind spot (B1 `confirm`) at the first submit. */
+export function sweepACast(withEnergyRead: boolean): Pattern {
+  return cannedCast({
+    id: "sweep-a",
+    intent:
+      "write every energy cost in percent of a full tank: change the drain rule so that 5 means five percent, and update every creature that drains energy",
+    summary: "Write energy costs in percent",
+    truth: [
+      "query:text:creatures/:drain(",
+      "query:refs:world/energy.js#drain",
+      "entity:world/energy.js#ENERGY_MAX",
+      "entity:world/energy.js#LIVING_COST",
+    ],
+    secondRepairWithdraws: true,
+    script: [
+      { tool: "read", args: { path: "GUIDE.md" }, why: "guide" },
+      ...(withEnergyRead
+        ? [{ tool: "read" as const, args: { path: "world/energy.js", entity: "ENERGY_MAX" }, why: "read" }]
+        : []),
+      { tool: "read", args: { path: "world/energy.js", entity: "LIVING_COST" }, why: "read" },
+      { tool: "read", args: { path: "world/energy.js", entity: "drain" }, why: "read" },
+      { tool: "read", args: { path: "world/energy.js", entity: "liveOneTick" }, why: "read" },
+      { tool: "search", args: { query: "drain(", path: "creatures/" }, why: "search" },
+      (s) => {
+        const calls: CastCall[] = [
+          { tool: "replace", args: { path: "world/energy.js", old: DRAIN_OLD, new: DRAIN_NEW }, why: "edit" },
+          { tool: "replace", args: { path: "world/energy.js", old: TICK_OLD, new: TICK_NEW }, why: "edit" },
+        ];
+        // "update every creature that drains energy": each search line's number becomes percent.
+        const lines = (s.data.lines ?? []) as Array<{ path: string; text: string }>;
+        const staged: CastCall[] = [];
+        for (const line of lines) {
+          for (const match of line.text.matchAll(DRAIN_CALL)) {
+            staged.push({
+              tool: "replace",
+              args: {
+                path: line.path,
+                old: match[0],
+                new: `drain(${match[1]}, ${percentText(Number(match[2]))})`,
+              },
+              why: "edit",
+            });
+          }
+        }
+        return [...calls, ...staged];
+      },
+    ],
+
+    onResult(s, call, result) {
+      if (call.why === "search") {
+        const lines = (result as { lines?: unknown }).lines;
+        s.data.lines = Array.isArray(lines)
+          ? lines
+              .filter((l): l is { path: string; text: string } => typeof (l as { path?: unknown }).path === "string")
+              .map((l) => ({ path: l.path, text: l.text }))
+          : [];
+        return;
+      }
+    },
+
+    onHeadsUp(s, hu, ack) {
+      // QT1 (`text:` gained a container) and QR1 (`refs:` gained referrers) both carry the new
+      // sources: every `drain` call they show on a creature module is rewritten to percent.
+      for (const item of hu.items) {
+        if (item.diff.kind !== "query") continue;
+        const before = s.queue.length;
+        for (const entry of [...item.diff.added, ...item.diff.context]) {
+          const path = entry.key.split("#")[0] ?? "";
+          if (!path.startsWith("creatures/") || entry.source === null) continue;
+          drainToPercent(s, path, entry.source);
+        }
+        if (s.queue.length > before) {
+          ack.statement = "a new creature calls drain; rewrote its number to percent";
         }
       }
-      return [...calls, ...staged];
     },
-  ],
+  });
+}
 
-  onResult(s, call, result) {
-    if (call.why === "search") {
-      const lines = (result as { lines?: unknown }).lines;
-      s.data.lines = Array.isArray(lines)
-        ? lines
-            .filter((l): l is { path: string; text: string } => typeof (l as { path?: unknown }).path === "string")
-            .map((l) => ({ path: l.path, text: l.text }))
-        : [];
-      return;
-    }
-  },
-
-  onHeadsUp(s, hu, ack) {
-    // QT1 (`text:` gained a container) and QR1 (`refs:` gained referrers) both carry the new
-    // sources: every `drain` call they show on a creature module is rewritten to percent.
-    for (const item of hu.items) {
-      if (item.diff.kind !== "query") continue;
-      const before = s.queue.length;
-      for (const entry of [...item.diff.added, ...item.diff.context]) {
-        const path = entry.key.split("#")[0] ?? "";
-        if (!path.startsWith("creatures/") || entry.source === null) continue;
-        drainToPercent(s, path, entry.source);
-      }
-      if (s.queue.length > before) {
-        ack.statement = "a new creature calls drain; rewrote its number to percent";
-      }
-    }
-  },
-});
+export const SWEEP_A: Pattern = sweepACast(true);

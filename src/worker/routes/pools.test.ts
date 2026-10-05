@@ -256,6 +256,19 @@ describe("POST /api/pools with source (IR1, IR2)", () => {
     expect(calls.filter((c) => c.kind === "pools.import")).toHaveLength(4);
   });
 
+  it("passes the import the address rebuilt from its checked parts, the host in lower case", async () => {
+    const { env, calls } = fakeEnv({ pools: {} });
+    const res = await createPool(
+      input(post("/api/pools", { ...good, source: { url: "https://GitHub.com/octo/app.git" } }), env),
+    );
+    expect(res.status).toBe(200);
+    const imp = calls.find((c) => c.kind === "pools.import");
+    expect(imp?.opts).toEqual({
+      source: { url: "https://github.com/octo/app.git", depth: 1 },
+      target: { name: "tp-repo" },
+    });
+  });
+
   it("refuses every other address form of IR1 with 400 invalid_args", async () => {
     const { env, calls } = fakeEnv({ pools: {} });
     const bad = [
@@ -276,6 +289,9 @@ describe("POST /api/pools with source (IR1, IR2)", () => {
       "https://github.com/o/%2e%2e", // an encoded name
       "git@github.com:o/r.git", // not https at all
       "https://github.com/o/r/", // a trailing slash
+      "https://github.com/o/r\n", // a line break, which `new URL` would drop
+      "https://git\thub.com/o/r", // a tab inside the host, which `new URL` would drop
+      " https://github.com/o/r", // a leading space
       "",
     ];
     for (const url of bad) {

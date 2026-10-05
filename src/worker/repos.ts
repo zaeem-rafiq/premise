@@ -20,12 +20,16 @@ const SOURCE_BRANCH = /^[A-Za-z0-9._/-]+$/;
  * and holds no `..`. Returns the descriptor as given, or null for any other form.
  *
  * The authority is checked on the raw address, not `URL.host`: `new URL` folds `:443` away,
- * and IR1 refuses every port — including the default one.
+ * and IR1 refuses every port — including the default one. The address is untrusted input: one
+ * holding white space or a control character is refused (`new URL` would drop a tab or a line
+ * break and accept what remains), and the address handed on is rebuilt from the checked parts,
+ * so the import never sees text the checks did not.
  */
 export function parseRepoSource(source: unknown): { url: string; branch?: string } | null {
   if (typeof source !== "object" || source === null) return null;
   const request = source as { url?: unknown; branch?: unknown };
   if (typeof request.url !== "string" || request.url.length === 0) return null;
+  if (/[\s\u0000-\u001f\u007f]/.test(request.url)) return null;
   if (
     request.branch !== undefined &&
     (typeof request.branch !== "string" || !SOURCE_BRANCH.test(request.branch) || request.branch.includes(".."))
@@ -62,5 +66,6 @@ export function parseRepoSource(source: unknown): { url: string; branch?: string
   const rawName = segments[2]!;
   const name = rawName.endsWith(".git") ? rawName.slice(0, -".git".length) : rawName;
   if (!SOURCE_SEGMENT.test(owner) || !SOURCE_SEGMENT.test(name)) return null;
-  return request.branch === undefined ? { url: request.url } : { url: request.url, branch: request.branch };
+  const url = `https://${parsed.hostname}/${owner}/${rawName}`;
+  return request.branch === undefined ? { url } : { url, branch: request.branch };
 }

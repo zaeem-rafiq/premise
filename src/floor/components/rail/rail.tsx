@@ -38,6 +38,8 @@ export type RailProps = {
   onSend: (text: string) => void;
   /** Opens the attempt's card sheet (`attempt.open_card` on a held card). */
   onOpenCard: (cardId: string) => void;
+  /** Opens the Why card of a landed row (CO12). */
+  onOpenWhy?: (seq: number) => void;
 };
 
 /** An attempt that still belongs to the Working tab: in flight (which counts `accepted`),
@@ -224,7 +226,7 @@ export function Rail(props: RailProps) {
           ) : (
             landed.map((landing) => (
               <div key={landing.seq}>
-                <LandedRow landing={landing} floor={floor} />
+                <LandedRow landing={landing} floor={floor} onOpenWhy={props.onOpenWhy} />
                 {Object.values(floor.attempts)
                   .filter(
                     (a) =>
@@ -277,7 +279,15 @@ function attemptName(attempt: AttemptView, floor: FloorState): string {
   });
 }
 
-function LandedRow({ landing, floor }: { landing: LandingEntry; floor: FloorState }) {
+function LandedRow({
+  landing,
+  floor,
+  onOpenWhy,
+}: {
+  landing: LandingEntry;
+  floor: FloorState;
+  onOpenWhy?: (seq: number) => void;
+}) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const attempt = landing.attempt_id === null ? undefined : floor.attempts[landing.attempt_id];
@@ -300,8 +310,8 @@ function LandedRow({ landing, floor }: { landing: LandingEntry; floor: FloorStat
       </div>
     );
   }
-  return (
-    <button type="button" className="landed-row" data-kind={landing.kind}>
+  const content = (
+    <>
       <span className="landed-seq">{landingLabel(landing.seq)}</span>
       <span className="landed-name" dir="auto">
         {name}
@@ -315,6 +325,15 @@ function LandedRow({ landing, floor }: { landing: LandingEntry; floor: FloorStat
             ? ""
             : timeOfDay(landing.landed.ts)}
       </span>
+    </>
+  );
+  return onOpenWhy === undefined ? (
+    <div className="landed-row" data-kind={landing.kind}>
+      {content}
+    </div>
+  ) : (
+    <button type="button" className="landed-row" data-kind={landing.kind} onClick={() => onOpenWhy(landing.seq)}>
+      {content}
     </button>
   );
 }

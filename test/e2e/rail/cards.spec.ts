@@ -178,6 +178,109 @@ async function serve(
   });
 }
 
+/** Two completed changes and an accepted-only change exercise CO12 without a pool frame. */
+function landingFrames(n: number, seq: number, text: string, pending = false): Frame[] {
+  const intent_id = `i_${seq}`;
+  const attempt_id = `a_${seq}`;
+  return [
+    ev(n, {
+      type: "intent.created",
+      intent_id,
+      text,
+      requester: "owner",
+      race: false,
+      prewritten: false,
+    }),
+    ev(n + 1, {
+      type: "attempt.opened",
+      intent_id,
+      attempt_id,
+      change_id: `c_${seq}`,
+      agent: "real",
+      model: "model-a",
+      race: false,
+    }),
+    ev(n + 2, {
+      type: "landing.accepted",
+      seq,
+      batch_id: seq,
+      kind: "change",
+      attempt_id,
+      change_id: `c_${seq}`,
+      intent_id,
+      request_id: null,
+      paths: [],
+      writes: [],
+    }),
+    ...(pending
+      ? []
+      : [
+          ev(n + 3, {
+            type: "landing.landed",
+            seq,
+            batch_id: seq,
+            commit: `commit-${seq}`,
+            tree: `tree-${seq}`,
+            note: `note-${seq}`,
+            note_json: JSON.stringify({ v: 1, seq, kind: "change", change_id: `c_${seq}` }),
+            time_to_land_ms: 100,
+          }),
+        ]),
+  ];
+}
+
+test.describe("the Landed tab", () => {
+  const changes = [
+    { seq: 1, text: "a tracer fish" },
+    { seq: 2, text: "a hiding crab" },
+  ];
+  const frames = [
+    { ...POOL_STATE, app: null },
+    ...landingFrames(2, 1, changes[0]!.text),
+    ...landingFrames(6, 2, changes[1]!.text),
+    ...landingFrames(10, 3, "a darting shrimp", true),
+  ];
+
+  for (const activation of ["mouse", "Enter", "Space"] as const) {
+    test(`CO12: ${activation} opens the Why card of the selected landing`, async ({ page }) => {
+      await serve(page, frames);
+      await page.goto(`/p/${POOL}`);
+      await page.getByRole("tab", { name: /^Landed/ }).click();
+      for (const change of changes) {
+        const row = page.locator("button.landed-row").filter({ hasText: change.text });
+        if (activation === "mouse") {
+          await row.click();
+        } else {
+          await row.focus();
+          await page.keyboard.press(activation);
+        }
+        const sheet = page.getByRole("dialog", { name: "Why is this here?", exact: true });
+        await expect(sheet).toBeVisible();
+        await expect(sheet.getByRole("heading", { name: "Why is this here?", exact: true })).toBeVisible();
+        await expect(sheet.locator(".why-head")).toContainText(`landing ${change.seq}`);
+        await expect(sheet.locator('[data-section="asked"]')).toContainText(`owner: "${change.text}"`);
+        await page.keyboard.press("Escape");
+        await expect(sheet).toHaveCount(0);
+        await expect(row).toBeFocused();
+      }
+    });
+  }
+
+  test("FL3: a Landing… row has no button", async ({ page }) => {
+    await serve(page, frames);
+    await page.goto(`/p/${POOL}`);
+    await page.getByRole("tab", { name: /^Landed/ }).click();
+    const pending = page.locator(".landed-row").filter({ hasText: "a darting shrimp" });
+    await expect(pending).toBeVisible();
+    await expect(pending).toContainText("Landing…");
+    await expect(pending).toHaveJSProperty("tagName", "DIV");
+    await expect(pending.getByRole("button")).toHaveCount(0);
+    await expect(pending).not.toHaveAttribute("tabindex");
+    await pending.click();
+    await expect(page.locator(".why-sheet")).toHaveCount(0);
+  });
+});
+
 test.describe("the tray and the card sheet", () => {
   test("plan 2.6 item 5, AC22: with features.held false the minimal held sheet carries the card's own text and options (HD1, CD4, CD5)", async ({
     page,

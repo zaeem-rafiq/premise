@@ -139,6 +139,7 @@ declare const window: Window & {
 
 function Harness() {
   const [state, setState] = useState(() => emptyFloorState());
+  const [owner, setOwner] = useState(true);
   const [mode, setMode] = useState<"live" | "replay">("live");
   const [sheet, setSheet] = useState<
     | { kind: "why"; seq: number }
@@ -147,10 +148,11 @@ function Harness() {
   >(null);
   const [highlight, setHighlight] = useState<string[] | undefined>(undefined);
   const [banner, setBanner] = useState(false);
-  const shell = makeShell(SETTINGS as never, true, mode === "replay");
+  const shell = makeShell(SETTINGS as never, owner, mode === "replay");
   const close = () => { setSheet(null); window.sheetKind = null; };
   window.harness = {
     event: (e: unknown) => setState((s) => ({ ...reduce(s, e as never) })),
+    owner: (value: boolean) => setOwner(value),
     mode: (m: "live" | "replay") => setMode(m),
     banner: (on: boolean) => setBanner(on),
     openWhy: (seq: number) => { setSheet({ kind: "why", seq }); window.sheetKind = "why"; },
@@ -315,6 +317,43 @@ test.beforeEach(() => {
 });
 
 test.describe("2.8 item 1 — the Why card (3.9, CO22)", () => {
+  for (const { role, owner, mode, canUndo } of [
+    { role: "owner", owner: true, mode: "live", canUndo: true },
+    { role: "visitor", owner: false, mode: "live", canUndo: false },
+    { role: "owner in Replay", owner: true, mode: "replay", canUndo: false },
+    { role: "visitor in Replay", owner: false, mode: "replay", canUndo: false },
+  ] as const) {
+    test(`FL7 / 3.12: ${role} ${canUndo ? "has" : "has no"} Undo button on a change Why card`, async ({ page }) => {
+      await serveHarness(page);
+      await sendEvents(page, C04, C04_ALL);
+      await page.evaluate(
+        ({ owner, mode }) => {
+          const harness = (
+            window as { harness?: { owner: (value: boolean) => void; mode: (value: "live" | "replay") => void } }
+          ).harness;
+          harness?.owner(owner);
+          harness?.mode(mode);
+        },
+        { owner, mode },
+      );
+      await page.locator("#why-open").click();
+      const sheet = page.getByRole("dialog", { name: "Why is this here?", exact: true });
+      await expect(sheet).toBeVisible();
+      await expect(sheet).toHaveAttribute("data-status", "live");
+      await expect(sheet.locator(".why-head")).toContainText("landing 2");
+      await expect(sheet.getByRole("button", { name: "Show the git", exact: true })).toBeVisible();
+      const undo = sheet.getByRole("button", { name: "Undo", exact: true });
+      if (canUndo) {
+        await expect(undo).toBeVisible();
+        await expect(undo).toBeEnabled();
+        await undo.click();
+        await expect.poll(() => page.evaluate(() => (window as { lastUndo?: number }).lastUndo)).toBe(2);
+      } else {
+        await expect(undo).toHaveCount(0);
+      }
+    });
+  }
+
   test("a tapped creature opens the Why card of its newest change (hero-c04)", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, C04, C04_ALL);

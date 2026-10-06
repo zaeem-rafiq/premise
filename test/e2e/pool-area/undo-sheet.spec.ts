@@ -417,7 +417,7 @@ test.describe("the undo sheet (3.12)", () => {
     expect(sent.length).toBe(0);
   });
 
-  test("3.12 held row: a visitor sends no undo-plan request; the sheet shows only the off state", async ({ page }) => {
+  test("FL7 / 3.12 held row: a visitor's Why card has no Undo button and sends no request", async ({ page }) => {
     const planCalls: string[] = [];
     const sent: Captured[] = [];
     await serve(page, BASE_STREAM, { owner: false, planCalls, sent });
@@ -428,16 +428,9 @@ test.describe("the undo sheet (3.12)", () => {
     );
     const why = page.locator(".why-sheet");
     await expect(why).toBeVisible();
-    // 3.12's held row says a visitor has no Undo button on the Why card. The Why card is the
-    // floor-pool lane's; if it still shows the button, the sheet itself must hold the line —
-    // either way no request leaves and nothing is queued. (Replay reads the same shell.visitor.)
-    const undoButton = why.getByRole("button", { name: "Undo" });
-    if ((await undoButton.count()) > 0) {
-      await undoButton.click();
-      const sheet = page.locator(".undo-sheet");
-      await expect(sheet.getByText("The owner key is needed for this. Unlock, then try again.")).toBeVisible();
-      await expect(sheet.getByRole("button", { name: "Undo it" })).toHaveCount(0);
-    }
+    await expect(why).toHaveAttribute("data-status", "live");
+    await expect(why.getByRole("button", { name: "Undo", exact: true })).toHaveCount(0);
+    await expect(page.locator(".undo-sheet")).toHaveCount(0);
     expect(planCalls.length).toBe(0);
     expect(sent.length).toBe(0);
   });

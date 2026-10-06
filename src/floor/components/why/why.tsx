@@ -331,6 +331,7 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
             </button>
           )}
           {onOpenUndo !== undefined &&
+            !shell.visitor &&
             card.kind === "change" &&
             !card.undone &&
             card.status === "live" &&

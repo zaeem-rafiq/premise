@@ -17,12 +17,12 @@ import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { PoolEvent } from "../../src/protocol/events.ts";
 import type { SwarmConfig } from "../../src/protocol/swarm.ts";
 import type { FloorJson } from "../../src/protocol/floor-json.ts";
 import { redact } from "../../src/protocol/redact.ts";
 import { runDial } from "./run.ts";
-import type { SoakDeps, SoakResponse, SoakResult, SoakStream } from "./run.ts";
+import type { SoakDeps, SoakResponse, SoakResult } from "./run.ts";
+import type { StreamSocket } from "./stream.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -109,34 +109,20 @@ function makeDeps(origin: string, ownerKey: string, namespace: string): SoakDeps
     return { status: response.status, body: new TextDecoder().decode(buffer), bytes: buffer.byteLength };
   };
 
-  const openStream: SoakDeps["openStream"] = (pool): SoakStream => {
-    const pending: PoolEvent[] = [];
-    const socket = {
-      pending,
-      closed: false,
-      close(): void {
-        socket.closed = true;
-        ws.close();
-      },
-    };
-    const ws = new WebSocket(`${origin.replace(/^http/, "ws")}/api/pools/${pool}/stream`);
-    ws.onopen = () => ws.send(JSON.stringify({ hello: 1, after: 0 }));
-    ws.onmessage = (message) => {
-      try {
-        const frame = JSON.parse(String(message.data)) as { events?: PoolEvent[] };
-        for (const event of frame.events ?? []) pending.push(event);
-      } catch {
-        /* an unparseable frame carries no event */
-      }
-    };
-    ws.onclose = () => {
-      socket.closed = true;
-    };
-    ws.onerror = () => {
-      socket.closed = true;
-    };
-    return socket;
+  // FR30's probe: a plain GET on the stream route — the browser cannot see the upgrade's 404,
+  // the script can. The route's role is `anyone`: the owner key stays out of it.
+  const probe: SoakDeps["probe"] = async (pool) => {
+    try {
+      const response = await fetch(`${origin}/api/pools/${encodeURIComponent(pool)}/stream`);
+      await response.arrayBuffer().catch(() => new ArrayBuffer(0));
+      return response.status;
+    } catch {
+      return 0;
+    }
   };
+
+  const socket: SoakDeps["socket"] = (pool): StreamSocket =>
+    new WebSocket(`${origin.replace(/^http/, "ws")}/api/pools/${encodeURIComponent(pool)}/stream`) as StreamSocket;
 
   const git: SoakDeps["git"] = async (args, opts) => {
     const env = { ...(opts?.env ?? {}) };
@@ -195,7 +181,8 @@ function makeDeps(origin: string, ownerKey: string, namespace: string): SoakDeps
 
   return {
     http,
-    openStream,
+    probe,
+    socket,
     git,
     issueToken,
     clock: { now: () => Date.now() },

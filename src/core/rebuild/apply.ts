@@ -12,6 +12,7 @@ import { metaSet } from "../trunk/schema.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { attemptFromRow } from "../trunk/registry.ts";
 import type { ApplyPayload, ExpectedRegister, LandingPlan, RebuildCursor } from "./plan.ts";
+import { buildsPlain } from "../trunk/plain.ts";
 
 export const CURSOR_KEY = "rebuild_cursor";
 
@@ -519,8 +520,8 @@ export function applyRebuildStep(pool: Pool, payload: ApplyPayload): Record<stri
   );
   // 11.7: the rebuilt landing set re-runs the plain replay once — idle when the remote's
   // `plain_commit` already covers it, one re-anchored commit when it moved (RB3's crash gap).
-  // IR7: an imported pool never gets a plain-merge build, so the timer is never armed for it.
-  if (pool.meta.get("app") !== "") {
+  // An imported pool (IR7) and a summary-only pool have no plain-merge pool: no timer for them.
+  if (buildsPlain(pool)) {
     sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   }
   emitPoolState(pool);

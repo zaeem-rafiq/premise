@@ -137,6 +137,12 @@ function materialize(
  * `parent_override` re-anchors the pending commit when the remote's `main` moved underneath —
  * the same tree, same timestamp, a new parent and so a new commit id (the remote's own value is
  * the parent, so the push that follows is a fast-forward it cannot refuse). */
+/** Whether the pool has a plain-merge pool at all (11.7): an imported pool (IR7, `app` "") and a
+ * summary-only pool (EV6, the Swarm's) have none, so the `plain` timer is never armed for them. */
+export function buildsPlain(pool: { meta: { get(key: string): string | undefined } }): boolean {
+  return pool.meta.get("app") !== "" && pool.meta.get("summary_only") !== "1";
+}
+
 export function plainBuild(pool: Pool, input: { parent_override?: string } = {}): PlainBuild {
   // A rebuilding pool's landings are mid-flight; the job's own finish re-arms nothing here —
   // the next `batch.pushed` does, and the remote repository was left consistent as it stood.

@@ -87,6 +87,8 @@ describe("the plain-merge pool (11.7) in local workerd", () => {
         plainRepo("p4-p"),
         "p5-p",
         plainRepo("p5-p"),
+        // A summary-only pool: no plain-merge repository is made for it (11.7 amended).
+        "sum-p",
       ],
     });
   }, 240_000);
@@ -153,6 +155,22 @@ describe("the plain-merge pool (11.7) in local workerd", () => {
     expect(String((await lastPoolState(worker, "hero-p"))?.plain_remote)).toBe(worker.remoteFor(plainRepo("hero-p")));
     expect(() => git(dir, ["fsck", "--strict"])).not.toThrow();
   }, 240_000);
+
+  it("11.7: a summary-only pool (a Swarm pool) builds no plain-merge pool", async () => {
+    // Its Floor shows no Compare view, and replaying every landing from the seed after each
+    // push kept a busy Swarm pool's Trunk from its pushes (2026-10-05). The stand-in has no
+    // `sum-p-plain` repository: a build would fail its push and leave a `trunk.error`.
+    await createPool(worker, "sum-p", { seed: "tidepool", summary_only: true });
+    await launch(worker, "sum-p", ["add-plain"], { request_id: "r-launch-sum-p" });
+    await waitFor(async () => (await landedSeqs(worker, "sum-p")).length >= 1, 60_000);
+    for (let i = 0; i < 5; i += 1) await worker.runAlarm("sum-p", Date.now() + 60_000);
+    expect(await plainsOf(worker, "sum-p")).toEqual([]);
+    const plainErrors = (await eventsOf(worker, "sum-p", "trunk.error")).filter((e) =>
+      String(e.where).includes("plain"),
+    );
+    expect(plainErrors).toEqual([]);
+    expect((await lastPoolState(worker, "sum-p"))?.plain_remote ?? null).toBeNull();
+  }, 180_000);
 
   it("PM7/TP20: a change that replays as it landed gives `tree` = `landing.landed.tree` of `through_seq`", async () => {
     await createPool(worker, "clean-p", { seed: "tidepool" });

@@ -2105,7 +2105,7 @@ type VerifyResult = {
 
 ### 11.7 The "same changes, merged by plain git" pool
 
-Neutral label, shown as constructed. It lives in a second Artifacts repository per pool, the **plain-merge repository**, branch `main` (served by the app server as repo `plain`). Trunk builds it after each `batch.pushed`, off the landing path (`plain` timer), with the pack code of 9.5.
+Neutral label, shown as constructed. It lives in a second Artifacts repository per pool, the **plain-merge repository**, branch `main` (served by the app server as repo `plain`). Trunk builds it after each `batch.pushed`, off the landing path (`plain` timer), with the pack code of 9.5. A `summary_only` pool (EV6, a Swarm pool, whose Floor shows no Compare view) and a pool imported from a repository (`06-repos.md` IR7) have none: Trunk never builds one for them (added 2026-10-05: in a busy Swarm pool, replaying every landing after each push held the Trunk Durable Object back from its own pushes).
 
 - **PM1 (what is replayed).** Start from the seed. For each landing of kind `change` in `seq` order, replay the operations the attempt held **before its first heads-up of result `confirm` or `repair`** (`ops_first`; if it never had one, its landed operations), with no premise check.
 - **PM2 (`ops_first`).** Written once per attempt and revision, when its first heads-up of result `confirm` or `repair` is created, with the operations it held at that moment (before any OP6 drop), and with `submitted = 1` if the attempt had passed a submit (reached `submitted`, `validated` or `held`) before that moment.

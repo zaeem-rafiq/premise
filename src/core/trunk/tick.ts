@@ -55,6 +55,7 @@ import { classify } from "../classify/table.ts";
 import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
+import { buildsPlain } from "./plain.ts";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const utf8len = (s: string): number => utf8(s).length;
@@ -1032,9 +1033,9 @@ export function pushOk(pool: Pool): void {
   });
   markLanded(pool);
   // The plain-merge pool rebuilds off the landing path (11.7, PM6): the `plain` timer
-  // carries it — this transaction only arms it, the push never waits on it. IR7: an imported
-  // pool (`app` "") gets no plain-merge build — the timer is never armed for it.
-  if (pool.meta.get("app") !== "") {
+  // carries it — this transaction only arms it, the push never waits on it. An imported pool
+  // (IR7) and a summary-only pool have no plain-merge pool: the timer is never armed for them.
+  if (buildsPlain(pool)) {
     pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   }
   pool.outbox.pushed_at = pool.now();

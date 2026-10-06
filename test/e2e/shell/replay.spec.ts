@@ -64,4 +64,58 @@ test.describe("/replay/tracer with no Worker running", () => {
     await expect(empty).not.toContainText("Type a request above");
     await expect(empty).not.toContainText("Press Replay to watch a recorded run");
   });
+
+  test("RY19: at its end the bar holds its controls, its track and its marks", async ({ page }) => {
+    // At stage (1920x1080) and laptop (1440x900): once the recording has ended the bar
+    // shows replay.ended, Watch again and Open the live Floor without squeezing the rest
+    // - the track keeps at least half the bar's width, no text is cut off, the chapter
+    // marks do not overlap, and the page does not scroll sideways.
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/replay/tracer");
+      const bar = page.locator(".replay-bar");
+      await expect(bar).toBeVisible();
+
+      // End on the slider seeks to the recording's last event.
+      await page.locator(".replay-track").press("End");
+      const ended = page.locator(".replay-ended");
+      await expect(ended).toContainText("The recording has ended.");
+      await expect(ended.getByRole("button", { name: "Watch again" })).toBeVisible();
+      await expect(ended.getByRole("button", { name: "Open the live Floor" })).toBeVisible();
+
+      const barBox = await bar.boundingBox();
+      const trackBox = await page.locator(".replay-track-wrap").boundingBox();
+      expect(barBox, `${viewport.width}px: the bar has a box`).not.toBeNull();
+      expect(trackBox, `${viewport.width}px: the track has a box`).not.toBeNull();
+      expect(trackBox!.width, `${viewport.width}px: the track keeps at least half the bar`).toBeGreaterThanOrEqual(
+        barBox!.width / 2,
+      );
+
+      // No text element in the bar is clipped.
+      const clipped = await bar
+        .locator(".replay-ended, .replay-ended button, .replay-position")
+        .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.className));
+      expect(clipped, `${viewport.width}px: clipped text elements`).toEqual([]);
+
+      // No two chapter marks overlap.
+      const marks = await page
+        .locator(".replay-mark")
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+      marks.sort((a, b) => a.left - b.left);
+      for (let i = 1; i < marks.length; i++) {
+        expect(marks[i]!.left, `${viewport.width}px: mark ${i} clears the mark before it`).toBeGreaterThanOrEqual(
+          marks[i - 1]!.right - 0.5,
+        );
+      }
+
+      // The bar does not push the page sideways.
+      const pageFits = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      );
+      expect(pageFits, `${viewport.width}px: no horizontal page scroll`).toBe(true);
+    }
+  });
 });

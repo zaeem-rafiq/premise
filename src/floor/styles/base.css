@@ -1004,11 +1004,30 @@ a {
 .replay-ended {
   font-size: var(--size-small);
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
 }
 .replay-speed,
 .replay-close {
   white-space: nowrap;
   flex: none;
+}
+
+/* RY19: at the recording's end the bar holds the ended controls, the position and the
+ * track. The track never takes less than half the bar - on a width where that would not
+ * fit beside the controls, it wraps to a row of its own and the bar grows the row. */
+.replay-bar[data-ended] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: var(--replay-h);
+  row-gap: 8px;
+}
+.replay-bar[data-ended] .replay-track-wrap {
+  /* The bar's padding is 16 px a side: 50% of the content width + 16 px is half of the
+   * whole bar. Where less than that is left beside the controls the track wraps. */
+  min-width: calc(50% + 16px);
 }
 
 /* ---- Toasts (3.19): bottom left, at most three ---- */

@@ -7,7 +7,7 @@ import { createServer, type Server } from "node:http";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -332,7 +332,10 @@ export async function startLandingWorker(options: {
     const source = readFileSync(BUNDLE, "utf8");
     const marker = "var FEATURES = {\n  held: false,";
     if (source.split(marker).length !== 2) throw new Error("test bundle must contain one disabled held flag");
-    bundle = join(projectRoot, "held-worker.mjs");
+    // Beside the built bundle: the local runtime does not start a module copied to the system's
+    // temporary directory on every machine (it did inside the builder's sandbox, where TMPDIR is
+    // under the repository).
+    bundle = join(dirname(BUNDLE), `index.held-${process.pid}.mjs`);
     writeFileSync(bundle, source.replace(marker, "var FEATURES = {\n  held: true,"));
   }
   const directories = new Map(

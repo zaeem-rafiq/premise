@@ -84,6 +84,10 @@ export type SoakTunables = {
   reconnectMs: number;
 };
 
+/** Tries of the pool creation when the service answers a server error. */
+const CREATE_TRIES = 3;
+const CREATE_RETRY_MS = 2_000;
+
 const DEFAULT_TUNABLES: SoakTunables = {
   pollMs: 500,
   drainQuietMs: 5_000,
@@ -398,13 +402,15 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     return response;
   };
 
-  // PL1: one summary-only pool per dial value.
-  const created = await post("/api/pools", {
-    pool,
-    seed: "tidepool-swarm",
-    summary_only: true,
-    request_id: requestId("create"),
-  });
+  // PL1: one summary-only pool per dial value. A server error is tried again with the same
+  // request_id, which names the same pool (9.8): the deployment once answered 500 after the pool
+  // was already made (2026-10-05).
+  const createBody = { pool, seed: "tidepool-swarm", summary_only: true, request_id: requestId("create") };
+  let created = await post("/api/pools", createBody);
+  for (let retry = 1; retry < CREATE_TRIES && created.status >= 500; retry += 1) {
+    await deps.sleep(CREATE_RETRY_MS);
+    created = await post("/api/pools", createBody);
+  }
   if (created.status < 200 || created.status >= 300) {
     throw new SoakError(`POST /api/pools answered ${created.status}: ${created.body.slice(0, 200)}`);
   }

@@ -13,6 +13,7 @@ import { wire as wireTrunk } from "./routes/wiring.ts";
 import { wire as wireSwarm } from "./routes/swarm.ts";
 import { wire as wireFloor } from "./floor/wiring.ts";
 import { wire as wirePool } from "./app-server/wiring.ts";
+import { answerUnhandled } from "./unhandled.ts";
 
 // The classes that wrangler.jsonc names. Wrangler finds them as exports of this module.
 export { Trunk } from "./trunk/trunk-do.ts";
@@ -194,7 +195,7 @@ function routeRequest(request: Request, env: Env): Response | Promise<Response> 
 
 export default {
   async fetch(request, env): Promise<Response> {
-    const response = await routeRequest(request, env);
+    const response = await answerUnhandled(() => routeRequest(request, env));
     // HEAD answers what GET answers: the same status and headers, and no body.
     return request.method === "HEAD" ? new Response(null, response) : response;
   },

@@ -509,6 +509,8 @@ type FakeHooks = {
   probeMisses?: number;
   /** Runs inside the `POST /api/swarm` `running: true` answer — where a mid-run drop is staged. */
   onSwarmStart?: (floor: FakeFloor) => void;
+  /** Server errors `POST /api/pools` answers before it answers 200. */
+  createErrors?: number;
 };
 
 function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks = {}): Fake {
@@ -549,7 +551,13 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
 
   const http: SoakDeps["http"] = async ({ method, path, body }) => {
     httpCalls.push({ method, path, body, frames: floor.framesSent });
-    if (method === "POST" && path === "/api/pools") return { status: 200, body: "{}", bytes: 2 };
+    if (method === "POST" && path === "/api/pools") {
+      if ((hooks.createErrors ?? 0) > 0) {
+        hooks.createErrors = (hooks.createErrors ?? 0) - 1;
+        return { status: 500, body: "<!DOCTYPE html>", bytes: 15 };
+      }
+      return { status: 200, body: "{}", bytes: 2 };
+    }
     if (method === "POST" && path === "/api/swarm") {
       if ((body as { running?: unknown }).running === true) hooks.onSwarmStart?.(floor);
       return { status: 200, body: "{}", bytes: 2 };
@@ -916,6 +924,26 @@ describe("the soak runner of VE6", () => {
 });
 
 describe("the stream gate and the export", () => {
+  it("a server error on the pool's creation is tried again with the same request_id", async () => {
+    // The deployment answered 500 once after the pool was already made (2026-10-05): the run
+    // creates again with the same request_id, which names the same pool (9.8), and goes on.
+    const run = buildRun();
+    const fake = makeFake(run, {}, { createErrors: 2 });
+    const result = await runDial(input, fake.deps);
+    const creates = fake.httpCalls.filter((call) => call.method === "POST" && call.path === "/api/pools");
+    expect(creates).toHaveLength(3);
+    expect(new Set(creates.map((call) => JSON.stringify(call.body))).size).toBe(1);
+    for (const check of result.checks) {
+      expect(check.ok, `${check.name}: ${check.detail ?? ""}`).toBe(true);
+    }
+  });
+
+  it("three server errors in a row end the dial with the last answer", async () => {
+    const run = buildRun();
+    const fake = makeFake(run, {}, { createErrors: 3 });
+    await expect(runDial(input, fake.deps)).rejects.toThrow("POST /api/pools answered 500");
+  });
+
   it("probes through FR30's 404s and starts the Swarm only after the stream's first frame", async () => {
     // The route answers 404 twice (the pool's first event has not reached the Floor) and 200
     // on the third probe; the Swarm's POST must land after the first frame was delivered.

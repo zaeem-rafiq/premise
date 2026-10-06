@@ -230,6 +230,23 @@ describe("cardSheetModel: the held sheet's frames (3.13, CO36)", () => {
     expect(model.frames?.before).toEqual({ repo: "main", commit: "seed00" });
   });
 
+  it("FR32: a null before under preview.error reads held.preview_building, not held.no_preview", () => {
+    const state = baseState();
+    openAttempt(state, "a_1", "i_1");
+    reduce(
+      state,
+      ev("card.opened", {
+        card: heldCard({
+          preview: { before: null, after: {}, error: "build failed" },
+        }),
+      }),
+    );
+    const model = modelOf(state, "k_1");
+    expect(model.frames?.before).toBeNull();
+    expect(model.frames?.beforeNote).toBe(text("held.preview_building"));
+    expect(model.frames?.afterNote).toBe(text("held.no_preview"));
+  });
+
   it("a missing after entry with no error reads held.preview_building (3.13 loading row)", () => {
     const state = baseState();
     openAttempt(state, "a_1", "i_1");
@@ -323,11 +340,11 @@ describe("cardSheetModel: the race sheet's columns (3.14)", () => {
     expect(must(model.race?.[0]).frameAddress).toBeNull();
   });
 
-  it("CO39: null seconds and cost read race.unknown, never zero", () => {
+  it("CO39: null seconds and cost read race.unknown inside the labeled sentences, never zero", () => {
     const model = modelOf(raceState(), "k_r");
     const column = must(model.race?.[1]);
-    expect(column.took).toBe(text("race.unknown"));
-    expect(column.cost).toBe(text("race.unknown"));
+    expect(column.took).toBe(text("race.took", { duration: text("race.unknown") }));
+    expect(column.cost).toBe(text("race.cost", { money: text("race.unknown") }));
     expect(column.took).not.toContain("0");
   });
 
@@ -405,8 +422,11 @@ describe("cardSheetModel: the race sheet's columns (3.14)", () => {
     expect(model.closedSentence).toBe(text("race.superseded"));
   });
 
-  it("a visitor sees no reason field and no buttons (3.14 held row)", () => {
+  it("a visitor sees no reason field and no Choose on any column (3.14 held row)", () => {
     const model = modelOf(raceState(), "k_r", { visitor: true });
     expect(model.reasonLabel).toBeNull();
+    expect(model.race?.map((column) => column.canChoose)).toEqual([false, false]);
+    // The columns still show: the choosable candidate keeps its preview frame.
+    expect(must(model.race?.[0]).frameAddress).toEqual({ repo: "main", commit: "c_a1" });
   });
 });

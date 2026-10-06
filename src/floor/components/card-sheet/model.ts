@@ -35,7 +35,8 @@ export type RaceColumn = {
   cost: string;
   /** `race.blast` with the `repair` count of `Card.blast_radius[id]`. */
   blast: string;
-  /** `can_choose` of `Card.candidates[id]`: the button is only on offer while true (CO38). */
+  /** `can_choose` of `Card.candidates[id]`, the card open, and the reader the owner: the button
+   * is only on offer while true (CO38; 3.14 held row gives a visitor no button). */
   canChoose: boolean;
   /** The column's preview frame address (`Card.preview.after[id]` of a candidate that can be
    * chosen, 3.14 live row); null while the candidate works or is stopped (3.14 loading row: "no
@@ -275,9 +276,9 @@ function riskBlock(view: CardView, clef: boolean): CardSheetModel["risk"] {
 
 /** The held sheet's frame cells (3.13's state table): `before` is `Card.preview.before`, `after`
  * is `Card.preview.after[attempt_id]` of the card's attempt (CO36). While the preview commit is
- * being built (PV1) the cell carries `held.preview_building`; a `preview.error` or a missing
- * `before` reads `held.no_preview` (FR32 — the spec gives no `before`-missing row, so the no-preview
- * sentence stands in). */
+ * being built (PV1) the cell carries `held.preview_building`; a `preview.error` reads
+ * `held.no_preview` in the after frame only (FR32 — the spec gives no `before`-missing row, so a
+ * null `before` keeps the building sentence). */
 function heldFrames(card: Card): NonNullable<CardSheetModel["frames"]> {
   const preview = card.preview;
   if (preview === null) {
@@ -288,7 +289,7 @@ function heldFrames(card: Card): NonNullable<CardSheetModel["frames"]> {
   const after = id === undefined ? undefined : preview.after[id];
   return {
     before: preview.before,
-    beforeNote: preview.before === null ? text("held.no_preview") : null,
+    beforeNote: preview.before === null ? text("held.preview_building") : null,
     after: after ?? null,
     afterNote:
       preview.error !== null ? text("held.no_preview") : after === undefined ? text("held.preview_building") : null,
@@ -297,7 +298,7 @@ function heldFrames(card: Card): NonNullable<CardSheetModel["frames"]> {
 
 /** One race column (03 3.14's table): facts from `Card.candidates`, `Card.blast_radius` and the
  * attempt; the state line from the candidate and the card's own `closed`. */
-function raceColumn(state: FloorState, view: CardView, attemptId: string): RaceColumn {
+function raceColumn(state: FloorState, view: CardView, attemptId: string, visitor: boolean): RaceColumn {
   const card = view.card;
   const attempt = state.attempts[attemptId];
   const candidate = card.candidates?.[attemptId];
@@ -344,14 +345,14 @@ function raceColumn(state: FloorState, view: CardView, attemptId: string): RaceC
     checks: attempt === undefined ? null : checksSummary(attempt),
     took:
       candidate?.seconds === null || candidate?.seconds === undefined
-        ? text("race.unknown")
+        ? text("race.took", { duration: text("race.unknown") })
         : text("race.took", { duration: duration(candidate.seconds * 1000) }),
     cost:
       candidate?.cost_usd === null || candidate?.cost_usd === undefined
-        ? text("race.unknown")
+        ? text("race.cost", { money: text("race.unknown") })
         : text("race.cost", { money: money(candidate.cost_usd) }),
     blast: text("race.blast", { n: radius?.repair.length ?? 0 }),
-    canChoose: choosable && view.closed === null,
+    canChoose: choosable && view.closed === null && !visitor,
     frameAddress,
     frameNote,
     stateLine,
@@ -395,7 +396,7 @@ export function cardSheetModel(
     affects: minimal || card.kind === "race" ? null : affectsRows(state, view),
     checked: card.kind === "race" ? null : checkedBlock(state, view),
     risk: minimal || card.kind === "race" ? null : riskBlock(view, opts.features.clef),
-    race: card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id)) : null,
+    race: card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id, opts.visitor)) : null,
     reasonLabel: opts.visitor ? null : text("held.reason"),
     options: card.options.map((option) => ({
       id: option.id,

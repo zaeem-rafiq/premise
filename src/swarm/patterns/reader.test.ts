@@ -99,7 +99,8 @@ describe("reader (02-tidepool.md 10.3)", () => {
     expect(calls.map((call) => call.tool)).toEqual(["read", "list", "read", "read", "read", "read", "write", "submit"]);
     expect((calls[0] as Call).args).toEqual({ path: "world/energy.js" });
     expect((calls[1] as Call).args).toEqual({ path: "creatures/" });
-    expect((calls[6] as Call).args.path).toBe("creatures/s0004.js");
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3.
+    expect((calls[6] as Call).args.path).toBe("creatures/s-test.js");
   });
 
   it("an `info` on `world/energy.js` (F4 `holds`) gives it nothing to acknowledge", () => {

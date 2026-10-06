@@ -101,31 +101,30 @@ describe("same-file (02-tidepool.md 10.3)", () => {
     expect((b.calls[0] as Call).args).toEqual((a.calls[0] as Call).args);
   });
 
-  it("repair (F1 + OP5): lists the directory and writes the next free `d<number>` name", () => {
+  it("repair (F1 + OP5): writes the pair's file to its own fresh name", () => {
     const inject = new Map([[1, [f1Repair(1)]]]);
     const { calls } = run({ rand: agentRandom(7, 0), inject });
     const tools = calls.map((call) => call.tool);
-    expect(tools).toEqual(["write", "list", "write", "submit", "submit"]);
-    expect((calls[1] as Call).args).toEqual({ path: "creatures/" });
-    // `d0000.js` is free by the listing's own answer? The listing holds `d0000.js`, so the
-    // next free `d<number>` is `d0001`.
-    expect((calls[2] as Call).args.path).toBe("creatures/d0001.js");
+    expect(tools).toEqual(["write", "write", "submit", "submit"]);
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3; the listing is not consulted.
+    expect((calls[1] as Call).args.path).toBe("creatures/s-test.js");
   });
 
-  it("read_first on the write: lists and writes the next free `d<number>` name", () => {
+  it("read_first on the drawn write: writes its own fresh name", () => {
     const { calls } = run({ rand: agentRandom(7, 0), raced: true });
-    expect(calls.map((call) => call.tool)).toEqual(["write", "list", "write", "submit", "submit"]);
-    expect((calls[2] as Call).args.path).toBe("creatures/d0001.js");
+    expect(calls.map((call) => call.tool)).toEqual(["write", "write", "submit", "submit"]);
+    expect((calls[1] as Call).args.path).toBe("creatures/s-test.js");
   });
 
   it("a repair that lands on a `validated` attempt rewrites, not an empty submit (F1 + OP5 pull-back)", () => {
     // The partner's landing took the drawn name after this attempt's submit already validated
-    // (GA3): the write is dropped, so the row's answer runs again — list, write the next free
-    // name, then submit with the acknowledgement. An empty submit would answer `rejected`.
+    // (GA3): the write is dropped, so the row's answer runs again — write the agent's own
+    // fresh name, then submit with the acknowledgement. An empty submit would answer
+    // `rejected`.
     const inject = new Map([[3, [f1Repair(2)]]]);
     const { calls } = run({ rand: agentRandom(7, 0), inject });
-    expect(calls.map((call) => call.tool)).toEqual(["write", "submit", "submit", "list", "write", "submit"]);
-    expect((calls[4] as Call).args.path).toBe("creatures/d0001.js");
-    expect((calls[5] as Call).args.acknowledge).toEqual([2]);
+    expect(calls.map((call) => call.tool)).toEqual(["write", "submit", "submit", "write", "submit"]);
+    expect((calls[3] as Call).args.path).toBe("creatures/s-test.js");
+    expect((calls[4] as Call).args.acknowledge).toEqual([2]);
   });
 });

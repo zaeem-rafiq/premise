@@ -133,7 +133,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const item = (sent[0]?.items as HeadsUpItem[])[0] as HeadsUpItem;
     expect(item.diff.kind).toBe("query");
     if (item.diff.kind === "query") {
-      expect(item.diff.added.map((m) => m.key)).toContain("creatures/s0004.js#spawn");
+      expect(item.diff.added.map((m) => m.key)).toContain("creatures/s-1.js#spawn");
     }
 
     sim.release(rescale);
@@ -141,7 +141,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sim.state(rescale)).toBe("landed");
 
     // The repair replaced the threshold in the gained module: 0.3 = 0.3 x new ENERGY_MAX(=1).
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-1.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
@@ -194,7 +194,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
 
     // The T-relative file holds ENERGY_MAX * 0.3 whatever the value is; the oracle has no
     // numbered threshold to check on it.
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
@@ -342,7 +342,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     sim.resume(ae);
     sim.settle();
     expect(sim.state(ae)).toBe("landed");
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
@@ -371,7 +371,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     sim.release(ae);
     sim.settle();
     expect(sim.state(ae)).toBe("landed");
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
@@ -385,7 +385,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     drive(sim, ae);
     sim.land();
     expect(sim.state(ae)).toBe("landed");
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 30");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 30");
 
     const rescale = sim.open("rescale-energy");
     drive(sim, rescale);
@@ -394,7 +394,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sentTo(sim, ae)).toEqual([]);
 
     expect(sim.files().get("world/energy.js")).toContain("ENERGY_MAX = 1");
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 
@@ -413,17 +413,17 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const rel = sim.open("add-relative");
     drive(sim, rel);
     sim.land();
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 30");
-    expect(sim.files().get("creatures/s0005.js")).toContain("creature.energy < 30");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 30");
+    expect(sim.files().get("creatures/s-1.js")).toContain("creature.energy < 30");
 
     const rescale = sim.open("rescale-energy");
     drive(sim, rescale);
     sim.land();
     expect(sim.state(rescale)).toBe("landed");
 
-    expect(sim.files().get("creatures/s0004.js")).toContain("creature.energy < 0.3");
-    expect(sim.files().get("creatures/s0005.js")).toContain("creature.energy < 0.3");
-    expect(sim.files().get("creatures/s0006.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
+    expect(sim.files().get("creatures/s-0.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-1.js")).toContain("creature.energy < 0.3");
+    expect(sim.files().get("creatures/s-2.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
 });

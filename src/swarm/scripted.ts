@@ -2,17 +2,13 @@
 // creature name, tool-result and submit shaping, and the `ENERGY_MAX`/threshold arithmetic the
 // energy patterns and the SW2 oracle share. Pure helpers: no clock, no randomness (SY1, SY2).
 
-/** The first free `creatures/s<number>.js` name in the listing, number zero-padded to at least 4
- * digits (02 10.2). */
-export function freshName(entries: readonly string[]): string {
-  const used = new Set<number>();
-  for (const entry of entries) {
-    const match = /^s(\d+)\.js$/.exec(entry);
-    if (match !== null) used.add(Number(match[1]));
-  }
-  let n = 0;
-  while (used.has(n)) n += 1;
-  return `creatures/s${String(n).padStart(4, "0")}.js`;
+/** The agent's own fresh creature name (02 10.3): `creatures/s-<id>.js`, where `<id>` is the
+ * first 10 characters of its attempt id after `a_`, in lower case — a kind name of 2.6. Two
+ * attempt ids give two names, so concurrent agents never race a listing for the next free
+ * number. An id that does not start `a_` is used whole: the name is still the attempt's own. */
+export function freshName(attemptId: string): string {
+  const tail = attemptId.startsWith("a_") ? attemptId.slice(2) : attemptId;
+  return `creatures/s-${tail.slice(0, 10).toLowerCase()}.js`;
 }
 
 /** The `name` of each `type: "file"` entry of a `list` result. */

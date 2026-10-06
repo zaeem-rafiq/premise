@@ -50,12 +50,12 @@ describe("blind (02-tidepool.md 10.3)", () => {
     ]);
   });
 
-  it("reads GUIDE.md, writes T-plain to a drawn name, and answers B1's `confirm` with an acknowledged resubmit", () => {
+  it("reads GUIDE.md, writes T-plain to its own fresh name, and answers B1's `confirm` with an acknowledged resubmit", () => {
     const { calls } = run({ rand: agentRandom(7, 0) });
     expect(calls.map((call) => call.tool)).toEqual(["read", "write", "submit", "submit"]);
     expect((calls[0] as Call).args).toEqual({ path: "GUIDE.md" });
-    // seed 7 agent 0 draws 0.6111038 -> s10000 + floor(0.6111*90000) = `s64999`.
-    expect((calls[1] as Call).args.path).toBe("creatures/s64999.js");
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3.
+    expect((calls[1] as Call).args.path).toBe("creatures/s-test.js");
     const content = (calls[1] as Call).args.content as string;
     expect(content).toContain("wander(creature, 0.05)");
   });

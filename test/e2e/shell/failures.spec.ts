@@ -176,6 +176,37 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await shoot(page, "ac15-fr10");
   });
 
+  test("FR10: an open socket that goes silent is replaced; the new socket asks after the last n", async ({ page }) => {
+    // The first socket delivers the pool and then goes silent without closing: a half-open
+    // connection after a network drop. The Floor's EM5 tick would arrive every METRICS_EVERY_MS,
+    // so after STREAM_SILENCE_MS (5 s) the page gives the socket up and reconnects (FR10).
+    const hellos: number[] = [];
+    let sockets = 0;
+    await page.route("**/floor.json", (route) =>
+      route.fulfill({ contentType: "application/json", body: JSON.stringify(FLOOR_JSON) }),
+    );
+    await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {
+      sockets += 1;
+      const mine = sockets;
+      ws.onMessage((message) => {
+        const request = JSON.parse(message.toString()) as { hello?: number; after?: number };
+        if (request.hello !== 1) return;
+        hellos.push(request.after ?? -1);
+        if (mine === 1) ws.send(JSON.stringify({ events: BASE }));
+        else
+          ws.send(
+            JSON.stringify({ events: [intentCreated(4, "i_2", "a second fish"), attemptOpened(5, "a_2", "i_2")] }),
+          );
+      });
+    });
+    await page.goto(`/p/${POOL}`);
+    await expect(page.locator('.attempt-card[data-attempt-id="a_1"]')).toBeVisible();
+    await expect(page.locator('.attempt-card[data-attempt-id="a_2"]')).toBeVisible({ timeout: 10_000 });
+    // One reconnect, asking for the events after the last applied n (3), and no offline banner.
+    expect(hellos).toEqual([0, 3]);
+    await expect(page.locator(".floor")).not.toHaveAttribute("data-state", "offline");
+  });
+
   test("FR11: push_rejected pauses the pool; the owner gets the Rebuild button", async ({ page }) => {
     await serveStream(page, [...BASE, poolPaused(4, "push_rejected")]);
     await serveSession(page, true);

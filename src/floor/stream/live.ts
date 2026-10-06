@@ -4,9 +4,12 @@
 // is the pool-missing probe of FR30: the Floor answers 404 for an unknown pool and 426 for
 // a real one, which the browser's WebSocket API cannot see on its own (a failed handshake
 // hides the status). Reconnects with waits from WS_RETRY_BASE_MS doubling to
-// WS_RETRY_MAX_MS (FR10), asking for events after the last applied `n`.
+// WS_RETRY_MAX_MS (FR10), asking for events after the last applied `n`. The Floor sends
+// `metrics` to every open socket each METRICS_EVERY_MS (EM5), so an open socket that carries no
+// frame for STREAM_SILENCE_MS is dead although no close event came — a half-open connection
+// after a network drop, which a browser can take minutes to notice. It is given up and replaced.
 
-import { OFFLINE_AFTER_MS, WS_RETRY_BASE_MS, WS_RETRY_MAX_MS } from "../../protocol/constants.ts";
+import { OFFLINE_AFTER_MS, STREAM_SILENCE_MS, WS_RETRY_BASE_MS, WS_RETRY_MAX_MS } from "../../protocol/constants.ts";
 import type { PoolEvent } from "../../protocol/events.ts";
 import type { FloorState } from "../../protocol/reducer/state.ts";
 import type { StreamFrame, StreamHello } from "../../protocol/stream.ts";
@@ -52,6 +55,8 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
   let tries = 0;
   let lastN = 0;
   let lostSince: number | null = null;
+  let lastFrameAt = 0;
+  let silence: unknown = null;
 
   const say = (connection: Connection) => cb.onConnection(connection, tries);
   const after = (ms: number, fn: () => void) => {
@@ -68,6 +73,36 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
     after(wait, () => void attempt());
   };
 
+  const stopSilenceWatch = () => {
+    if (silence !== null) env.clearTimeout(silence);
+    silence = null;
+  };
+
+  /** FR10: checks the open socket for silence; a check that finds a recent frame re-arms for the rest. */
+  const watchSilence = (ws: SocketLike, ms: number) => {
+    silence = env.setTimeout(() => {
+      silence = null;
+      if (closed || socket !== ws) return;
+      const quiet = env.now() - lastFrameAt;
+      if (quiet < STREAM_SILENCE_MS) {
+        watchSilence(ws, STREAM_SILENCE_MS - quiet);
+        return;
+      }
+      // Detached first: the dead connection's close may still arrive, and must not count twice.
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      socket = null;
+      try {
+        ws.close();
+      } catch {
+        // A socket that cannot even close is already gone; the reconnect below is what matters.
+      }
+      markDead();
+    }, ms);
+  };
+
   const openSocket = () => {
     if (closed) return;
     const ws = env.socket(wsUrl(pool, env.origin));
@@ -76,9 +111,13 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
       const hello: StreamHello = { hello: 1, after: lastN };
       ws.send(JSON.stringify(hello));
       socket = ws;
+      lastFrameAt = env.now();
+      stopSilenceWatch();
+      watchSilence(ws, STREAM_SILENCE_MS);
     };
     ws.onmessage = (event) => {
       if (closed) return;
+      lastFrameAt = env.now();
       let frame: StreamFrame;
       try {
         frame = JSON.parse(String(event.data)) as StreamFrame;
@@ -99,6 +138,7 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
     };
     ws.onclose = () => {
       socket = null;
+      stopSilenceWatch();
       markDead();
     };
     ws.onerror = () => {
@@ -145,6 +185,7 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
     close() {
       closed = true;
       if (timer !== null) env.clearTimeout(timer);
+      stopSilenceWatch();
       socket?.close();
       socket = null;
     },

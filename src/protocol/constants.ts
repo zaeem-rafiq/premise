@@ -166,6 +166,7 @@ export const STALE_CARD_MS = 6_000;
 export const TOAST_MS = 6_000;
 export const SPEND_NEAR_SHARE = 0.8;
 export const OFFLINE_AFTER_MS = 3_000;
+export const STREAM_SILENCE_MS = 5_000;
 export const WS_RETRY_BASE_MS = 500;
 export const WS_RETRY_MAX_MS = 8_000;
 export const WALL_FPS = 10;

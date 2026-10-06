@@ -2212,7 +2212,7 @@ The owner must be able to tell, from the page alone, what happened, whether to w
 | FR7 | Spend is near the cap | `spend_usd >= cap_usd × SPEND_NEAR_SHARE` | The spend cell in the `confirm` colour with `spend.near`. | Nothing. | Stop the Swarm or let fewer agents run. |
 | FR8 | The spend cap is reached | `limits.refusing` is true | Banner 6 (`banner.cap`). The intent box shows `intent.cap`. Attempts stop with the sentence for `spend_cap`. | Checked changes still land. No model call starts. | Nothing on the page raises the cap. Replay still works. On stage: press `R`. |
 | FR9 | The kill switch is on | `limits.killed` | Banner 3 (`banner.killed`, or `banner.killed.landings` when the pool is also paused by the owner). The intent box shows `intent.killed`. Attempts stop with "Stopped by the kill switch." | Checked changes still land unless landings were paused too. | `kill.allow`. |
-| FR10 | The connection is lost | The socket closed, or no frame for `OFFLINE_AFTER_MS` while the socket is not open | Banner 9 (`banner.offline`) with the try count. Everything is dimmed (CO3). Owner controls are off. | The page reconnects with waits from `WS_RETRY_BASE_MS` doubling to `WS_RETRY_MAX_MS`, and asks for events after its last `n`. It catches up or takes a snapshot. | Wait. On stage: press `R` (a recording that is already loaded plays without the network, except for pool frames). |
+| FR10 | The connection is lost | The socket closed, or no frame for `OFFLINE_AFTER_MS` while the socket is not open. An open socket that carries no frame for `STREAM_SILENCE_MS` is closed by the page and counts as closed: the Floor sends `metrics` to every open socket each `METRICS_EVERY_MS` (`01-core.md` EM5), so that silence means a dead connection that no close event reports (added 2026-10-05: a live run's socket went silent after a network drop and stayed open) | Banner 9 (`banner.offline`) with the try count. Everything is dimmed (CO3). Owner controls are off. | The page reconnects with waits from `WS_RETRY_BASE_MS` doubling to `WS_RETRY_MAX_MS`, and asks for events after its last `n`. It catches up or takes a snapshot. | Wait. On stage: press `R` (a recording that is already loaded plays without the network, except for pool frames). |
 | FR11 | The pool diverged, or Artifacts refuses its push | `pool.paused` with reason `diverged` or `push_rejected` | Banner 4 (`banner.paused.diverged` or `banner.paused.push_rejected`) with the button `pool.rebuild`. Attempt cards in "Landing…" stay so. | Nothing lands. Agents can still read. | `pool.rebuild`, then confirm (`01-core.md` LP8). |
 | FR12 | A note does not match its commit | `pool.paused` with reason `note_seq_mismatch` | Banner 4 (`banner.paused.note_seq_mismatch`). | Nothing. | Nothing on the page. This needs a look at the repository. Replay still works. |
 | FR13 | The owner paused landings | `pool.paused` with reason `owner` | Banner 4 (`banner.paused.owner`). | Nothing lands. | `kill.allow`. |
@@ -2404,6 +2404,7 @@ Any one of these. None needs a key, an account or a tool.
 | `TOAST_MS` | 6,000 | |
 | `SPEND_NEAR_SHARE` | 0.8 | |
 | `OFFLINE_AFTER_MS` | 3,000 | |
+| `STREAM_SILENCE_MS` | 5,000 | FR10: an open socket with no frame this long is given up; five ticks of EM5 |
 | `WS_RETRY_BASE_MS` | 500 | |
 | `WS_RETRY_MAX_MS` | 8,000 | |
 | `WALL_FPS` | 10 | |

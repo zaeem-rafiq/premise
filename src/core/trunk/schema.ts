@@ -349,6 +349,9 @@ export function metaGet(sql: Sql, k: string): string | null {
 }
 
 export function metaSet(sql: Sql, k: string, v: string | number | null): void {
+  // Some handlers also write through before persist. Compare with SQLite so those writes,
+  // retries and a rolled-back transaction never cause an unchanged row to be written.
+  if (metaGet(sql, k) === (v === null ? null : String(v))) return;
   if (v === null) {
     sql.exec("DELETE FROM meta WHERE k = ?", k);
     return;

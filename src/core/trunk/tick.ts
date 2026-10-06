@@ -464,6 +464,12 @@ function reachableObjects(pool: Pool, roots: readonly string[]): GitObject[] {
 // ---------------------------------------------------------------------------
 // The tick (9.4).
 
+function schedulePendingTick(pool: Pool): void {
+  if (pool.undoQueue.length > 0 || [...pool.attempts.values()].some((a) => a.state === "validated")) {
+    scheduleTick(pool, TICK_MS);
+  }
+}
+
 /** The heads-up cause of a batch landing (8.1). */
 function batchCause(batch: Landing[], type: "landing" | "undo" | "revert"): HeadsUpCause {
   return {
@@ -551,13 +557,13 @@ export function tick(pool: Pool): void {
     }
   }
 
-  // Candidates (9.3): validated, every premise holds, every heads-up resolved, submit_id current.
+  // Candidates (9.3): validated, premises hold, confirm/repair resolved, submit_id current.
   const cands = inflight(pool)
     .filter(
       (a) =>
         a.state === "validated" &&
         [...a.premises.values()].every((p) => p.status === "holds") &&
-        a.heads.every((h) => h.resolved_at !== null) &&
+        a.heads.every((h) => h.result === "info" || h.resolved_at !== null) &&
         a.submit_id === submitIdOf(a),
     )
     .sort(
@@ -701,6 +707,7 @@ export function tick(pool: Pool): void {
     // CD2: even a batch-free tick can move a blast radius — a right-of-way grant lapsed.
     refreshOpenCards(pool);
     flushEvents(pool);
+    schedulePendingTick(pool);
     return;
   }
 
@@ -799,8 +806,7 @@ export function tick(pool: Pool): void {
   // 9.4: the tick fires every TICK_MS while candidates or undo requests remain — the batch that
   // just landed clears LP1's block on the next alarm; work the batch could not take (MAX_BATCH,
   // the budget) ticks again at the cadence.
-  const workRemains = pool.undoQueue.length > 0 || [...pool.attempts.values()].some((x) => x.state === "validated");
-  if (workRemains) scheduleTick(pool, TICK_MS);
+  schedulePendingTick(pool);
 
   for (const r of reopened) repairReopened(pool, r, running, seq, batch);
 

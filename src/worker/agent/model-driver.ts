@@ -42,10 +42,10 @@ import { callModel, type AiBinding } from "../adapters/model/workers-ai.ts";
 import { GateCalls } from "./gate-client.ts";
 import { abandonCall, beginCall, finishCall, journaledCall } from "./journal.ts";
 import { appendEvent } from "./events.ts";
+import { metaSet } from "./meta.ts";
 import {
   inboxMarkShown,
   journalPut,
-  metaSet,
   timerPut,
   transcriptAppend,
   transcriptRows,

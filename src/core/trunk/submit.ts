@@ -104,7 +104,9 @@ export function submitCall(
       commit: pool.landings.find((l) => l.seq === a.landed_seq)?.commit_oid ?? null,
     });
   if (a.state === "stopped") return result({ status: "stopped", reason: a.stop_reason });
-  const newAcks = (args.acknowledge ?? []).filter((n) => !a.resolved.has(n));
+  const newAcks = (args.acknowledge ?? []).filter(
+    (n) => !a.resolved.has(n) && !(n <= ack && a.heads.find((h) => h.hn === n)?.result === "info"),
+  );
   if (isWaiting(a) && newAcks.length === 0 && submitIdOf(a) === a.submit_id) {
     const r: Record<string, unknown> = { status: a.state, submit_id: a.submit_id, tier: a.tier, duplicate: true };
     if (a.state === "submitted") r.waiting_for = ["triage"];
@@ -118,6 +120,8 @@ export function submitCall(
     if (h === undefined || n > ack) {
       return { ok: false, error: { code: "invalid_args", message: `no such heads-up: ${n}` }, premises: [] };
     }
+    // HU9/TL10: info needs no resolution and never becomes part of submit identity.
+    if (h.result === "info") continue;
     h.resolved_at = pool.now();
     h.statement = args.statement ?? null;
     a.resolved.add(n);

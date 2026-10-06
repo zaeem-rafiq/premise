@@ -251,8 +251,8 @@ export type SwarmEmitParams = {
 
 /** The `SWARM` Workflow's `create` params for a run (SWR1): `run-<pool>` launches `config.agents`
  * scripted agents at `launch_per_second`, drawing each pattern from `collision_dial` (SW1), and
- * emits `swarm.state` on every change (SWR4). A `swarm.control` event (`sendEvent`) carries the
- * owner's dial moves and the stop. */
+ * emits `swarm.state` on every change (SWR4). A `SWARM_CONTROL_EVENT` event (`sendEvent`) carries
+ * the owner's dial moves and the stop. */
 export type SwarmRunParams = {
   kind: "run";
   pool: string;
@@ -268,8 +268,14 @@ export type SwarmRunParams = {
   };
 };
 
+/** The type of the event the owner route sends a running `run-<pool>` instance. A Workflows event
+ * type allows letters, digits, `-` and `_` only: a `.` is refused with `workflow.invalid_event_type`
+ * by the deployed engine, though local workerd accepts it (the first name, "swarm.control", made
+ * every stop and dial move fail on the test deployment, 2026-10-05). */
+export const SWARM_CONTROL_EVENT = "swarm-control";
+
 /** The event the owner route sends a running `run-<pool>` instance (`sendEvent`/`waitForEvent`). */
 export type SwarmControlEvent = {
-  type: "swarm.control";
+  type: typeof SWARM_CONTROL_EVENT;
   payload: { op: "dial"; collision_dial: number } | { op: "agents"; agents: number } | { op: "stop" };
 };

@@ -129,6 +129,10 @@ describe("EM6/EV2a: swarm.state reaches every registered pool, each on its own c
         (await swarmEvents(worker, pool)).some((event) => event.running === false && event.collision_dial === 0.8),
       );
     }
+    // The run itself heard the stop and ended: the streams' `running: false` is not a stand-in
+    // emitted beside a run that keeps launching (SWR1).
+    const swarm = await worker.swarm();
+    await waitFor(async () => (await swarm.status("run-sw-a")) === "complete");
   });
 
   it("a pool whose swarm counter already moved still gets the event once (EV2a resend)", async () => {

@@ -524,6 +524,7 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
     gitCalls.push({ args: [...args], cwd: opts?.cwd, env: opts?.env === undefined ? undefined : { ...opts.env } });
     const [cmd] = args;
     if (cmd === "clone") return gitOk("");
+    if (cmd === "fetch") return gitOk("");
     if (cmd === "rev-list") return gitOk(`${run.commits.join("\n")}\n`);
     if (cmd === "notes") return gitOk(run.notesList === "" ? "" : `${run.notesList}\n`);
     if (cmd === "cat-file") return gitOk(run.noteBodies.get(String(args[2])) ?? "{}");
@@ -886,20 +887,21 @@ describe("the soak runner of VE6", () => {
     expect(haystack).not.toContain(TOKEN);
     expect(haystack).not.toContain(OWNER_KEY);
 
-    // The token travels exactly one way: the clone's process environment, as http.extraHeader.
-    const cloneCalls = fake.gitCalls.filter((call) => call.args[0] === "clone");
-    expect(cloneCalls).toHaveLength(1);
-    const cloneCall = cloneCalls[0];
-    expect(cloneCall).toBeDefined();
-    const cloneEnv = cloneCall?.env ?? {};
-    expect(cloneEnv.GIT_CONFIG_KEY_0).toBe("http.extraHeader");
-    expect(cloneEnv.GIT_CONFIG_VALUE_0).toBe(`Authorization: Bearer ${TOKEN}`);
+    // The token travels one way: the process environment of the clone and of the notes fetch that
+    // follows it (`git clone` fetches no refs/notes), as http.extraHeader.
+    const authCalls = fake.gitCalls.filter((call) => call.args[0] === "clone" || call.args[0] === "fetch");
+    expect(authCalls.map((call) => call.args[0])).toEqual(["clone", "fetch"]);
+    expect(authCalls[1]?.args).toEqual(["fetch", "origin", "refs/notes/*:refs/notes/*"]);
+    for (const call of authCalls) {
+      expect(call.env?.GIT_CONFIG_KEY_0).toBe("http.extraHeader");
+      expect(call.env?.GIT_CONFIG_VALUE_0).toBe(`Authorization: Bearer ${TOKEN}`);
+    }
 
     for (const call of fake.gitCalls) {
       const argsText = call.args.join(" ");
       expect(argsText).not.toContain(TOKEN);
       expect(argsText).not.toContain(OWNER_KEY);
-      if (call !== cloneCall && call.env !== undefined) {
+      if (!authCalls.includes(call) && call.env !== undefined) {
         expect(JSON.stringify(call.env)).not.toContain(TOKEN);
         expect(JSON.stringify(call.env)).not.toContain(OWNER_KEY);
       }

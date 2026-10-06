@@ -261,3 +261,95 @@ describe("POST /api/swarm (01-core SWR1 to SWR4)", () => {
     expect(agents.opens).toHaveLength(0);
   });
 });
+
+/** The `SWARM` Workflow binding, as the deployed engine answers: `sendEvent` accepts an event
+ * type of letters, digits, `-` and `_` only (Cloudflare's rule; a `.` is
+ * `workflow.invalid_event_type`), and an instance can be terminated. */
+class FakeRunInstance {
+  status_ = "running";
+  sent: Array<{ type: string; payload: unknown }> = [];
+  terminated = 0;
+  refuseEvents = false;
+  status(): Promise<{ status: string }> {
+    return Promise.resolve({ status: this.status_ });
+  }
+  sendEvent(event: { type: string; payload: unknown }): Promise<void> {
+    if (this.refuseEvents || !/^[A-Za-z0-9_-]{1,100}$/.test(event.type)) {
+      return Promise.reject(new Error("workflow.invalid_event_type"));
+    }
+    this.sent.push(event);
+    return Promise.resolve();
+  }
+  terminate(): Promise<void> {
+    this.terminated += 1;
+    this.status_ = "terminated";
+    return Promise.resolve();
+  }
+}
+
+class FakeSwarmWorkflow {
+  instances = new Map<string, FakeRunInstance>();
+  created: Array<{ id: string; params: Record<string, unknown> }> = [];
+  get(id: string): Promise<FakeRunInstance> {
+    const instance = this.instances.get(id);
+    return instance === undefined ? Promise.reject(new Error("instance.not_found")) : Promise.resolve(instance);
+  }
+  create(options: { id: string; params: Record<string, unknown> }): Promise<FakeRunInstance> {
+    this.created.push(options);
+    const instance = new FakeRunInstance();
+    this.instances.set(options.id, instance);
+    return Promise.resolve(instance);
+  }
+}
+
+describe("the run's control events reach the deployed engine (SWR1, CO44a)", () => {
+  function withRun(pool: string): { env: Env; swarm: FakeSwarmWorkflow; run: FakeRunInstance } {
+    const { env } = fakeEnv();
+    const swarm = new FakeSwarmWorkflow();
+    const run = new FakeRunInstance();
+    swarm.instances.set(`run-${pool}`, run);
+    (env as unknown as { SWARM: FakeSwarmWorkflow }).SWARM = swarm;
+    return { env, swarm, run };
+  }
+
+  it("a stop during a run sends the run one control event of a type the engine accepts", async () => {
+    const { env, run } = withRun("ctl-stop");
+    const response = await call({ pool: "ctl-stop", running: false, request_id: "ctl-stop-1" }, env);
+    expect(response.status).toBe(200);
+    expect(run.sent).toEqual([{ type: expect.stringMatching(/^[A-Za-z0-9_-]{1,100}$/), payload: { op: "stop" } }]);
+    expect(run.terminated).toBe(0);
+  });
+
+  it("a dial move during a run reaches the run", async () => {
+    const { env, run } = withRun("ctl-dial");
+    const response = await call(
+      { pool: "ctl-dial", running: true, collision_dial: 0.5, request_id: "ctl-dial-1" },
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(run.sent).toEqual([{ type: expect.any(String), payload: { op: "dial", collision_dial: 0.5 } }]);
+  });
+
+  it("a stop the run refuses ends the run anyway: it is terminated and the streams say stopped", async () => {
+    const { env, swarm, run } = withRun("ctl-refused");
+    run.refuseEvents = true;
+    const response = await call({ pool: "ctl-refused", running: false, request_id: "ctl-refused-1" }, env);
+    expect(response.status).toBe(200);
+    expect(run.terminated).toBe(1);
+    const emits = swarm.created.filter((entry) => entry.id.startsWith("emit-"));
+    expect(emits.map((entry) => entry.params.patch)).toEqual([{ running: false }]);
+  });
+
+  it("a dial move the run refuses answers 502 control_failed and changes nothing", async () => {
+    const { env, swarm, run } = withRun("ctl-dial-refused");
+    run.refuseEvents = true;
+    const response = await call(
+      { pool: "ctl-dial-refused", running: true, collision_dial: 0.5, request_id: "ctl-dial-refused-1" },
+      env,
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ error: { code: "control_failed" } });
+    expect(swarm.created).toEqual([]);
+    expect(run.terminated).toBe(0);
+  });
+});

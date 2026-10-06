@@ -8,7 +8,7 @@
 //   run           — a Swarm run (SWR1): emits `running` state, launches `config.agents`
 //     scripted agents at `launch_per_second` — agent n's pattern drawn from
 //     `collision_dial` with `agentRandom(seed, n)` (SW1), one `rescale-energy` every
-//     `rescale_every_s` while the dial is positive — takes `swarm.control` events (dial,
+//     `rescale_every_s` while the dial is positive — takes `SWARM_CONTROL_EVENT` events (dial,
 //     stop) and emits every change. It ends on `stop`, on the kill switch, or by itself
 //     ATTEMPT_TIMEOUT_MS after its last regular agent was due (`runTick`).
 //
@@ -25,6 +25,7 @@ import type {
   SwarmRegisterPoolParams,
   SwarmRunParams,
 } from "../../protocol/internal.ts";
+import { SWARM_CONTROL_EVENT } from "../../protocol/internal.ts";
 import { notBuiltError } from "../not-built.ts";
 import { emitSwarmState } from "../swarm/emit.ts";
 import { launchAgent, launchId } from "../swarm/launch.ts";
@@ -116,7 +117,7 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
     const startMs = await step.do<number>("start", async () => Date.now());
     await emit({ running: true, agents, collision_dial });
 
-    // Pace one-second ticks: each waits on a `swarm.control` event; the timeout is the tick.
+    // Pace one-second ticks: each waits on a control event; the timeout is the tick.
     // `seq` is the draw-stream index every launch takes (SW1); `regular` counts only the
     // run's `agents`, so a rescale-energy launch never fills the configured quota. Each tick
     // costs two steps (the wait and one for the kill switch and the clock) plus one per launch,
@@ -130,7 +131,7 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
       let control: SwarmControlEvent["payload"] | null = null;
       try {
         const event: WorkflowStepEvent<SwarmControlEvent["payload"]> = await step.waitForEvent(`control-${tick}`, {
-          type: "swarm.control",
+          type: SWARM_CONTROL_EVENT,
           timeout: "1 second",
         });
         control = event.payload ?? null;

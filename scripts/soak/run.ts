@@ -565,6 +565,16 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
       if (clone.code !== 0) {
         cloneOk = false;
         fsckDetail = `git clone exited ${clone.code}`;
+      } else {
+        // `git clone` fetches branches only: the landing notes live under refs/notes/premise.
+        const notes = await deps.git(["fetch", "origin", "refs/notes/*:refs/notes/*"], {
+          cwd: input.cloneDir,
+          env: authEnv,
+        });
+        if (notes.code !== 0) {
+          cloneOk = false;
+          fsckDetail = `git fetch of the notes exited ${notes.code}`;
+        }
       }
     } else if (cloneOk) {
       cloneOk = false;

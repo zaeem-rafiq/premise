@@ -14,6 +14,7 @@ import type { RouteInput, RouteTable } from "../index.ts";
 import { ROUTES } from "../../protocol/routes.ts";
 import type { SwarmRequest } from "../../protocol/swarm.ts";
 import type { SwarmEmitParams, SwarmRunParams } from "../../protocol/internal.ts";
+import { SWARM_CONTROL_EVENT } from "../../protocol/internal.ts";
 import { patternById } from "../../swarm/pattern.ts";
 import { heldAttempts, launchAgent, launchId, releaseAgent } from "../swarm/launch.ts";
 import { notBuilt } from "../not-built.ts";
@@ -128,19 +129,46 @@ async function spawnEmit(env: Env, pool: string, requestId: string, patch: Swarm
   }
 }
 
-/** Sends the live `run-<pool>` instance a `swarm.control` event; false when no run lives. */
-async function controlRun(env: Env, pool: string, payload: object): Promise<boolean> {
+/** Sends the live `run-<pool>` instance a control event: `sent`, `no_run` when no run lives, or
+ * `failed` when a live run refused it (then the caller must not pretend the run heard it). */
+async function controlRun(
+  env: Env,
+  pool: string,
+  payload: object,
+): Promise<{ outcome: "sent" | "no_run" } | { outcome: "failed"; terminate(): Promise<void> }> {
   const swarm = env.SWARM;
-  if (swarm === undefined) return false;
+  if (swarm === undefined) return { outcome: "no_run" };
+  let instance: Awaited<ReturnType<NonNullable<Env["SWARM"]>["get"]>>;
   try {
-    const instance = await swarm.get(runInstanceId(pool));
+    instance = await swarm.get(runInstanceId(pool));
     const status = (await instance.status()).status;
-    if (status !== "running" && status !== "waiting" && status !== "queued") return false;
-    await instance.sendEvent({ type: "swarm.control", payload });
-    return true;
+    if (status !== "running" && status !== "waiting" && status !== "queued") return { outcome: "no_run" };
   } catch {
-    return false;
+    return { outcome: "no_run" }; // no instance by that id
   }
+  try {
+    await instance.sendEvent({ type: SWARM_CONTROL_EVENT, payload });
+    return { outcome: "sent" };
+  } catch (cause) {
+    console.error("swarm control refused", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
+    return { outcome: "failed", terminate: () => instance.terminate() };
+  }
+}
+
+/** Stops the pool's run (SWR1): the run hears `stop` and emits its last state; with no live run the
+ * route emits `running: false` itself; a run that refused the event is terminated, then the same. */
+async function stopRun(env: Env, pool: string, requestId: string): Promise<boolean> {
+  const control = await controlRun(env, pool, { op: "stop" });
+  if (control.outcome === "sent") return true;
+  if (control.outcome === "failed") {
+    try {
+      await control.terminate();
+    } catch {
+      return false;
+    }
+  }
+  await spawnEmit(env, pool, requestId, { running: false });
+  return true;
 }
 
 /** Starts `run-<pool>`: the launcher instance of a run request (SWR1). A completed run's instance
@@ -218,8 +246,7 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
     request.running === true &&
     ((request.patterns?.length ?? 0) > 0 || hasFullConfig(request as unknown as Record<string, unknown>));
   if (willLaunch && (await killed(input.env))) {
-    await controlRun(input.env, request.pool, { op: "stop" });
-    await spawnEmit(input.env, request.pool, `${request.request_id}-kill`, { running: false });
+    await stopRun(input.env, request.pool, `${request.request_id}-kill`);
     answeredRequests.add(request.request_id);
     return Response.json({ ok: true, killed: true, launched, released });
   }
@@ -262,20 +289,20 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
   } else if (request.running === true && request.collision_dial !== undefined) {
     // CO44a: moving the dial during a run sends the new collision_dial; the run instance emits
     // the state. With no live run the dial still lands in `swarm.state` for the next start.
-    const sent = await controlRun(input.env, request.pool, {
+    const control = await controlRun(input.env, request.pool, {
       op: "dial",
       collision_dial: request.collision_dial,
     });
-    if (!sent) {
+    if (control.outcome === "failed") return Response.json({ error: { code: "control_failed" } }, { status: 502 });
+    if (control.outcome === "no_run") {
       await spawnEmit(input.env, request.pool, request.request_id, {
         collision_dial: request.collision_dial,
       });
     }
   } else if (request.running === false) {
     // SWR1: stop launching in this pool; agents in flight finish.
-    const sent = await controlRun(input.env, request.pool, { op: "stop" });
-    if (!sent) {
-      await spawnEmit(input.env, request.pool, request.request_id, { running: false });
+    if (!(await stopRun(input.env, request.pool, request.request_id))) {
+      return Response.json({ error: { code: "control_failed" } }, { status: 502 });
     }
   }
 

@@ -29,6 +29,7 @@ export class PatternDriver implements Driver {
   readonly #hold: boolean;
   readonly #thinkMs: [number, number];
   readonly #released: () => boolean;
+  readonly #attemptId: string;
   readonly #rand: () => number;
   #draws: number;
 
@@ -38,6 +39,8 @@ export class PatternDriver implements Driver {
       seed: number;
       agent_n: number;
       hold: boolean;
+      /** The attempt id the pattern runs as — the fresh name of 10.3 derives from it. */
+      attempt_id: string;
       think_ms?: [number, number];
       /** Reads the Agent's current released flag — live, so `/release` takes effect at the next turn. */
       released: () => boolean;
@@ -47,6 +50,7 @@ export class PatternDriver implements Driver {
     this.#hold = opts.hold;
     this.#thinkMs = opts.think_ms ?? [0, 0];
     this.#released = opts.released;
+    this.#attemptId = opts.attempt_id;
     this.#rand = agentRandom(opts.seed, opts.agent_n);
     this.#draws = 0;
   }
@@ -86,6 +90,7 @@ export class PatternDriver implements Driver {
       heads_ups,
       hold: this.#hold,
       released: this.#released(),
+      attempt_id: this.#attemptId,
       state: patternState,
       rand: () => this.#draw(),
     });

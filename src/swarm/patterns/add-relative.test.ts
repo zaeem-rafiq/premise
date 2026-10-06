@@ -23,6 +23,7 @@ function run(opts: {
       hold: false,
       released: false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     });
     state = step.state;
@@ -112,7 +113,8 @@ describe("add-relative (02-tidepool.md 10.3)", () => {
     const { calls } = run({ rand: agentRandom(7, 0), respond: seedRespond });
     expect(calls.map((call) => call.tool)).toEqual(["list", "read", "read", "read", "read", "write", "submit"]);
     expect((calls[4] as Call).args).toEqual({ path: "world/energy.js", entity: "ENERGY_MAX" });
-    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3.
+    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s-test.js");
   });
 
   it("writes T-relative: the threshold text `ENERGY_MAX * 0.3`, not a number", () => {

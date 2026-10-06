@@ -6,31 +6,26 @@
 // false abort, HU12 `changed: false`). An `info` (X0) on `ENERGY_MAX` before the write gives the
 // new value the write must use.
 //
+// The file goes to the agent's own fresh name — `creatures/s-<id>.js`, `<id>` the first 10
+// characters of its attempt id after `a_` — so two concurrent agents never race a `creatures/`
+// listing for the next free number.
+//
 // A `write`, `replace` or `submit` sent while an unshown heads-up waits is refused
 // `heads_up_first` (TA3): the operation is NOT recorded, and the heads-up arrives on that
 // answer. Nothing is replayed blindly — every issued call is computed again at issue time
 // from the pattern's freshest knowledge, so the write's threshold always follows `v`
-// (the X0/E2 updates land in `v` before the re-issue), a refused repair keeps its queue
-// slot, and a name that raced a landing is re-listed before the next write.
+// (the X0/E2 updates land in `v` before the re-issue), and a refused repair keeps its queue
+// slot.
 //
-// Points where the row is silent, answered from the same-file row's spirit and SW6:
-// `read_first` on the creature write — the name was taken between the `list` and the
-// `write` — re-lists `creatures/` and writes the next free name; a dropped write does
-// the same (F1/OP5): relist, rewrite the next free name on the current source, then
-// acknowledge. A repair or confirm anywhere else: SW6's defaults.
+// Points where the row is silent, answered from SW6's reapply-on-the-current-source:
+// a dropped write (F1/OP5, or any other cause) is written to the agent's own name again and
+// acknowledged; `read_first` on the write — the name exists at head unshown — `read`s the file
+// first (W1) and writes it again. A repair or confirm anywhere else: SW6's defaults.
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
 import type { Pattern, PatternStep, PatternTurn } from "../pattern.ts";
-import {
-  energyMaxOf,
-  fileNamesOf,
-  freshName,
-  sourceOf,
-  submitFields,
-  submitStatus,
-  thresholdText,
-} from "../scripted.ts";
+import { energyMaxOf, freshName, sourceOf, submitFields, submitStatus, thresholdText } from "../scripted.ts";
 import { PALETTE, tEnergy, tRelative } from "../templates.ts";
 
 const ENERGY_KEY = "world/energy.js#ENERGY_MAX";
@@ -49,12 +44,11 @@ const STEP_WRITE = 5;
 const STEP_SUBMIT = 6;
 
 /** What the pattern asked with its last issued call, so the next turn can consume the answer. */
-type Issued = "none" | "script" | "relist" | "repair" | "submit";
+type Issued = "none" | "script" | "reshow" | "repair" | "submit";
 
 type AddEnergyState = {
   issued: Issued;
   step: number;
-  entries: string[];
   name: string | null;
   colour: string | null;
   v: number | null; // ENERGY_MAX as last seen: its own read, or a heads-up's `after` (X0, E2)
@@ -62,7 +56,7 @@ type AddEnergyState = {
   pending: string | null; // the threshold text of the write in flight; becomes `threshold` on ok
   seen_hns: number[]; // heads-ups already answered (re-pushes arrive again, HU5)
   repairs: Array<{ path: string; old: string; new: string }>; // queued `replace`s; the head is in flight
-  relist: boolean; // the creature name raced a landing: list again, then write the next free name
+  reshow: boolean; // the write answered `read_first`: read the file shown (W1), then write again
   acks: Array<{ hn: number; statement: string }>; // pending `acknowledge` entries for the submit
   released: boolean;
   withdrawn: boolean;
@@ -73,7 +67,6 @@ function initialState(): AddEnergyState {
   return {
     issued: "none",
     step: STEP_LIST,
-    entries: [],
     name: null,
     colour: null,
     v: null,
@@ -81,7 +74,7 @@ function initialState(): AddEnergyState {
     pending: null,
     seen_hns: [],
     repairs: [],
-    relist: false,
+    reshow: false,
     acks: [],
     released: false,
     withdrawn: false,
@@ -106,7 +99,8 @@ type AddEnergyOpts = {
  * `repair` (E2) on `ENERGY_MAX`: `add-energy` queues the threshold `replace`, chained off the
  * queue's tail so consecutive E2s stay consistent; `add-relative` acknowledges with no edit.
  * `confirm` and any other `repair`: acknowledge "not affected". A dropped write: the file is
- * gone — re-list and write the next free name on the current source (F1/OP5), then acknowledge.
+ * gone — write the agent's own name on the current source again (SW6's reapply), then
+ * acknowledge.
  */
 function answerHeadsUp(opts: AddEnergyOpts, state: AddEnergyState, headsUp: HeadsUp): void {
   if (state.seen_hns.includes(headsUp.hn)) return;
@@ -152,12 +146,11 @@ function answerHeadsUp(opts: AddEnergyOpts, state: AddEnergyState, headsUp: Head
   }
   if (headsUp.result === "repair" && headsUp.dropped_ops.length > 0) {
     // The dropped op is the creature write (the only write the pattern makes): the file is
-    // gone, pending threshold replaces are moot — the fresh write carries the current value —
-    // and the name is listed fresh.
+    // gone and pending threshold replaces are moot — the fresh write carries the current
+    // value. The name is still the agent's own.
     state.repairs.length = 0;
     state.threshold = null;
-    state.name = null;
-    state.relist = true;
+    state.step = STEP_WRITE;
     statement = "reapplied the edit";
   }
   state.acks.push({ hn: headsUp.hn, statement });
@@ -177,10 +170,12 @@ function consumeLast(state: AddEnergyState, turn: PatternTurn): void {
       // TA3: the call was refused without being recorded; the heads-ups that caused it ride
       // this answer and the step is decided again below, never replayed.
     } else if (code === "read_first" && issued === "script" && state.step === STEP_WRITE) {
-      // The creature name was taken between `list` and `write`: re-list, then write the
-      // next free name (the same-file row's answer, generalized).
-      state.relist = true;
-      state.name = null;
+      // The write's path exists at head unshown: read it first (W1), then write again.
+      state.reshow = true;
+    } else if (code === "not_found" && issued === "reshow") {
+      // The shown file went away: the name is free again, the write proceeds.
+      state.reshow = false;
+      state.step = STEP_WRITE;
     } else {
       // SW6: a call answering `limit_reached`, `no_match` or `ambiguous`, and any other failure the
       // script cannot fix, ends the attempt with `stop` `withdrawn`.
@@ -190,7 +185,6 @@ function consumeLast(state: AddEnergyState, turn: PatternTurn): void {
     return;
   }
   if (issued === "script") {
-    if (state.step === STEP_LIST) state.entries = fileNamesOf(last.result);
     if (state.step === STEP_ENERGY_READ) {
       const v = energyMaxOf(sourceOf(last.result));
       if (v !== null) state.v = v;
@@ -202,11 +196,9 @@ function consumeLast(state: AddEnergyState, turn: PatternTurn): void {
     state.step += 1;
     return;
   }
-  if (issued === "relist") {
-    state.entries = fileNamesOf(last.result);
-    state.name = null;
+  if (issued === "reshow") {
+    state.reshow = false;
     state.step = STEP_WRITE;
-    state.relist = false;
     return;
   }
   if (issued === "repair") {
@@ -249,10 +241,11 @@ export function makeEnergyAdd(opts: AddEnergyOpts): Pattern {
       consumeLast(state, turn);
       for (const headsUp of turn.heads_ups) answerHeadsUp(opts, state, headsUp);
 
-      // A pull-back (GA3) or a landed-time answer reopens work after a successful submit.
-      if (state.done && (state.acks.length > 0 || state.repairs.length > 0 || state.relist)) {
+      // A pull-back (GA3) or a landed-time answer reopens work after a successful submit; a
+      // dropped-write repair already re-armed STEP_WRITE — do not send it back to submit.
+      if (state.done && (state.acks.length > 0 || state.repairs.length > 0 || state.reshow)) {
         state.done = false;
-        state.step = STEP_SUBMIT;
+        if (state.step !== STEP_WRITE) state.step = STEP_SUBMIT;
       }
 
       if (state.withdrawn) {
@@ -266,9 +259,9 @@ export function makeEnergyAdd(opts: AddEnergyOpts): Pattern {
         state.issued = "repair";
         return { kind: "tool", tool: "replace", args: repair, state };
       }
-      if (state.relist) {
-        state.issued = "relist";
-        return { kind: "tool", tool: "list", args: { path: "creatures/" }, state };
+      if (state.reshow) {
+        state.issued = "reshow";
+        return { kind: "tool", tool: "read", args: { path: state.name }, state };
       }
       if (state.done) return { kind: "wait", state };
 
@@ -287,7 +280,7 @@ export function makeEnergyAdd(opts: AddEnergyOpts): Pattern {
       }
       if (state.step === STEP_WRITE) {
         if (state.name === null) {
-          state.name = freshName(state.entries);
+          state.name = freshName(turn.attempt_id);
           // The colour is the script's one draw of the agent's stream (SW1).
           state.colour = PALETTE[Math.floor(turn.rand() * PALETTE.length)] as string;
         }

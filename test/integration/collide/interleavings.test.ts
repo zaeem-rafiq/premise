@@ -81,7 +81,7 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["add-relative", "rescale-energy"], // E2 false abort; QR1 the other way
   ["add-plain", "rescale-energy"], // the table names no break either way: the control pair
   ["rescale-energy", "rescale-energy"], // E1 + OP1: the second rescale withdraws
-  ["add-energy", "add-energy"], // the same-file shape: F1 + OP5 on the taken name
+  ["add-energy", "add-energy"], // each writes its own `s-<id>`: no shared name, nothing
   ["cosmetic", "add-plain"], // cosmetic disturbs nobody (E0, F2) either way
   ["cosmetic", "add-energy"],
   ["cosmetic", "add-relative"],
@@ -105,7 +105,7 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["same-file", "rescale-energy"], // nothing either way (no ENERGY_MAX in T-plain)
   ["same-file", "sweep-colour"], // L1: the added d-file joins the sweep
   ["same-file", "sweep-search"], // the gained container: X0/QT2 info, QT1 repair
-  ["same-file", "same-file"], // the pair: F1 + OP5, the next free name lands
+  ["same-file", "same-file"], // the pair: F1 + OP5, each then writes its own `s-<id>`
   ["reader", "rescale-energy"], // F4/X0 info into the reader; QR4 triage the other way
   ["reader", "sweep-colour"], // L1: the reader's landed file joins the sweep
   ["reader", "sweep-search"], // QT1: a T-plain container is gained
@@ -225,9 +225,9 @@ function aDisturbance(pa: string, pb: string, k: number): Disturbance {
       if (k <= 4) return "none";
       return k === 5 ? "info" : "repair";
     }
-    // A same-name creature landing breaks the recorded write (F1 + OP5); before the
-    // write the listing premise only gains a name it is not sweeping (L3, no heads-up).
-    if (pb === "add-energy") return k <= 5 ? "none" : "repair";
+    // Another add-* writes its own `s-<id>` name, never this one's (10.3): the listing
+    // premise only gains a name it is not sweeping (L3, no heads-up) — the F1 + OP5
+    // same-name landing this row once covered can no longer happen.
     return "none"; // cosmetic and the other add-* rows never disturb it
   }
   // pa === "rescale-energy"

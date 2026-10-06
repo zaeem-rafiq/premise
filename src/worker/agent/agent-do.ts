@@ -220,6 +220,7 @@ export class Agent extends DurableObject<Env> {
           seed: this.#int("seed"),
           agent_n: this.#int("agent_n"),
           hold: this.#meta("hold") === "1",
+          attempt_id,
           think_ms: Array.isArray(think) && think.length === 2 ? [think[0] ?? 0, think[1] ?? 0] : [0, 0],
           released: () => metaGet(this.#sql, "released") === "1",
         });

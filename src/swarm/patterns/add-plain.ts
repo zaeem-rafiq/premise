@@ -1,21 +1,24 @@
 // The `add-plain` canned pattern (02-tidepool.md 10.3): add a creature made of template T-plain
-// (10.2) and submit. Truth list `bounce`, `step`, `wander`; on a `repair` (E2) on one of them it
-// reads the entity again and acknowledges "still valid". Every other heads-up takes the default
-// answers of SW6; a held agent waits before its first `submit` (SW8, SWR3).
+// (10.2) and submit. Its file goes to the agent's own fresh name — `creatures/s-<id>.js`, `<id>`
+// the first 10 characters of its attempt id after `a_` — so two concurrent agents never race a
+// `creatures/` listing for the next free number. Truth list `bounce`, `step`, `wander`; on a
+// `repair` (E2) on one of them it reads the entity again and acknowledges "still valid". Every
+// other heads-up takes the default answers of SW6; a held agent waits before its first `submit`
+// (SW8, SWR3).
 //
 // A `write` or `submit` sent while an unshown heads-up waits is refused `heads_up_first` (TA3):
 // the operation is NOT recorded, and the heads-up arrives on that answer. Queued re-reads keep
 // their slot until confirmed, so a refused one is re-issued rather than skipped.
 //
-// Points where the row is silent, answered from the same-file row's spirit and SW6:
-// `read_first` on the creature write — the name was taken between the `list` and the `write` —
-// re-lists `creatures/` and writes the next free name; a dropped write does the same (F1/OP5):
-// relist, rewrite the next free name on the current source, then acknowledge.
+// Points where the row is silent, answered from SW6's reapply-on-the-current-source:
+// a dropped write (F1/OP5, or any other cause) is written to the agent's own name again and
+// acknowledged; `read_first` on the write — the name exists at head unshown — `read`s the file
+// first (W1) and writes it again.
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
 import type { Pattern, PatternStep, PatternTurn } from "../pattern.ts";
-import { fileNamesOf, freshName, readArgsOf, submitFields, submitStatus } from "../scripted.ts";
+import { freshName, readArgsOf, submitFields, submitStatus } from "../scripted.ts";
 import { PALETTE, SPEEDS, tPlain } from "../templates.ts";
 
 /** The truth list of `add-plain` (02 10.3; the row's `bounce`, `step`, `wander` expanded per the
@@ -41,18 +44,17 @@ const STEP_WRITE = 5;
 const STEP_SUBMIT = 6;
 
 /** What the pattern asked with its last issued call, so the next turn can consume the answer. */
-type Issued = "none" | "script" | "relist" | "reread" | "submit";
+type Issued = "none" | "script" | "reshow" | "reread" | "submit";
 
 type AddPlainState = {
   issued: Issued;
   step: number;
-  entries: string[];
   name: string | null;
   colour: string | null;
   speed: number | null;
   seen_hns: number[]; // heads-ups already answered (re-pushes arrive again, HU5)
   rereads: string[]; // entity keys "path#name" to read again (E2 repairs); the head is in flight
-  relist: boolean; // the creature name raced a landing: list again, then write the next free name
+  reshow: boolean; // the write answered `read_first`: read the file shown (W1), then write again
   acks: Array<{ hn: number; statement: string }>; // pending `acknowledge` entries for the submit
   released: boolean;
   withdrawn: boolean;
@@ -63,13 +65,12 @@ function initialState(): AddPlainState {
   return {
     issued: "none",
     step: STEP_LIST,
-    entries: [],
     name: null,
     colour: null,
     speed: null,
     seen_hns: [],
     rereads: [],
-    relist: false,
+    reshow: false,
     acks: [],
     released: false,
     withdrawn: false,
@@ -80,8 +81,8 @@ function initialState(): AddPlainState {
 /**
  * SW6 and the pattern's own row (02 10.3): what a new heads-up costs.
  * `repair` (E2) on a truth entity: read it again, acknowledge "still valid".
- * `repair` with a dropped operation: the write is gone — re-list, write the next free name
- * on the current source, then acknowledge. `confirm` or any other `repair`: acknowledge, no
+ * `repair` with a dropped operation: the write is gone — write the agent's own name on the
+ * current source again, then acknowledge. `confirm` or any other `repair`: acknowledge, no
  * edit ("not affected"). `info`: nothing.
  */
 function answerHeadsUp(state: AddPlainState, headsUp: HeadsUp): void {
@@ -104,9 +105,9 @@ function answerHeadsUp(state: AddPlainState, headsUp: HeadsUp): void {
     }
     if (onTruth) statement = "still valid";
     if (headsUp.dropped_ops.length > 0) {
-      // The dropped op is the creature write (the only write the pattern makes).
-      state.name = null;
-      state.relist = true;
+      // The dropped op is the creature write (the only write the pattern makes): the name is
+      // still the agent's own — the write is applied again on the current source.
+      state.step = STEP_WRITE;
       statement = "reapplied the edit";
     }
   }
@@ -127,10 +128,12 @@ function consumeLast(state: AddPlainState, turn: PatternTurn): void {
       // TA3: refused without being recorded; the heads-ups ride this answer and the step is
       // decided again below, never replayed.
     } else if (code === "read_first" && issued === "script" && state.step === STEP_WRITE) {
-      // The creature name was taken between `list` and `write`: re-list, then write the
-      // next free name (the same-file row's answer, generalized).
-      state.relist = true;
-      state.name = null;
+      // The write's path exists at head unshown: read it first (W1), then write again.
+      state.reshow = true;
+    } else if (code === "not_found" && issued === "reshow") {
+      // The shown file went away: the name is free again, the write proceeds.
+      state.reshow = false;
+      state.step = STEP_WRITE;
     } else {
       // SW6: a call answering `limit_reached`, `no_match` or `ambiguous`, and any other failure the
       // script cannot fix, ends the attempt with `stop` `withdrawn`.
@@ -139,15 +142,12 @@ function consumeLast(state: AddPlainState, turn: PatternTurn): void {
     return;
   }
   if (issued === "script") {
-    if (state.step === STEP_LIST) state.entries = fileNamesOf(last.result);
     state.step += 1;
     return;
   }
-  if (issued === "relist") {
-    state.entries = fileNamesOf(last.result);
-    state.name = null;
+  if (issued === "reshow") {
+    state.reshow = false;
     state.step = STEP_WRITE;
-    state.relist = false;
     return;
   }
   if (issued === "reread") {
@@ -187,10 +187,11 @@ export const ADD_PLAIN: Pattern = {
     consumeLast(state, turn);
     for (const headsUp of turn.heads_ups) answerHeadsUp(state, headsUp);
 
-    // A pull-back (GA3) or a landed-time answer reopens work after a successful submit.
-    if (state.done && (state.acks.length > 0 || state.rereads.length > 0 || state.relist)) {
+    // A pull-back (GA3) or a landed-time answer reopens work after a successful submit; a
+    // dropped-write repair already re-armed STEP_WRITE — do not send it back to submit.
+    if (state.done && (state.acks.length > 0 || state.rereads.length > 0 || state.reshow)) {
       state.done = false;
-      state.step = STEP_SUBMIT;
+      if (state.step !== STEP_WRITE) state.step = STEP_SUBMIT;
     }
 
     if (state.withdrawn) {
@@ -202,9 +203,9 @@ export const ADD_PLAIN: Pattern = {
       state.issued = "reread";
       return { kind: "tool", tool: "read", args: readArgsOf(key), state };
     }
-    if (state.relist) {
-      state.issued = "relist";
-      return { kind: "tool", tool: "list", args: { path: "creatures/" }, state };
+    if (state.reshow) {
+      state.issued = "reshow";
+      return { kind: "tool", tool: "read", args: { path: state.name }, state };
     }
     if (state.done) return { kind: "wait", state };
 
@@ -223,7 +224,7 @@ export const ADD_PLAIN: Pattern = {
     }
     if (state.step === STEP_WRITE) {
       if (state.name === null) {
-        state.name = freshName(state.entries);
+        state.name = freshName(turn.attempt_id);
         // Both draws come from the agent's stream (SW1), colour first.
         state.colour = PALETTE[Math.floor(turn.rand() * PALETTE.length)] as string;
         state.speed = SPEEDS[Math.floor(turn.rand() * SPEEDS.length)] as number;

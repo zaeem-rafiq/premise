@@ -10,6 +10,7 @@ type Call = { tool: string; args: Record<string, unknown> };
 /** Drives the pattern: each tool call is answered by `respond`; turns stop at `wait` or `stop`. */
 function run(opts: {
   rand: () => number;
+  attempt_id?: string;
   hold?: boolean;
   released?: boolean;
   respond: (call: Call) => ModelToolMessage;
@@ -26,6 +27,7 @@ function run(opts: {
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: opts.attempt_id ?? "a_test",
       rand: opts.rand,
     };
     const step = ADD_PLAIN.next(turn);
@@ -108,7 +110,8 @@ describe("add-plain (02-tidepool.md 10.3)", () => {
     expect((calls[2] as Call).args).toEqual({ path: "world/bounds.js", entity: "bounce" });
     expect((calls[3] as Call).args).toEqual({ path: "world/movement.js", entity: "step" });
     expect((calls[4] as Call).args).toEqual({ path: "world/movement.js", entity: "wander" });
-    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3.
+    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s-test.js");
   });
 
   it("writes the file T-plain of 02 10.2 gives with the drawn colour and speed", () => {
@@ -117,7 +120,7 @@ describe("add-plain (02-tidepool.md 10.3)", () => {
     const { calls } = run({ rand: agentRandom(7, 0), respond: seedRespond });
     const write = calls[5] as Call;
     expect(write.args).toEqual({
-      path: "creatures/s0004.js",
+      path: "creatures/s-test.js",
       content: `import { bounce } from "../world/bounds.js";
 import { step, wander } from "../world/movement.js";
 
@@ -152,6 +155,14 @@ export function draw(creature, pen) {
     const a = run({ rand: agentRandom(7, 0), respond: seedRespond });
     const b = run({ rand: agentRandom(7, 1), respond: seedRespond });
     expect((b.calls[5] as Call).args).not.toEqual((a.calls[5] as Call).args);
+  });
+
+  it("two attempt ids write two different own names (10.3)", () => {
+    // `a_first` -> `s-first`, `a_second` -> `s-second`, worked from the rule (BP1).
+    const a = run({ rand: agentRandom(7, 0), attempt_id: "a_first", respond: seedRespond });
+    const b = run({ rand: agentRandom(7, 0), attempt_id: "a_second", respond: seedRespond });
+    expect(((a.calls[5] as Call).args as { path: string }).path).toBe("creatures/s-first.js");
+    expect(((b.calls[5] as Call).args as { path: string }).path).toBe("creatures/s-second.js");
   });
 
   it("repair (E2) on a truth entity: reads it again, then acknowledges 'still valid'", () => {
@@ -191,6 +202,7 @@ export function draw(creature, pen) {
         hold: true,
         released: false,
         state,
+        attempt_id: "a_test",
         rand: agentRandom(7, 0),
       });
       state = step.state;
@@ -208,6 +220,7 @@ export function draw(creature, pen) {
       hold: true,
       released: true,
       state,
+      attempt_id: "a_test",
       rand: agentRandom(7, 0),
     });
     expect(released.kind).toBe("tool");

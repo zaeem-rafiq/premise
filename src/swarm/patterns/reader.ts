@@ -6,7 +6,7 @@
 // write, F4 answered `holds` by scripted triage after it, because no entity of that file is in
 // its truth list (the row's note). Every heads-up the wide read does not answer is forwarded
 // to `add-plain`'s turn, whose state machine answers them by SW6 (an `info` is nothing; a
-// `repair` that drops the creature write re-lists and rewrites the next free name; a held
+// `repair` that drops the creature write rewrites the agent's own fresh name; a held
 // agent waits before its first `submit` — SW8, SWR3).
 
 import type { AgentStopReason } from "../../protocol/attempt.ts";

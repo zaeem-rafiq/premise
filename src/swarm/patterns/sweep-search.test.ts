@@ -35,6 +35,7 @@ function run(opts: { inject?: Map<number, HeadsUp[]>; secondRepair?: boolean }):
       hold: false,
       released: false,
       state,
+      attempt_id: "a_test",
       rand: agentRandom(7, 0),
     });
     state = step.state;

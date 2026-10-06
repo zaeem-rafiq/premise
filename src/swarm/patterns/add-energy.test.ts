@@ -26,6 +26,7 @@ function run(opts: {
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     } as PatternTurn);
     state = step.state;
@@ -94,7 +95,7 @@ function headsUp(hn: number, opts: { result: string; rule: string; after?: strin
         uses: [],
       },
     ],
-    dropped_ops: opts.dropped ? [{ op_seq: 1, path: "creatures/s0004.js", rule: "OP5" }] : [],
+    dropped_ops: opts.dropped ? [{ op_seq: 1, path: "creatures/s-test.js", rule: "OP5" }] : [],
     go_around: opts.result === "repair" ? 1 : null,
     head_seq: 3,
     created_at: 0,
@@ -118,7 +119,8 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
     expect((calls[2] as Call).args).toEqual({ path: "world/bounds.js", entity: "bounce" });
     expect((calls[3] as Call).args).toEqual({ path: "world/movement.js", entity: "step" });
     expect((calls[4] as Call).args).toEqual({ path: "world/energy.js", entity: "ENERGY_MAX" });
-    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
+    // `a_test` -> `s-test`: the agent's own fresh name of 10.3.
+    expect(((calls[5] as Call).args as { path: string }).path).toBe("creatures/s-test.js");
   });
 
   it("writes T-energy with the threshold 0.3 x V parsed from the ENERGY_MAX it read", () => {
@@ -148,7 +150,7 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
       "submit",
     ]);
     expect((calls[6] as Call).args).toEqual({
-      path: "creatures/s0004.js",
+      path: "creatures/s-test.js",
       old: "creature.energy < 30",
       new: "creature.energy < 0.3",
     });
@@ -182,9 +184,9 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
   it("SW6: a dropped write is applied again, then acknowledged", () => {
     const inject = new Map([[6, [headsUp(1, { result: "repair", rule: "F1", dropped: true })]]]);
     const { calls } = run({ rand: agentRandom(7, 0), respond: seedRespond, inject });
-    // F1 + OP5 drops the write because its name was taken: the pattern re-lists
-    // `creatures/` and writes to the next free name (the mock's list leaves s0004 free),
-    // never replaying the dropped call's arguments.
+    // A dropped write is applied again on the current source (SW6): the name is still the
+    // agent's own `s-test`, no listing is consulted, and the dropped call's arguments are
+    // never replayed verbatim (the threshold is recomputed at issue time).
     expect(calls.map((call) => call.tool)).toEqual([
       "list",
       "read",
@@ -192,14 +194,12 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
       "read",
       "read",
       "write",
-      "list",
       "write",
       "submit",
     ]);
-    expect((calls[6] as Call).tool).toBe("list");
-    expect((calls[7] as Call).tool).toBe("write");
-    expect(((calls[7] as Call).args as { path: string }).path).toBe("creatures/s0004.js");
-    expect((calls[8] as Call).args).toEqual({
+    expect((calls[6] as Call).tool).toBe("write");
+    expect(((calls[6] as Call).args as { path: string }).path).toBe("creatures/s-test.js");
+    expect((calls[7] as Call).args).toEqual({
       summary: "add a creature",
       acknowledge: [1],
       statement: "reapplied the edit",
@@ -217,6 +217,7 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
         hold: true,
         released: false,
         state,
+        attempt_id: "a_test",
         rand: agentRandom(7, 0),
       });
       state = step.state;
@@ -233,6 +234,7 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
       hold: true,
       released: true,
       state,
+      attempt_id: "a_test",
       rand: agentRandom(7, 0),
     });
     expect(released.kind).toBe("tool");

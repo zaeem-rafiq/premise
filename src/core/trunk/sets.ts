@@ -332,6 +332,9 @@ export type Pool = {
   dirtyOutbox: boolean;
   dirtyUndo: Set<string>;
   newLandings: Landing[];
+  /** The persisted row of each landing as `landingMark` read it (load or last persist): a save
+   * writes a landing again only when its mark changed (its push, its undo). */
+  landingMarks: Map<number, string>;
   filesChanged: Set<string>; // paths the batch changed at head
   entitiesChanged: Set<string>; // module paths whose entities/refs must be rewritten
   analyses: Map<FileMap, Analysis>;

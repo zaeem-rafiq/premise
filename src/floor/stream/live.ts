@@ -1,7 +1,7 @@
 // The live stream: `GET /api/pools/{pool}/stream` (13.6), then the read-only socket of
 // `01-core.md` 12.2 — the page sends exactly one message `{ hello: 1, after: n }` and
 // receives a snapshot and/or `events` frames in `n` order. A non-upgrade GET on the route
-// is the pool-missing probe of FR30: the Floor answers 404 for an unknown pool and 426 for
+// is the pool-missing probe of FR30: the Floor answers 404 for an unknown pool and 200 for
 // a real one, which the browser's WebSocket API cannot see on its own (a failed handshake
 // hides the status). Reconnects with waits from WS_RETRY_BASE_MS doubling to
 // WS_RETRY_MAX_MS (FR10), asking for events after the last applied `n`. The Floor sends
@@ -156,15 +156,15 @@ export function openLiveStream(pool: string, env: LiveEnv, cb: LiveCallbacks): {
           : "connecting",
     );
     try {
-      // FR30: a plain GET on the stream route — 404 means the pool does not exist
-      // (`{"error":"not_found"}` of the Floor), 426 means it does but needs the upgrade.
+      // FR30: a plain GET on the stream route — 404 with the Floor's `{"error":{"code":"not_found"}}`
+      // means the pool does not exist; any other answer means it does (the Floor's is 200).
       const response = await env.get(streamPath(pool));
       if (closed) return;
       if (response.status === 404) {
         let missing = false;
         try {
-          const body = (await response.json()) as { error?: string };
-          missing = body.error === "not_found";
+          const body = (await response.json()) as { error?: { code?: string } };
+          missing = body.error?.code === "not_found";
         } catch {
           missing = false; // a dev server's 404 page: unreachable, not "no pool"
         }

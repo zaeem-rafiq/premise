@@ -35,7 +35,8 @@ test.describe("AC4 / CO49 / FL4: the SYNTHETIC banner has no close control, ever
     const banner = page.locator(".banner[data-tone='synthetic']");
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("SYNTHETIC");
-    await expect(banner).toContainText("scripted agents");
+    // One scripted attempt in the stream: the n = 1 form of banner.synthetic (CP5).
+    await expect(banner).toContainText("1 scripted agent · it makes no model calls");
     // No close control - and no button at all on banner 1 (CO49).
     await expect(banner.locator("button")).toHaveCount(0);
 

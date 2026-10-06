@@ -256,11 +256,13 @@ export class Floor extends DurableObject<Env> {
   // ---- The read-only stream socket (12.2, EV7, FS3) ----
 
   private openSocket(request: Request): Response {
-    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-      return jsonError("upgrade_required", 426);
-    }
     const { n } = this.state();
-    if (n === 0) return jsonError("not_found", 404); // FR30: an unknown pool answers 404
+    if (n === 0) return jsonError("not_found", 404); // FR30: an unknown pool answers 404, upgrade or not
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+      // FR30's probe: a plain GET learns that the pool exists. 200 rather than 426, so the probe of
+      // every page load is not a failed request in the browser's console.
+      return json({ pool: this.poolId(), stream: "websocket" });
+    }
     const address = clientAddress(request);
     if (this.ctx.getWebSockets(address).length >= MAX_SOCKETS_PER_ADDR) {
       return jsonError("too_many_sockets", 429);

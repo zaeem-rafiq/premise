@@ -326,7 +326,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
 
   test("FR30: an unknown pool shows pool.missing with the way to the default pool", async ({ page }) => {
     await page.route("**/api/pools/ghost/stream", (route) =>
-      route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"not_found"}' }),
+      route.fulfill({ status: 404, contentType: "application/json", body: '{"error":{"code":"not_found"}}' }),
     );
     await page.goto("/p/ghost");
     const missing = page.getByTestId("pool-missing");

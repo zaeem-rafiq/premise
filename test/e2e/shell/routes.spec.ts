@@ -20,10 +20,11 @@ test.describe("client routes (AC25)", () => {
 
 test.describe("pool.missing (FR30)", () => {
   test("a pool the stream does not answer shows pool.missing and the way to the default pool", async ({ page }) => {
-    // The Floor's probe is a plain GET on the stream route; a real pool answers 426, an
-    // unknown one 404 {"error":"not_found"}. Only the second may show pool.missing.
+    // The Floor's probe is a plain GET on the stream route; a real pool answers 200, an
+    // unknown one 404 with the API's error shape {"error":{"code":"not_found"}} (the Floor's own
+    // body, src/worker/floor/floor-do.ts). Only the second may show pool.missing.
     await page.route("**/api/pools/ghost/stream", (route) =>
-      route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"not_found"}' }),
+      route.fulfill({ status: 404, contentType: "application/json", body: '{"error":{"code":"not_found"}}' }),
     );
     await page.goto("/p/ghost");
     await expect(page.getByTestId("pool-missing")).toBeVisible();

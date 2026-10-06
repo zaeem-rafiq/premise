@@ -5,7 +5,7 @@
 // and `metrics`, never of its own request. Slice 1 draws the numbers and the wall; the
 // start/stop controls are the owner's and send `SwarmRequest` (SWR1).
 
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
 import { duration } from "../../../copy/format.ts";
@@ -26,6 +26,16 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
 
   const swarm = floor.swarm;
   const metrics = floor.metrics;
+
+  // CO48: the controls show the newest swarm.state, not the page's own requests. The local
+  // values are drafts while no state has arrived; a new state adopts its numbers (a value the
+  // owner already set does not drag the control back).
+  const seen = useRef<{ agents?: number; dial?: number }>({});
+  useEffect(() => {
+    if (swarm !== null && swarm.agents !== seen.current.agents) setAgents(swarm.agents);
+    if (swarm !== null && swarm.collision_dial !== seen.current.dial) setDial(swarm.collision_dial);
+    seen.current = { agents: swarm?.agents, dial: swarm?.collision_dial };
+  }, [swarm]);
   const wall = Object.values(floor.attempts).filter((a) => a.agent === "synthetic");
   const working = wall.filter((a) => inFlight(a) && a.state !== "going_around").length;
   const goingAround = wall.filter((a) => a.state === "going_around").length;
@@ -45,6 +55,14 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
             request_id: crypto.randomUUID(),
           }
         : { pool, running: false, request_id: crypto.randomUUID() };
+      await post(body);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const post = async (body: object) => {
+    try {
       const response = await fetch("/api/swarm", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -53,8 +71,16 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
       if (!response.ok) setError(errorSentence(response.status));
     } catch {
       setError(errorSentence(null));
-    } finally {
-      setBusy(false);
+    }
+  };
+
+  // CO44a: moving the dial during a run sends { pool, running: true, collision_dial } at once —
+  // while idle it is the config the next Start sends.
+  const moveDial = (value: number) => {
+    setDial(value);
+    if (swarm?.running === true) {
+      setError(null);
+      void post({ pool, running: true, collision_dial: value, request_id: crypto.randomUUID() });
     }
   };
 
@@ -153,7 +179,7 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
               step={0.05}
               value={dial}
               title={t("swarm.dial.tip")}
-              onChange={(e) => setDial(Number(e.target.value))}
+              onChange={(e) => moveDial(Number(e.target.value))}
             />
           </label>
           {swarm?.running ? (

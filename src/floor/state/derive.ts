@@ -325,13 +325,16 @@ export function bannerList(
 ): BannerRow[] {
   const rows: BannerRow[] = [];
   const syntheticCount = Object.values(state.attempts).filter((a) => a.agent === "synthetic").length;
+  // CO48: in Swarm view the count names what the newest swarm.state runs, not the wall cells —
+  // a summary_only pool's stream need not hold one attempt per agent before they open.
+  const bannerCount = opts.view === "swarm" ? (state.swarm?.agents ?? syntheticCount) : syntheticCount;
 
   if (opts.view === "swarm" || opts.replay.synthetic || state.pool.synthetic) {
     const id = opts.view === "swarm" ? "banner.synthetic.swarm" : "banner.synthetic";
     rows.push({
       id,
       word: bannerWord(id),
-      sentence: text(id, { n: syntheticCount }),
+      sentence: text(id, { n: bannerCount }),
       tone: "synthetic",
     });
   }

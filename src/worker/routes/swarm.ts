@@ -1,61 +1,27 @@
-// The swarm lane's wiring module for the routes seam (04-build-plan 3.2) and the Swarm launcher of
-// 01-core SWR1 to SWR4 for a canned cast (SWR2): `POST /api/swarm` takes a `SwarmRequest` and starts
-// one scripted Agent Durable Object per entry of `patterns`, in list order.
+// The swarm lane's wiring module for the routes seam (04-build-plan 3.2) and the Swarm launcher
+// of 01-core SWR1 to SWR4: `POST /api/swarm` takes a `SwarmRequest` and starts scripted Agent
+// Durable Objects — one per `patterns` entry for a canned cast (SWR2), or a paced run of
+// `agents` drawn by `collision_dial` for a full `SwarmConfig` (SWR1, the `run-<pool>` Workflow
+// instance). `running: false` stops the run; a bare `collision_dial` moves its dial (CO44a).
 //
-// The Agent Durable Object itself is built by the agent lane; the launch call this route makes is
-// `POST /open` on the object named by the attempt id (the same naming the seam uses at dispatch):
-// a repeated `/open` for an attempt it already holds is an idempotent no-op (9.8). Because the
-// attempt id is derived from `request_id`, a repeated request launches nothing (SWR4).
+// Every change of what is running is reported by `swarm.state` (SWR4/EM6): the run instance and
+// `emit-<request_id>` instances deliver it to every registered pool on the `swarm` source
+// (EV2a). Because the launcher's attempt ids derive from `request_id`, a repeated request
+// launches nothing, and a re-sent state is deduplicated by content at each Floor.
 
 import type { Env } from "../env.ts";
 import type { RouteInput, RouteTable } from "../index.ts";
 import { ROUTES } from "../../protocol/routes.ts";
 import type { SwarmRequest } from "../../protocol/swarm.ts";
-import type {
-  AgentOpenRequest,
-  AgentOpenResponse,
-  TrunkOpenAttemptRequest,
-  TrunkOpenAttemptResponse,
-} from "../../protocol/internal.ts";
+import type { SwarmEmitParams, SwarmRunParams } from "../../protocol/internal.ts";
 import { patternById } from "../../swarm/pattern.ts";
-import { H } from "../../core/sync/h.ts";
+import { heldAttempts, launchAgent, launchId, releaseAgent } from "../swarm/launch.ts";
+import { notBuilt } from "../not-built.ts";
 
-/** The launch call's contract lives in `src/protocol/internal.ts`; the local aliases stay so the
- * lane's test keeps its import shape (gap 1's one-definition rule). */
-export type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/internal.ts";
-
-/** The requester recorded on a synthetic attempt's intent (CM1's author `SYNTHETIC swarm`). */
-const REQUESTER = "swarm";
-
-const AGENT_OPEN_URL = "https://agent/open";
-const TRUNK_STATE_URL = "https://trunk/internal/state";
-const AGENT_RELEASE_URL = "https://agent/release";
-const TRUNK_OPEN_ATTEMPT_URL = "https://trunk/internal/open-attempt";
-const TRUNK_SWARM_HOLD_URL = "https://trunk/internal/swarm-hold";
-const TRUNK_SWARM_HELD_URL = "https://trunk/internal/swarm-held";
-
-/** ULID's Crockford base32 alphabet, in order. */
-const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-/**
- * A deterministic `a_<ULID>` (or `i_`, `c_`) for one agent of one request: the 128 bits of
- * `H("swarm|<prefix>|<request_id>|<n>")` base32-encoded. SWR4: a repeated `request_id` names the
- * same Durable Objects, whose `/open` is idempotent, so a retry launches nothing.
- */
-function launchId(prefix: "a_" | "i_" | "c_", requestId: string, n: number): string {
-  let value = BigInt(`0x${H(`swarm|${prefix}|${requestId}|${n}`)}`);
-  let id = "";
-  for (let i = 0; i < 26; i += 1) {
-    id = B32[Number(value & 0x1fn)] + id;
-    value >>= 5n;
-  }
-  return `${prefix}${id}`;
-}
-
-/** The attempt id of agent `n` of `request_id` — the Durable Object's name. */
-export function launchAttemptId(requestId: string, n: number): string {
-  return launchId("a_", requestId, n);
-}
+/** The one live run instance per pool — `run-<pool>` (SWR1). */
+const runInstanceId = (pool: string) => `run-${pool}`;
+/** A route-asked emission instance — `emit-<request_id>`; `create` refuses its repeat (SWR4). */
+const emitInstanceId = (requestId: string) => `emit-${requestId}`;
 
 /** Request ids this isolate has already answered (SWR4; DO idempotency covers restarts). */
 const answeredRequests = new Set<string>();
@@ -72,10 +38,25 @@ function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Every field of `SwarmConfig` present — a run's shape (SWR1), not a dial-only request. */
+function hasFullConfig(raw: Record<string, unknown>): boolean {
+  return (
+    isNumber(raw.seed) &&
+    isNumber(raw.agents) &&
+    isNumber(raw.launch_per_second) &&
+    isNumber(raw.collision_dial) &&
+    isNumber(raw.rescale_every_s) &&
+    Array.isArray(raw.think_ms) &&
+    raw.think_ms.length === 2 &&
+    (raw.think_ms as unknown[]).every(isNumber)
+  );
+}
+
 /**
  * Shape-checks the body as `SwarmRequest` (SWR1). A request that starts agents carries all of
  * `SwarmConfig`; a release-only request may carry only `pool`, `running`, `release`, `request_id`
- * (SWR3). Returns the request or a 400 response.
+ * (SWR3); a dial move during a run carries `pool`, `running`, `collision_dial`, `request_id`
+ * (CO44a). Returns the request or a 400 response.
  */
 function validate(body: unknown): { request: SwarmRequest } | { response: Response } {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -100,17 +81,21 @@ function validate(body: unknown): { request: SwarmRequest } | { response: Respon
   if ((request.release ?? []).some((id) => patternById(id) === undefined)) {
     return { response: badRequest("unknown_pattern") };
   }
-  if (request.running === true && (request.patterns?.length ?? 0) > 0) {
-    const configOk =
-      isNumber(raw.seed) &&
-      isNumber(raw.agents) &&
-      isNumber(raw.launch_per_second) &&
-      isNumber(raw.collision_dial) &&
-      isNumber(raw.rescale_every_s) &&
-      Array.isArray(raw.think_ms) &&
-      raw.think_ms.length === 2 &&
-      raw.think_ms.every(isNumber);
-    if (!configOk) return { response: badRequest("invalid_args") };
+  const hasPatterns = (request.patterns?.length ?? 0) > 0;
+  const hasRelease = (request.release?.length ?? 0) > 0;
+  if (request.running === true && hasPatterns && !hasFullConfig(raw)) {
+    return { response: badRequest("invalid_args") };
+  }
+  // A `running` request that launches nothing must still be shaped: a full config (a run), a
+  // bare `collision_dial` (the dial move of CO44a) or a `release` list (SWR3).
+  if (
+    request.running === true &&
+    !hasPatterns &&
+    !hasRelease &&
+    !hasFullConfig(raw) &&
+    raw.collision_dial === undefined
+  ) {
+    return { response: badRequest("invalid_args") };
   }
   return { request };
 }
@@ -126,6 +111,73 @@ async function killed(env: Env): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** One `emit-<request_id>` instance delivers `patch` as `swarm.state` to every pool (EM6, EV2a).
+ * A repeated request id is refused by `create` — the emission already exists (SWR4). */
+async function spawnEmit(env: Env, pool: string, requestId: string, patch: SwarmEmitParams["patch"]): Promise<void> {
+  const swarm = env.SWARM;
+  if (swarm === undefined) return;
+  try {
+    await swarm.create({
+      id: emitInstanceId(requestId),
+      params: { kind: "emit", pool, request_id: requestId, patch } satisfies SwarmEmitParams,
+    });
+  } catch {
+    // A duplicate instance id is the repeated request — the first emit still stands (SWR4).
+  }
+}
+
+/** Sends the live `run-<pool>` instance a `swarm.control` event; false when no run lives. */
+async function controlRun(env: Env, pool: string, payload: object): Promise<boolean> {
+  const swarm = env.SWARM;
+  if (swarm === undefined) return false;
+  try {
+    const instance = await swarm.get(runInstanceId(pool));
+    const status = (await instance.status()).status;
+    if (status !== "running" && status !== "waiting" && status !== "queued") return false;
+    await instance.sendEvent({ type: "swarm.control", payload });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Starts `run-<pool>`: the launcher instance of a run request (SWR1). A completed run's instance
+ * is deleted first so the id is free; a live one is answered `already` (the launch list is empty). */
+async function startRun(
+  env: Env,
+  pool: string,
+  requestId: string,
+  request: SwarmRequest,
+): Promise<"started" | "already" | "no_binding"> {
+  const swarm = env.SWARM;
+  if (swarm === undefined) return "no_binding";
+  const id = runInstanceId(pool);
+  try {
+    const existing = await swarm.get(id);
+    const status = (await existing.status()).status;
+    if (status === "running" || status === "waiting" || status === "queued") return "already";
+    await existing.delete();
+  } catch {
+    /* no live instance: create is next */
+  }
+  const params: SwarmRunParams = {
+    kind: "run",
+    pool,
+    request_id: requestId,
+    config: {
+      seed: request.seed as number,
+      agents: request.agents as number,
+      launch_per_second: request.launch_per_second as number,
+      collision_dial: request.collision_dial as number,
+      think_ms: request.think_ms as [number, number],
+      rescale_every_s: request.rescale_every_s as number,
+      hold_before_submit: request.hold_before_submit,
+    },
+  };
+  await swarm.create({ id, params });
+  return "started";
 }
 
 async function handleSwarm(input: RouteInput): Promise<Response> {
@@ -146,7 +198,9 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
   // that fails does not block the launch: the `open_attempt` call below reports a missing or
   // unready pool exactly as before.
   try {
-    const state = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(TRUNK_STATE_URL);
+    const state = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
+      "https://trunk/internal/state",
+    );
     if (state.ok) {
       const meta = ((await state.json()) as { meta?: Record<string, string> }).meta ?? {};
       if ((meta.source ?? "") !== "") return badRequest("invalid_args");
@@ -158,91 +212,70 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
   const launched: string[] = [];
   const released: string[] = [];
 
+  // The kill switch stops launching (SE10): a killed start launches nothing, stops the live run
+  // and reports the change (SWR4/EM6).
+  const willLaunch =
+    request.running === true &&
+    ((request.patterns?.length ?? 0) > 0 || hasFullConfig(request as unknown as Record<string, unknown>));
+  if (willLaunch && (await killed(input.env))) {
+    await controlRun(input.env, request.pool, { op: "stop" });
+    await spawnEmit(input.env, request.pool, `${request.request_id}-kill`, { running: false });
+    answeredRequests.add(request.request_id);
+    return Response.json({ ok: true, killed: true, launched, released });
+  }
+
   // SWR2: one scripted agent per entry of `patterns`, in list order; agent n is entry n.
   if (request.running && (request.patterns?.length ?? 0) > 0) {
-    if (await killed(input.env)) {
-      return Response.json({ ok: true, killed: true, launched, released });
-    }
     const hold = new Set(request.hold_before_submit ?? []);
     for (const [n, id] of request.patterns!.entries()) {
       const pattern = patternById(id);
       if (pattern === undefined) return badRequest("unknown_pattern");
-      const attemptId = launchAttemptId(request.request_id, n);
+      const attemptId = launchId("a_", request.request_id, n);
       const intentId = launchId("i_", request.request_id, n);
-      // SWR2/9.2 T1: the attempt opens in the pool's Trunk first — `attempt.opened` (and EM1a's
-      // `pool.state` on the first synthetic) precede everything the agent does.
-      const openAttempt: TrunkOpenAttemptRequest = {
-        attempt_id: attemptId,
-        intent_id: intentId,
-        intent: pattern.intent,
-        agent_kind: "synthetic",
-        truth: [...pattern.truth],
-        requester: REQUESTER,
-      };
-      let trunkAnswer: TrunkOpenAttemptResponse;
-      try {
-        const response = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
-          TRUNK_OPEN_ATTEMPT_URL,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(openAttempt),
-          },
-        );
-        trunkAnswer = (await response.json()) as TrunkOpenAttemptResponse;
-      } catch {
-        return Response.json({ error: { code: "trunk_open_failed" } }, { status: 502 });
-      }
-      if (!trunkAnswer.ok) {
-        return Response.json({ error: { code: "trunk_open_failed", detail: trunkAnswer.error } }, { status: 502 });
-      }
-      const open: AgentOpenRequest = {
+      const result = await launchAgent(input.env, {
         pool: request.pool,
-        attempt_id: attemptId,
-        intent_id: intentId,
-        change_id: trunkAnswer.change_id,
-        intent_text: pattern.intent,
-        requester: REQUESTER,
-        driver: "scripted",
-        pattern: pattern.id,
+        attemptId,
+        intentId,
+        pattern: { id: pattern.id, intent: pattern.intent, truth: pattern.truth },
         seed: request.seed as number,
-        agent_n: n,
-        truth: [...pattern.truth],
+        agentN: n,
         hold: hold.has(pattern.id),
-        think_ms: request.think_ms as [number, number],
-      };
-      let answer: AgentOpenResponse;
-      try {
-        const response = await input.env.AGENT.get(input.env.AGENT.idFromName(attemptId)).fetch(AGENT_OPEN_URL, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(open),
-        });
-        answer = (await response.json()) as AgentOpenResponse;
-      } catch {
-        return Response.json({ error: { code: "agent_open_failed" } }, { status: 502 });
+        thinkMs: request.think_ms as [number, number],
+      });
+      if (!result.ok) {
+        return Response.json(
+          { error: { code: result.code, detail: "detail" in result ? result.detail : undefined } },
+          { status: 502 },
+        );
       }
-      if (!answer.ok) {
-        return Response.json({ error: { code: "agent_open_failed", detail: answer.error } }, { status: 502 });
-      }
-      // SWR3: a held agent is recorded with the pool, so that a release reaching any isolate
-      // finds it (the pool's Trunk keeps the list; this isolate's memory does not last).
-      if (hold.has(pattern.id)) {
-        try {
-          const recorded = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
-            TRUNK_SWARM_HOLD_URL,
-            {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ pattern: pattern.id, attempt_id: attemptId }),
-            },
-          );
-          if (!recorded.ok) return Response.json({ error: { code: "trunk_hold_failed" } }, { status: 502 });
-        } catch {
-          return Response.json({ error: { code: "trunk_hold_failed" } }, { status: 502 });
-        }
-      }
-      if (answer.already !== true) launched.push(attemptId);
+      if (!result.already) launched.push(attemptId);
+    }
+    // SWR4/EM6: the cast changed what is running — the stream of every pool reports it.
+    await spawnEmit(input.env, request.pool, request.request_id, { agents: launched.length });
+  } else if (request.running === true && hasFullConfig(request as unknown as Record<string, unknown>)) {
+    // SWR1: a run. The `run-<pool>` instance emits `swarm.state` itself.
+    const started = await startRun(input.env, request.pool, request.request_id, request);
+    if (started === "no_binding") return notBuilt();
+    if (started === "already") {
+      return Response.json({ ok: true, already: true, launched, released });
+    }
+  } else if (request.running === true && request.collision_dial !== undefined) {
+    // CO44a: moving the dial during a run sends the new collision_dial; the run instance emits
+    // the state. With no live run the dial still lands in `swarm.state` for the next start.
+    const sent = await controlRun(input.env, request.pool, {
+      op: "dial",
+      collision_dial: request.collision_dial,
+    });
+    if (!sent) {
+      await spawnEmit(input.env, request.pool, request.request_id, {
+        collision_dial: request.collision_dial,
+      });
+    }
+  } else if (request.running === false) {
+    // SWR1: stop launching in this pool; agents in flight finish.
+    const sent = await controlRun(input.env, request.pool, { op: "stop" });
+    if (!sent) {
+      await spawnEmit(input.env, request.pool, request.request_id, { running: false });
     }
   }
 
@@ -250,20 +283,13 @@ async function handleSwarm(input: RouteInput): Promise<Response> {
   for (const id of request.release ?? []) {
     let ids: string[];
     try {
-      const held = await input.env.TRUNK.get(input.env.TRUNK.idFromName(request.pool)).fetch(
-        `${TRUNK_SWARM_HELD_URL}?pattern=${encodeURIComponent(id)}`,
-      );
-      ids = ((await held.json()) as { attempts?: string[] }).attempts ?? [];
+      ids = await heldAttempts(input.env, request.pool, id);
     } catch {
       return Response.json({ error: { code: "agent_release_failed" } }, { status: 502 });
     }
     for (const attemptId of ids) {
       try {
-        await input.env.AGENT.get(input.env.AGENT.idFromName(attemptId)).fetch(AGENT_RELEASE_URL, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ attempt_id: attemptId, pool: request.pool, pattern: id }),
-        });
+        await releaseAgent(input.env, request.pool, id, attemptId);
         released.push(attemptId);
       } catch {
         return Response.json({ error: { code: "agent_release_failed" } }, { status: 502 });
@@ -279,4 +305,13 @@ export function wire(table: RouteTable): void {
   const route = ROUTES.find((entry) => entry.paths.includes("/api/swarm"));
   // The seam's key of `routeKey(route)`: "<method> <first path>" — "POST /api/swarm".
   if (route !== undefined) table.handlers.set(`${route.method} ${route.paths[0]}`, handleSwarm);
+}
+
+// The `AgentOpenRequest`/`AgentOpenResponse` contract lives in `src/protocol/internal.ts`; the
+// local aliases stay so the lane's test keeps its import shape (gap 1's one-definition rule).
+export type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/internal.ts";
+
+/** The attempt id of agent `n` of `request_id` — the Durable Object's name. */
+export function launchAttemptId(requestId: string, n: number): string {
+  return launchId("a_", requestId, n);
 }

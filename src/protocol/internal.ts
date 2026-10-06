@@ -227,3 +227,40 @@ export type GateKillResponse = { ok: true; killed: boolean };
 
 /** The `SWARM` Workflow's `create` params (EV2a): registering a pool with the launcher. */
 export type SwarmRegisterPoolParams = { kind: "register_pool"; pool: string; request_id: string };
+
+/** The `SWARM` Workflow's `create` params for a one-shot `swarm.state` emission (EM6, EV2a): the
+ * launcher re-reads the registered pools and the newest `swarm.state` on any of their streams,
+ * applies `patch`, and delivers the result to every registered pool. `emit_id` deduplicates a
+ * retried `create` (the instance id carries it). */
+export type SwarmEmitParams = {
+  kind: "emit";
+  /** The pool the triggering request named — a read candidate for the current state. */
+  pool: string;
+  request_id: string;
+  patch: { running?: boolean; agents?: number; collision_dial?: number };
+};
+
+/** The `SWARM` Workflow's `create` params for a run (SWR1): `run-<pool>` launches `config.agents`
+ * scripted agents at `launch_per_second`, drawing each pattern from `collision_dial` (SW1), and
+ * emits `swarm.state` on every change (SWR4). A `swarm.control` event (`sendEvent`) carries the
+ * owner's dial moves and the stop. */
+export type SwarmRunParams = {
+  kind: "run";
+  pool: string;
+  request_id: string;
+  config: {
+    seed: number;
+    agents: number;
+    launch_per_second: number;
+    collision_dial: number;
+    think_ms: [number, number];
+    rescale_every_s: number;
+    hold_before_submit?: string[];
+  };
+};
+
+/** The event the owner route sends a running `run-<pool>` instance (`sendEvent`/`waitForEvent`). */
+export type SwarmControlEvent = {
+  type: "swarm.control";
+  payload: { op: "dial"; collision_dial: number } | { op: "agents"; agents: number } | { op: "stop" };
+};

@@ -132,6 +132,9 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         "tick",
         "tool",
         "triage",
+        // 13.6: the owner's undo routes (UN4, UN5) reach the Trunk object as these two entries.
+        "undo",
+        "undo_plan",
       ].sort(),
     );
     expect([...engineTable().effects].sort()).toEqual(["events", "push"]);

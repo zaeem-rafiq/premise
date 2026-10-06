@@ -94,23 +94,24 @@ describe("the Trunk Durable Object in workerd", () => {
     expect(tool.status).toBe(404);
     expect(await tool.json()).toEqual({ error: { code: "pool_not_found" } });
 
-    // `/register` joined the built entries with the rebuild (01-core 3.6 step 6, 4.12).
-    for (const path of ["/sync", "/stop", "/register"]) {
+    // `/register` joined the built entries with the rebuild (01-core 3.6 step 6, 4.12), and the
+    // owner's undo with Slice 13 (13.6).
+    for (const path of ["/sync", "/stop", "/register", "/api/pools/t1/undo"]) {
       const res = await worker
         .trunk("t1")
         .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: { code: "pool_not_found" } });
     }
-    for (const path of ["/api/pools/t1/intents", "/api/pools/t1/undo"]) {
-      const res = await worker
-        .trunk("t1")
-        .fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      expect(res.status).toBe(503);
-      expect(await res.json()).toEqual({ error: { code: "not_built" } });
-    }
-    const undoPlan = await worker.trunk("t1").fetch("/api/pools/t1/undo-plan");
-    expect(undoPlan.status).toBe(503);
+    const undoPlan = await worker.trunk("t1").fetch(`/api/pools/t1/undo-plan?q=${encodeURIComponent('{"seq":1}')}`);
+    expect(undoPlan.status).toBe(404);
+    expect(await undoPlan.json()).toEqual({ error: { code: "pool_not_found" } });
+    // A path no entry is registered under still answers not_built.
+    const intents = await worker
+      .trunk("t1")
+      .fetch("/api/pools/t1/intents", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(intents.status).toBe(503);
+    expect(await intents.json()).toEqual({ error: { code: "not_built" } });
   });
 
   it("the creation endpoint stores the record and reports already/exists on repeats", async () => {

@@ -11,7 +11,7 @@
 import type { EngineTable } from "../engine.ts";
 import type { Trunk } from "../registry.ts";
 import type { ToolRequest } from "../../../protocol/tools.ts";
-import type { TrunkOpenAttemptRequest } from "../../../protocol/internal.ts";
+import type { RaceCostDone, TrunkCreateIntentRequest, TrunkOpenAttemptRequest } from "../../../protocol/internal.ts";
 
 export function wire(table: EngineTable): void {
   wireEngineEntries(table);
@@ -20,6 +20,8 @@ export function wire(table: EngineTable): void {
 /** The engine lane's entries, ready to register into `table` (9.1, 9.4, 9.8, 10.3, 12.4). */
 export function wireEngineEntries(table: EngineTable): void {
   const trunk = (ctx: unknown): Trunk => ctx as Trunk;
+  table.entries.set("open_intent", (input, ctx) => trunk(ctx).createIntent(input as TrunkCreateIntentRequest));
+  table.entries.set("race_cost_done", (input, ctx) => trunk(ctx).raceCostDone(input as RaceCostDone));
   // The seven tools of 01-core.md 4.3, reached through one entry (TA1-TA5 in the tool envelope).
   // The launcher's `open_attempt` (SWR2): creates the intent + attempt, emitting `intent.created`,
   // `pool.state` (EM1a on the first synthetic) and `attempt.opened`. Idempotent by attempt id (9.8).

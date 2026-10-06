@@ -20,8 +20,19 @@ import type { HeadsUp } from "./headsup.ts";
 import type { StreamSource } from "./stream.ts";
 import type { ToolName } from "./tools.ts";
 import type { FloorState } from "./reducer/index.ts";
+import type { CreateIntentRequest } from "./routes.ts";
 
 // ---- Trunk Durable Object (the routes' and the launcher's internal calls) ----
+
+/** `POST /internal/open-intent` freezes the complete launch before any Agent starts (RC1, 9.8). */
+export type TrunkCreateIntentRequest = CreateIntentRequest & {
+  intent_id: string;
+  candidates: Array<{ attempt_id: string; model: string }>;
+};
+
+export type TrunkCreateIntentResponse =
+  | { ok: true; intent_id: string; launches: AgentOpenRequest[]; imported?: ImportedPrompt }
+  | { ok: false; error: string };
 
 /** `POST /internal/create-pool` (PL1): the Worker's pool route forwards the creation record and
  * the seed's files — Trunk is the only writer of the pool's tables. `files` is the seed's whole
@@ -72,6 +83,21 @@ export type TrunkOpenAttemptResponse =
   | { ok: false; error: string };
 
 // ---- Agent Durable Object (the launcher and the heads-up push) ----
+
+/** RC3: settled model spend only, read without waking the Agent or exposing its transcript. */
+export type AgentSpendRequest = { pool: string; attempt_id: string };
+export type AgentSpendResponse =
+  { ok: true; attempt_id: string; cost_usd: number } | { ok: false; error: "attempt_unknown" | "spend_unavailable" };
+
+/** The immutable identity of the submit whose cost is being read after its transaction. */
+export type RaceCostJob = {
+  epoch: number;
+  card_id: string;
+  attempt_id: string;
+  submit_id: string;
+  submitted_at: number;
+};
+export type RaceCostDone = RaceCostJob & { cost_usd: number | null };
 
 /** One scripted step of a canned agent (02-tidepool.md 10.3): the tool to call and its args.
  * `reapply` marks a step the driver re-issues when its edit was dropped (SW6). */

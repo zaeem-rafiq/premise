@@ -27,6 +27,7 @@ import { runRebuildJob } from "./rebuild-job.ts";
 import { runImportJob } from "./import-job.ts";
 import { runPlainJob } from "./plain-runner.ts";
 import { runPreviewJob } from "./preview-runner.ts";
+import { runRaceCostJob } from "./race-cost-runner.ts";
 import { poolRepoName } from "../repos.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
@@ -299,6 +300,7 @@ export class Trunk extends DurableObject<Env> {
     if (pathname === "/sync" || pathname === "/register" || pathname === "/stop") return pathname.slice(1);
     if (pathname === "/internal/create-pool") return "pool_create";
     if (pathname === "/internal/open-attempt") return "open_attempt";
+    if (pathname === "/internal/open-intent") return "open_intent";
     if (pathname === "/internal/tick") return "tick";
     if (/^\/api\/pools\/[^/]+\/intents$/.test(pathname)) return "create_intent";
     if (/^\/api\/pools\/[^/]+\/cards\/[^/]+$/.test(pathname)) return "card_action";
@@ -416,7 +418,7 @@ export class Trunk extends DurableObject<Env> {
       const { response: raw, status, effects } = normalizeResult(r.result);
       // IR9 to IR11: an imported pool's prompt context rides the open-attempt answer, so the
       // intents route hands it to the Agent's open. A seed pool's answer is unchanged.
-      const imported = name === "open_attempt" ? importedPrompt(this.#sql) : null;
+      const imported = name === "open_attempt" || name === "open_intent" ? importedPrompt(this.#sql) : null;
       const response =
         imported !== null && typeof raw === "object" && raw !== null && (raw as { ok?: unknown }).ok === true
           ? { ...(raw as Record<string, unknown>), imported }
@@ -650,6 +652,13 @@ export class Trunk extends DurableObject<Env> {
           undefined,
           now,
         );
+        await this.#postCommit();
+      },
+      raceCost: async (now) => {
+        await runRaceCostJob(this.env, this.ctx, async (input) => {
+          const r = await this.#callEngineEntry("race_cost_done", input, now);
+          if ("error" in r) throw new Error("race cost apply failed");
+        });
         await this.#postCommit();
       },
       preview: async (now) => {

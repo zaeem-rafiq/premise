@@ -26,6 +26,8 @@ import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
+import { canChooseRace, createIntent, raceCostDone, refreshRaceCandidates } from "./race.ts";
+import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse } from "../../protocol/internal.ts";
 import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
@@ -1257,6 +1259,7 @@ function wrapCall<T>(pool: Pool, run: () => T): T {
   pool.out = beginTrace();
   const r = pool.sql.transaction(() => {
     const got = run();
+    refreshRaceCandidates(pool);
     persist(pool);
     return got;
   });
@@ -1311,6 +1314,14 @@ export class Trunk {
   /** Create an intent + attempt (the case's attempt ids are used verbatim). */
   openAttempt(id: string, args: OpenArgs): Attempt {
     return wrapCall(this.pool, () => openAttempt(this.pool, id, args));
+  }
+
+  createIntent(request: TrunkCreateIntentRequest): TrunkCreateIntentResponse {
+    return wrapCall(this.pool, () => createIntent(this.pool, request));
+  }
+
+  raceCostDone(input: RaceCostDone): void {
+    wrapCall(this.pool, () => raceCostDone(this.pool, input));
   }
 
   tool(req: ToolRequest): ToolResponse {
@@ -1384,7 +1395,11 @@ export class Trunk {
   }
 
   triage(args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number }): void {
-    wrapCall(this.pool, () => triage(this.pool, args));
+    wrapCall(this.pool, () => {
+      triage(this.pool, args);
+      const attempt = this.pool.attempts.get(args.attempt);
+      if (attempt?.race && attempt.state === "held") attempt.validated_at = null;
+    });
   }
 
   owner(args: {
@@ -1395,7 +1410,15 @@ export class Trunk {
     reason?: string;
     new_attempt_model?: string;
   }): Record<string, unknown> {
-    return wrapCall(this.pool, () => owner(this.pool, args));
+    return wrapCall(this.pool, () => {
+      if (args.action === "choose") {
+        const attempt = this.pool.attempts.get(args.attempt ?? "");
+        if (attempt === undefined || !canChooseRace(this.pool, attempt)) {
+          return { ok: false, error: { code: "invalid_args", message: "race candidate is not ready" } };
+        }
+      }
+      return owner(this.pool, args);
+    });
   }
 
   undoPlan(seq: number): UndoPlanResponse {

@@ -95,7 +95,7 @@ import { MODEL_PLAN } from "../../config/model-plan.ts";
 import { RESUME_MESSAGE } from "../../protocol/agent-prompt.ts";
 import { firstRows } from "../../core/agent/loop/context.ts";
 import { importedFills, TIDE_FILLS, type PromptFills } from "../../protocol/agent-prompt.ts";
-import type { ImportedPrompt } from "../../protocol/internal.ts";
+import type { AgentSpendRequest, AgentSpendResponse, ImportedPrompt } from "../../protocol/internal.ts";
 import {
   callTarget,
   headsUpUserMessage,
@@ -370,6 +370,8 @@ export class Agent extends DurableObject<Env> {
           return await this.#ownerStop();
         case "/internal/inspect":
           return this.#inspect();
+        case "/internal/spend":
+          return this.#spend(body);
         case "/internal/recover":
           await this.#recover();
           return json({ ok: true });
@@ -391,6 +393,25 @@ export class Agent extends DurableObject<Env> {
   }
 
   // -- open ------------------------------------------------------------------
+
+  #spend(body: unknown): Response {
+    if (!isRecord(body) || typeof body.pool !== "string" || typeof body.attempt_id !== "string") {
+      return invalid("pool and attempt_id are required");
+    }
+    const request = body as AgentSpendRequest;
+    let answer: AgentSpendResponse;
+    if (request.pool !== this.#meta("pool_id") || request.attempt_id !== this.#meta("attempt_id")) {
+      answer = { ok: false, error: "attempt_unknown" };
+    } else {
+      const raw = this.#meta("usd_spent");
+      const cost = raw === null ? Number.NaN : Number(raw);
+      answer =
+        Number.isFinite(cost) && cost >= 0
+          ? { ok: true, attempt_id: request.attempt_id, cost_usd: cost }
+          : { ok: false, error: "spend_unavailable" };
+    }
+    return json(answer);
+  }
 
   async #open(body: unknown): Promise<Response> {
     if (!isRecord(body)) return invalid("an open request object is required");

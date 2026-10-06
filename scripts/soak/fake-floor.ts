@@ -42,6 +42,9 @@ export type FakeFloor = {
   probes: number;
   /** How many frames all sockets were sent in total (a snapshot counts once). */
   framesSent: number;
+  /** Set true to refuse every further socket (it closes before it ever opens): how a dead
+   * stream drives the reader's `dead()` — and the caller's `stream_lost`. */
+  refuseSockets: boolean;
 };
 
 type Held = {
@@ -57,6 +60,7 @@ export function fakeFloor(script: PoolEvent[] = [], opts: { probeMisses?: number
   const floor = {
     probes: 0,
     framesSent: 0,
+    refuseSockets: false,
     sockets: [] as FakeSocket[],
     async probe(): Promise<number> {
       floor.probes += 1;
@@ -65,6 +69,25 @@ export function fakeFloor(script: PoolEvent[] = [], opts: { probeMisses?: number
     },
     socket(): FakeSocket {
       const h: Held = { ws: null as unknown as FakeSocket, after: null };
+      if (floor.refuseSockets) {
+        const ws = {
+          sent: [],
+          frames: [],
+          closed: false,
+          onopen: null,
+          onmessage: null,
+          onclose: null,
+          onerror: null,
+          send(): void {},
+          close(): void {},
+        } as FakeSocket;
+        floor.sockets.push(ws);
+        queueMicrotask(() => {
+          ws.closed = true;
+          ws.onclose?.({ code: 1006, reason: "refused" });
+        });
+        return ws;
+      }
       const ws: FakeSocket = {
         sent: [],
         frames: [],
@@ -146,8 +169,10 @@ export function fakeFloor(script: PoolEvent[] = [], opts: { probeMisses?: number
     floor.framesSent += 1;
     h.ws.frames.push(frame);
     const data = JSON.stringify(frame);
+    // A real socket is an ordered channel: a frame written before the close still arrives, so
+    // the queued message fires even when `dropAll` closes the socket in the same task.
     queueMicrotask(() => {
-      if (!h.ws.closed) h.ws.onmessage?.({ data });
+      h.ws.onmessage?.({ data });
     });
   }
   function bye(ws: FakeSocket, code: number, reason: string): void {

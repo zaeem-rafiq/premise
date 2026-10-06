@@ -50,6 +50,9 @@ export type PoolStreamOpts = {
   probeMs?: number;
   /** Wait after a socket close before the next probe. Default 1 s. */
   reconnectMs?: number;
+  /** Give up after this many consecutive sockets closed without a single frame applied —
+   * the caller's `stream_lost` bound. Default: never (the dark bound alone applies). */
+  giveUpDrops?: number;
 };
 
 export type PoolStream = {
@@ -77,6 +80,7 @@ export function openPoolStream(pool: string, env: PoolStreamEnv, opts: PoolStrea
   const deadlineMs = opts.deadlineMs ?? 10 * 60_000;
   const probeMs = opts.probeMs ?? 250;
   const reconnectMs = opts.reconnectMs ?? 1_000;
+  const giveUpDrops = opts.giveUpDrops ?? Number.POSITIVE_INFINITY;
 
   const applied: PoolEvent[] = [];
   let state: FloorState | null = null;
@@ -188,6 +192,7 @@ export function openPoolStream(pool: string, env: PoolStreamEnv, opts: PoolStrea
     });
 
   const run = async (): Promise<void> => {
+    let drops = 0;
     try {
       for (;;) {
         if (stopped || dead) return;
@@ -213,8 +218,16 @@ export function openPoolStream(pool: string, env: PoolStreamEnv, opts: PoolStrea
           await env.sleep(probeMs);
           continue;
         }
+        const framesBefore = frames;
         await openSocket();
         if (stopped || dead) return;
+        // A socket that applied nothing counts against the give-up bound; one that produced
+        // even a snapshot proves the stream flows and resets it.
+        drops = frames === framesBefore ? drops + 1 : 0;
+        if (drops >= giveUpDrops) {
+          die();
+          return;
+        }
         await env.sleep(reconnectMs);
       }
     } catch {

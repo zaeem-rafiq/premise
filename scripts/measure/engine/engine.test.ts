@@ -12,6 +12,7 @@ import { engineRunOnce, WorkhorseMismatch } from "./run.ts";
 import { runMeasurement, poolName } from "./measure.ts";
 import { engineMain } from "./main.ts";
 import { ev, fakeClock, fakeService } from "./fake.ts";
+import { fakeFloor } from "../../soak/fake-floor.ts";
 
 const WORKHORSE = "@cf/openai/gpt-oss-120b";
 const T = 1_000_000; // the epoch ms the hand-built events share
@@ -675,5 +676,152 @@ describe("engineMain", () => {
     const allText = readFileSync(`${out}/${json}`, "utf8") + readFileSync(`${out}/${jsonl}`, "utf8") + logs.join("\n");
     expect(allText).not.toContain(SECRET);
     expect(allText).toContain("[redacted]");
+  });
+});
+
+describe("the stream gate, the snapshot and the export (12.2, FR30, 12.3)", () => {
+  /** The additive landing run as hand-built events — the same ladder the first describe feeds
+   * the scripted stream. */
+  const additiveScript = (): PoolEvent[] => [
+    poolState(1),
+    intentCreated(2, T + 0, "i_test"),
+    opened(3, T + 100, "a1", "i_test"),
+    modelStep(4, T + 900, "a1", 1, 0.001),
+    toolStep(5, T + 950, "a1", 2, "read", "GUIDE.md"),
+    toolStep(6, T + 1000, "a1", 3, "write", "creatures/jellyfish.js"),
+    opRecorded(7, T + 1050, "a1", 1, "creatures/jellyfish.js"),
+    modelStep(8, T + 1900, "a1", 4, 0.002),
+    toolStep(9, T + 1950, "a1", 5, "submit", null),
+    submitted(10, T + 2000, "a1"),
+    accepted(11, T + 2100, 41, "a1", ["creatures/jellyfish.js"]),
+    landed(12, T + 2200, 41),
+  ];
+
+  const runOnce = (fake: ReturnType<typeof fakeService>, spec = A01) =>
+    engineRunOnce({
+      service: fake.service,
+      clock: fakeClock(),
+      model: WORKHORSE,
+      spec,
+      runIndex: 1,
+      tryIndex: 1,
+      pool: "m-test",
+      requestPrefix: "t",
+      swarmSeed: 7,
+      seedFiles: SEED,
+    });
+
+  it("probes through FR30's 404s; the scripted agent and the intent start only after the first frame", async () => {
+    // The route answers 404 twice (the pool's first event has not reached its Floor) and 426 on
+    // the third probe — the POSTs must land after a frame was delivered, not before.
+    const floor = fakeFloor(additiveScript(), { probeMisses: 2 });
+    const fake = fakeService({ floors: [floor] });
+    const result = await runOnce(fake);
+
+    expect(floor.probes).toBe(3);
+    const intentPost = fake.calls.find((call) => call.path.endsWith("/intents"));
+    expect(intentPost?.frames).toBeGreaterThanOrEqual(1);
+    expect(result.record.outcome).toBe("landed");
+
+    // The scripted agent waits on the same gate: a hero run's swarm POST also lands after the
+    // first frame.
+    const heroFloor = fakeFloor(additiveScript(), { probeMisses: 2 });
+    const heroFake = fakeService({ floors: [heroFloor] });
+    await runOnce(heroFake, P1A);
+    const swarmPost = heroFake.calls.find((call) => call.path === "/api/swarm");
+    expect(swarmPost?.frames).toBeGreaterThanOrEqual(1);
+    expect(heroFloor.probes).toBe(3);
+  });
+
+  it("never posts the intent while the stream has not produced a frame", async () => {
+    const floor = fakeFloor(additiveScript(), { probeMisses: 100_000 });
+    const fake = fakeService({ floors: [floor] });
+    await expect(runOnce(fake)).rejects.toThrow(/stream_not_ready/);
+    expect(fake.calls.map((call) => call.path)).toEqual(["/api/pools"]);
+  });
+
+  it("a first frame that is a snapshot: every reported value still comes out of the export", async () => {
+    // Every event predates the hello — the live `events()` stays empty and the run ends on the
+    // snapshot's attempt state; the RunRecord is the export's alone.
+    const floor = fakeFloor(additiveScript());
+    const fake = fakeService({ floors: [floor] });
+    const result = await runOnce(fake, A01);
+
+    expect(floor.sockets).toHaveLength(1);
+    expect(floor.sockets[0]?.frames[0]).toHaveProperty("snapshot");
+    expect(result.record.outcome).toBe("landed");
+    expect(result.record.seconds).toBeCloseTo((T + 2200 - (T + 0)) / 1000, 6);
+    expect(result.record.cost_usd).toBeCloseTo(0.003, 9);
+    expect(result.events).toHaveLength(12); // the export's complete list, not the empty live view
+  });
+
+  it("a mid-run drop: the gap's landing.landed is counted from the export — one hello per socket", async () => {
+    // The floor holds the run through `op.recorded` (n=7). The intent's POST pushes the submit
+    // ladder live, drops the socket, and pushes `landing.accepted` + `landing.landed` while no
+    // socket is open — the gap only the reconnect's snapshot (for the wait) and the export (for
+    // the score) cover.
+    const script = additiveScript();
+    const floor = fakeFloor(script.slice(0, 7));
+    const fake = fakeService({
+      floors: [floor],
+      post: (path) => {
+        if (path.endsWith("/intents")) {
+          floor.push(...script.slice(7, 10));
+          floor.dropAll();
+          floor.push(...script.slice(10));
+        }
+        return null;
+      },
+    });
+    const result = await runOnce(fake);
+
+    // Two sockets; each got exactly the one hello (the Floor closes on a second message), the
+    // second with the cursor the first reached.
+    expect(floor.sockets).toHaveLength(2);
+    for (const ws of floor.sockets) {
+      expect(ws.sent).toHaveLength(1);
+      expect(JSON.parse(ws.sent[0] as string)).toMatchObject({ hello: 1 });
+    }
+    expect(JSON.parse(floor.sockets[0]!.sent[0] as string)).toMatchObject({ after: 0 });
+    expect(JSON.parse(floor.sockets[1]!.sent[0] as string)).toMatchObject({ after: 10 });
+    // The reconnect's first frame is the snapshot covering the gap.
+    expect(floor.sockets[1]?.frames[0]).toHaveProperty("snapshot");
+    // `landing.accepted` (n=11) and `landing.landed` (n=12) never rode an events frame.
+    const deliveredNs = new Set<number>();
+    for (const ws of floor.sockets) {
+      for (const frame of ws.frames) {
+        if (!("events" in frame)) continue;
+        for (const event of frame.events) deliveredNs.add(event.n);
+      }
+    }
+    expect(deliveredNs.has(11)).toBe(false);
+    expect(deliveredNs.has(12)).toBe(false);
+    // The score is the export's: the run counts as landed with the gap's own numbers.
+    expect(result.record.outcome).toBe("landed");
+    expect(result.record.seconds).toBeCloseTo((T + 2200 - (T + 0)) / 1000, 6);
+    expect(result.record.cost_usd).toBeCloseTo(0.003, 9);
+    expect(result.events).toHaveLength(12);
+  });
+
+  it("a stream that keeps dropping its sockets ends the run stream_lost", async () => {
+    // The first socket delivers its snapshot, then every socket the reader opens dies before it
+    // can carry a frame: after the give-up bound the run ends `stream_lost`, not `timeout`.
+    const floor = fakeFloor(additiveScript().slice(0, 3));
+    const fake = fakeService({
+      floors: [floor],
+      post: (path) => {
+        if (path.endsWith("/intents")) {
+          floor.dropAll();
+          floor.refuseSockets = true;
+        }
+        return null;
+      },
+    });
+    const result = await runOnce(fake);
+
+    // The working socket plus the six refused ones (the reader's give-up bound).
+    expect(floor.sockets).toHaveLength(7);
+    expect(result.record.outcome).toBe("not_completed");
+    expect(result.record.stop_reason).toBe("stream_lost");
   });
 });

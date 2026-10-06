@@ -1,7 +1,7 @@
 // The one pool-stream reader of scripts/soak and scripts/measure (01-core 12.2, 03-floor FR30).
 //
 //   - Before the socket opens, the stream route is probed with a plain GET: 404 means the Floor
-//     holds no event of the pool yet (FR30) — wait and probe again; 426 means the route exists
+//     holds no event of the pool yet (FR30) — wait and probe again; 200 (or 426) means the route exists
 //     and needs the upgrade. The probe runs before every connect, first one and reconnects.
 //   - The socket gets exactly one message, `{ "hello": 1, "after": <last n> }` — never a second:
 //     the Floor closes the socket on any second client message.
@@ -33,7 +33,7 @@ export type StreamSocket = {
 
 export type PoolStreamEnv = {
   /** A plain GET of `/api/pools/{pool}/stream`, FR30's probe: 404 while the Floor holds no
-   * event of the pool, 426 once it does (the route wants the upgrade). Answers the HTTP
+   * event of the pool, 200 once it does (426 on an older deployment). Answers the HTTP
    * status, or 0 when the request itself failed. */
   probe(pool: string): Promise<number>;
   /** Opens the pool's stream WebSocket. */
@@ -200,7 +200,8 @@ export function openPoolStream(pool: string, env: PoolStreamEnv, opts: PoolStrea
           die();
           return;
         }
-        // FR30's probe: 404 keeps the pool "not up yet"; 426 lets the socket open. A socket
+        // FR30's probe: 404 keeps the pool "not up yet"; 200 (426 on a deployment from before
+        // 2026-10-05) lets the socket open. A socket
         // that then 404s the upgrade (the probe answered before the event landed) just closes
         // and the loop probes again — both orderings of the route's checks work.
         let status = 0;
@@ -214,7 +215,7 @@ export function openPoolStream(pool: string, env: PoolStreamEnv, opts: PoolStrea
           die();
           return;
         }
-        if (status !== 426) {
+        if (status !== 200 && status !== 426) {
           await env.sleep(probeMs);
           continue;
         }

@@ -1,6 +1,6 @@
 // A fake Floor for the scripts' unit tests: one pool's event list, answered the way the
 // Durable Object answers the reader (01-core 12.2, 03-floor FR30). The plain-GET probe answers
-// 404 while the pool has no event and 426 after; a socket gets exactly one `hello` — a second
+// 404 while the pool has no event and 200 after; a socket gets exactly one `hello` — a second
 // message closes it — and a stale `after` answers with a snapshot of the whole reducer state at
 // the newest `n`, then only events appended after it. `push` appends events and fans them out
 // to the open sockets; `dropAll` closes the sockets mid-run so the reader's reconnect — and the
@@ -26,7 +26,7 @@ export type FakeSocket = StreamSocket & {
 
 export type FakeFloor = {
   /** FR30's probe: 404 while the pool has no event (and for the first `probeMisses` calls),
-   * 426 after. */
+   * 200 after. */
   probe(pool: string): Promise<number>;
   /** A fresh stream socket; the hello arrives via `send` after `onopen` fires. */
   socket(pool: string): FakeSocket;
@@ -65,7 +65,7 @@ export function fakeFloor(script: PoolEvent[] = [], opts: { probeMisses?: number
     async probe(): Promise<number> {
       floor.probes += 1;
       if (floor.probes <= (opts.probeMisses ?? 0)) return 404;
-      return events.length === 0 ? 404 : 426;
+      return events.length === 0 ? 404 : 200;
     },
     socket(): FakeSocket {
       const h: Held = { ws: null as unknown as FakeSocket, after: null };

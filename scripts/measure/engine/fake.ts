@@ -40,7 +40,7 @@ export function fakeClock(at = 1_700_000_000_000): Clock {
  * The fake service. Two ways to hand a pool its events:
  *
  * - `streams`: one script per `POST /api/pools`, in call order. The script's first event seeds
- *   the Floor (so FR30's probe answers 426 and the first hello gets its snapshot); the rest is
+ *   the Floor (so FR30's probe answers 200 and the first hello gets its snapshot); the rest is
  *   pushed live when the run posts its intent — the order a real pool emits them.
  * - `floors`: ready-built `fakeFloor`s, again one per `POST /api/pools`. Every scripted event is
  *   on the Floor before the hello (the snapshot covers them all), and the test drives

@@ -80,9 +80,9 @@ function env(floor: FakeFloor, at = 0): TestEnv {
 const OPTS = { probeMs: 10, reconnectMs: 10, deadlineMs: 100_000 };
 
 describe("the shared pool-stream reader", () => {
-  it("probes the route until it answers 426, then opens the socket and reads the first frame", async () => {
+  it("probes the route until it answers 200, then opens the socket and reads the first frame", async () => {
     n = 0;
-    const floor = fakeFloor([poolState(T)], { probeMisses: 2 }); // 404, 404, then 426 (FR30)
+    const floor = fakeFloor([poolState(T)], { probeMisses: 2 }); // 404, 404, then 200 (FR30)
     const stream = openPoolStream("p-test", env(floor), OPTS);
     expect(await stream.ready()).toBe(true);
     expect(floor.probes).toBe(3); // two 404s before the route existed

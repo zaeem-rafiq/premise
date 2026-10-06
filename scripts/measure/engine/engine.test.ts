@@ -712,7 +712,7 @@ describe("the stream gate, the snapshot and the export (12.2, FR30, 12.3)", () =
     });
 
   it("probes through FR30's 404s; the scripted agent and the intent start only after the first frame", async () => {
-    // The route answers 404 twice (the pool's first event has not reached its Floor) and 426 on
+    // The route answers 404 twice (the pool's first event has not reached its Floor) and 200 on
     // the third probe — the POSTs must land after a frame was delivered, not before.
     const floor = fakeFloor(additiveScript(), { probeMisses: 2 });
     const fake = fakeService({ floors: [floor] });

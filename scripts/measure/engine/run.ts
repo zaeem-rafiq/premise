@@ -5,7 +5,7 @@
 // stream, the clock — is injected, so the unit tests drive a fake service.
 //
 // The stream discipline is 01-core 12.2's, through the shared reader of `../../soak/stream.ts`:
-// the route is probed (FR30's plain GET) until it answers 426, the socket sends its one hello,
+// the route is probed (FR30's plain GET) until it answers 200, the socket sends its one hello,
 // a stale `after` answers a snapshot (its attempt states keep driving the waits), and a dropped
 // socket is re-probed and re-helloed with `after: <last n>`. The scripted agent and the intent
 // never start before the first frame. The live stream drives the waiting alone — every number

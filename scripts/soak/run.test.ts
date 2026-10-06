@@ -915,7 +915,7 @@ describe("the soak runner of VE6", () => {
 
 describe("the stream gate and the export", () => {
   it("probes through FR30's 404s and starts the Swarm only after the stream's first frame", async () => {
-    // The route answers 404 twice (the pool's first event has not reached the Floor) and 426
+    // The route answers 404 twice (the pool's first event has not reached the Floor) and 200
     // on the third probe; the Swarm's POST must land after the first frame was delivered.
     const run = buildRun();
     const fake = makeFake(run, {}, { probeMisses: 2 });

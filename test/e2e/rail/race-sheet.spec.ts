@@ -133,7 +133,10 @@ test.describe("the race sheet (3.14)", () => {
     const sheet = page.locator(".card-sheet");
     // The typed reason goes in `reason` and nowhere else (CO38a).
     await sheet.getByLabel(/Reason/).fill("the faster one");
-    await sheet.locator('.card-sheet__candidate[data-attempt-id="a_1"]').getByRole("button", { name: "Choose" }).click();
+    await sheet
+      .locator('.card-sheet__candidate[data-attempt-id="a_1"]')
+      .getByRole("button", { name: "Choose" })
+      .click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0]!.url).toContain(`/api/pools/${POOL}/cards/k_r`);
     expect(sent[0]!.body).toMatchObject({
@@ -145,9 +148,7 @@ test.describe("the race sheet (3.14)", () => {
     expect(typeof sent[0]!.body["request_id"]).toBe("string");
   });
 
-  test("3.14 stopped row: card.closed choose reads race.closed; the sheet closes after 1.5 s", async ({
-    page,
-  }) => {
+  test("3.14 stopped row: card.closed choose reads race.closed; the sheet closes after 1.5 s", async ({ page }) => {
     const wsRef: { ws?: { send: (m: string) => void } } = {};
     await serve(page, RACE_STREAM(raceCard()), { owner: true, wsRef });
     await page.goto(`/p/${POOL}`);

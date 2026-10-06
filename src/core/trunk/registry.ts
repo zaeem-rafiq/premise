@@ -24,7 +24,7 @@ import type {
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
-import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
 import { canChooseRace, createIntent, raceCostDone, refreshRaceCandidates } from "./race.ts";
 import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse } from "../../protocol/internal.ts";
@@ -1260,6 +1260,8 @@ function wrapCall<T>(pool: Pool, run: () => T): T {
   const r = pool.sql.transaction(() => {
     const got = run();
     refreshRaceCandidates(pool);
+    // EM1: the call's transitions settle into `real_agents` — one `pool.state` at most.
+    syncRealAgents(pool);
     persist(pool);
     return got;
   });

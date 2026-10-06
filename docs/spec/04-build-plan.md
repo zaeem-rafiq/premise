@@ -1137,10 +1137,10 @@ Checks. These are about correctness. Speed has no pass mark: the numbers are pub
 | `no_go_around_at_zero` | At dial 0 the go-around rate is 0 (`02` 10.4). |
 | `cosmetic_is_silent` | No `headsup.sent` whose cause is a `cosmetic` landing reaches an attempt of another pattern. |
 | `never_paused` | No `pool.paused`. |
-| `no_stall` | `metrics.longest_gap_ms` is at most 10,000: at no time did more than 10 s pass without a `landing.accepted` while at least one attempt was in `validated`. A sweep that holds right of way must not stop every creature-adding landing (RW3); the sweep patterns withdraw at their second repair so that it cannot (2.9). |
+| `no_stall` | `metrics.longest_gap_ms` is at most 10,000: at no time did more than 10 s pass without a `landing.accepted` while at least one attempt was in `validated` and no accepted batch was waiting for its push. A sweep that holds right of way must not stop every creature-adding landing (RW3); the sweep patterns withdraw at their second repair so that it cannot (2.9). The time a batch waits for its push is not a stall: the tick accepts nothing then by design (LP1), and that time is published as `push_ms` (amended 2026-10-05: pushes to Artifacts of 6 to 20 s under load failed the check with no stall of the engine). |
 | `fsck` | `git fsck --strict` passes on a fresh clone. |
 | `rebuildable` | After the run, rebuild from Artifacts gives the same `head_seq` and the same head tree id. |
-| `false_abort_reported` | `metrics.false_abort_rate` and `truth.false_abort_rate` are both present. A value above `FALSE_ABORT_TARGET` is published as measured and the README says the target was missed. |
+| `false_abort_reported` | `metrics.false_abort_rate` and `truth.false_abort_rate` are both present, or both null because there was nothing to rate (no go-around and no repair, which `no_go_around_at_zero` demands at dial 0; amended 2026-10-05). A value above `FALSE_ABORT_TARGET` is published as measured and the README says the target was missed. |
 | `recording_fits` | The exported stream of the run chosen as the `swarm` recording is at most `REPLAY_MAX_BYTES` (`stream.bytes`). If no run at 1,024 agents fits, the recording is made from a shorter run and its banner shows that run's agent count. |
 
 Real-agent repair latency (14.7) comes from `measure:models`, never from the soak. Fork throughput (14.8) comes from track 4D's `attempt.repo` events, never from landing numbers.

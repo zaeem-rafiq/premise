@@ -221,6 +221,9 @@ type Collected = {
   validated: Set<string>;
   validatedSince: number | null;
   lastAcceptedTs: number | null;
+  /** Batches accepted and not yet pushed (LP1: the tick waits for them; their time is push_ms). */
+  pushPending: Set<number>;
+  lastPushedTs: number | null;
   longestGapMs: number;
 };
 
@@ -250,6 +253,8 @@ function newCollected(): Collected {
     validated: new Set(),
     validatedSince: null,
     lastAcceptedTs: null,
+    pushPending: new Set(),
+    lastPushedTs: null,
     longestGapMs: 0,
   };
 }
@@ -259,12 +264,11 @@ function newCollected(): Collected {
  * soak's own bookkeeping for what the run needs and the state does not keep whole.
  */
 function observe(col: Collected, event: PoolEvent): void {
-  // `no_stall`: the interval from the newest of {last landing.accepted, the ts the `validated`
-  // set last became nonempty} to this event — while the set is nonempty.
-  if (col.validated.size > 0 && col.validatedSince !== null) {
-    const anchor = Math.max(col.lastAcceptedTs ?? col.validatedSince, col.validatedSince);
-    col.longestGapMs = Math.max(col.longestGapMs, event.ts - anchor);
-  }
+  // `no_stall` (VE6, amended 2026-10-05): the interval from the newest of {last
+  // landing.accepted, last batch.pushed, the ts the `validated` set last became nonempty} to this
+  // event — while the set is nonempty and no accepted batch waits for its push (LP1: the tick
+  // accepts nothing then, by design; that time is `push_ms`).
+  noteGap(col, event.ts);
 
   reduce(col.state, event);
   col.events += 1;
@@ -318,6 +322,7 @@ function observe(col: Collected, event: PoolEvent): void {
         batch_id: event.batch_id,
       });
       col.lastAcceptedTs = event.ts;
+      col.pushPending.add(event.batch_id);
       // 14.3's per-landing facts, frozen at acceptance; the state trims them with the landing.
       const facts = col.state.landing_facts[event.seq];
       if (facts !== undefined) col.acceptFacts.set(event.seq, { ...facts });
@@ -339,6 +344,8 @@ function observe(col: Collected, event: PoolEvent): void {
     case "batch.pushed":
       col.pushes += 1;
       col.pushMs.push(event.ms);
+      col.pushPending.delete(event.batch_id);
+      col.lastPushedTs = event.ts;
       break;
     case "push.retry":
       col.pushRetries += 1;
@@ -358,12 +365,20 @@ function observe(col: Collected, event: PoolEvent): void {
   }
 }
 
+/** The stall clock of `no_stall` up to `ts` (see `observe`). */
+function noteGap(col: Collected, ts: number): void {
+  if (col.validated.size === 0 || col.validatedSince === null || col.pushPending.size > 0) return;
+  const anchor = Math.max(
+    col.lastAcceptedTs ?? col.validatedSince,
+    col.lastPushedTs ?? col.validatedSince,
+    col.validatedSince,
+  );
+  col.longestGapMs = Math.max(col.longestGapMs, ts - anchor);
+}
+
 /** The trailing stall: `validated` nonempty at stream end counts until the last event. */
 function finishGap(col: Collected): void {
-  if (col.validated.size > 0 && col.validatedSince !== null) {
-    const anchor = Math.max(col.lastAcceptedTs ?? col.validatedSince, col.validatedSince);
-    col.longestGapMs = Math.max(col.longestGapMs, col.lastTs - anchor);
-  }
+  noteGap(col, col.lastTs);
 }
 
 // ---- Percentiles as the reducer computes them (metrics.ts) ----
@@ -888,8 +903,13 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     const truthRate = repairs === 0 ? null : repairsOutside / repairs;
     checks.push({
       name: "false_abort_reported",
-      ok: runMetrics.false_abort_rate !== null && truthRate !== null,
+      // VE6 (amended 2026-10-05): both rates present, or both null because there was nothing to
+      // rate — no go-around and no repair, which no_go_around_at_zero demands at dial 0.
+      ok:
+        (runMetrics.false_abort_rate !== null && truthRate !== null) ||
+        (runMetrics.false_abort_rate === null && truthRate === null && withGoAround === 0 && repairs === 0),
       detail:
+        `${runMetrics.false_abort_rate === null && truthRate === null ? "nothing to rate; " : ""}` +
         `metrics.false_abort_rate=${runMetrics.false_abort_rate ?? "null"};` +
         ` truth.false_abort_rate=${truthRate ?? "null"} (repairs=${repairs}, outside=${repairsOutside}` +
         `${unmappableNotes > 0 ? `, unmappable attempts=${unmappableNotes}` : ""})`,

@@ -112,6 +112,8 @@ function agentLadder(
     timeToLand?: number;
     goAround?: { causeSeqs: number[] };
     acceptDelay?: number;
+    /** Extra ms this landing's push takes (its batch.pushed comes that much later). */
+    pushDelay?: number;
     stopAfterWorking?: boolean;
   },
 ): PoolEvent[] {
@@ -193,7 +195,7 @@ function agentLadder(
       ev(b + 500 + d, "trunk", {
         type: "landing.accepted",
         seq,
-        batch_id: 1,
+        batch_id: seq,
         kind: "change",
         attempt_id: a.attempt,
         change_id: a.change,
@@ -204,10 +206,21 @@ function agentLadder(
       }),
       attemptState(b + 510 + d, a.attempt, "validated", "accepted", o.goAround === undefined ? 0 : 1),
       attemptState(b + 520 + d, a.attempt, "accepted", "landed", o.goAround === undefined ? 0 : 1),
+      // LP1: the batch's push completes before the next accept; 50 ms after this one.
+      ev(b + 550 + d + (o.pushDelay ?? 0), "trunk", {
+        type: "batch.pushed",
+        batch_id: seq,
+        first_seq: seq,
+        last_seq: seq,
+        main: `c${seq}`,
+        notes: `note${seq}`,
+        tries: 0,
+        ms: 50 + (o.pushDelay ?? 0),
+      }),
       ev(b + 700 + d, "trunk", {
         type: "landing.landed",
         seq,
-        batch_id: 1,
+        batch_id: seq,
         commit: `c${seq}`,
         tree: `t${seq}`,
         note: `n${seq}`,
@@ -330,6 +343,8 @@ type RunPlan = {
   goAroundOn: number[];
   /** Agent index -> extra ms before its landing.accepted (the no_stall gap). */
   acceptDelay: Record<number, number>;
+  /** Agent index -> extra ms its landing's push takes (LP1: the next accept waits for it). */
+  pushDelay: Record<number, number>;
   /** Agent indices whose ladder stops after `working` (in flight at end). */
   stopAfterWorking: number[];
   /** Extra events appended just before the tail (batch.pushed, metrics, swarm stop). */
@@ -357,6 +372,7 @@ const DEFAULT_PLAN: RunPlan = {
   rescale: true,
   goAroundOn: [1],
   acceptDelay: {},
+  pushDelay: {},
   stopAfterWorking: [],
   extraTail: () => [],
   extraLate: () => [],
@@ -431,28 +447,19 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
         base: 1000 * (index + 1),
         goAround,
         acceptDelay: plan.acceptDelay[index],
+        pushDelay: plan.pushDelay[index],
         stopAfterWorking: stops,
         timeToLand: [400, 900, 500, 400][index] ?? 400,
       }),
     );
   });
+  // A stream is in arrival order: a delayed push or accept lands among the later agents' events
+  // (the sort is stable, so ladders that do not overlap keep their order).
+  pre.sort((x, y) => x.ts - y.ts);
   pre.push(...plan.extraTail(landed));
 
   let tail = Math.max(...pre.map((e) => e.ts)) + 100;
   const lastSeq = landed.length === 0 ? 0 : (landed[landed.length - 1] as { seq: number }).seq;
-  pre.push(
-    ev(tail, "trunk", {
-      type: "batch.pushed",
-      batch_id: 1,
-      first_seq: 1,
-      last_seq: lastSeq,
-      main: `c${lastSeq}`,
-      notes: "note1",
-      tries: 1,
-      ms: 250,
-    }),
-  );
-  tail += 100;
   pre.push(metricsEv(tail, { waiting_behind: plan.waitingBehind, push_backlog: plan.pushBacklog, tick: plan.tick }));
   tail += 100;
   pre.push(
@@ -650,10 +657,11 @@ describe("the soak runner of VE6", () => {
 
     // 3 drawn agents (reader, add-plain, add-plain at seed 7 / dial 0.25) plus one rescale.
     expect(result.agents).toEqual({ launched: 4, landed: 4, stopped: {}, in_flight_at_end: 0 });
-    expect(result.landings).toEqual({ count: 4, commits_on_main: 4, notes: 4, batches: 1, pushes: 1, push_retries: 0 });
+    expect(result.landings).toEqual({ count: 4, commits_on_main: 4, notes: 4, batches: 4, pushes: 4, push_retries: 0 });
 
-    // Window: first event ts 0 to run end (the swarm stop at 5000); 4 change landings.
-    expect(result.metrics.landings_per_second).toBeCloseTo(4 / 5, 10);
+    // Window: first event ts 0 to run end (the swarm stop at 4900: the last ladder event at 4700,
+    // then the metrics tick at 4800); 4 change landings.
+    expect(result.metrics.landings_per_second).toBeCloseTo(4 / 4.9, 10);
     // time_to_land_ms of the four landings: 400, 900, 500, 400 -> sorted 400,400,500,900.
     expect(result.metrics.time_to_land_ms).toEqual({ p50: 400, p99: 900 });
     // Agent 1 took a repair heads-up before acceptance: 1 of 4 change landings.
@@ -669,11 +677,11 @@ describe("the soak runner of VE6", () => {
     // 3110-3500, 4110-4500 -> longest 390.
     expect(result.metrics.longest_gap_ms).toBe(390);
     expect(result.metrics.tick_cpu_ms).toEqual({ p50: 12, p99: 40 });
-    expect(result.metrics.push_ms).toEqual({ p50: 250, p99: 250 });
+    expect(result.metrics.push_ms).toEqual({ p50: 50, p99: 50 });
 
     // The rescale note carries one repair on ENERGY_MAX, inside its truth list.
     expect(result.truth).toEqual({ repairs: 1, repairs_outside_truth: 0, false_abort_rate: 0, escapes: 0 });
-    expect(result.stream).toEqual({ events: 48, bytes: 1234 });
+    expect(result.stream).toEqual({ events: 51, bytes: 1234 });
 
     expect(result.checks.map((check) => check.name)).toEqual(CHECK_NAMES);
     for (const check of result.checks) {
@@ -700,6 +708,19 @@ describe("the soak runner of VE6", () => {
     const result = await runDial(input, makeFake(run).deps);
     expect(result.metrics.longest_gap_ms).toBe(10100);
     expect(failed(result)).toEqual(["no_stall"]);
+  });
+
+  it("no_stall: an attempt that waits while a batch's push is in flight is not a stall (LP1)", async () => {
+    // Agent 2's landing (accepted at 3500) takes 12 s to push; agent 3, validated at 4310, can
+    // only be accepted after it (its accept at 15710 = 4500 + 11210 delay), 160 ms after the push
+    // at 15550. The tick accepts nothing while a push is pending (LP1), so that time is push_ms,
+    // not a stall: the clock runs only from the push to the accept.
+    const run = buildRun({ pushDelay: { 2: 12_000 }, acceptDelay: { 3: 11_210 } });
+    const result = await runDial(input, makeFake(run).deps);
+    expect(result.metrics.longest_gap_ms).toBeLessThan(10_000);
+    expect(failed(result)).toEqual([]);
+    // The push time is published as measured: 50 + 12000 ms for agent 2's batch.
+    expect(result.metrics.push_ms.p99).toBe(12_050);
   });
 
   it("never_paused fails on one pool.paused", async () => {
@@ -877,11 +898,22 @@ describe("the soak runner of VE6", () => {
     expect(failed(result)).toEqual(["one_commit_per_landing"]);
   });
 
-  it("false_abort_reported fails when both rates are missing", async () => {
-    // No go-around ends (metrics side null) and no note repairs anything (truth side null).
+  it("false_abort_reported: nothing to rate (no go-around, no repair) is reported as such and passes", async () => {
+    // VE6 amended: at dial 0, no_go_around_at_zero demands this run, whose two rates are 0/0.
     const run = buildRun({ goAroundOn: [], judgmentsOf: () => [] });
     const result = await runDial(input, makeFake(run).deps);
     expect(result.metrics.false_abort_rate).toBeNull();
+    expect(result.truth.false_abort_rate).toBeNull();
+    expect(failed(result)).toEqual([]);
+    expect(result.checks.find((check) => check.name === "false_abort_reported")?.detail).toContain("nothing to rate");
+  });
+
+  it("false_abort_reported fails when a go-around is rated but the notes carry no repair", async () => {
+    // Agent 1 goes around and resolves (the metrics side has a rate), but no note judges a repair:
+    // the truth side is missing while there was something to rate.
+    const run = buildRun({ judgmentsOf: () => [] });
+    const result = await runDial(input, makeFake(run).deps);
+    expect(result.metrics.false_abort_rate).not.toBeNull();
     expect(result.truth.false_abort_rate).toBeNull();
     expect(failed(result)).toEqual(["false_abort_reported"]);
   });
@@ -957,7 +989,7 @@ describe("the stream gate and the export", () => {
     for (const check of result.checks) {
       expect(check.ok, `${check.name}: ${check.detail ?? ""}`).toBe(true);
     }
-    expect(result.stream.events).toBe(48);
+    expect(result.stream.events).toBe(51); // four per-landing pushes (LP1) in place of one
   });
 
   it("never posts /api/swarm — running true or false — while the stream has not produced a frame", async () => {
@@ -977,16 +1009,16 @@ describe("the stream gate and the export", () => {
     // (for every reported number).
     const run = buildRun();
     const split = run.pre.findIndex((event) => event.type === "intent.created" && event.intent_id === iid(1));
-    expect(split).toBe(12);
+    expect(split).toBe(13); // agent 0's ladder: 13 events with its batch.pushed
     const tail = run.pre.slice(split);
     const fake = makeFake(
       { ...run, pre: run.pre.slice(0, split) },
       {},
       {
         onSwarmStart: (floor) => {
-          floor.push(...tail.slice(0, 15)); // agent 1's ladder: delivered live on socket 0
+          floor.push(...tail.slice(0, 16)); // agent 1's ladder (n 14..29): delivered live on socket 0
           floor.dropAll();
-          floor.push(...tail.slice(15)); // n 28..48: pushed while no socket is open — the gap
+          floor.push(...tail.slice(16)); // n 30..51: pushed while no socket is open — the gap
         },
       },
     );
@@ -997,7 +1029,7 @@ describe("the stream gate and the export", () => {
     const second = fake.floor.sockets[1];
     expect(second?.frames[0]).toHaveProperty("snapshot");
 
-    // The gap's events (n 28..48 — landings 2, 3 and the rescale's `landing.landed` among them)
+    // The gap's events (n 30..51 — landings 2, 3 and the rescale's `landing.landed` among them)
     // were never carried on an events frame.
     const deliveredNs = new Set<number>();
     for (const ws of fake.floor.sockets) {
@@ -1006,13 +1038,13 @@ describe("the stream gate and the export", () => {
         for (const event of frame.events) deliveredNs.add(event.n);
       }
     }
-    expect(deliveredNs.has(28)).toBe(false);
-    expect(deliveredNs.has(48)).toBe(false);
+    expect(deliveredNs.has(30)).toBe(false);
+    expect(deliveredNs.has(51)).toBe(false);
 
     // Every reported number is the export's: identical to the undropped run's hand-worked values.
     expect(result.agents).toEqual({ launched: 4, landed: 4, stopped: {}, in_flight_at_end: 0 });
-    expect(result.landings).toEqual({ count: 4, commits_on_main: 4, notes: 4, batches: 1, pushes: 1, push_retries: 0 });
-    expect(result.stream).toEqual({ events: 48, bytes: 1234 });
+    expect(result.landings).toEqual({ count: 4, commits_on_main: 4, notes: 4, batches: 4, pushes: 4, push_retries: 0 });
+    expect(result.stream).toEqual({ events: 51, bytes: 1234 });
     for (const check of result.checks) {
       expect(check.ok, `${check.name}: ${check.detail ?? ""}`).toBe(true);
     }

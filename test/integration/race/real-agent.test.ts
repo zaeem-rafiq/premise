@@ -1,10 +1,10 @@
 // Slice 12 service acceptance: actual public routes, three real Agent objects,
 // Trunk, Floor, model gate and stock-git remotes. Only provider answers are canned.
-// The race flag changes in memory for this test file, using the same fixture
-// convention as the workerd route tests. No production config or bundle is edited.
+// The Worker runs with race on in memory (`features: { race: true }` of the harness), whatever
+// the build ships. No production config or bundle is edited.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Card } from "../../../src/protocol/cards.ts";
 import type { Note } from "../../../src/protocol/note.ts";
 import type { AgentSpendResponse } from "../../../src/protocol/internal.ts";
@@ -13,34 +13,6 @@ import { REPO_ROOT } from "../../support/source.ts";
 import { FakeModel, type ModelScriptEntry } from "../../workerd/agent/real/harness.ts";
 import { startLandingWorker, type LandingWorker } from "../../workerd/landing/harness.ts";
 import { bearer, createPool, eventsOf, KEY, openAttempt, tick, tool, waitFor } from "../../workerd/collide/helpers.ts";
-
-vi.mock("miniflare", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("miniflare")>();
-  const { readFileSync: read } = await import("node:fs");
-  return {
-    ...actual,
-    convertV4MiniflareOptions(options: Parameters<typeof actual.convertV4MiniflareOptions>[0]) {
-      // File-scoped Vitest isolation confines this wrapper to the race acceptance.
-      const workers = ("workers" in options ? options.workers : [options]) as Array<{
-        name?: string;
-        modules?: boolean | Array<{ type: string; path: string; contents?: string }>;
-      }>;
-      for (const worker of workers) {
-        if (worker.name !== "premise" || !Array.isArray(worker.modules)) continue;
-        for (const module of worker.modules) {
-          if (module.type !== "ESModule" || !module.path.endsWith("/dist/worker/index.js")) continue;
-          const source = read(module.path, "utf8");
-          const blocks = source.match(/var FEATURES = \{[\s\S]*?\n\};/g) ?? [];
-          if (blocks.length !== 1 || (blocks[0]!.match(/\brace: false,/g) ?? []).length !== 1) {
-            throw new Error("Expected exactly one disabled race flag in the built FEATURES object");
-          }
-          module.contents = source.replace(blocks[0]!, blocks[0]!.replace("race: false,", "race: true,"));
-        }
-      }
-      return actual.convertV4MiniflareOptions(options);
-    },
-  };
-});
 
 const POOL = "race-real-agents";
 const INTENT = "compare three small candidate markers";
@@ -90,7 +62,12 @@ describe("Slice 12 race and choose through real Agents, local workerd and stock 
     originalBundle = readFileSync(BUNDLE, "utf8");
     model = new FakeModel();
     await model.listen();
-    worker = await startLandingWorker({ ownerKey: KEY, repos: [POOL, `${POOL}-plain`], modelUrl: model.url });
+    worker = await startLandingWorker({
+      ownerKey: KEY,
+      repos: [POOL, `${POOL}-plain`],
+      modelUrl: model.url,
+      features: { race: true },
+    });
     await createPool(worker, POOL, { seed: "tidepool" });
   }, 180_000);
 

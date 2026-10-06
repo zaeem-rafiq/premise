@@ -426,4 +426,25 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sim.files().get("creatures/s-2.js")).toContain("creature.energy < ENERGY_MAX * 0.3");
     expect(sw2Escapes(sim.files())).toEqual([]);
   });
+
+  it("10.4 (dial 0): 16 concurrent add-plain agents each write their own name — no name race, no go-around", () => {
+    // The soak failure this amendment removes: concurrent adders listed `creatures/` and all
+    // chose the same next free number, so one write landed and the rest went around. At dial
+    // 0 (all agents independent) 10.4's go-around rate is 0 — every agent lands its own
+    // `s-<id>` name and the listing premise's gains are held silently (L3).
+    const sim = new SwarmSim(swarmFiles(), { seed: 7 });
+    const agents = Array.from({ length: 16 }, () => sim.open("add-plain"));
+    sim.settle();
+    const paths: string[] = [];
+    for (const [i, agent] of agents.entries()) {
+      expect(sim.state(agent)).toBe("landed");
+      expect(sentTo(sim, agent)).toEqual([]);
+      expect(sim.attempt(agent)?.go_arounds ?? 0).toBe(0);
+      // `a_<i>` -> `creatures/s-<i>.js`, worked from the rule and the harness's own ids (BP1).
+      const files = [...(sim.landingOf(agent)?.files.keys() ?? [])].filter((p) => p.startsWith("creatures/"));
+      expect(files).toEqual([`creatures/s-${i}.js`]);
+      paths.push(files[0] as string);
+    }
+    expect(new Set(paths).size).toBe(agents.length);
+  });
 });

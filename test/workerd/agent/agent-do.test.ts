@@ -384,6 +384,41 @@ describe("the Agent Durable Object in workerd", () => {
     expect(s.meta.shown_hn).toBe("0");
   });
 
+  it("10.3: a pattern-driven scripted agent writes the creature to the attempt's own name", async () => {
+    // Opened the way the Swarm route opens a scripted agent — `driver: "scripted"` plus the
+    // pattern id, seed and agent number — the DO constructs a `PatternDriver` whose
+    // `attempt_id` is this attempt's, and 10.3's fresh name is `a_own` -> `s-own`.
+    const q = encodeURIComponent(
+      JSON.stringify({
+        attempt_id: "a_own",
+        intent_id: "i_t",
+        change_id: "c_t",
+        pool: "p_t",
+        pool_id: "p_t",
+        intent_text: "test",
+        requester: "swarm",
+        agent_kind: "synthetic",
+        driver: "scripted",
+        model: null,
+        revision: 1,
+        trunk_url: fake.url,
+        pattern: "add-plain",
+        seed: 1,
+        agent_n: 0,
+        truth: ADD_PLAIN.truth,
+        hold: false,
+        think_ms: [0, 0],
+      }),
+    );
+    expect(await (await worker.fetchDurableObject("AGENT", "a_own", `/open?q=${q}`)).json()).toMatchObject({
+      ok: true,
+    });
+    await waitFor(async () => (await inspect("a_own")).meta.state === "validated");
+    const calls = fake.requests.filter((r) => r.path === "/tool" && r.body.attempt_id === "a_own");
+    expect(calls.map((r) => r.body.tool)).toEqual(["list", "read", "read", "read", "read", "write", "submit"]);
+    expect((calls[5]?.body.args as { path: string }).path).toBe("creatures/s-own.js");
+  });
+
   it("AG3 + SW8: a scripted agent held before its submit is not stalled while it waits for its release", async () => {
     // The defect: a live run of the hero conflict lost its held cast to the watchdog — every
     // agent stopped `stalled` while it waited for the held card. SW8's wait is exempt (AG3).

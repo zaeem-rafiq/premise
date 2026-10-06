@@ -38,7 +38,7 @@
     "soak": "node scripts/ops/not-built.ts soak 'Slice 8'",
     "calibrate:clef": "node scripts/ops/not-built.ts calibrate:clef 'Slice 15'",
     "rehearse:hero": "node scripts/ops/not-built.ts rehearse:hero 'Slice 6'",
-    "record:export": "node scripts/ops/not-built.ts record:export 'Slice 9'",
+    "record:export": "node scripts/recordings/export.ts",
     "cleanup:test": "node scripts/ops/not-built.ts cleanup:test 'Slice 1'",
     "spend": "node scripts/ops/not-built.ts spend 'Slice 4'"
   },

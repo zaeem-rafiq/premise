@@ -143,7 +143,14 @@ export async function runMeasurement(opts: {
           if (result.confirm !== null) confirmWindows.push(result.confirm);
           const repeats = repeatsLeft.get(spec.intent.id) ?? MAX_REPEATS_PER_INTENT;
           if (result.record.outcome === "not_counted" && repeats > 0) {
+            results.push({ record: result.record, rate_limited: result.rateLimited });
+            opts.onProgress?.(result.record);
             repeatsLeft.set(spec.intent.id, repeats - 1);
+            if (!headroomOk()) {
+              // ME4: the repeat is a new run of real spend — it obeys the cap like any slot.
+              incomplete = true;
+              return;
+            }
             tryIndex++;
             continue;
           }

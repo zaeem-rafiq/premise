@@ -497,8 +497,9 @@ describe("runMeasurement", () => {
       requestPrefix: "t",
       seedFiles: SEED,
     });
-    expect(measured.results).toHaveLength(1);
-    expect(measured.results[0]?.record.outcome).toBe("not_counted");
+    // Every try is a real run of real spend: all four records are kept, each `not_counted`.
+    expect(measured.results).toHaveLength(4);
+    expect(measured.results.every((r) => r.record.outcome === "not_counted")).toBe(true);
     const pools = fake.calls.filter((c) => c.path === "/api/pools");
     expect(pools).toHaveLength(4); // the original plus three repeats
   });

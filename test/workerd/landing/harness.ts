@@ -4,10 +4,10 @@
 // binding's `readFile`/`readCommit`/`readTree` (the app server's only data path, AS16).
 
 import { createServer, type Server } from "node:http";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -300,6 +300,8 @@ process.env.NO_PROXY = "*";
 
 export async function startLandingWorker(options: {
   ownerKey?: string;
+  /** Enable Slice 11 only in this isolated test bundle; production flags are unchanged. */
+  held?: boolean;
   repos: string[];
   /** Repos whose every receive-pack push is refused: a real `pre-receive` hook that exits 1. */
   refuseRepos?: string[];
@@ -325,6 +327,17 @@ export async function startLandingWorker(options: {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
   }
   const projectRoot = mkdtempSync(join(tmpdir(), "premise-landing-repos-"));
+  let bundle = BUNDLE;
+  if (options.held === true) {
+    const source = readFileSync(BUNDLE, "utf8");
+    const marker = "var FEATURES = {\n  held: false,";
+    if (source.split(marker).length !== 2) throw new Error("test bundle must contain one disabled held flag");
+    // Beside the built bundle: the local runtime does not start a module copied to the system's
+    // temporary directory on every machine (it did inside the builder's sandbox, where TMPDIR is
+    // under the repository).
+    bundle = join(dirname(BUNDLE), `index.held-${process.pid}.mjs`);
+    writeFileSync(bundle, source.replace(marker, "var FEATURES = {\n  held: true,"));
+  }
   const directories = new Map(
     [...options.repos, ...(options.importSources ?? [])].map((name) => [name, createNamedRepo(projectRoot, name)]),
   );
@@ -358,7 +371,7 @@ export async function startLandingWorker(options: {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          modules: [{ type: "ESModule", path: bundle }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: {

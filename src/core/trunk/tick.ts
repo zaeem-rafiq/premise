@@ -39,6 +39,7 @@ import {
   setState,
   unvalidate,
   setIntentState,
+  refreshCardText,
 } from "./intents.ts";
 import { applyClassification, blast, hItem, sendHeadsUp, worst } from "./landing.ts";
 import { classify } from "../classify/table.ts";
@@ -645,7 +646,8 @@ export function tick(pool: Pool): void {
       c.tier = "held";
       setState(pool, c, "held", "T4");
       openCard(pool, "held", "held_path", [c.id], {
-        blast_radius: { [c.id]: blast(pool, c) },
+        blast_radius: pool.featuresHeld ? { [c.id]: blast(pool, c, running, inBatch) } : {},
+        head: { files: running, seq },
         submit_ids: c.submit_id === null ? {} : { [c.id]: c.submit_id },
       });
       continue;
@@ -696,6 +698,8 @@ export function tick(pool: Pool): void {
   }
   if (batch.length === 0) {
     pool.out.waiting = cands.filter((c) => pool.out.skipped[c.id] === "right_of_way").length;
+    // CD2: even a batch-free tick can move a blast radius — a right-of-way grant lapsed.
+    refreshOpenCards(pool);
     flushEvents(pool);
     return;
   }
@@ -833,6 +837,8 @@ export function tick(pool: Pool): void {
   pool.out.waiting = inflight(pool).filter(
     (c) => c.state === "validated" && pool.out.skipped[c.id] === "right_of_way",
   ).length;
+  // CD2 (9.4 step 5): the batch changed what an open card's blast radius holds.
+  refreshOpenCards(pool);
 }
 
 // ---------------------------------------------------------------------------
@@ -1076,6 +1082,37 @@ export function triage(
 // ---------------------------------------------------------------------------
 // Owner actions (10.3, 11.3) and the non-tool calls.
 
+/**
+ * CD2: one open card's blast radius re-computed against the pool as it stands — "if it landed
+ * now" — with the card's text and options refreshed under it (the `land_now` option of 10.2
+ * step 4 joins and leaves here). Emits `card.updated` when a field changed.
+ */
+function refreshCardBlast(pool: Pool, c: CardRec): void {
+  let changed = false;
+  for (const id of c.attempt_ids) {
+    const a = pool.attempts.get(id);
+    if (a === undefined || a.state !== "held" || c.body.blast_radius[id] === undefined) continue;
+    const next = blast(pool, a);
+    if (JSON.stringify(next) !== JSON.stringify(c.body.blast_radius[id])) {
+      c.body.blast_radius[id] = next;
+      changed = true;
+    }
+  }
+  if (refreshCardText(pool, c)) changed = true;
+  if (changed) {
+    pool.dirtyCards.add(c.card_id);
+    event(pool, "card.updated", { card: c.body });
+  }
+}
+
+/** CD2: every open held or race card's blast radius again, while the card is open. */
+export function refreshOpenCards(pool: Pool): void {
+  for (const c of pool.cards) {
+    if (!c.open || c.kind === "choice") continue;
+    refreshCardBlast(pool, c);
+  }
+}
+
 export function owner(
   pool: Pool,
   args: {
@@ -1113,6 +1150,9 @@ export function owner(
     if (a === undefined) return {};
     const card = pool.cards.find((c) => c.open && c.kind === "held" && c.attempt_ids.includes(a.id));
     if (card === undefined) return {};
+    // 10.2 step 4: the blast radius is recomputed when the owner taps — `land_now` stands in
+    // `options` exactly while an attempt with right of way sits under `repair` or `confirm`.
+    refreshCardBlast(pool, card);
     if (!offered(card, action)) return bad(`card ${card.card_id} does not offer ${action}`);
     if (action === "decline") {
       // T14: the owner's decline stops the held attempt.

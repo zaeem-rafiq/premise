@@ -3,10 +3,22 @@
 // attempt-class lists the tick uses (in-flight, parked, frozen).
 
 import type { AttemptState } from "../../protocol/attempt.ts";
-import type { Card, CardKind, CardReason } from "../../protocol/cards.ts";
-import { CARD_TEMPLATES, type CardTemplateId } from "../../copy/cards.ts";
-import type { Attempt, CardRec, IntentRec, Pool, Premise } from "./sets.ts";
-import { event, emitPoolState } from "./events.ts";
+import type { Card, CardKind, CardReason, RiskAnswers } from "../../protocol/cards.ts";
+import {
+  blastSentence,
+  CARD_TEMPLATES,
+  HELD_BODY_MINIMAL,
+  raceTitle,
+  riskSentence,
+  type CardTemplateId,
+} from "../../copy/cards.ts";
+import { changeName, keyShort, type LabelKind } from "../../copy/names.ts";
+import { share } from "../../copy/format.ts";
+import { fill } from "../../copy/fill.ts";
+import { tierOfPath } from "../policy/policy.ts";
+import { curOps, type Attempt, type CardRec, type IntentRec, type Pool, type Premise } from "./sets.ts";
+import { event, emitPoolState, poolPolicy } from "./events.ts";
+import { cardPreview, enqueuePreviews } from "./preview.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
@@ -130,6 +142,7 @@ export function closeCard(pool: Pool, a: Attempt, action: string, by: "owner" | 
         cand.state = a.state;
         cand.can_choose = false;
       }
+      refreshCardText(pool, c);
       pool.dirtyCards.add(c.card_id);
       event(pool, "card.updated", { card: c.body });
       const inFlight = c.attempt_ids.some((id) => {
@@ -163,42 +176,242 @@ export function closeCard(pool: Pool, a: Attempt, action: string, by: "owner" | 
   pool.dirtyAttempts.add(a.id);
 }
 
+/**
+ * The touched paths of a card's attempts with their tiers under the policy at head (10.2 step 2:
+ * "touched paths with their tiers"). A race card carries no single list — the sheet draws one
+ * column per candidate.
+ */
+function cardPaths(pool: Pool, kind: CardKind, attempt_ids: string[], head = pool.files): Card["paths"] {
+  if (kind === "race") return [];
+  const policy = poolPolicy(pool, head);
+  const touched = new Set<string>();
+  for (const id of attempt_ids) {
+    const a = pool.attempts.get(id);
+    if (a === undefined) continue;
+    for (const op of curOps(a)) touched.add(op.path);
+  }
+  return [...touched].sort((x, y) => x.localeCompare(y)).map((path) => ({ path, tier: tierOfPath(policy, path) }));
+}
+
+/** The `changeName` of an attempt of the card, or its id when the attempt is gone (a card body
+ * must still fill). */
+function cardName(pool: Pool, id: string): string {
+  const a = pool.attempts.get(id);
+  if (a === undefined) return id;
+  return changeName({
+    intentText: a.intentText,
+    race: a.race,
+    model: a.model,
+    premises: [...a.premises.values()],
+  });
+}
+
+/** The `keyShort` a `go_around_limit` card names (03 5.10): the premise of the most recent repair
+ * or confirm heads-up — the key that sent the attempt back — else its first edit premise. */
+function keptChangingKey(a: Attempt | undefined): { kind: LabelKind; key: string } | null {
+  if (a === undefined) return null;
+  for (let i = a.heads.length - 1; i >= 0; i--) {
+    const h = a.heads[i]!;
+    if (h.body.result !== "repair" && h.body.result !== "confirm") continue;
+    const it = h.body.items[0];
+    if (it !== undefined) return { kind: it.premise.kind, key: it.premise.key };
+  }
+  const edit = [...a.premises.values()].find((p) => p.edit);
+  return edit === undefined ? null : { kind: edit.kind, key: edit.key };
+}
+
+/** The `keyShort` a `contradiction` card names: the first edit premise both attempts share. */
+function sharedEditKey(a: Attempt | undefined, b: Attempt | undefined): { kind: LabelKind; key: string } | null {
+  if (a === undefined || b === undefined) return null;
+  const bKeys = new Set([...b.premises.values()].filter((p) => p.edit).map((p) => `${p.kind}|${p.key}`));
+  const shared = [...a.premises.values()].find((p) => p.edit && bKeys.has(`${p.kind}|${p.key}`));
+  return shared === undefined ? null : { kind: shared.kind, key: shared.key };
+}
+
+/**
+ * `Card.title` and `Card.body` filled from the card's template (03 5.10, CD5). The blast sentence
+ * reads the card's current `blast_radius` argument, so a refresh after a batch rewrites the same
+ * fields. `body` holds the filled template as its one paragraph.
+ */
+function cardText(
+  pool: Pool,
+  kind: CardKind,
+  reason: CardReason,
+  attempt_ids: string[],
+  blast_radius: Card["blast_radius"],
+  paths: Card["paths"],
+  risk: RiskAnswers | null,
+  candidates: Card["candidates"],
+): { title: string; body: string[] } {
+  const template = CARD_TEMPLATES[`${kind}:${reason}` as CardTemplateId];
+  if (template === undefined) return { title: reason, body: [] };
+  const pathsText = paths.map((p) => p.path).join(", ");
+  // The blast sentence of the card's own attempt (10.2 step 2/4); an empty radius reads as the
+  // "no change in flight" sentence.
+  const blastOf = (): string => {
+    const r = blast_radius[attempt_ids[0] ?? ""] ?? { repair: [], confirm: [], triage: [], right_of_way: [] };
+    const waits = r.right_of_way.filter((id) => r.repair.includes(id) || r.confirm.includes(id));
+    return blastSentence(
+      { ...r, right_of_way: waits },
+      {
+        repair: r.repair.map((id) => cardName(pool, id)),
+        confirm: r.confirm.map((id) => cardName(pool, id)),
+        triage: r.triage.map((id) => cardName(pool, id)),
+        rightOfWay: waits.length === 0 ? undefined : cardName(pool, waits[0]!),
+      },
+    );
+  };
+  const id = `${kind}:${reason}` as CardTemplateId;
+  if (id === "held:held_path") {
+    // HD1: the minimal form carries the paths sentence alone — Trunk computes no blast radius.
+    const body = pool.featuresHeld
+      ? fill(template.body, { paths: pathsText, "blast sentence": blastOf() })
+      : fill(HELD_BODY_MINIMAL, { paths: pathsText });
+    return { title: fill(template.title), body: [body] };
+  }
+  if (id === "held:risk") {
+    return {
+      title: fill(template.title),
+      body: [fill(template.body, { "risk sentence": riskSentence(risk, share), "blast sentence": blastOf() })],
+    };
+  }
+  if (id === "race:race") {
+    const a = pool.attempts.get(attempt_ids[0] ?? "");
+    const intentText = (a !== undefined && pool.intents.get(a.intent_id)?.text) || a?.intentText || "";
+    const ready = Object.values(candidates ?? {}).filter((c) => c.can_choose).length;
+    return { title: raceTitle(ready, attempt_ids.length, intentText), body: [template.body] };
+  }
+  if (id === "choice:go_around_limit") {
+    const kk = keptChangingKey(pool.attempts.get(attempt_ids[0] ?? ""));
+    return {
+      title: fill(template.title),
+      body: [
+        fill(template.body, {
+          changeName: cardName(pool, attempt_ids[0] ?? ""),
+          keyShort: kk === null ? "shared code" : keyShort(kk.kind, kk.key),
+        }),
+      ],
+    };
+  }
+  if (id === "choice:contradiction") {
+    const a = pool.attempts.get(attempt_ids[0] ?? "");
+    const b = pool.attempts.get(attempt_ids[1] ?? "");
+    const kk = sharedEditKey(a, b);
+    return {
+      title: fill(template.title),
+      body: [
+        fill(template.body, {
+          "requester A": a?.requester ?? "The owner",
+          "intent A": a?.intentText ?? "",
+          "requester B": b?.requester ?? "The owner",
+          "intent B": b?.intentText ?? "",
+          keyShort: kk === null ? "the same code" : keyShort(kk.kind, kk.key),
+        }),
+      ],
+    };
+  }
+  // `choice:revert_limit` and `choice:reopen_failed`: `{changeName}` is their only placeholder.
+  return {
+    title: fill(template.title),
+    body: [fill(template.body, { changeName: cardName(pool, attempt_ids[0] ?? "") })],
+  };
+}
+
+/** CD4: the held card's options for a blast radius — `land_now` joins only on the full form
+ * (features.held) while the blast radius lists an attempt with right of way under `repair` or
+ * `confirm` (10.2 step 4). */
+function cardOptions(
+  pool: Pool,
+  kind: CardKind,
+  reason: CardReason,
+  blast_radius: Card["blast_radius"],
+): Card["options"] {
+  const fullHeld = kind === "held" && pool.featuresHeld;
+  const landNow =
+    fullHeld &&
+    Object.values(blast_radius).some((b) =>
+      b.right_of_way.some((id) => b.repair.includes(id) || b.confirm.includes(id)),
+    );
+  const template = CARD_TEMPLATES[`${kind}:${reason}` as CardTemplateId];
+  return (template?.options ?? [])
+    .filter((o) => o.id !== "land_now" || landNow)
+    .map((o) => ({ id: o.id, label: o.label }));
+}
+
+/**
+ * Recompute an open card's `options`, `title` and `body` from its current `blast_radius`
+ * (CD2/CD4): `land_now` joins and leaves as right of way comes and goes, and the blast sentence
+ * rewrites under the same fill. Returns true when the card changed.
+ */
+export function refreshCardText(pool: Pool, c: CardRec): boolean {
+  if (c.kind === "choice") return false;
+  const options = cardOptions(pool, c.kind, c.reason, c.body.blast_radius);
+  const text = cardText(
+    pool,
+    c.kind,
+    c.reason,
+    c.attempt_ids,
+    c.body.blast_radius,
+    c.body.paths,
+    c.body.risk,
+    c.body.candidates,
+  );
+  let changed = false;
+  if (JSON.stringify(options) !== JSON.stringify(c.body.options)) {
+    c.body.options = options;
+    changed = true;
+  }
+  if (text.title !== c.body.title) {
+    c.body.title = text.title;
+    changed = true;
+  }
+  if (JSON.stringify(text.body) !== JSON.stringify(c.body.body)) {
+    c.body.body = text.body;
+    changed = true;
+  }
+  return changed;
+}
+
 /** Open a card (10.3) and emit `card.opened`. Returns the record. */
 export function openCard(
   pool: Pool,
   kind: CardKind,
   reason: CardReason,
   attempt_ids: string[],
-  extra: { body?: Partial<Card>; blast_radius?: Card["blast_radius"]; submit_ids?: Record<string, string> } = {},
+  extra: {
+    body?: Partial<Card>;
+    blast_radius?: Card["blast_radius"];
+    submit_ids?: Record<string, string>;
+    head?: { files: Pool["files"]; seq: number };
+  } = {},
 ): CardRec {
   const card_id = `k_${String(pool.cardCounter++).padStart(4, "0")}`;
-  // CD4: the options of the card, in the table's order. `land_now` joins the held card only on
-  // the full form (features.held) while the case of 10.2 step 4 holds: the blast radius lists an
-  // attempt with right of way under `repair` or `confirm`.
-  const fullHeld = kind === "held" && pool.featuresHeld;
-  const landNow =
-    fullHeld &&
-    Object.values(extra.blast_radius ?? {}).some((b) =>
-      b.right_of_way.some((id) => b.repair.includes(id) || b.confirm.includes(id)),
-    );
-  const template = CARD_TEMPLATES[`${kind}:${reason}` as CardTemplateId];
-  const options = (template?.options ?? [])
-    .filter((o) => o.id !== "land_now" || landNow)
-    .map((o) => ({ id: o.id, label: o.label }));
+  const blastRadius = kind === "held" && !pool.featuresHeld ? {} : (extra.blast_radius ?? {});
+  const paths = cardPaths(pool, kind, attempt_ids, extra.head?.files);
+  const text = cardText(
+    pool,
+    kind,
+    reason,
+    attempt_ids,
+    blastRadius,
+    paths,
+    extra.body?.risk ?? null,
+    extra.body?.candidates ?? null,
+  );
   const body: Card = {
     card_id,
     kind,
     attempt_ids,
     intent_ids: attempt_ids.map((id) => pool.attempts.get(id)?.intent_id ?? ""),
     submit_ids: extra.submit_ids ?? {},
-    title: reason,
-    body: [],
-    options,
-    paths: [],
+    title: text.title,
+    body: text.body,
+    options: cardOptions(pool, kind, reason, blastRadius),
+    paths,
     // HD1: on the minimal held form `card.opened` carries an empty blast radius; the callers
     // still compute it, because the `land_now` check of 10.2 step 4 reads it.
-    blast_radius: kind === "held" && !pool.featuresHeld ? {} : (extra.blast_radius ?? {}),
-    preview: null,
+    blast_radius: blastRadius,
+    preview: cardPreview(pool, kind),
     candidates: null,
     risk: null,
     reason,
@@ -219,6 +432,8 @@ export function openCard(
   pool.dirtyCards.add(card_id);
   pool.out.cards.push({ kind, reason, attempts: attempt_ids, blast_radius: body.blast_radius });
   event(pool, "card.opened", { card: body });
+  // PV1: the card's preview commits build off the landing path, on the `preview` timer.
+  enqueuePreviews(pool, c, extra.head?.seq);
   return c;
 }
 
@@ -356,6 +571,7 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
       card.attempt_ids.push(id);
       card.body.candidates ??= {};
       card.body.candidates[id] = cand;
+      refreshCardText(pool, card);
       pool.dirtyCards.add(card.card_id);
       event(pool, "card.updated", { card: card.body });
     }

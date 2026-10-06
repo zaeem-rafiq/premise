@@ -24,6 +24,7 @@ export function fakeStream(script: PoolEvent[], pushed?: PoolEvent[]): EngineStr
   let cursor = 0;
   return {
     events: () => queue.slice(0, cursor),
+    dead: () => false,
     close() {},
     async next() {
       return cursor < queue.length ? (queue[cursor++] as PoolEvent) : null;

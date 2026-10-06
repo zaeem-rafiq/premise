@@ -150,7 +150,7 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
   let acceptedSeq: number | null = null;
   let releaseTries = 0;
   let released = false;
-  let ended: "landed" | "stopped" | "paused" | "deadline" = "deadline";
+  let ended: "landed" | "stopped" | "paused" | "deadline" | "stream_lost" = "deadline";
   const deadline = clock.now() + RUN_BUDGET_MS;
 
   const sendRelease = async (): Promise<void> => {
@@ -167,7 +167,10 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
 
   for (;;) {
     const event = await stream.next(deadline);
-    if (event === null) break; // the deadline passed
+    if (event === null) {
+      if (stream.dead()) ended = "stream_lost"; // the socket gave up before the deadline
+      break; // else: the deadline passed
+    }
     events.push(event);
     if (event.type === "limits") {
       opts.onLimits?.({ spend_usd: event.spend_usd, reserved_usd: event.reserved_usd });

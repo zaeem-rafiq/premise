@@ -114,7 +114,7 @@ export function scoreRun(opts: {
   runIndex: number;
   files: Record<string, string>;
   seedFiles: ReadonlyMap<string, string>;
-  ended: "landed" | "stopped" | "paused" | "deadline";
+  ended: "landed" | "stopped" | "paused" | "deadline" | "stream_lost";
 }): ScoredRun {
   const { obs, spec, ended } = opts;
   const hu = qualifyingHeadsUp(obs, spec);
@@ -139,9 +139,11 @@ export function scoreRun(opts: {
       ? (obs.stopped.reason ?? "stopped")
       : ended === "paused"
         ? `paused:${obs.paused?.reason ?? "unknown"}`
-        : ended === "deadline"
-          ? "timeout"
-          : null;
+        : ended === "stream_lost"
+          ? "stream_lost"
+          : ended === "deadline"
+            ? "timeout"
+            : null;
 
   const modelSteps = obs.steps.filter((s) => s.tool === null);
   const toolSteps = obs.steps.filter((s) => s.tool !== null);

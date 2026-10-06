@@ -15,6 +15,9 @@ export type EngineResponse = { status: number; body: unknown };
 export type EngineStream = {
   next(deadline: number): Promise<PoolEvent | null>;
   events(): readonly PoolEvent[];
+  /** True once the socket gave up after `MAX_RECONNECTS` — the run then ends `stream_lost`,
+   * not `timeout`. */
+  dead(): boolean;
   close(): void;
 };
 
@@ -99,6 +102,7 @@ function wsStream(origin: string, pool: string, clock: Clock): EngineStream {
 
   return {
     events: () => events,
+    dead: () => dead,
     close() {
       stopped = true;
       try {

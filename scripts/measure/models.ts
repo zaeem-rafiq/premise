@@ -275,7 +275,11 @@ if (isMain) {
     .then((code) => process.exit(code))
     .catch((error) => {
       console.error(
-        redact(String(error), [process.env.CLOUDFLARE_API_TOKEN ?? "", process.env.CLOUDFLARE_ACCOUNT_ID ?? ""]),
+        redact(String(error), [
+          process.env.CLOUDFLARE_API_TOKEN ?? "",
+          process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+          process.env.PREMISE_OWNER_KEY ?? "",
+        ]),
       );
       process.exit(1);
     });

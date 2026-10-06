@@ -24,7 +24,7 @@ describe("read (4.4)", () => {
     expect(r.ok).toBe(true);
     expect(r.result).toMatchObject({
       path: "GUIDE.md",
-      oid: "e788bed259693c0311c1ac1b6a593ebb0b66e1ae",
+      oid: "4762fbaf6124cb22f539d944e5e9cb11e4294a2f",
       edited_by_you: false,
     });
     expect(r.heads_ups).toEqual([]);

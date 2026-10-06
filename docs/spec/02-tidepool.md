@@ -383,7 +383,7 @@ The tide pool is a small world drawn on one canvas. Every file is a plain JavaSc
 
 ## Where things are
 
-- `creatures/<kind>.js`: one file per kind of creature. Adding a file adds the creature. No other file needs to change.
+- `creatures/<kind>.js`: one file per kind of creature. Adding a file adds the creature. No other file needs to change. A kind name has only lower-case letters, digits and `-`, starts with a letter and is at most 31 characters long, for example `cleaner-fish`. A file with any other name is ignored.
 - `world/*.js`: the shared rules every creature lives by: time, bounds, movement, energy, food, spawning, rules, scene.
 - `main.js`, `pen.js`: how the pool starts and how drawing works.
 - `selftest/`: the checks that must pass after every change.

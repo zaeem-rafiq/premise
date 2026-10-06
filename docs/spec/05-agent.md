@@ -471,7 +471,7 @@ Reading the examples: a `tool` message's `content` and a tool call's `arguments`
   { "role": "assistant", "content": "", "tool_calls": [
     { "id": "call_1", "type": "function", "function": { "name": "read", "arguments": { "path": "GUIDE.md" } } } ] },
   { "role": "tool", "tool_call_id": "call_1", "content": {
-    "result": { "path": "GUIDE.md", "oid": "e788bed259693c0311c1ac1b6a593ebb0b66e1ae",
+    "result": { "path": "GUIDE.md", "oid": "4762fbaf6124cb22f539d944e5e9cb11e4294a2f",
                 "content": "‹the text of GUIDE.md, 02-tidepool.md 2.7›", "edited_by_you": false } } },
 
   { "role": "assistant", "content": "", "tool_calls": [
@@ -546,7 +546,7 @@ Rows 1 to 11, in the same form as in example 1:
 
   { "role": "assistant", "content": "", "tool_calls": [
     { "id": "call_1", "type": "function", "function": { "name": "read", "arguments": { "path": "GUIDE.md" } } } ] },
-  { "role": "tool", "tool_call_id": "call_1", "content": { "result": { "path": "GUIDE.md", "oid": "e788bed259693c0311c1ac1b6a593ebb0b66e1ae", "content": "‹the text of GUIDE.md›", "edited_by_you": false } } },
+  { "role": "tool", "tool_call_id": "call_1", "content": { "result": { "path": "GUIDE.md", "oid": "4762fbaf6124cb22f539d944e5e9cb11e4294a2f", "content": "‹the text of GUIDE.md›", "edited_by_you": false } } },
 
   { "role": "assistant", "content": "", "tool_calls": [
     { "id": "call_2", "type": "function", "function": { "name": "read", "arguments": { "path": "world/energy.js", "entity": "ENERGY_MAX" } } },

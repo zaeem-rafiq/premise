@@ -118,12 +118,13 @@ describe("IR12: a pool with app null", () => {
     expect(html).not.toContain(">Compare<");
   });
 
-  it("shows the pool's files as tiles where the frame stood", () => {
+  it("shows the pool's files as tiles where the frame stood, extensions kept (3.7 amended)", () => {
     const html = markup(importedPoolState());
     expect(html).toContain('class="tiles"');
-    for (const name of ["README", "index", "util"]) {
+    for (const name of ["README.md", "index.ts", "util.ts"]) {
       expect(html).toContain(`>${name}<`);
     }
+    expect(html).not.toContain(">index<");
   });
 
   it("a seed pool keeps its live picture: frame, Pause and no no-app caption", () => {

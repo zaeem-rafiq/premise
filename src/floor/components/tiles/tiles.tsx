@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { text } from "../../../copy/strings.ts";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
-import { tileCells, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
+import { tileCells, tileKeepsExtension, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
 
 /** How long a landed change glows and a removed file keeps its tile (6.4, 3.7). */
 const FLASH_MS = 2_000;
@@ -83,6 +83,9 @@ export type FileTilesProps = {
 
 export function FileTiles(props: FileTilesProps) {
   const { state } = props;
+  // IR12 (the 3.7 amendment): a pool made from a repository keeps each tile's extension —
+  // repository files often differ only by it (`index.js` vs `index.d.ts`).
+  const keepExtension = tileKeepsExtension(state);
   const [open, setOpen] = useState(false);
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const [glow, setGlow] = useState<ReadonlySet<string>>(new Set());
@@ -203,7 +206,7 @@ export function FileTiles(props: FileTilesProps) {
     const marks = tileMarks(file.readers, file.writers);
     const body = (
       <>
-        <span className="tile-name">{tileName(file.path)}</span>
+        <span className="tile-name">{tileName(file.path, keepExtension)}</span>
         <span className="tile-foot">
           <span className="tile-marks">
             {Array.from({ length: marks.readers }, (_, k) => (

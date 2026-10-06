@@ -46,6 +46,15 @@ const PATHS = [
 ];
 const FILES = PATHS.map((path, i) => ({ path, tier: i === 9 ? ("held" as const) : ("auto" as const) }));
 
+// Three files that differ only by extension — the reason the 3.7 amendment keeps the
+// extension on a repository pool's tiles (IR12).
+const EXT_FILES = [
+  { path: "dist/index.js", tier: "auto" as const },
+  { path: "dist/index.d.ts", tier: "auto" as const },
+  { path: "dist/index.browser.js", tier: "auto" as const },
+  { path: "package.json", tier: "auto" as const },
+];
+
 function importedStream(extra: Record<string, unknown> = {}) {
   return [poolState(1, { app: null, source: "octo/app", ...extra }), ev(2, { type: "pool.files", files: FILES })];
 }
@@ -105,6 +114,22 @@ test.describe("IR12: a pool with no live picture", () => {
     });
   }
 
+  test("the tiles keep the extension, so files differing only by it stay distinct (3.7 amended)", async ({ page }) => {
+    await serveStream(page, [
+      poolState(1, { app: null, source: "octo/app" }),
+      ev(2, { type: "pool.files", files: EXT_FILES }),
+    ]);
+    await page.goto("/");
+    await expect(page.locator(".pf-caption-text")).toHaveText(CAPTION);
+
+    const names = await page.locator(".tiles-grid .tile:not(.tile-label) .tile-name").allInnerTexts();
+    for (const name of ["index.js", "index.d.ts", "index.browser.js", "package.json"]) {
+      expect(names).toContain(name);
+    }
+    // no tile drops to the bare stem — that is the collision the amendment prevents
+    expect(names).not.toContain("index");
+  });
+
   test("the header names the repository; Compare and key C are absent", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     // Even with a stale plain remote on the stream, an imported pool gets no Compare.
@@ -133,5 +158,8 @@ test.describe("IR12: a pool with no live picture", () => {
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
     await expect(page.locator(".pf-caption")).toContainText("Premise · main · the seed, before any landing");
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    // A tide pool's tiles still drop the extension (3.7's original rule).
+    const names = await page.locator(".tiles-grid .tile:not(.tile-label) .tile-name").allInnerTexts();
+    expect(names).toEqual(["README", "package", "LICENSE"]);
   });
 });

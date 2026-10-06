@@ -50,9 +50,11 @@ export type TreeOverlay = {
 /**
  * The objects for a nested file map such as `{ "a/b.txt": "...", "run.sh": { content, mode: "100755" } }`.
  * A plain string or byte value is a regular file (mode 100644). `objects` holds every blob and
- * tree the root tree needs; `root` is the root tree object itself. `dirs` records the tree
- * object id each built directory got (repo path as in `TreeOverlay.stored`), so the caller can
- * keep `stored` current across landings.
+ * tree the root tree needs, each object id once — paths with identical content share one blob,
+ * identical directories share one tree, and a pack carries an object id at most once (9.5).
+ * `root` is the root tree object itself. `dirs` records the tree object id each built directory
+ * got (repo path as in `TreeOverlay.stored`), so the caller can keep `stored` current across
+ * landings.
  */
 export function makeTreeFromFiles(
   files: Record<string, FileMapValue>,
@@ -68,6 +70,14 @@ export function makeTreeFromFiles(
   }
   const rootDir: Dir = { files: new Map(), dirs: new Map() };
   const objects: GitObject[] = [];
+  const emitted = new Set<string>();
+  // Two paths can name the same content and two directories the same subtree: the pack holds
+  // each object once, so an oid already emitted is not emitted again.
+  const emit = (object: GitObject): void => {
+    if (emitted.has(object.oid)) return;
+    emitted.add(object.oid);
+    objects.push(object);
+  };
   for (const [path, value] of Object.entries(files)) {
     const segments = path.split("/");
     const fileName = segments.pop();
@@ -89,7 +99,7 @@ export function makeTreeFromFiles(
     }
     const spec = isFileSpec(value) ? value : { content: value, mode: "100644" as const };
     const blob = makeBlob(spec.content);
-    objects.push(blob);
+    emit(blob);
     dir.files.set(fileName, { oid: blob.oid, mode: spec.mode });
   }
   const dirs = new Map<string, string>();
@@ -107,7 +117,7 @@ export function makeTreeFromFiles(
       entries.push({ mode: "40000", name, oid: build(sub, subPath).oid });
     }
     const tree = makeTree(entries);
-    objects.push(tree);
+    emit(tree);
     dirs.set(dirPath, tree.oid);
     return { oid: tree.oid, tree };
   };

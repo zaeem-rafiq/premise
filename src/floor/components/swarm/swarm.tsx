@@ -10,6 +10,7 @@ import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
 import { duration } from "../../../copy/format.ts";
 import { errorSentence } from "../../../copy/errors.ts";
+import { ESCAPE_TARGET, FALSE_ABORT_TARGET } from "../../../protocol/constants.ts";
 import { inFlight } from "../../state/derive.ts";
 
 function share(x: number): string {
@@ -133,14 +134,14 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
               <div className="strip-label" title={t("swarm.false_abort.tip")}>
                 {metrics?.false_abort_rate == null
                   ? t("strip.dash")
-                  : t("swarm.false_abort", { share: share(metrics.false_abort_rate) })}
+                  : t("swarm.false_abort", { share: [share(metrics.false_abort_rate), share(FALSE_ABORT_TARGET)] })}
               </div>
             </div>
             <div className="swarm-cell">
               <div className="strip-label" title={t("swarm.escape.tip")}>
                 {metrics?.escape_rate == null
                   ? t("strip.dash")
-                  : t("swarm.escape", { share: share(metrics.escape_rate) })}
+                  : t("swarm.escape", { share: [share(metrics.escape_rate), share(ESCAPE_TARGET)] })}
               </div>
             </div>
             <div className="swarm-cell">
@@ -150,7 +151,7 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
           {wall.length > 0 && (
             <>
               <p className="swarm-wall-summary">
-                {t("swarm.wall.summary", { n: [wall.length, working, goingAround, landing] })}
+                {t("swarm.wall.summary", { n: wall.length, a: working, b: goingAround, c: landing })}
               </p>
               <div className="swarm-wall" role="list">
                 {wall.map((a) => (

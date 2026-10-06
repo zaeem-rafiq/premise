@@ -13,6 +13,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 import {
+  FLOOR_JSON,
   POOL,
   attemptOpened,
   ev,
@@ -89,8 +90,9 @@ test.describe("CO42/CO42a: the numbers of the newest metrics event", () => {
     await expect(cells.nth(2)).toContainText("25%"); // go_around_rate
     await expect(cells.nth(3)).toContainText("3"); // waiting_behind
     // The two small rates and the backlog.
-    await expect(page.locator(".swarm-numbers")).toContainText("False-abort rate 50%");
-    await expect(page.locator(".swarm-numbers")).toContainText("Escape rate 0%");
+    // The copy table's second {share} is the target: FALSE_ABORT_TARGET 5%, ESCAPE_TARGET 0%.
+    await expect(page.locator(".swarm-numbers")).toContainText("False-abort rate 50% (target 5%)");
+    await expect(page.locator(".swarm-numbers")).toContainText("Escape rate 0% (target 0%)");
     await expect(page.locator(".swarm-numbers")).toContainText("Push backlog 2");
   });
 
@@ -156,7 +158,7 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
     expect(posts[0]).not.toHaveProperty("seed");
   });
 
-  test("Stop sends { pool, running: false }; Start sends the whole SwarmConfig", async ({ page }) => {
+  test("Stop sends { pool, running: false }", async ({ page }) => {
     const posts: Frame[] = [];
     await serveStream(page, RUN);
     await serveSession(page, true);
@@ -168,9 +170,39 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
     await page.goto(`/p/${POOL}`);
     await openSwarm(page);
 
-    await page.getByRole("button", { name: "Stop" }).click();
+    // `exact`: the header's kill switch ("Stop all agents") also contains the word.
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
     await expect.poll(() => posts.length).toBe(1);
     expect(posts[0]).toMatchObject({ pool: SWARM, running: false });
+    expect(typeof posts[0]!["request_id"]).toBe("string");
+  });
+
+  test("Start sends the whole SwarmConfig (SWR1): the controls' values and the deployment's defaults", async ({
+    page,
+  }) => {
+    const posts: Frame[] = [];
+    // A stopped run: the controls adopt its agent count and dial (CO48), and Start is offered.
+    await serveStream(page, [poolState(1), swarmState(2, { running: false })]);
+    await serveSession(page, true);
+    await page.route("**/api/swarm", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST") posts.push(JSON.parse(request.postData() ?? "{}") as Frame);
+      await route.fulfill({ contentType: "application/json", body: '{"ok":true}' });
+    });
+    await page.goto(`/p/${POOL}`);
+    await openSwarm(page);
+
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect.poll(() => posts.length).toBe(1);
+    // SWR1: a request that starts agents carries all of SwarmConfig — agents and dial from the
+    // newest swarm.state (7, 0.3), the rest from /floor.json's swarm_defaults (FLOOR_JSON).
+    expect(posts[0]).toMatchObject({
+      pool: SWARM,
+      running: true,
+      agents: 7,
+      collision_dial: 0.3,
+      ...FLOOR_JSON.swarm_defaults,
+    });
     expect(typeof posts[0]!["request_id"]).toBe("string");
   });
 });

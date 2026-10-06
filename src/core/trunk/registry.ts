@@ -25,6 +25,8 @@ import type {
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
+import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
@@ -104,6 +106,9 @@ export function createPool(
     metaSet(sql, "epoch", "1");
     metaSet(sql, "summary_only", opts.summary_only === true ? "1" : "0");
     metaSet(sql, "synthetic", opts.synthetic === true ? "1" : "0");
+    // FJ1: the build's `features.held`, or the create call's own `features.held` — the pool
+    // remembers a direct engine override across reopen; an explicit build flag takes precedence.
+    if (opts.features?.held === true) metaSet(sql, "features_held", "1");
     metaSet(sql, "remote", opts.remote ?? "");
     metaSet(sql, "real_agents", "0");
     if (opts.request_id !== undefined) metaSet(sql, "create_request_id", opts.request_id);
@@ -224,6 +229,9 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
+  // FJ1: `features.held` comes from the build (the caller passes FEATURES.held); a pool created
+  // under a direct engine call keeps that default, but an explicit false always wins.
+  pool.featuresHeld = opts.features?.held ?? pool.meta.get("features_held") === "1";
   // LG1: an imported pool (`app` "", 06-repos IR2/IR8) works in IMPORT_LANGUAGES; the tide
   // pool and any other seeded pool keep 2.1's set.
   pool.languages = pool.meta.get("app") === "" ? IMPORT_LANGUAGES : TIDEPOOL_LANGUAGES;
@@ -280,18 +288,25 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     }
     l.push(j);
   }
+  // Each child table is read once, in its key order, and grouped: one query per attempt and per
+  // landing made every open cost thousands of queries in a busy pool.
+  const premisesByAttempt = groupRows(
+    sql.exec("SELECT * FROM premises ORDER BY attempt_id, kind, key").toArray(),
+    "attempt_id",
+  );
+  const opsByAttempt = groupRows(sql.exec("SELECT * FROM ops ORDER BY attempt_id, op_seq").toArray(), "attempt_id");
+  const headsByAttempt = groupRows(sql.exec("SELECT * FROM heads_ups ORDER BY attempt_id, hn").toArray(), "attempt_id");
   for (const row of sql.exec("SELECT * FROM attempts ORDER BY attempt_id").toArray()) {
     const a = attemptFromRow(pool, row);
-    const premiseRows = sql.exec("SELECT * FROM premises WHERE attempt_id = ?", a.id).toArray();
-    for (const pr of premiseRows) {
+    for (const pr of premisesByAttempt.get(a.id) ?? []) {
       const p = premiseFromRow(pr);
       a.premises.set(`${p.kind}|${p.key}`, p);
     }
-    for (const or of sql.exec("SELECT * FROM ops WHERE attempt_id = ? ORDER BY op_seq", a.id).toArray()) {
+    for (const or of opsByAttempt.get(a.id) ?? []) {
       a.ops.push(opFromRow(or));
       a.opCount = Math.max(a.opCount, num(or.op_seq));
     }
-    for (const hr of sql.exec("SELECT * FROM heads_ups WHERE attempt_id = ? ORDER BY hn", a.id).toArray()) {
+    for (const hr of headsByAttempt.get(a.id) ?? []) {
       const h = headFromRow(hr);
       a.heads.push(h);
       a.next_hn = Math.max(a.next_hn, h.hn + 1);
@@ -308,12 +323,16 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     pool.attemptCounter += 1;
   }
   // landings + companions
+  const filesBySeq = groupRows(sql.exec("SELECT * FROM landing_files ORDER BY seq, path").toArray(), "seq");
+  const writesBySeq = groupRows(sql.exec("SELECT * FROM landing_writes ORDER BY seq, kind, key").toArray(), "seq");
+  const premisesBySeq = groupRows(sql.exec("SELECT * FROM landing_premises ORDER BY seq, kind, key").toArray(), "seq");
+  const opsBySeq = groupRows(sql.exec("SELECT * FROM landing_ops ORDER BY seq, op_seq").toArray(), "seq");
   for (const row of sql.exec("SELECT * FROM landings ORDER BY seq").toArray()) {
     const l = landingFromRow(row);
-    for (const fr of sql.exec("SELECT * FROM landing_files WHERE seq = ?", l.seq).toArray()) {
+    for (const fr of filesBySeq.get(String(l.seq)) ?? []) {
       l.files.set(str(fr.path), { old_oid: str(fr.old_oid), new_oid: str(fr.new_oid) });
     }
-    for (const wr of sql.exec("SELECT * FROM landing_writes WHERE seq = ?", l.seq).toArray()) {
+    for (const wr of writesBySeq.get(String(l.seq)) ?? []) {
       l.writes.push({
         kind: str(wr.kind) as Landing["writes"][number]["kind"],
         key: str(wr.key),
@@ -321,7 +340,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
         new_hash: str(wr.new_hash),
       });
     }
-    for (const pr of sql.exec("SELECT * FROM landing_premises WHERE seq = ?", l.seq).toArray()) {
+    for (const pr of premisesBySeq.get(String(l.seq)) ?? []) {
       l.premises.push({
         kind: str(pr.kind) as Premise["kind"],
         key: str(pr.key),
@@ -335,14 +354,14 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
         status: "holds",
       });
     }
-    for (const or of sql.exec("SELECT * FROM landing_ops WHERE seq = ? ORDER BY op_seq", l.seq).toArray()) {
+    for (const or of opsBySeq.get(String(l.seq)) ?? []) {
       l.ops.push(JSON.parse(str(or.body)) as Op);
     }
     pool.landings.push(l);
   }
   for (const l of pool.landings) {
-    l.before = pool.fileMapAt(l.seq - 1);
-    l.after = l.seq === pool.headSeq() ? pool.files : pool.fileMapAt(l.seq);
+    lazyFileMaps(pool, l);
+    pool.landingMarks.set(l.seq, landingMark(l));
   }
   // cards
   for (const row of sql.exec("SELECT * FROM cards").toArray()) {
@@ -435,6 +454,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     dirtyOutbox: false,
     dirtyUndo: new Set(),
     newLandings: [],
+    landingMarks: new Map(),
     filesChanged: new Set(),
     entitiesChanged: new Set(),
     analyses: new Map(),
@@ -941,6 +961,64 @@ function persistJudgment(pool: Pool, j: Judgment): void {
   j.dirty = false;
 }
 
+/** The rows of `table` grouped by the string value of `column`, each group in the query's order. */
+function groupRows(rows: Record<string, unknown>[], column: string): Map<string, Record<string, unknown>[]> {
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const key = String(row[column]);
+    let group = groups.get(key);
+    if (group === undefined) {
+      group = [];
+      groups.set(key, group);
+    }
+    group.push(row);
+  }
+  return groups;
+}
+
+/**
+ * A loaded landing's `before` and `after` are the file maps at `seq - 1` and `seq`, computed when
+ * first read (`fileMapAt` walks back from head) and kept: copying the whole map twice for every
+ * landing on every open made each open quadratic in the landings, and its memory grew with them.
+ * An assignment replaces the map, as for a landing made in this call.
+ */
+function lazyFileMaps(pool: Pool, l: Landing): void {
+  let before: FileMap | undefined;
+  let after: FileMap | undefined;
+  Object.defineProperty(l, "before", {
+    get: () => (before ??= pool.fileMapAt(l.seq - 1)),
+    set: (value: FileMap) => {
+      before = value;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(l, "after", {
+    get: () => (after ??= pool.fileMapAt(l.seq)),
+    set: (value: FileMap) => {
+      after = value;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/** The fields of a landing's own row that change after it is made (its push, its note, its undo). */
+function landingMark(l: Landing): string {
+  return JSON.stringify([
+    l.kind,
+    l.batch_id,
+    l.commit_oid,
+    l.parent_oid,
+    l.tree_oid,
+    l.note_oid,
+    l.submitted_at,
+    l.accepted_at,
+    l.pushed_at,
+    l.undone_by,
+  ]);
+}
+
 function persistLanding(pool: Pool, l: Landing): void {
   const sql = pool.sql;
   sql.exec(
@@ -1037,10 +1115,19 @@ export function persist(pool: Pool): void {
   }
   pool.dirtyIntents.clear();
   for (const j of pool.judgments.values()) if (j.dirty) persistJudgment(pool, j);
-  for (const l of pool.newLandings) persistLanding(pool, l);
+  for (const l of pool.newLandings) {
+    persistLanding(pool, l);
+    pool.landingMarks.set(l.seq, landingMark(l));
+  }
   pool.newLandings = [];
+  // Only a landing whose row changed since it was loaded or persisted (its push, its undo) is
+  // written again: rewriting every pushed landing on every save made each call write a number of
+  // rows that grew with the pool.
   for (const l of pool.landings) {
-    if (l.undone_by !== null || l.pushed_at !== null) persistLanding(pool, l);
+    const mark = landingMark(l);
+    if (pool.landingMarks.get(l.seq) === mark) continue;
+    persistLanding(pool, l);
+    pool.landingMarks.set(l.seq, mark);
   }
   for (const id of pool.dirtyCards) {
     const c = pool.cards.find((x) => x.card_id === id);
@@ -1243,6 +1330,15 @@ export class Trunk {
     return wrapCall(this.pool, () => reconcile(this.pool, remote_main, remote_notes ?? remote_main));
   }
 
+  /** PV1: materialize frozen preview snapshots off the landing path. */
+  preview(): PreviewBuild {
+    return wrapCall(this.pool, () => previewBuild(this.pool));
+  }
+
+  previewDone(input: PreviewDoneInput): Record<string, unknown> {
+    return wrapCall(this.pool, () => previewDone(this.pool, input));
+  }
+
   /** 11.7's `plain` timer: the next plain-merge commit spec, or `idle` when caught up. */
   plain(input: { parent_override?: string } = {}): PlainBuild {
     return wrapCall(this.pool, () => plainBuild(this.pool, input));
@@ -1306,7 +1402,9 @@ export class Trunk {
     return wrapCall(this.pool, () => {
       if (begin.summary_only !== undefined) metaSet(this.pool.sql, "summary_only", begin.summary_only ? "1" : "0");
       if (begin.synthetic !== undefined) metaSet(this.pool.sql, "synthetic", begin.synthetic ? "1" : "0");
-      return beginRebuild(this.pool, begin);
+      const result = beginRebuild(this.pool, begin);
+      if (result.ok === true) clearPreviews(this.pool);
+      return result;
     });
   }
 

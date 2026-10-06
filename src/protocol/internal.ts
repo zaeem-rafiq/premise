@@ -279,3 +279,11 @@ export type SwarmControlEvent = {
   type: typeof SWARM_CONTROL_EVENT;
   payload: { op: "dial"; collision_dial: number } | { op: "agents"; agents: number } | { op: "stop" };
 };
+
+// ---- Preview timer (PV1-PV3): frozen commit builds and post-push outcomes ----
+export type PreviewPush = { submit_id: string; ref: string; commit: string; tree: string; pack: Uint8Array };
+export type PreviewResult = { submit_id: string; commit?: string; error?: string };
+export type PreviewDoneInput = { epoch?: number; results?: PreviewResult[]; dropped?: string[]; retried?: string[] };
+export type PreviewBuild =
+  | { state: "idle" }
+  | { state: "build"; epoch: number; previews: PreviewPush[]; errors: PreviewResult[]; dropped: string[] };

@@ -11,15 +11,18 @@
 
 import { HEADS_UP_REPUSH_MS, RESUME_ACK_TIMEOUT_MS } from "../../protocol/constants.ts";
 import type { ResumeRequest, ResumeResponse } from "../../protocol/tools.ts";
+import type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/internal.ts";
 import type { Card } from "../../protocol/cards.ts";
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import { CARD_TEMPLATES } from "../../copy/cards.ts";
 import { fill } from "../../copy/fill.ts";
 import { changeName } from "../../copy/names.ts";
+import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import type { Env } from "../env.ts";
 import {
   appendEvent,
+  metaAll,
   metaDelete,
   metaGet,
   metaSet,
@@ -36,6 +39,8 @@ const REOPEN_STATES = new Set(["working", "going_around", "needs_confirm"]);
 const CYCLE = "resume_cycle:";
 const DONE = "resume_done:";
 const RESUME_URL = "https://agent/resume";
+const NEW_AGENT = "new_agent_open:";
+const NEW_AGENT_CYCLE = "new_agent_cycle:";
 
 /** The cycle a `resume` owes, stored in `meta` so it survives an evicted object (LP6's shape). */
 type ResumeCycle = {
@@ -62,6 +67,26 @@ type AttemptRow = {
   right_of_way_at: number | null;
 };
 
+function attemptRow(row: Record<string, unknown>): AttemptRow {
+  return {
+    attempt_id: String(row.attempt_id),
+    intent_id: String(row.intent_id),
+    resumes: Number(row.resumes),
+    revision: Number(row.revision),
+    state: String(row.state),
+    last_call_id: row.last_call_id === null || row.last_call_id === undefined ? null : String(row.last_call_id),
+    go_arounds: Number(row.go_arounds),
+    pull_backs: Number(row.pull_backs),
+    right_of_way_at:
+      row.right_of_way_at === null || row.right_of_way_at === undefined ? null : Number(row.right_of_way_at),
+  };
+}
+
+function readAttempt(sql: Sql, attempt_id: string): AttemptRow | null {
+  const row = sql.exec("SELECT * FROM attempts WHERE attempt_id = ?", attempt_id).toArray()[0];
+  return row === undefined ? null : attemptRow(row);
+}
+
 function attempts(sql: Sql): AttemptRow[] {
   return sql
     .exec(
@@ -70,18 +95,7 @@ function attempts(sql: Sql): AttemptRow[] {
        FROM attempts WHERE resumes > 0`,
     )
     .toArray()
-    .map((row) => ({
-      attempt_id: String(row.attempt_id),
-      intent_id: String(row.intent_id),
-      resumes: Number(row.resumes),
-      revision: Number(row.revision),
-      state: String(row.state),
-      last_call_id: row.last_call_id === null || row.last_call_id === undefined ? null : String(row.last_call_id),
-      go_arounds: Number(row.go_arounds),
-      pull_backs: Number(row.pull_backs),
-      right_of_way_at:
-        row.right_of_way_at === null || row.right_of_way_at === undefined ? null : Number(row.right_of_way_at),
-    }));
+    .map(attemptRow);
 }
 
 function cycleOf(sql: Sql, attempt_id: string): ResumeCycle | null {
@@ -101,7 +115,10 @@ function endCycle(sql: Sql, attempt_id: string, resume_n: number): void {
 /** The `cause` of the attempt's newest `attempt.reopened` in the still-pending events — `retry`
  * when none is there (already confirmed, or emitted before the shell watched). */
 function causeOf(sql: Sql, attempt_id: string): ResumeCycle["cause"] {
-  let cause: ResumeCycle["cause"] = "retry";
+  // The transition stores the cause with the revision, so an event delivery or restart
+  // cannot turn an undo/revert into a retry before the first resume send.
+  const stored = metaGet(sql, `resume_cause:${attempt_id}`);
+  let cause: ResumeCycle["cause"] = stored === "undo" || stored === "revert" ? stored : "retry";
   for (const row of pendingEvents(sql)) {
     const body = JSON.parse(row.body) as { type?: string; attempt_id?: string; cause?: string };
     if (body.type === "attempt.reopened" && body.attempt_id === attempt_id) {
@@ -252,6 +269,84 @@ function applyReopenFailed(ctx: DurableObjectState, a: AttemptRow, now: number):
   });
 }
 
+/** UN6a: an explicit new-attempt choice starts a fresh model driver, not a resume.
+ * The engine writes its open request and timer with the new attempt. Retrying that request
+ * is safe because Agent /open is idempotent by attempt id. */
+async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): Promise<void> {
+  const sql = sqlOf(ctx);
+  const finish = (attempt_id: string): void => {
+    sql.transaction(() => {
+      metaDelete(sql, `${NEW_AGENT}${attempt_id}`);
+      metaDelete(sql, `${NEW_AGENT_CYCLE}${attempt_id}`);
+      timerDelete(sql, "resume", attempt_id);
+    });
+  };
+  for (const [key, raw] of Object.entries(metaAll(sql))) {
+    if (!key.startsWith(NEW_AGENT)) continue;
+    const request = JSON.parse(raw) as AgentOpenRequest;
+    const id = request.attempt_id;
+    const a = readAttempt(sql, id);
+    if (a === null || ["stopped", "accepted", "landed"].includes(a.state)) {
+      finish(id);
+      continue;
+    }
+    const cycleKey = `${NEW_AGENT_CYCLE}${id}`;
+    const stored = metaGet(sql, cycleKey);
+    const cycle: { deadline: number; next_send: number; since_call: string | null } =
+      stored === null
+        ? { deadline: Date.now() + RESUME_ACK_TIMEOUT_MS, next_send: at, since_call: a.last_call_id }
+        : JSON.parse(stored);
+    if (a.last_call_id !== cycle.since_call) {
+      finish(id); // A previous open reached the Agent and it has already taken a step.
+      continue;
+    }
+    if (at >= cycle.deadline) {
+      // This Agent has never resumed: T20r only follows T19/T21. A fresh Agent
+      // that cannot start is lost (T20), rather than an orphan in `opened`.
+      TrunkEngine.open(sql, { now: () => at }).stop({ attempt_id: id, reason: "lost" });
+      finish(id);
+      continue;
+    }
+    if (cycle.next_send > at) {
+      sql.transaction(() => timerPut(sql, "resume", id, cycle.next_send));
+      continue;
+    }
+    // Write the retry before sending, so a process loss during /open leaves a wake-up.
+    cycle.next_send = Date.now() + HEADS_UP_REPUSH_MS;
+    sql.transaction(() => {
+      metaSet(sql, cycleKey, JSON.stringify(cycle));
+      timerPut(sql, "resume", id, cycle.next_send);
+    });
+    let refused = false;
+    try {
+      const response = await env.AGENT.get(env.AGENT.idFromName(id)).fetch("https://agent/open", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const answer = (await response.json().catch(() => null)) as AgentOpenResponse | null;
+      if (response.ok && answer?.ok === true) {
+        finish(id);
+        continue;
+      }
+      refused = response.ok && answer?.ok === false;
+    } catch {
+      // The durable resume timer retries the same open request until the deadline.
+    }
+    if (refused) {
+      // /open yielded: another request may have advanced or stopped this attempt meanwhile.
+      const current = readAttempt(sql, id);
+      if (
+        current !== null &&
+        !["stopped", "accepted", "landed"].includes(current.state) &&
+        current.last_call_id === cycle.since_call
+      )
+        TrunkEngine.open(sql, { now: () => at }).stop({ attempt_id: id, reason: "lost" });
+      finish(id);
+    }
+  }
+}
+
 /**
  * One pass over the resume work (RS1): cycles owed are detected from `attempts.resumes`, sends
  * go to the Agent Durable Object named by the attempt id, and the answers end the cycle —
@@ -264,6 +359,7 @@ function applyReopenFailed(ctx: DurableObjectState, a: AttemptRow, now: number):
 export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: number): Promise<void> {
   const sql = sqlOf(ctx);
   const at = now ?? Date.now();
+  await deliverNewAgents(env, ctx, at);
   const rows = attempts(sql);
 
   // Detection: a reopened attempt (`resumes` beyond what a cycle already served) that is back
@@ -346,8 +442,14 @@ export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: nu
     }
     if (refused) {
       // RS4: the Agent refused — T20r unless a step already applied since detection.
-      if (a.last_call_id === cycle.since_call) {
-        applyReopenFailed(ctx, a, at);
+      const current = readAttempt(sql, a.attempt_id);
+      if (
+        current !== null &&
+        current.resumes === cycle.resume_n &&
+        REOPEN_STATES.has(current.state) &&
+        current.last_call_id === cycle.since_call
+      ) {
+        applyReopenFailed(ctx, current, at);
       } else {
         endCycle(sql, a.attempt_id, a.resumes);
       }

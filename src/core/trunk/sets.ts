@@ -216,6 +216,7 @@ export type UndoRequest = {
   cause: "undo" | "revert";
   state: "queued" | "landed" | "refused";
   requested_by: string | null;
+  reverted?: number[];
 };
 
 export type IntentRec = {

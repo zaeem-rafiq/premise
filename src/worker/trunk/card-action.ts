@@ -9,6 +9,7 @@
 
 import type { Card } from "../../protocol/cards.ts";
 import type { CardActionRequest } from "../../protocol/routes.ts";
+import { WORKHORSE_MODEL } from "../../config/model-plan.ts";
 import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
 import { metaGet, metaSet } from "./sql.ts";
@@ -73,7 +74,12 @@ export function cardAction(input: unknown, ctx: EntryContext): EntryResult {
   const attempt = body.attempt_id ?? card.body.attempt_ids[0];
 
   const trunk = TrunkEngine.open(ctx.sql, { now: () => ctx.now, syncTriage: ScriptedTriage });
-  const answer = trunk.owner({ action: body.option, attempt, reason: body.reason });
+  const answer = trunk.owner({
+    action: body.option,
+    attempt,
+    reason: body.reason,
+    ...(body.option === "new_attempt" ? { new_attempt_model: WORKHORSE_MODEL } : {}),
+  });
   if ((answer as { ok?: unknown }).ok === false) {
     return finish({
       response: { error: (answer as { error?: unknown }).error ?? { code: "invalid_args" } },

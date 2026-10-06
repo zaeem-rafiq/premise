@@ -30,7 +30,7 @@ import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { tool } from "./tools-edit.ts";
-import { tick, pushOk, reconcile, restart, triage, owner, planUndo, recordLanding, seedCommit } from "./tick.ts";
+import { tick, pushOk, reconcile, restart, triage, owner, recordLanding, seedCommit } from "./tick.ts";
 import { armRebuild, beginRebuild, applyRebuildStep, registerDeadline } from "../rebuild/apply.ts";
 import { IMPORT_CURSOR_KEY, applyImportStep, type ImportCursor, type ImportPayload } from "./import.ts";
 import { register as registerAttempt } from "../rebuild/register.ts";
@@ -40,6 +40,10 @@ import { IMPORT_LANGUAGES, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8, text as fromUtf8, blobBytes } from "../sync/bytes.ts";
 import type { GitObject } from "../git/objects.ts";
+
+import { undoPlan, confirmUndo } from "./undo-apply.ts";
+import type { UndoRequest as OwnerUndoRequest } from "../../protocol/routes.ts";
+import type { UndoPlanResponse, UndoResponse } from "../../protocol/undo.ts";
 
 export type PoolOptions = {
   pool_id?: string;
@@ -59,6 +63,15 @@ const DEFAULT_K: Pool["K"] = {
   T_REPAIR: 0.7,
   T_CONFIRM: 0.2,
 };
+
+// Older stores used the requester string directly; new rows also freeze the confirmed set.
+function parseUndoDetail(raw: string): { requested_by: string | null; reverted?: number[] } {
+  try {
+    return JSON.parse(raw) as { requested_by: string | null; reverted?: number[] };
+  } catch {
+    return { requested_by: raw };
+  }
+}
 
 const str = (v: unknown): string => String(v);
 const num = (v: unknown): number => Number(v);
@@ -387,7 +400,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
       target_seq: num(row.target_seq),
       cause: str(row.cause) as UndoRequest["cause"],
       state: str(row.state) as UndoRequest["state"],
-      requested_by: row.detail === null ? null : str(row.detail),
+      requested_by: row.detail === null ? null : parseUndoDetail(str(row.detail)).requested_by,
+      reverted: row.detail === null ? undefined : parseUndoDetail(str(row.detail)).reverted,
     };
     pool.undoLog.set(u.request_id, u);
     if (u.state === "queued") pool.undoQueue.push(u);
@@ -1104,7 +1118,7 @@ export function persist(pool: Pool): void {
         u.target_seq,
         u.cause,
         u.state,
-        u.requested_by,
+        JSON.stringify({ requested_by: u.requested_by, reverted: u.reverted }),
       );
     }
   }
@@ -1283,8 +1297,17 @@ export class Trunk {
     seq?: number;
     expect_reverted?: number[];
     reason?: string;
+    new_attempt_model?: string;
   }): Record<string, unknown> {
     return wrapCall(this.pool, () => owner(this.pool, args));
+  }
+
+  undoPlan(seq: number): UndoPlanResponse {
+    return undoPlan(this.pool, seq);
+  }
+
+  undo(request: OwnerUndoRequest): UndoResponse {
+    return wrapCall(this.pool, () => confirmUndo(this.pool, request));
   }
 
   /** 13.6 `rebuild`: park the job cursor and arm the `rebuild` timer (idempotent, 9.8). */

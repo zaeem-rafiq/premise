@@ -6,21 +6,11 @@
 
 import type { Operation } from "../../protocol/operations.ts";
 import type { PremiseKind } from "../../protocol/premise.ts";
-import type { HeadsUpItem } from "../../protocol/headsup.ts";
 import type { Note } from "../../protocol/note.ts";
 import type { ToolError } from "../../protocol/tools.ts";
-import type { Attempt, CardRec, FileMap, Judgment, Landing, Op, Pool, Premise } from "./sets.ts";
-import {
-  curOps,
-  entityAt,
-  entityKeysOf,
-  keyHash,
-  pathOf,
-  replayOps,
-  setsOf,
-  sourceOf,
-  type ClassifyItem,
-} from "./sets.ts";
+import type { AgentOpenRequest } from "../../protocol/internal.ts";
+import type { Attempt, CardRec, FileMap, Landing, Op, Pool, Premise } from "./sets.ts";
+import { curOps, entityAt, entityKeysOf, keyHash, replayOps, setsOf, sourceOf, type ClassifyItem } from "./sets.ts";
 import { TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import type { LanguageSet } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
@@ -50,12 +40,16 @@ import {
   unvalidate,
   setIntentState,
 } from "./intents.ts";
-import { applyClassification, blast, emitSent, hItem, pushHeadsUp, sendHeadsUp, worst } from "./landing.ts";
+import { applyClassification, blast, hItem, sendHeadsUp, worst } from "./landing.ts";
 import { classify } from "../classify/table.ts";
 import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 import { buildsPlain } from "./plain.ts";
+
+import { planUndo } from "../undo/plan.ts";
+import { confirmUndo, undoPlan } from "./undo-apply.ts";
+import { reopen, repairReopened, type Reopened } from "./reopen.ts";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const utf8len = (s: string): number => utf8(s).length;
@@ -265,6 +259,7 @@ export function recordLanding(
     undoes?: number[];
     undo?: Note["undo"];
     request_id?: string | null;
+    undoTarget?: Landing;
   },
 ): Landing {
   const { w, paths } = writeSet(l.before, l.after, pool.languages);
@@ -342,9 +337,9 @@ export function recordLanding(
     attemptId: a?.id ?? null,
     acceptedAt: Math.floor(l.accepted_at / 1000),
     summary: a?.summary ?? "",
-    intentText: a?.intentText ?? "",
+    intentText: a?.intentText ?? l.undoTarget?.intentText ?? "",
     changeId: a?.change_id ?? `u_${l.seq}`,
-    intentId: a?.intent_id ?? `u_${l.seq}`,
+    intentId: a?.intent_id ?? l.undoTarget?.intent_id ?? `u_${l.seq}`,
     undoes: undoesCommits,
   });
   pool.objects.set(commitObj.oid, commitObj);
@@ -362,12 +357,16 @@ export function recordLanding(
     accepted_at: l.accepted_at,
     ...(l.undo !== undefined ? { undo: l.undo } : {}),
   });
+  if (l.undoTarget !== undefined) {
+    const targetNote = JSON.parse(l.undoTarget.note) as Note;
+    note.intent = targetNote.intent;
+  }
   const landing: Landing = {
     seq: l.seq,
     kind: l.kind,
     change_id: a?.change_id ?? `u_${l.seq}`,
     attempt_id: a?.id ?? null,
-    intent_id: a?.intent_id ?? null,
+    intent_id: a?.intent_id ?? l.undoTarget?.intent_id ?? null,
     batch_id,
     commit_oid: commitObj.oid,
     parent_oid: parent,
@@ -394,7 +393,7 @@ export function recordLanding(
     writes,
     premises: l.premises.map((p) => ({ ...p })),
     ops: l.ops,
-    intentText: a?.intentText ?? null,
+    intentText: a?.intentText ?? l.undoTarget?.intentText ?? null,
     request_id: l.request_id ?? null,
     before: l.before,
     after: l.after,
@@ -464,110 +463,6 @@ function reachableObjects(pool: Pool, roots: readonly string[]): GitObject[] {
 // ---------------------------------------------------------------------------
 // The tick (9.4).
 
-type UndoPlan = {
-  reverted: number[];
-  files: FileMap;
-  depKeys: Map<number, Set<string>>;
-  kept: number[];
-};
-
-/**
- * UN3's plan for reverting `u` against `running`: R grows by dependency (premises pinned on what
- * a reverted landing wrote) and by replay failure; kept readers stay.
- */
-export function planUndo(pool: Pool, u: number, running: FileMap): UndoPlan {
-  const live = pool.landings.filter((l) => l.undone_by === null && l.kind === "change");
-  const R = new Set<number>([u]);
-  const depKeys = new Map<number, Set<string>>();
-  for (;;) {
-    let grew = false;
-    for (const L of live) {
-      if (R.has(L.seq)) continue;
-      for (const xs of R) {
-        if (xs >= L.seq) continue;
-        const X = pool.landings.find((l) => l.seq === xs);
-        if (X === undefined) continue;
-        for (const p of L.premises) {
-          if (
-            p.seq >= xs &&
-            (p.kind === "entity" || p.kind === "file") &&
-            (p.edit || p.derived) &&
-            X.writes.some((w) => w.kind === p.kind && w.key === p.key)
-          ) {
-            let d = depKeys.get(L.seq);
-            if (d === undefined) {
-              d = new Set();
-              depKeys.set(L.seq, d);
-            }
-            d.add(`${p.kind}|${p.key}`);
-            if (!R.has(L.seq)) {
-              R.add(L.seq);
-              grew = true;
-            }
-          }
-        }
-      }
-    }
-    // Replay each un-reverted landing's ops on the reverted paths (UN3).
-    const files = new Map(running);
-    const P = new Set<string>();
-    for (const s of R) for (const p of pool.landings.find((l) => l.seq === s)?.files.keys() ?? []) P.add(p);
-    let failedLanding: number | null = null;
-    for (const p of P) {
-      const first = live.filter((l) => R.has(l.seq) && l.files.has(p)).sort((a, b) => a.seq - b.seq)[0];
-      if (first === undefined) continue;
-      const tree = new Map<string, string>();
-      const beforeP = pool.fileMapAt(first.seq - 1).get(p);
-      if (beforeP !== undefined) tree.set(p, beforeP);
-      for (const L of live) {
-        if (R.has(L.seq) || L.seq < first.seq) continue;
-        const ops = L.ops.filter((o) => o.path === p);
-        if (ops.length === 0) continue;
-        const r = replayOps(ops, tree, { noOP5: true }, pool.languages);
-        if (r.failed.length > 0) {
-          failedLanding = L.seq;
-          break;
-        }
-        const got = r.files.get(p);
-        if (got === undefined) tree.delete(p);
-        else tree.set(p, got);
-      }
-      if (failedLanding !== null) break;
-      const got = tree.get(p);
-      if (got === undefined) files.delete(p);
-      else files.set(p, got);
-    }
-    if (failedLanding !== null) {
-      R.add(failedLanding);
-      continue;
-    }
-    if (!grew) {
-      const kept: number[] = [];
-      for (const L of live) {
-        if (R.has(L.seq)) continue;
-        for (const xs of R) {
-          if (xs >= L.seq) continue;
-          const X = pool.landings.find((l) => l.seq === xs);
-          if (X === undefined) continue;
-          if (
-            L.premises.some(
-              (p) =>
-                p.seq >= xs &&
-                p.read &&
-                !p.edit &&
-                !p.derived &&
-                X.writes.some((w) => w.kind === p.kind && w.key === p.key),
-            )
-          ) {
-            if (!kept.includes(L.seq)) kept.push(L.seq);
-          }
-        }
-      }
-      return { reverted: [...R].sort((a, b) => a - b), files, depKeys, kept };
-    }
-  }
-}
-
 /** The heads-up cause of a batch landing (8.1). */
 function batchCause(batch: Landing[], type: "landing" | "undo" | "revert"): HeadsUpCause {
   return {
@@ -591,18 +486,30 @@ export function tick(pool: Pool): void {
   let running = new Map(pre);
   let seq = pool.headSeq();
   const batch: Landing[] = [];
-  const reopened: Array<{ a: Attempt; plan: UndoPlan; x: Landing }> = [];
+  const reopened: Reopened[] = [];
+  pool.eventBuffer = [];
 
   // Undo requests first (11.3): each queued request becomes one undo landing.
-  for (const u of pool.undoQueue.splice(0)) {
-    const plan = planUndo(pool, u.target_seq, running);
+  while (pool.undoQueue.length > 0 && batch.length < pool.K.MAX_BATCH) {
+    const u = pool.undoQueue.shift()!;
+    // Older stores could queue the same target twice without a frozen set. Never
+    // produce a second undo of an already undone landing during that recovery.
+    if (u.cause === "undo" && pool.landings.find((l) => l.seq === u.target_seq)?.undone_by != null) {
+      u.state = "refused";
+      pool.undoLog.set(u.request_id, u);
+      pool.dirtyUndo.add(u.request_id);
+      event(pool, "undo.refused", { request_id: u.request_id, target_seq: u.target_seq, reason: "already_undone" });
+      continue;
+    }
+    const plan = planUndo(pool, u.target_seq, running, u.cause === "revert" ? u.reverted : undefined);
     const before = running;
     running = plan.files;
     seq += 1;
     const landing = recordLanding(pool, {
       seq,
-      kind: "undo",
+      kind: u.cause,
       a: null,
+      undoTarget: pool.landings.find((l) => l.seq === u.target_seq),
       before,
       after: running,
       premises: [],
@@ -613,7 +520,7 @@ export function tick(pool: Pool): void {
         requested_by: u.requested_by ?? "owner",
         undoes: plan.reverted,
         reopened: plan.reverted
-          .filter((s) => s !== u.target_seq)
+          .filter((s) => u.cause === "revert" || s !== u.target_seq)
           .map((s) => pool.landings.find((l) => l.seq === s)?.attempt_id ?? "")
           .filter((x) => x !== ""),
         kept_readers: plan.kept,
@@ -622,7 +529,7 @@ export function tick(pool: Pool): void {
     });
     batch.push(landing);
     pool.out.accepted.push(`undo:${u.target_seq}`);
-    pool.out.landings.push({ seq, kind: "undo", undoes: plan.reverted });
+    pool.out.landings.push({ seq, kind: u.cause, undoes: plan.reverted });
     u.state = "landed";
     pool.undoLog.set(u.request_id, u);
     pool.dirtyUndo.add(u.request_id);
@@ -632,38 +539,12 @@ export function tick(pool: Pool): void {
       x.undone_by = seq;
       const a = x.attempt_id === null ? null : pool.attempts.get(x.attempt_id);
       if (a === null || a === undefined) continue;
-      if (s === u.target_seq) {
+      if (u.cause === "undo" && s === u.target_seq) {
         setState(pool, a, "stopped", "T18", "undone");
         setIntentState(pool, a.intent_id, "undone");
       } else {
-        // T19: a dependent landing's attempt is reopened with its frozen state.
-        a.go_arounds += 1;
-        clearRightOfWay(pool, a);
-        setState(pool, a, "going_around", "T19");
-        event(pool, "attempt.reopened", {
-          attempt_id: a.id,
-          cause: "undo",
-          revision: a.revision + 1,
-          model_changed: false,
-        });
-        a.revision += 1;
-        a.resumes += 1;
-        // PM2: the new revision earns its own `ops_first` row at its first `confirm`/`repair`.
-        a.opsFirstDone = false;
-        unvalidate(pool, a);
-        a.ops = x.ops.map((o) => ({
-          ...o,
-          dropped: false,
-          ...(o.op === "write"
-            ? { base_oid: running.has(o.path) ? blobId(utf8(running.get(o.path)!)) : "absent" }
-            : {}),
-        }));
-        a.opCount = Math.max(0, ...a.ops.map((o) => o.op_seq));
-        a.premises = new Map(
-          x.premises.map((p) => [`${p.kind}|${p.key}`, { ...p, status: "holds" as const, shown: null }]),
-        );
-        a.state = "going_around";
-        reopened.push({ a, plan, x });
+        reopen(pool, a, x, running, u.cause);
+        reopened.push({ a, plan, x, cause: u.cause, undoSeq: seq, head: running });
       }
       pool.dirtyAttempts.add(a.id);
     }
@@ -685,7 +566,6 @@ export function tick(pool: Pool): void {
     );
   const inBatch = new Set<Attempt>();
   const members: Array<{ premises: Premise[]; attempt_id: string }> = [];
-  pool.eventBuffer = [];
   for (const c of cands) {
     if (batch.length >= pool.K.MAX_BATCH) break;
     const after = replayOps(curOps(c), running, {}, pool.languages);
@@ -825,6 +705,8 @@ export function tick(pool: Pool): void {
   pool.meta.set("next_batch_id", String(batchId + 1));
   const oldMain = pool.meta.get("head_commit") ?? "";
   const oldNotes = pool.meta.get("notes_commit") ?? "";
+  const causedEvents = pool.eventBuffer;
+  pool.eventBuffer = null;
   for (const l of batch) {
     l.batch_id = batchId;
     // NT3: the note is built after the batch is complete — `batch` is final here.
@@ -845,6 +727,9 @@ export function tick(pool: Pool): void {
       paths: [...l.files.keys()],
       writes: l.writes.map((x) => ({ kind: x.kind, key: x.key, old: x.old_hash, new: x.new_hash })),
     });
+  }
+  pool.eventBuffer = causedEvents;
+  for (const l of batch) {
     if (l.attempt_id !== null) {
       const a = pool.attempts.get(l.attempt_id);
       if (a !== undefined) {
@@ -913,46 +798,7 @@ export function tick(pool: Pool): void {
   const workRemains = pool.undoQueue.length > 0 || [...pool.attempts.values()].some((x) => x.state === "validated");
   if (workRemains) scheduleTick(pool, TICK_MS);
 
-  // Reopened attempts get their repair heads-up (T19): the premises whose dep key changed.
-  for (const r of reopened) {
-    const items: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
-    for (const p of r.a.premises.values()) {
-      const cur = keyHash(running, p.kind, p.key, pool.languages);
-      const dep = r.plan.depKeys.get(r.x.seq)?.has(`${p.kind}|${p.key}`) === true;
-      if (dep && cur.hash !== p.hash) {
-        const rule = p.kind === "file" ? "F1" : p.edit ? "E1" : "E2";
-        p.status = "pending_repair";
-        if (p.kind === "entity") p.shown = cur.hash;
-        const it: ClassifyItem = {
-          p,
-          kind: p.kind,
-          key: p.key,
-          old_hash: p.hash,
-          new_hash: cur.hash,
-          members: cur.members,
-          oldMembers: p.members,
-          before: pool.fileMapAt(r.x.seq),
-          after: running,
-          after_src:
-            p.kind === "entity"
-              ? entityAt(running, p.key, pool.languages) !== null
-                ? sourceOf(running, p.key, pool.languages)
-                : null
-              : null,
-          rule,
-          result: "repair",
-          reason: "reopened_dep_changed",
-        };
-        items.push(hItem(pool, r.a, it, "repair", r.x.seq));
-      }
-      p.hash = cur.hash;
-      p.members = cur.members;
-      p.seq = seq;
-    }
-    const uh = pushHeadsUp(pool, r.a, "repair", items, [], batchCause(batch, "undo"));
-    uh.body.go_around = r.a.go_arounds;
-    emitSent(pool, r.a, uh, items);
-  }
+  for (const r of reopened) repairReopened(pool, r, running, seq, batch);
 
   // Every other in-flight or parked attempt is classified against the batch (9.4 step 6).
   for (const a of [...inflight(pool), ...parked(pool)]) {
@@ -967,7 +813,22 @@ export function tick(pool: Pool): void {
         if (l !== undefined && l.attempt_id !== null) causeAttempt = pool.attempts.get(l.attempt_id) ?? null;
       }
     }
-    applyClassification(pool, a, cl, running, seq, batchCause(batch, "landing"), causeAttempt);
+    applyClassification(
+      pool,
+      a,
+      cl,
+      running,
+      seq,
+      batchCause(
+        batch,
+        batch.find((l) => l.kind !== "change")?.kind === "revert"
+          ? "revert"
+          : batch.some((l) => l.kind === "undo")
+            ? "undo"
+            : "landing",
+      ),
+      causeAttempt,
+    );
   }
   pool.out.waiting = inflight(pool).filter(
     (c) => c.state === "validated" && pool.out.skipped[c.id] === "right_of_way",
@@ -1200,8 +1061,8 @@ export function triage(
         reason: j.reason,
       } satisfies ClassifyItem);
     sendHeadsUp(pool, a, result, [hItem(pool, a, it, result, j.cause_seq)], [], {
-      type: "landing",
-      seqs: [],
+      type: j.cause,
+      seqs: j.cause_seq === null ? [] : [j.cause_seq],
       changes: [],
     });
   }
@@ -1217,7 +1078,14 @@ export function triage(
 
 export function owner(
   pool: Pool,
-  args: { action: string; attempt?: string; seq?: number; expect_reverted?: number[]; reason?: string },
+  args: {
+    action: string;
+    attempt?: string;
+    seq?: number;
+    expect_reverted?: number[];
+    reason?: string;
+    new_attempt_model?: string;
+  },
 ): Record<string, unknown> {
   const action = args.action;
   const bad = (message: string): Record<string, unknown> => ({
@@ -1317,42 +1185,15 @@ export function owner(
     return {};
   }
   if (action === "undo") {
-    const target = pool.landings.find((l) => l.seq === args.seq);
     const request_id = `u_${String(pool.undoCounter++).padStart(4, "0")}`;
-    if (target === undefined || target.kind !== "change") {
-      event(pool, "undo.refused", { request_id, target_seq: args.seq ?? 0, reason: "not_a_change" });
-      return { refused: "not_a_change" };
-    }
-    if (target.undone_by !== null) {
-      event(pool, "undo.refused", { request_id, target_seq: target.seq, reason: "already_undone" });
-      return { refused: "already_undone" };
-    }
-    const plan = planUndo(pool, target.seq, pool.files);
-    const detail = {
-      reverted: plan.reverted,
-      reopened: plan.reverted
-        .filter((s) => s !== target.seq)
-        .map((s) => pool.landings.find((l) => l.seq === s)?.attempt_id)
-        .filter((x): x is string => x !== undefined && x !== null),
-      kept_readers: plan.kept,
-    };
-    if (args.expect_reverted !== undefined && JSON.stringify(args.expect_reverted) !== JSON.stringify(plan.reverted)) {
-      event(pool, "undo.refused", { request_id, target_seq: target.seq, reason: "plan_changed" });
-      return { refused: "plan_changed", undo: detail };
-    }
-    const req = {
+    const result = confirmUndo(pool, {
+      seq: args.seq ?? 0,
       request_id,
-      target_seq: target.seq,
-      cause: "undo" as const,
-      state: "queued" as const,
-      requested_by: "owner",
-    };
-    pool.undoQueue.push(req);
-    pool.undoLog.set(request_id, req);
-    pool.dirtyUndo.add(request_id);
-    scheduleTick(pool);
-    event(pool, "undo.planned", { request_id, cause: "undo", target_seq: target.seq, ...detail });
-    return { undo: detail };
+      expect_reverted: args.expect_reverted ?? planUndo(pool, args.seq ?? 0, pool.files).reverted,
+    });
+    if (!result.ok) return { refused: result.reason, ...(result.plan ? { undo: result.plan } : {}) };
+    const plan = undoPlan(pool, args.seq ?? 0);
+    return plan.ok ? { undo: plan.plan } : {};
   }
   if (action === "retry" || action === "stop" || action === "keep_landed" || action === "new_attempt") {
     const a = pool.attempts.get(args.attempt ?? "");
@@ -1361,18 +1202,51 @@ export function owner(
     if (card === undefined) return {};
     if (!offered(card, action)) return bad(`card ${card.card_id} does not offer ${action}`);
     if (action !== "retry") {
+      if (action === "new_attempt" && !args.new_attempt_model) return bad("new_attempt requires the workhorse model");
       closeOwned(card, action);
+      let newAttempt: AgentOpenRequest | undefined;
       if (action === "new_attempt") {
-        // UN6a: the engine entry of the option opens a new attempt for the same intent.
+        // UN6a: a fresh real Agent starts from the same intent, never the old transcript.
         const intent = pool.intents.get(a.intent_id);
         const n = [...pool.attempts.values()].filter((x) => x.intent_id === a.intent_id).length;
-        openAttempt(pool, `${a.id}~${n}`, {
+        const opened = openAttempt(pool, `${a.id}~${n}`, {
           intent_id: a.intent_id,
           intent: intent?.text ?? "",
-          agent_kind: a.agent_kind,
-          race: a.race,
+          requester: intent?.requester ?? a.requester,
+          agent_kind: "real",
+          model: args.new_attempt_model,
+          race: false,
         });
         setIntentState(pool, a.intent_id, "open");
+        const source = pool.meta.get("source");
+        newAttempt = {
+          attempt_id: opened.id,
+          intent_id: opened.intent_id,
+          change_id: opened.change_id,
+          intent_text: opened.intentText,
+          requester: opened.requester,
+          pool: pool.meta.get("pool_id"),
+          agent_kind: "real",
+          driver: "model",
+          model: opened.model,
+          ...(pool.meta.get("app") === "" && source
+            ? {
+                imported: {
+                  guide_path: pool.meta.get("guide_path") ?? "",
+                  source,
+                  branch: pool.meta.get("branch") ?? "",
+                },
+              }
+            : {}),
+        };
+        // Persist delivery in the same transaction as the card and attempt. A restart
+        // between the commit and the first /open call must still start the new Agent.
+        pool.meta.set(`new_agent_open:${opened.id}`, JSON.stringify(newAttempt));
+        pool.sql.exec(
+          "INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('resume', ?, ?)",
+          opened.id,
+          pool.now(),
+        );
       }
       // GL3a: a card that closes with any option other than `retry` deletes the parked
       // attempt's premises and operations; the intent stops when no other attempt of it is in
@@ -1390,7 +1264,7 @@ export function owner(
       ) {
         setIntentState(pool, a.intent_id, "stopped");
       }
-      return {};
+      return newAttempt === undefined ? {} : { new_attempt: newAttempt };
     }
     // T21: the owner retries a stopped attempt that holds a choice card.
     closeOwned(card, "retry");
@@ -1407,7 +1281,13 @@ export function owner(
     } else {
       setState(pool, a, "working", "T21");
     }
+    if (card.reason === "revert_limit") {
+      a.revision += 1;
+      a.opsFirstDone = false;
+    }
     a.resumes += 1;
+    pool.meta.set(`resume_cause:${a.id}`, "retry");
+    setIntentState(pool, a.intent_id, "open");
     event(pool, "attempt.reopened", { attempt_id: a.id, cause: "retry", revision: a.revision, model_changed: false });
     pool.dirtyAttempts.add(a.id);
     return {};

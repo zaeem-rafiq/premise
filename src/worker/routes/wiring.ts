@@ -2,8 +2,7 @@
 // of `protocol/routes.ts`; the lane edits this file, never `../index.ts`.
 //
 // Slice 1 (track 1D): the session routes (SE2, SE2a) and the pool routes the Worker answers (PL1,
-// SE5c). The owner routes `undo*` stay unregistered so the Worker's
-// dispatch hands them to the Trunk Durable Object, whose shell answers from the engine table.
+// SE5c). Undo routes validate the owner request and forward it to the engine table.
 
 import { ROUTES } from "../../protocol/routes.ts";
 import { routeKey, type RouteTable } from "../index.ts";
@@ -14,6 +13,7 @@ import { createIntent } from "./intents.ts";
 import { stopAttempt } from "./stop.ts";
 import { handleCard } from "./cards.ts";
 import { rebuild } from "./rebuild.ts";
+import { undo, undoPlan } from "./undo.ts";
 
 /** The seam key of the `ROUTES` row for `method`+`path`: keyed on the row, not a retyped string. */
 function key(method: string, path: string): string {
@@ -33,4 +33,6 @@ export function wire(table: RouteTable): void {
   table.handlers.set(key("POST", "/api/pools/{pool}/attempts/{attempt_id}/stop"), stopAttempt);
   table.handlers.set(key("POST", "/api/pools/{pool}/cards/{card_id}"), handleCard);
   table.handlers.set(key("POST", "/api/pools/{pool}/rebuild"), rebuild);
+  table.handlers.set(key("GET", "/api/pools/{pool}/undo-plan"), undoPlan);
+  table.handlers.set(key("POST", "/api/pools/{pool}/undo"), undo);
 }

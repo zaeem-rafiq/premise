@@ -189,6 +189,10 @@ test.describe("IR12: a pool with no live picture", () => {
     await page.goto("/");
 
     await expect(page.locator(".pool-name")).toHaveText("octo/app");
+    // The start card's second button names the repository, not a live pool (start.look.repo).
+    await expect(
+      page.locator(".start-card").getByRole("button", { name: "Look around this repository" }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Compare", exact: true })).toHaveCount(0);
     await expect(page.locator(".floor")).toHaveAttribute("data-view", "floor");
     await page.keyboard.press("c");
@@ -206,6 +210,7 @@ test.describe("IR12: a pool with no live picture", () => {
     await page.goto("/");
 
     await expect(page.locator(".pool-name")).toHaveText("testpool");
+    await expect(page.locator(".start-card").getByRole("button", { name: "Look around the live pool" })).toBeVisible();
     const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
     // The frame loads as soon as pool.state names the kind — not when the first-load wait
     // lapses (the hold is 3 s; this bound keeps the release honest).

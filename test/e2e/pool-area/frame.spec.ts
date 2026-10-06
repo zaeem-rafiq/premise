@@ -153,6 +153,13 @@ function poolFrame(page: Page) {
   return page.frames().find((f) => f.url().includes("/pool/tidepool/"));
 }
 
+/** The pool frame once it has loaded: a live frame's first load waits for the stream's
+ * `pool.state` (IR12), so a lookup right after the first events may find no frame yet. */
+async function loadedPoolFrame(page: Page) {
+  await expect.poll(() => poolFrame(page) !== undefined, { timeout: 10_000 }).toBe(true);
+  return poolFrame(page)!;
+}
+
 async function sendEvents(page: Page, throughIndex: number): Promise<void> {
   await page.evaluate(
     ([events, through]) => {
@@ -202,7 +209,7 @@ test.describe("the pool frame component", () => {
   test("CO21: landing.landed posts one debounced probe to the live frame — the src never moves", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, 1); // pool.state + pool.files
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect
       .poll(async () => frame?.evaluate(() => (window as never as { __v?: string }).__v !== undefined))
       .toBe(true);
@@ -244,7 +251,7 @@ test.describe("the pool frame component", () => {
   test("CO23a: the pause control posts pause and resume to the frame", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, 0);
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await page.getByRole("button", { name: "Pause" }).click();
     await expect(page.locator(".pf-caption")).toContainText("Paused.");
     await page.getByRole("button", { name: "Play" }).click();
@@ -259,7 +266,7 @@ test.describe("the pool frame component", () => {
     test.setTimeout(30_000);
     await serveHarness(page);
     await sendEvents(page, EVENTS.length - 1); // green.commit = c0c0…c0 at landing 1 in the tracer
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect.poll(async () => frame?.url()).toContain("/pool/tidepool/main/");
     await frame!.evaluate(() => {
       (window as never as { __silent: boolean }).__silent = true;
@@ -283,7 +290,7 @@ test.describe("the pool frame component", () => {
     const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
     await expect(iframe).toHaveAttribute("src", /\/pool\/tidepool\/main\/\?seed=7&paused=1$/);
     await expect(page.locator(".pf-caption")).toContainText("Paused.");
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect
       .poll(async () => frame?.evaluate(() => (window as never as { __paused: boolean }).__paused))
       .toBe(true);
@@ -292,7 +299,7 @@ test.describe("the pool frame component", () => {
   test("CO23a/AS14: a frame scrolled out of view posts pause, back in view resume", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, 0);
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect.poll(async () => frame !== undefined).toBe(true);
     await page.evaluate(() => {
       const tall = document.createElement("div");
@@ -316,7 +323,7 @@ test.describe("the pool frame component", () => {
   test("CO23b: highlight posts the given kinds, then the empty list when cleared", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, 0);
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect.poll(async () => frame !== undefined).toBe(true);
     const log = () => frame!.evaluate(() => (window as never as { __log: { type: string; kinds?: string[] }[] }).__log);
     // Never passed: after a few stats beats the log still carries no highlight.
@@ -343,7 +350,7 @@ test.describe("the pool frame component", () => {
     await page.evaluate(() => {
       (window as { harness?: { selftest: (b: boolean) => void } }).harness?.selftest(true);
     });
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect
       .poll(async () =>
         frame?.evaluate(() =>
@@ -359,7 +366,7 @@ test.describe("the pool frame component", () => {
   test("CO22: a tapped message reports its path through onTapped", async ({ page }) => {
     await serveHarness(page);
     await sendEvents(page, 0);
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect.poll(async () => frame !== undefined).toBe(true);
     await frame!.evaluate(() => {
       window.parent.postMessage({ type: "tapped", creature: "fish", path: "creatures/fish.js" }, "*");
@@ -399,7 +406,7 @@ test.describe("the pool frame component", () => {
     test.setTimeout(40_000);
     await serveHarness(page);
     await sendEvents(page, GREEN_IX - 1); // landings 1-2 reduced but green.advanced not yet
-    const frame = poolFrame(page);
+    const frame = await loadedPoolFrame(page);
     await expect.poll(async () => frame?.url()).toContain("/pool/tidepool/main/");
     await frame!.evaluate(() => {
       (window as never as { __silent: boolean }).__silent = true;

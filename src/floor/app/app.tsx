@@ -671,7 +671,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                         {shell.t("start.play", { duration: defaultRecordingDuration() })}
                       </button>
                       <button type="button" onClick={() => setStartDismissed(true)}>
-                        {shell.t("start.look")}
+                        {/* A repository pool has no live pool to look around (IR12). */}
+                        {shell.t(floor.pool.app === null ? "start.look.repo" : "start.look")}
                       </button>
                     </div>
                   </div>

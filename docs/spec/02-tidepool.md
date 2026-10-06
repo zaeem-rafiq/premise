@@ -1767,7 +1767,7 @@ A `confirm` that reaches an attempt before its submit costs one scripted answer 
 | Independent | *u* ≥ *d* | `add-plain` 0.85, `reader` 0.10, `blind` 0.05 |
 | Colliding | *u* < *d* | `add-energy` 0.35, `edit-creature` 0.20, `retune` 0.15, `add-relative` 0.10, `sweep-colour` 0.05, `sweep-search` 0.05, `same-file` 0.05, `cosmetic` 0.05 |
 
-- `rescale-energy` is not drawn. One is launched every `rescale_every_s` seconds while *d* > 0. It is the meaning change that the colliding creatures are in flight against.
+- `rescale-energy` is not drawn. One is launched every `rescale_every_s` seconds while *d* > 0 and the run is still launching its agents. It is the meaning change that the colliding creatures are in flight against. (Amended 2026-10-05: launched for as long as a run lasted, rescales kept coming after the last agent and collided with each other, which stalled the landings of a 64-agent soak for more than 10 s.)
 - At *d* = 0 every agent adds its own file and edits nothing else. The expected go-around rate is 0: the only shared key is `listing:creatures/`, which rule L3 holds. `blind` still takes one `confirm` turn each, which is not a go-around. A run at *d* = 0 with a non-zero go-around rate is a failed run.
 - At *d* = 1 every agent is in the colliding class.
 - The Floor shows *d* in `swarm.state.collision_dial`. Throughput and go-around rate are always reported together with the *d* they were measured at.

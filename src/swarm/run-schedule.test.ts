@@ -1,54 +1,44 @@
-// The launch schedule of one Swarm run (01-core SWR1, 02-tidepool 10.4), one tick at a time:
-// regular agents at `launch_per_second` up to `agents`, one `rescale-energy` every
-// `rescale_every_s` while the dial is above 0, and the run's own end ATTEMPT_TIMEOUT_MS after
-// its last regular agent was due (SWR1, added 2026-10-05). Expected values are worked from those
-// rules, not from the function (BP1).
+// The launch schedule of one Swarm run (01-core SWR1, 02-tidepool 10.4, both amended
+// 2026-10-05), one tick at a time: regular agents at `launch_per_second` up to `agents`; while the
+// dial is above 0, one `rescale-energy` every `rescale_every_s` for as long as the run is still
+// launching its agents; and the run ends once its last agent is launched. Expected values are
+// worked from those rules, not from the function (BP1).
 
 import { describe, expect, it } from "vitest";
-import { ATTEMPT_TIMEOUT_MS } from "../protocol/constants.ts";
 import { runTick } from "./run-schedule.ts";
 
 const START = 1_000_000;
-const RUN = { startMs: START, agents: 100, launchPerSecond: 50, collisionDial: 0.25, rescaleEverySecs: 15 };
+// 100 agents at 4 a second: the last one is due 25 s in.
+const RUN = { startMs: START, agents: 100, launchPerSecond: 4, collisionDial: 0.25, rescaleEverySecs: 10 };
 
 describe("runTick: what one tick of a run launches, and when the run ends", () => {
   it("regular agents are due at launch_per_second, never more than `agents`", () => {
-    // 50 a second: 1.5 s in, 75 are due; 3 s in, 150 would be due but the run has 100.
-    expect(runTick({ ...RUN, now: START + 1_500, doneAt: null }).regularDue).toBe(75);
-    expect(runTick({ ...RUN, now: START + 3_000, doneAt: null }).regularDue).toBe(100);
+    expect(runTick({ ...RUN, now: START + 2_500 }).regularDue).toBe(10); // 4 a second, 2.5 s
+    expect(runTick({ ...RUN, now: START + 40_000 }).regularDue).toBe(100);
   });
 
-  it("one rescale-energy every rescale_every_s while the dial is above 0, none at dial 0", () => {
-    // 31 s in at 15 s: two are due (at 15 s and 30 s).
-    expect(runTick({ ...RUN, now: START + 31_000, doneAt: null }).rescaleDue).toBe(2);
-    expect(runTick({ ...RUN, collisionDial: 0, now: START + 31_000, doneAt: null }).rescaleDue).toBe(0);
-    expect(runTick({ ...RUN, rescaleEverySecs: 0, now: START + 31_000, doneAt: null }).rescaleDue).toBe(0);
+  it("rescales come every rescale_every_s while the agents are still being launched", () => {
+    // 21 s in, at 10 s: two are due (10 s, 20 s); the launch still runs until 25 s.
+    expect(runTick({ ...RUN, now: START + 21_000 }).rescaleDue).toBe(2);
   });
 
-  it("the run ends ATTEMPT_TIMEOUT_MS after its last regular agent was due, and not before", () => {
-    // All 100 are due 2 s in: that tick records doneAt = START + 2_000.
-    const due = runTick({ ...RUN, now: START + 2_000, doneAt: null });
-    expect(due.doneAt).toBe(START + 2_000);
-    expect(due.ended).toBe(false);
-    const almost = runTick({ ...RUN, now: START + 2_000 + ATTEMPT_TIMEOUT_MS - 1, doneAt: due.doneAt });
-    expect(almost.ended).toBe(false);
-    expect(almost.doneAt).toBe(START + 2_000);
-    expect(runTick({ ...RUN, now: START + 2_000 + ATTEMPT_TIMEOUT_MS, doneAt: due.doneAt }).ended).toBe(true);
+  it("no rescale is due after the last agent was due, however long the run lasts", () => {
+    // The last regular agent is due at 25 s: the rescales of 10 s and 20 s, and no more.
+    expect(runTick({ ...RUN, now: START + 25_000 }).rescaleDue).toBe(2);
+    expect(runTick({ ...RUN, now: START + 600_000 }).rescaleDue).toBe(2);
   });
 
-  it("while regular agents are still due the run has no end time", () => {
-    expect(runTick({ ...RUN, now: START + 1_000, doneAt: null })).toMatchObject({ doneAt: null, ended: false });
+  it("no rescale at dial 0 or when rescale_every_s is 0", () => {
+    expect(runTick({ ...RUN, collisionDial: 0, now: START + 21_000 }).rescaleDue).toBe(0);
+    expect(runTick({ ...RUN, rescaleEverySecs: 0, now: START + 21_000 }).rescaleDue).toBe(0);
   });
 
-  it("a raised agent count reopens the run: the end time is cleared until the new quota is due", () => {
-    // 100 were done at 2 s; the owner raises the run to 400, due at 8 s.
-    const raised = runTick({ ...RUN, agents: 400, now: START + 5_000, doneAt: START + 2_000 });
-    expect(raised).toMatchObject({ regularDue: 250, doneAt: null, ended: false });
+  it("the run ends at the tick its last agent is due, and not before", () => {
+    expect(runTick({ ...RUN, now: START + 24_999 }).ended).toBe(false);
+    expect(runTick({ ...RUN, now: START + 25_000 }).ended).toBe(true);
   });
 
-  it("a run of 0 agents launches only rescales and ends ATTEMPT_TIMEOUT_MS after it started", () => {
-    const first = runTick({ ...RUN, agents: 0, now: START, doneAt: null });
-    expect(first).toMatchObject({ regularDue: 0, doneAt: START, ended: false });
-    expect(runTick({ ...RUN, agents: 0, now: START + ATTEMPT_TIMEOUT_MS, doneAt: START }).ended).toBe(true);
+  it("a run of 0 agents launches nothing and ends at once", () => {
+    expect(runTick({ ...RUN, agents: 0, now: START })).toEqual({ regularDue: 0, rescaleDue: 0, ended: true });
   });
 });

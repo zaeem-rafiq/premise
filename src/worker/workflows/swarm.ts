@@ -9,8 +9,8 @@
 //     scripted agents at `launch_per_second` — agent n's pattern drawn from
 //     `collision_dial` with `agentRandom(seed, n)` (SW1), one `rescale-energy` every
 //     `rescale_every_s` while the dial is positive — takes `SWARM_CONTROL_EVENT` events (dial,
-//     stop) and emits every change. It ends on `stop`, on the kill switch, or by itself
-//     ATTEMPT_TIMEOUT_MS after its last regular agent was due (`runTick`).
+//     stop) and emits every change. It ends on `stop`, on the kill switch, or by itself once
+//     its last agent is launched (`runTick`): `running` means launching.
 //
 // The step is the outbox row (EV2a): `emitSwarmState` throws while a pool's Floor has not
 // confirmed, and `step.do` retries with backoff — a step completes only when every delivery
@@ -126,7 +126,6 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
     let rescaled = 0;
     let seq = 0;
     let tick = 0;
-    let doneAt: number | null = null;
     while (true) {
       let control: SwarmControlEvent["payload"] | null = null;
       try {
@@ -165,10 +164,7 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
         launchPerSecond: launch_per_second,
         collisionDial: collision_dial,
         rescaleEverySecs: rescale_every_s,
-        doneAt,
       });
-      doneAt = due.doneAt;
-      if (due.ended) break;
       while (regular < due.regularDue) {
         const pattern = dialPick(collision_dial, agentRandom(seed, seq));
         await launch(seq, pattern.id);
@@ -181,6 +177,8 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
         seq += 1;
         rescaled += 1;
       }
+      // The last agent is launched: the run is over (its agents finish on their own).
+      if (due.ended) break;
     }
 
     await emit({ running: false });

@@ -31,6 +31,7 @@ import { GreenLine } from "../components/green/green.tsx";
 import { PoolArea } from "../components/pool-frame/pool-area.tsx";
 import { Rail } from "../components/rail/rail.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
+import { ViewBoundary } from "./view-boundary.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
 import { ReplayMenu } from "../replay/replay-menu.tsx";
 import { defaultRecordingId, loadRecordingIndex, type RecordingIndex } from "../replay/player.ts";
@@ -445,79 +446,113 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   const cells = stripCells(floor, clock, { greenFeature: settings.features.green });
   const sheets = (
     <>
-      {sheet.kind === "card" &&
-        call(table.entries.get("sheet.card"), { floor, card_id: sheet.card_id, onClose: closeSheet })}
-      {sheet.kind === "why" &&
-        call(table.entries.get("sheet.why"), {
-          floor,
-          seq: sheet.seq,
-          mode: replay ? "replay" : "live",
-          onClose: closeSheet,
-          // 3.9: the card's `who.open` and `undo.open` buttons open the sibling sheets.
-          onOpenWho: table.entries.has("sheet.who")
-            ? (kind: string, key: string) => openSheet({ kind: "who", kind_: kind, key })
-            : undefined,
-          onOpenUndo: table.entries.has("sheet.undo") ? (seq: number) => openSheet({ kind: "undo", seq }) : undefined,
-        })}
-      {sheet.kind === "who" &&
-        call(table.entries.get("sheet.who"), {
-          floor,
-          kind_: sheet.kind_,
-          // `key` is React's own prop and never reaches a component: the panel reads `whoKey`.
-          // As the element's key it also gives each subject a fresh panel.
-          key: `${sheet.kind_} ${sheet.key}`,
-          whoKey: sheet.key,
-          onClose: closeSheet,
-          onOpenWhy: table.entries.has("sheet.why") ? (seq: number) => openSheet({ kind: "why", seq }) : undefined,
-        })}
-      {sheet.kind === "undo" && call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
+      {/* FR33: every open sheet sits in a boundary of its own - a sheet that throws
+          while drawing shows view.failed inside the sheet shell and the rest of the page
+          keeps working. A boundary is keyed by its subject so the next sheet mounts clean. */}
+      {sheet.kind === "card" && (
+        <ViewBoundary key={`card ${sheet.card_id}`} sheet>
+          {call(table.entries.get("sheet.card"), { floor, card_id: sheet.card_id, onClose: closeSheet })}
+        </ViewBoundary>
+      )}
+      {sheet.kind === "why" && (
+        <ViewBoundary key={`why ${sheet.seq}`} sheet>
+          {call(table.entries.get("sheet.why"), {
+            floor,
+            seq: sheet.seq,
+            mode: replay ? "replay" : "live",
+            onClose: closeSheet,
+            // 3.9: the card's `who.open` and `undo.open` buttons open the sibling sheets.
+            onOpenWho: table.entries.has("sheet.who")
+              ? (kind: string, key: string) => openSheet({ kind: "who", kind_: kind, key })
+              : undefined,
+            onOpenUndo: table.entries.has("sheet.undo") ? (seq: number) => openSheet({ kind: "undo", seq }) : undefined,
+          })}
+        </ViewBoundary>
+      )}
+      {sheet.kind === "who" && (
+        <ViewBoundary key={`who ${sheet.kind_} ${sheet.key}`} sheet>
+          {call(table.entries.get("sheet.who"), {
+            floor,
+            kind_: sheet.kind_,
+            // `key` is React's own prop and never reaches a component: the panel reads `whoKey`.
+            // As the element's key it also gives each subject a fresh panel.
+            key: `${sheet.kind_} ${sheet.key}`,
+            whoKey: sheet.key,
+            onClose: closeSheet,
+            onOpenWhy: table.entries.has("sheet.why") ? (seq: number) => openSheet({ kind: "why", seq }) : undefined,
+          })}
+        </ViewBoundary>
+      )}
+      {sheet.kind === "undo" && (
+        <ViewBoundary key={`undo ${sheet.seq}`} sheet>
+          {call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
+        </ViewBoundary>
+      )}
       {sheet.kind === "about" && (
-        <AboutSheet
-          floor={floor}
-          shortcuts={shortcuts}
-          onShortcuts={setShortcuts}
-          onClose={closeSheet}
-          build={aboutBuild}
-        />
+        <ViewBoundary key="about" sheet>
+          <AboutSheet
+            floor={floor}
+            shortcuts={shortcuts}
+            onShortcuts={setShortcuts}
+            onClose={closeSheet}
+            build={aboutBuild}
+          />
+        </ViewBoundary>
       )}
       {sheet.kind === "shortcuts" && (
-        <AboutSheet
-          floor={floor}
-          shortcuts={shortcuts}
-          onShortcuts={setShortcuts}
-          onClose={closeSheet}
-          build={aboutBuild}
-        />
+        <ViewBoundary key="shortcuts" sheet>
+          <AboutSheet
+            floor={floor}
+            shortcuts={shortcuts}
+            onShortcuts={setShortcuts}
+            onClose={closeSheet}
+            build={aboutBuild}
+          />
+        </ViewBoundary>
       )}
       {sheet.kind === "owner" && (
-        <OwnerDialog
-          unlocked={owner}
-          onToast={toast}
-          onDone={(next) => {
-            setOwner(next);
-            closeSheet();
-            if (!next) toast(shell.t("owner.locked_toast"));
-          }}
-          onClose={closeSheet}
-        />
+        <ViewBoundary key="owner" sheet>
+          <OwnerDialog
+            unlocked={owner}
+            onToast={toast}
+            onDone={(next) => {
+              setOwner(next);
+              closeSheet();
+              if (!next) toast(shell.t("owner.locked_toast"));
+            }}
+            onClose={closeSheet}
+          />
+        </ViewBoundary>
       )}
       {sheet.kind === "kill" && (
-        <KillDialog onClose={closeSheet} onToast={toast} onExpired={sessionExpired} offline={offline} />
+        <ViewBoundary key="kill" sheet>
+          <KillDialog onClose={closeSheet} onToast={toast} onExpired={sessionExpired} offline={offline} />
+        </ViewBoundary>
       )}
       {sheet.kind === "rebuild" && (
-        <RebuildDialog pool={pool} onClose={closeSheet} onToast={toast} onExpired={sessionExpired} offline={offline} />
+        <ViewBoundary key="rebuild" sheet>
+          <RebuildDialog
+            pool={pool}
+            onClose={closeSheet}
+            onToast={toast}
+            onExpired={sessionExpired}
+            offline={offline}
+          />
+        </ViewBoundary>
       )}
       {replayMenuOpen && (
-        <ReplayMenu
-          index={replayIndex}
-          owner={owner && !replay}
-          pool={pool}
-          onPick={(id) => {
-            setReplayMenuOpen(false);
-            openRecording(id);
-          }}
-          onClose={() => setReplayMenuOpen(false)}
-        />
+        <ViewBoundary key="replay-menu" sheet>
+          <ReplayMenu
+            index={replayIndex}
+            owner={owner && !replay}
+            pool={pool}
+            onPick={(id) => {
+              setReplayMenuOpen(false);
+              openRecording(id);
+            }}
+            onClose={() => setReplayMenuOpen(false)}
+          />
+        </ViewBoundary>
       )}
     </>
   );
@@ -562,9 +597,13 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     const swarmEntry = table.entries.get("view.swarm");
     body = (
       <main className="floor-body floor-swarm">
-        {call(swarmEntry, { floor, owner: owner && !replay && !offline, pool: settings.swarm_pool }) ?? (
-          <SwarmView floor={floor} owner={owner && !replay && !offline} pool={settings.swarm_pool} />
-        )}
+        {/* FR33: a throw while a view draws fails that view alone. The boundary is keyed
+            by the view so switching to another view mounts it clean. */}
+        <ViewBoundary key="swarm">
+          {call(swarmEntry, { floor, owner: owner && !replay && !offline, pool: settings.swarm_pool }) ?? (
+            <SwarmView floor={floor} owner={owner && !replay && !offline} pool={settings.swarm_pool} />
+          )}
+        </ViewBoundary>
       </main>
     );
   } else if (
@@ -577,14 +616,16 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     // lane registers it; the shell owns the view state, the frames' pause and the way back.
     body = (
       <main className="floor-body floor-compare" data-view="compare">
-        {call(table.entries.get("view.compare"), {
-          pool,
-          floor,
-          mode: replay ? "replay" : "live",
-          paused: framesPaused,
-          onPausedChange: setFramesPaused,
-          onBack: () => setView("floor"),
-        })}
+        <ViewBoundary key="compare">
+          {call(table.entries.get("view.compare"), {
+            pool,
+            floor,
+            mode: replay ? "replay" : "live",
+            paused: framesPaused,
+            onPausedChange: setFramesPaused,
+            onBack: () => setView("floor"),
+          })}
+        </ViewBoundary>
       </main>
     );
   } else {
@@ -592,65 +633,67 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     // lane's `PoolArea`, the rail the shell's container over the rail lane's `AttemptCard`).
     body = (
       <main className="floor-body" data-view={view}>
-        <div className="pool-column">
-          <div className="pool-stage">
-            <PoolArea
-              pool={pool}
-              state={floor}
-              mode={replay ? "replay" : "live"}
-              paused={framesPaused}
-              onPausedChange={setFramesPaused}
-              onCompare={
-                floor.pool.plain_remote !== null && floor.pool.app !== null ? () => setView("compare") : undefined
-              }
-              selftest={floor.pool.app !== null}
-              onTapped={
-                table.entries.has("sheet.why")
-                  ? (path) => {
-                      const seq = floor.files[path]?.last_landed_seq;
-                      if (seq !== null && seq !== undefined) openSheet({ kind: "why", seq });
-                    }
-                  : undefined
-              }
-              onTileWho={
-                table.entries.has("sheet.who")
-                  ? (path) => openSheet({ kind: "who", kind_: "file", key: path })
-                  : undefined
-              }
-              onTileWhy={table.entries.has("sheet.why") ? (_path, seq) => openSheet({ kind: "why", seq }) : undefined}
-            />
-            {!replay && quietPool(floor, clock) && !startDismissed && (
-              <div className="start-overlay">
-                <div className="start-card" role="group" aria-label={shell.t("start.title")}>
-                  <h3>{shell.t("start.title")}</h3>
-                  <p>{shell.t("start.body")}</p>
-                  <div className="start-actions">
-                    <button type="button" className="primary" onClick={openDefaultRecording}>
-                      {shell.t("start.play", { duration: defaultRecordingDuration() })}
-                    </button>
-                    <button type="button" onClick={() => setStartDismissed(true)}>
-                      {shell.t("start.look")}
-                    </button>
+        <ViewBoundary key="floor">
+          <div className="pool-column">
+            <div className="pool-stage">
+              <PoolArea
+                pool={pool}
+                state={floor}
+                mode={replay ? "replay" : "live"}
+                paused={framesPaused}
+                onPausedChange={setFramesPaused}
+                onCompare={
+                  floor.pool.plain_remote !== null && floor.pool.app !== null ? () => setView("compare") : undefined
+                }
+                selftest={floor.pool.app !== null}
+                onTapped={
+                  table.entries.has("sheet.why")
+                    ? (path) => {
+                        const seq = floor.files[path]?.last_landed_seq;
+                        if (seq !== null && seq !== undefined) openSheet({ kind: "why", seq });
+                      }
+                    : undefined
+                }
+                onTileWho={
+                  table.entries.has("sheet.who")
+                    ? (path) => openSheet({ kind: "who", kind_: "file", key: path })
+                    : undefined
+                }
+                onTileWhy={table.entries.has("sheet.why") ? (_path, seq) => openSheet({ kind: "why", seq }) : undefined}
+              />
+              {!replay && quietPool(floor, clock) && !startDismissed && (
+                <div className="start-overlay">
+                  <div className="start-card" role="group" aria-label={shell.t("start.title")}>
+                    <h3>{shell.t("start.title")}</h3>
+                    <p>{shell.t("start.body")}</p>
+                    <div className="start-actions">
+                      <button type="button" className="primary" onClick={openDefaultRecording}>
+                        {shell.t("start.play", { duration: defaultRecordingDuration() })}
+                      </button>
+                      <button type="button" onClick={() => setStartDismissed(true)}>
+                        {shell.t("start.look")}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+            <div className="frame-under">
+              <GreenLine floor={floor} />
+            </div>
           </div>
-          <div className="frame-under">
-            <GreenLine floor={floor} />
-          </div>
-        </div>
-        <Rail
-          floor={floor}
-          mode={replay ? "replay" : "live"}
-          owner={owner}
-          visitor={shell.visitor}
-          clock={clock}
-          dwellMs={reducedMotion ? 2000 : 1200}
-          capReached={capReached(floor)}
-          onSend={(t) => void sendIntent(t)}
-          onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
-        />
+          <Rail
+            floor={floor}
+            mode={replay ? "replay" : "live"}
+            owner={owner}
+            visitor={shell.visitor}
+            clock={clock}
+            dwellMs={reducedMotion ? 2000 : 1200}
+            capReached={capReached(floor)}
+            onSend={(t) => void sendIntent(t)}
+            onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
+          />
+        </ViewBoundary>
       </main>
     );
   }

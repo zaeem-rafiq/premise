@@ -1087,6 +1087,16 @@ a {
   color: var(--muted);
 }
 
+/* FR33: a view body or open sheet that threw while drawing is replaced by `view.failed`
+ * where it stood; inside the floor body's grid the sentence spans the row. */
+.view-failed {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px;
+  color: var(--muted);
+  font-size: var(--size-body);
+}
+
 /* ---- The narrow layout (2.9): one column; header first, the strip wraps to two rows,
  * then banners, the intent box, the tray, the pool frame, the tabs and the cards. ---- */
 @media (max-width: 1099px) {

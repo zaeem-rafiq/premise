@@ -114,8 +114,9 @@ type Captured = { url: string; body: Record<string, unknown> | null };
 
 /**
  * floor.json, the session, the pool frame's page, the two undo routes and the stream socket.
- * `plan`/`confirm` answer their route (default: PLAN / `{ok:true, request_id:"r_1"}`); `sent`
- * captures the confirm POSTs and `planCalls` the plan GETs' `seq` parameter.
+ * `plan`/`confirm` answer their route (default: PLAN / `{ok:true, request_id}` with the request's
+ * own `request_id`, as Trunk answers UN5); `sent` captures the confirm POSTs and `planCalls` the
+ * plan GETs' `seq` parameter.
  */
 async function serve(
   page: Page,
@@ -143,14 +144,12 @@ async function serve(
     return route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, plan: PLAN }) });
   });
   await page.route("**/api/pools/*/undo", async (route) => {
-    opts.sent?.push({
-      url: route.request().url(),
-      body: (await route.request().postDataJSON()) as Record<string, unknown>,
-    });
+    const body = (await route.request().postDataJSON()) as Record<string, unknown>;
+    opts.sent?.push({ url: route.request().url(), body });
     if (opts.confirm !== undefined) return opts.confirm(route);
     return route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, request_id: "r_1" }),
+      body: JSON.stringify({ ok: true, request_id: body["request_id"] }),
     });
   });
   await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {

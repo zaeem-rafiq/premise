@@ -21,6 +21,7 @@ function run(
       hold: false,
       released: false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     };
     const step = pattern.next(turn);

@@ -26,6 +26,7 @@ function run(opts: {
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     } as PatternTurn);
     state = step.state;
@@ -217,6 +218,7 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
         hold: true,
         released: false,
         state,
+        attempt_id: "a_test",
         rand: agentRandom(7, 0),
       });
       state = step.state;
@@ -233,6 +235,7 @@ describe("add-energy (02-tidepool.md 10.3)", () => {
       hold: true,
       released: true,
       state,
+      attempt_id: "a_test",
       rand: agentRandom(7, 0),
     });
     expect(released.kind).toBe("tool");

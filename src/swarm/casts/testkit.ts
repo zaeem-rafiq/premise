@@ -19,13 +19,14 @@ export function step(
   b: Bag,
   last: ModelToolMessage | null,
   hus: HeadsUp[] = [],
-  flags: { hold?: boolean; released?: boolean } = {},
+  flags: { hold?: boolean; released?: boolean; attempt_id?: string } = {},
 ): PatternStep {
   const out = pattern.next({
     last,
     heads_ups: hus,
     hold: flags.hold ?? false,
     released: flags.released ?? false,
+    attempt_id: flags.attempt_id ?? "a_test",
     state: b.state,
     rand: () => 0,
   });
@@ -112,7 +113,7 @@ export function drain(
   pattern: Pattern,
   b: Bag,
   results: ModelToolMessage[] = [],
-  flags: { hold?: boolean; released?: boolean } = {},
+  flags: { hold?: boolean; released?: boolean; attempt_id?: string } = {},
   cap = 40,
 ): PatternStep {
   let out: PatternStep = step(pattern, b, null, [], flags);

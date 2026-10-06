@@ -145,7 +145,7 @@ export class SwarmSim {
     const pattern = typeof patternOrId === "string" ? patternById(patternOrId) : patternOrId;
     if (pattern === undefined) throw new Error(`unknown pattern ${patternOrId}`);
     const n = opts.n ?? this.agents.length;
-    const id = `a${this.agents.length}`;
+    const id = `a_${this.agents.length}`;
     this.trunk.openAttempt(id, {
       intent: pattern.intent,
       agent_kind: "synthetic",
@@ -334,6 +334,7 @@ export class SwarmSim {
         heads_ups: rawHu,
         hold: agent.hold,
         released: agent.released,
+        attempt_id: agent.id,
         state: agent.state,
         rand: agent.rand,
       });

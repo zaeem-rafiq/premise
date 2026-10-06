@@ -51,6 +51,7 @@ function run(opts: {
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand ?? agentRandom(7, 0),
     });
     state = step.state;
@@ -189,7 +190,15 @@ describe("sweep-colour (02-tidepool.md 10.3)", () => {
     let last: ModelToolMessage | null = null;
     const rand = agentRandom(7, 0);
     for (let i = 0; i < 15; i += 1) {
-      const step = SWEEP_COLOUR.next({ last, heads_ups: [], hold: true, released: false, state, rand });
+      const step = SWEEP_COLOUR.next({
+        last,
+        heads_ups: [],
+        hold: true,
+        released: false,
+        state,
+        attempt_id: "a_test",
+        rand,
+      });
       state = step.state;
       if (step.kind === "wait") break;
       if (step.kind === "tool") {
@@ -214,7 +223,15 @@ describe("sweep-colour (02-tidepool.md 10.3)", () => {
       "replace",
       "replace",
     ]);
-    const step = SWEEP_COLOUR.next({ last, heads_ups: [], hold: true, released: true, state, rand });
+    const step = SWEEP_COLOUR.next({
+      last,
+      heads_ups: [],
+      hold: true,
+      released: true,
+      state,
+      attempt_id: "a_test",
+      rand,
+    });
     expect((step as { tool?: string }).tool).toBe("submit");
   });
 });

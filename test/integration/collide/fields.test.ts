@@ -139,7 +139,7 @@ describe("event fields of 12.1, worked by hand (BP1)", () => {
     );
     sim.release(ae);
     sim.settle();
-    expect(rescale.id).toBe("a1");
+    expect(rescale.id).toBe("a_1");
   });
 
   it("intent.state: the landed attempt's intent goes to landed (T16)", () => {

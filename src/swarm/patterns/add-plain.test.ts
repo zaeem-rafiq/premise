@@ -26,6 +26,7 @@ function run(opts: {
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     };
     const step = ADD_PLAIN.next(turn);
@@ -191,6 +192,7 @@ export function draw(creature, pen) {
         hold: true,
         released: false,
         state,
+        attempt_id: "a_test",
         rand: agentRandom(7, 0),
       });
       state = step.state;
@@ -208,6 +210,7 @@ export function draw(creature, pen) {
       hold: true,
       released: true,
       state,
+      attempt_id: "a_test",
       rand: agentRandom(7, 0),
     });
     expect(released.kind).toBe("tool");

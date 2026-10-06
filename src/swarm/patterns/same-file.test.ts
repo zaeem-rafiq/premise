@@ -27,6 +27,7 @@ function run(opts: { rand: () => number; inject?: Map<number, HeadsUp[]>; raced?
       hold: false,
       released: false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     });
     state = step.state;

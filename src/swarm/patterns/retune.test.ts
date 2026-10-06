@@ -29,6 +29,7 @@ function run(
       hold: opts.hold ?? false,
       released: opts.released ?? false,
       state,
+      attempt_id: "a_test",
       rand: opts.rand,
     };
     const step = pattern.next(turn);
@@ -185,7 +186,7 @@ describe("retune (02-tidepool.md 10.3)", () => {
     let last: ModelToolMessage | null = null;
     const rand = agentRandom(7, 0);
     for (let i = 0; i < 10; i += 1) {
-      const step = RETUNE.next({ last, heads_ups: [], hold: true, released: false, state, rand });
+      const step = RETUNE.next({ last, heads_ups: [], hold: true, released: false, state, attempt_id: "a_test", rand });
       state = step.state;
       if (step.kind === "wait") break;
       if (step.kind === "tool") {
@@ -194,7 +195,7 @@ describe("retune (02-tidepool.md 10.3)", () => {
       }
     }
     expect(calls.map((call) => call.tool)).toEqual(["read", "replace"]);
-    const step = RETUNE.next({ last, heads_ups: [], hold: true, released: true, state, rand });
+    const step = RETUNE.next({ last, heads_ups: [], hold: true, released: true, state, attempt_id: "a_test", rand });
     expect(step.kind).toBe("tool");
     expect((step as { tool?: string }).tool).toBe("submit");
   });

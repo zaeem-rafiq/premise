@@ -46,6 +46,9 @@ export type PatternTurn = {
   hold: boolean;
   /** SWR3: the launcher released this pattern's agents; once set it stays set. */
   released: boolean;
+  /** The attempt id this pattern runs as: the fresh creature name of 10.3 derives from it —
+   *  `creatures/s-<id>.js`, `<id>` the first 10 characters after `a_`, in lower case. */
+  attempt_id: string;
   /** The pattern's state, carried by the driver between turns; `null` before the first turn. */
   state: unknown;
   /** The agent's draw stream: `agentRandom(seed, n)` (SW1). */

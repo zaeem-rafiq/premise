@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { poolState, serveStream } from "../stream.ts";
+import { poolState } from "../stream.ts";
 
 const STREAMS = join(dirname(fileURLToPath(import.meta.url)), "../../../fixtures/streams");
 
@@ -39,7 +39,8 @@ function allowedInReplay(pathname: string): boolean {
   );
 }
 
-/** Every request path and every WebSocket the page opens, in order. */
+/** Every request path and every WebSocket the page opens, in order. A socket that the fixture
+ * answers itself (`routeWebSocket`) raises no `websocket` event: `serveFixture` records those. */
 function networkLog(page: Page): { requests: string[]; sockets: string[] } {
   const requests: string[] = [];
   const sockets: string[] = [];
@@ -49,8 +50,9 @@ function networkLog(page: Page): { requests: string[]; sockets: string[] } {
 }
 
 /** `fixture` only: serves the recordings index and the one recording file (8.2, RY6), plus
- * the stream the page reconnects to when Replay is closed (RY20). */
-async function serveFixture(page: Page): Promise<void> {
+ * the stream the page reconnects to when Replay is closed (RY20); each stream socket the page
+ * opens is added to `sockets`. */
+async function serveFixture(page: Page, sockets: string[]): Promise<void> {
   const text = readFileSync(FIXTURE_FILE, "utf8");
   const header = JSON.parse(text.split("\n")[0] ?? "{}") as { recorded_at: string; events: number };
   const index = {
@@ -86,7 +88,17 @@ async function serveFixture(page: Page): Promise<void> {
     limits: [],
     related: "",
   };
-  await serveStream(page, [{ ...poolState(1), pool: "tidepool" }], [], floor);
+  await page.route("**/floor.json", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify(floor) }),
+  );
+  await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {
+    sockets.push(new URL(ws.url()).pathname);
+    ws.onMessage((message) => {
+      const request = JSON.parse(message.toString()) as { hello?: number };
+      if (request.hello !== 1) return;
+      ws.send(JSON.stringify({ events: [{ ...poolState(1), pool: "tidepool" }] }));
+    });
+  });
 }
 
 /** What the checks of a Replay visit share once it has started. */
@@ -145,8 +157,8 @@ test.describe("Replay with no credentials (RY25)", () => {
     const deployed = testInfo.project.name === "deployed";
     const id = deployed ? "hero-canned" : FIXTURE_ID;
     test.setTimeout(deployed ? 180_000 : 60_000);
-    if (!deployed) await serveFixture(page);
     const { requests, sockets } = networkLog(page);
+    if (!deployed) await serveFixture(page, sockets);
     await context.clearCookies(); // the context carries none; make the no-credential visit explicit
 
     await page.goto(`/replay/${id}`);
@@ -167,8 +179,8 @@ test.describe("Replay with no credentials (RY25)", () => {
   test("way 1 of 8.7: the quiet-pool start card plays the default recording", async ({ page, context }, testInfo) => {
     const deployed = testInfo.project.name === "deployed";
     test.setTimeout(deployed ? 180_000 : 60_000);
-    if (!deployed) await serveFixture(page);
     const { requests, sockets } = networkLog(page);
+    if (!deployed) await serveFixture(page, sockets);
     await context.clearCookies();
 
     await page.goto("/");
@@ -179,7 +191,11 @@ test.describe("Replay with no credentials (RY25)", () => {
     await expect(card).toContainText("Watch a recorded run");
 
     // From here on the assertions are about the Replay visit itself (RY1): the live floor's
-    // own session check and stream socket were opened before, and are not Replay's.
+    // own session check and stream socket were opened before, and are not Replay's. The start
+    // card can show before the live socket connects; a click in that moment lets the live
+    // session's pending connect open a socket just before the session closes it, so the check
+    // starts once the live socket is up.
+    await expect.poll(() => sockets.length, { timeout: 10_000 }).toBeGreaterThan(0);
     const requestsAtClick = requests.length;
     const socketsAtClick = sockets.length;
     await card.getByRole("button", { name: /Play the Replay/ }).click();

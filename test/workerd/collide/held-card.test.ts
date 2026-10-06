@@ -27,7 +27,12 @@ describe("item 7 (HD1, CD3, CD4): the held card and its route, in local workerd"
   let card: CardBody;
 
   beforeAll(async () => {
-    worker = await startLandingWorker({ ownerKey: KEY, repos: ["held-land", "held-decline"] });
+    // HD1's minimal card is the held form without Slice 11: held off, whatever the build ships.
+    worker = await startLandingWorker({
+      ownerKey: KEY,
+      repos: ["held-land", "held-decline"],
+      features: { held: false },
+    });
     // The `land` pool: one scripted rescale answers `held`; its card is this suite's shared card.
     await createPool(worker, "held-land", { seed: "tidepool" });
     await launch(worker, "held-land", ["rescale-energy"], { request_id: "r-launch-held-land" });

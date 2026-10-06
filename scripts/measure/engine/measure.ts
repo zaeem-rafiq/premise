@@ -3,6 +3,9 @@
 // the streams' `limits` events, and the workhorse check of the first run's `attempt.opened`.
 
 import { MAX_ATTEMPT_USD } from "../../../src/protocol/constants.ts";
+
+/** How often a slot that is waiting for headroom checks again. */
+const HEADROOM_RECHECK_MS = 1_000;
 import type { PoolEvent } from "../../../src/protocol/events.ts";
 import type { IntentSpec, RunSpec } from "../early/intents.ts";
 import type { RunRecord } from "../early/run.ts";
@@ -113,6 +116,14 @@ export async function runMeasurement(opts: {
       const spec = queue.shift();
       if (spec === undefined) return;
       if (!headroomOk()) {
+        if (spend.inFlight > 0) {
+          // ME4: the cap cannot hold this run beside the in-flight runs' worst cases yet. That is a
+          // reason to wait for one of them (its real cost replaces the worst case), not to end
+          // the plan: only a cap that cannot hold a run with nothing in flight is reached.
+          queue.unshift(spec);
+          await clock.sleep(HEADROOM_RECHECK_MS);
+          continue;
+        }
         incomplete = true;
         return;
       }

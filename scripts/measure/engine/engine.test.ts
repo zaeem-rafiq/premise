@@ -537,6 +537,29 @@ describe("runMeasurement", () => {
     expect(fake.calls.filter((c) => c.path === "/api/pools")).toHaveLength(1);
   });
 
+  it("a slot that waits on in-flight worst cases waits instead of ending the plan (ME4)", async () => {
+    // Four slots, a $3 cap, MAX_ATTEMPT_USD ($1) as the worst case until a run finishes: the fourth
+    // slot cannot start beside three unfinished runs, but nothing has been spent. Seen on the test
+    // deployment (2026-10-05): the plan ended "incomplete" after three runs that cost $0.04.
+    const fake = fakeService({
+      streams: [1, 2, 3, 4, 5, 6].map((i) => landingScript(`a${i}`, 0.001)),
+    });
+    const measured = await runMeasurement({
+      service: fake.service,
+      clock: fakeClock(),
+      model: WORKHORSE,
+      plan: ADDITIVE_INTENTS.slice(0, 6).map((intent) => ({ intent, run: 1 })),
+      concurrency: 4,
+      maxUsd: 3,
+      swarmSeed: 7,
+      requestPrefix: "t",
+      seedFiles: SEED,
+    });
+    expect(measured.incomplete).toBe(false);
+    expect(measured.results).toHaveLength(6);
+    expect(measured.spendUsd).toBeCloseTo(0.006, 9);
+  });
+
   it("refuses a deployment whose workhorse is not --model (the first attempt.opened)", async () => {
     const wrongModel = [
       poolState(1),

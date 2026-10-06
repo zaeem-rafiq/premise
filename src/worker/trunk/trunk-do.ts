@@ -13,6 +13,7 @@ import { DurableObject } from "cloudflare:workers";
 import { engineTable, type EngineTable } from "../../core/trunk/engine.ts";
 import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
+import { FEATURES } from "../../config/features.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
@@ -25,6 +26,7 @@ import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, time
 import { runRebuildJob } from "./rebuild-job.ts";
 import { runImportJob } from "./import-job.ts";
 import { runPlainJob } from "./plain-runner.ts";
+import { runPreviewJob } from "./preview-runner.ts";
 import { poolRepoName } from "../repos.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
@@ -197,6 +199,7 @@ export class Trunk extends DurableObject<Env> {
           request_id: create.request_id,
           branch: create.source.branch,
           syncTriage: ScriptedTriage,
+          features: FEATURES,
           now: () => ctx.now,
         });
         return { response: { ok: true, pool: create.pool } };
@@ -210,6 +213,7 @@ export class Trunk extends DurableObject<Env> {
         remote: create.remote,
         request_id: create.request_id,
         syncTriage: ScriptedTriage,
+        features: FEATURES,
         now: () => ctx.now,
       });
       return { response: { ok: true, pool: create.pool } };
@@ -327,7 +331,11 @@ export class Trunk extends DurableObject<Env> {
       // of synthetic attempts (TR8). Real attempts never use it.
       // A driven `now` (the alarm's `?now=` hook) is the engine clock for the call, so a test
       // drives time-dependent rules — RW1's lapse — without sleeping (LP5a's convention).
-      const trunk = TrunkEngine.open(this.#sql, { now: () => now ?? Date.now(), syncTriage: ScriptedTriage });
+      const trunk = TrunkEngine.open(this.#sql, {
+        now: () => now ?? Date.now(),
+        syncTriage: ScriptedTriage,
+        features: FEATURES,
+      });
       const result = await Promise.resolve(entry(input, trunk));
       return { result };
     } catch {
@@ -642,6 +650,17 @@ export class Trunk extends DurableObject<Env> {
           undefined,
           now,
         );
+        await this.#postCommit();
+      },
+      preview: async (now) => {
+        await runPreviewJob(this.env, this.ctx, async (name, input) => {
+          const trunk = TrunkEngine.open(this.#sql, {
+            now: () => now,
+            syncTriage: ScriptedTriage,
+            features: FEATURES,
+          });
+          return name === "preview" ? trunk.preview() : trunk.previewDone(input);
+        });
         await this.#postCommit();
       },
     });

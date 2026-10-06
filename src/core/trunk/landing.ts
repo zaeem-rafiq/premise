@@ -649,12 +649,14 @@ export function afterOp(pool: Pool, a: Attempt, op: Operation, pre: FileMap): Pr
 export function blast(
   pool: Pool,
   a: Attempt,
+  head = pool.files,
+  excluded: ReadonlySet<Attempt> = new Set(),
 ): { repair: string[]; confirm: string[]; triage: string[]; right_of_way: string[] } {
-  const after = replayOps(curOps(a), pool.files, {}, pool.languages).files;
+  const after = replayOps(curOps(a), head, {}, pool.languages).files;
   const out = { repair: [] as string[], confirm: [] as string[], triage: [] as string[], right_of_way: [] as string[] };
   for (const o of inflight(pool)) {
-    if (o === a) continue;
-    const res = worst(classify(pool, o, pool.files, after, null, [frozen(a)]));
+    if (o === a || excluded.has(o)) continue;
+    const res = worst(classify(pool, o, head, after, null, [frozen(a)]));
     if (res !== null) out[res].push(o.id);
   }
   // 10.2 step 4: the entries that hold right of way — `land_now` joins the card's options

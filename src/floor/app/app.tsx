@@ -693,6 +693,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             capReached={capReached(floor)}
             onSend={(t) => void sendIntent(t)}
             onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
+            onOpenWhy={table.entries.has("sheet.why") ? (seq) => openSheet({ kind: "why", seq }) : undefined}
           />
         </ViewBoundary>
       </main>

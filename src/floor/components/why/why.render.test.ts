@@ -51,6 +51,33 @@ describe("WhySheet render", () => {
     expect(html).toContain("Why is this here?");
     expect(html).toContain("a crab that hides when its energy is low");
   });
+
+  it.each([
+    { role: "owner", owner: true, replay: false, canUndo: true },
+    { role: "visitor", owner: false, replay: false, canUndo: false },
+    { role: "owner in Replay", owner: true, replay: true, canUndo: false },
+    { role: "visitor in Replay", owner: false, replay: true, canUndo: false },
+  ])("FL7 / 3.12: $role has Undo visibility $canUndo", ({ owner, replay, canUndo }) => {
+    const html = renderToString(
+      createElement(
+        ShellContext.Provider,
+        { value: makeShell(SETTINGS, owner, replay) },
+        createElement(WhySheet, {
+          floor: stateOf("hero-c04.ndjson"),
+          seq: 2,
+          mode: replay ? "replay" : "live",
+          onClose: () => undefined,
+          onOpenUndo: () => undefined,
+        }),
+      ),
+    );
+    expect(html).toContain('data-status="live"');
+    expect(html).toContain("Why is this here?");
+    expect(html).toContain("Show the git");
+    const undoButtons = html.match(/<button\b[^>]*>Undo<\/button>/g) ?? [];
+    expect(undoButtons).toHaveLength(canUndo ? 1 : 0);
+    if (canUndo) expect(undoButtons[0]).not.toContain("disabled");
+  });
 });
 
 describe("WhoSheet render", () => {

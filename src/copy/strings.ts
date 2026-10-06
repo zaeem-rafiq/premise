@@ -508,6 +508,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "start.play": { text: "Play the Replay ({duration})" },
   "start.look": { text: "Look around the live pool" },
+  "start.look.repo": { text: "Look around this repository" },
   "owner.visitor": { text: "Visitor" },
   "owner.unlocked": { text: "Owner" },
   "owner.replay": { text: "Replay" },

@@ -650,7 +650,7 @@ Shown only in Compare view, beside the live pool frame, with the same sandbox an
 
 Inputs: `files`.
 
-One tile per file that exists at the newest landed commit, grouped by directory. A group starts with a label cell that carries the directory name. A tile shows the file name without its directory and extension, up to 5 reader marks (small rings) and up to 5 writer marks (small filled squares), then `tile.more_marks`. A held path carries the tag `tile.held`. The file list and each path's tier come from `pool.files`.
+One tile per file that exists at the newest landed commit, grouped by directory. A group starts with a label cell that carries the directory name. A tile shows the file name without its directory and extension (in a pool made from a repository, `06-repos.md` IR12, with its extension, because such a pool often holds files that differ only by extension, for example `index.js` and `index.d.ts`; added 2026-10-05), up to 5 reader marks (small rings) and up to 5 writer marks (small filled squares), then `tile.more_marks`. A held path carries the tag `tile.held`. The file list and each path's tier come from `pool.files`.
 
 | State | When | Shows |
 | --- | --- | --- |
@@ -1670,6 +1670,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `start.body` | This plays a real recorded run through this same page. You need no account and no key. |
 | `start.play` | Play the Replay ({duration}) |
 | `start.look` | Look around the live pool |
+| `start.look.repo` | Look around this repository |
 | `owner.visitor` | Visitor |
 | `owner.unlocked` | Owner |
 | `owner.replay` | Replay |

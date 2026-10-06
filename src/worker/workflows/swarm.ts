@@ -32,6 +32,7 @@ import { patternById } from "../../swarm/pattern.ts";
 import { dialPick } from "../../swarm/dial.ts";
 import { agentRandom } from "../../swarm/prng.ts";
 import { runTick } from "../../swarm/run-schedule.ts";
+import { isWaitTimeout } from "../swarm/wait-timeout.ts";
 import { PUSH_BACKOFF_BASE_MS } from "../../protocol/constants.ts";
 
 type SwarmParams = SwarmRegisterPoolParams | SwarmEmitParams | SwarmRunParams | { kind?: unknown };
@@ -54,11 +55,6 @@ async function killed(env: Env): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** `waitForEvent`'s timeout error is not exported; the engine names it. */
-function isTimeout(cause: unknown): boolean {
-  return cause instanceof Error && cause.name === "WorkflowTimeoutError";
 }
 
 export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
@@ -139,7 +135,7 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
         });
         control = event.payload ?? null;
       } catch (cause) {
-        if (!isTimeout(cause)) throw cause;
+        if (!isWaitTimeout(cause)) throw cause;
       }
       tick += 1;
 

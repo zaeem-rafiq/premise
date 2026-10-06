@@ -11,6 +11,7 @@ import {
   FRAME_LOAD_TIMEOUT_MS,
   FRAME_PROBE_RETRY_MS,
   HOST_SEED,
+  OFFLINE_AFTER_MS,
   POOL_STALL_MS,
 } from "../../../protocol/constants.ts";
 import type { CopyVars } from "../../../copy/fill.ts";
@@ -25,7 +26,7 @@ export type FrameStats = Extract<PoolToFloor, { type: "stats" }>;
  * `stalled`: it kept not answering after the FR28 fallback (no silent wait, FL10). */
 export type FramePhase = "loading" | "live" | "error" | "stalled";
 
-export type TimerKey = "load" | "stall" | "probe" | "probe-retry" | "advance" | "advance-wait";
+export type TimerKey = "load" | "stall" | "probe" | "probe-retry" | "advance" | "advance-wait" | "kind";
 
 /** What the driver reads each time the Floor state changes. All of it comes from `FloorState`,
  * already reduced — the frame never learns a pool fact from anywhere else (FL1). */
@@ -36,6 +37,13 @@ export type DriverTarget = {
   greenCommit: string | null;
   /** `green.seq`: the landing seq of that green commit, for `frame.stalled.green`. */
   greenSeq: number | null;
+  /** `state.pool.state !== "unknown"` — the stream's first `pool.state` has named the pool's
+   * kind (IR12). `false` holds the first live load: a pool made from a repository has no live
+   * picture, so a speculative `/pool/{pool}/main/` request must not go out while the kind is
+   * undecided. The hold lapses at the page's own lost-connection window (OFFLINE_AFTER_MS),
+   * so a pool whose stream is slow or down still shows its frame. Absent means decided —
+   * feeds with no stream question (unit tests, a card's commit frame) load at once. */
+  poolKnown?: boolean;
 };
 
 /** The wall between the driver and the DOM. The component implements it with the iframe's
@@ -128,6 +136,7 @@ export class FrameDriver {
     // The `paused` page parameter already tells the host (AC11): the first stats does not
     // need a `pause` post for a state the page address announced.
     this.announced = this.effectivePaused();
+    this.sink.cancel("kind");
     this.sink.cancel("stall");
     this.sink.schedule("load", FRAME_LOAD_TIMEOUT_MS);
     this.sink.load(this.fullSrc(base));
@@ -144,6 +153,13 @@ export class FrameDriver {
   /** Feed the reduced state. Call it whenever `FloorState` changes — it is idempotent: nothing
    * here moves on `landing.accepted` alone (AC3/FL3), only on `landed_commit`/`green.commit`. */
   setTarget(target: DriverTarget): void {
+    if (this.opts.mode === "live" && this.base === "" && target.poolKnown === false) {
+      // IR12: the pool's kind is undecided — hold the first live load. The `kind` timer
+      // lapses the wait at OFFLINE_AFTER_MS, so a page whose stream never answers still
+      // gets its live picture (the promise the immediate load made).
+      this.sink.schedule("kind", OFFLINE_AFTER_MS);
+      return;
+    }
     const prev = this.target;
     this.target = target;
     if (this.opts.mode === "replay") {
@@ -221,6 +237,12 @@ export class FrameDriver {
           this.phase = "error";
           this.sink.changed();
         }
+        break;
+      case "kind":
+        // The kind wait outlived the lost-connection window without a `pool.state`:
+        // load the live picture anyway — the stream may be down, and its pool then
+        // still gets its frame.
+        if (this.base === "") this.loadNow(this.liveBase());
         break;
       case "stall":
         if (this.phase === "live" && !this.effectivePaused()) this.applyStall();
@@ -365,7 +387,7 @@ export class FrameDriver {
 
   /** Let every pending timer go. Called on unmount. */
   dispose(): void {
-    const keys: TimerKey[] = ["load", "stall", "probe", "probe-retry", "advance", "advance-wait"];
+    const keys: TimerKey[] = ["load", "stall", "probe", "probe-retry", "advance", "advance-wait", "kind"];
     for (const key of keys) this.sink.cancel(key);
   }
 }

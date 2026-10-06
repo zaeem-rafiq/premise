@@ -15,11 +15,20 @@ export function dirOfPath(path: string): string {
   return slash === -1 ? "" : path.slice(0, slash + 1);
 }
 
-/** What a tile shows (3.7): the file name without its directory and extension. */
-export function tileName(path: string): string {
+/** What a tile shows (3.7): the file name without its directory and — unless the pool was
+ * made from a repository (`keepExtension`, see `tileKeepsExtension`) — without its extension. */
+export function tileName(path: string, keepExtension = false): string {
   const name = path.slice(path.lastIndexOf("/") + 1);
+  if (keepExtension) return name;
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/** The 3.7 amendment (IR12): a pool made from a repository keeps each tile's extension —
+ * repository files often differ only by extension (`index.js` vs `index.d.ts`). `pool.app`
+ * is null only after the stream's `pool.state` says so; a pool of unknown kind strips. */
+export function tileKeepsExtension(state: FloorState): boolean {
+  return state.pool.app === null;
 }
 
 /** One grid position of the tile area. The group's label cell counts as one (3.7), and the

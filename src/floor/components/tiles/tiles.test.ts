@@ -12,7 +12,7 @@ import type { PoolEvent } from "../../../protocol/events.ts";
 import { emptyFloorState, reduce } from "../../../protocol/reducer/index.ts";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
 import { FileTiles } from "./tiles.tsx";
-import { MARKS_MAX, dirOfPath, tileCells, tileMarks, tileName } from "./tiles-plan.ts";
+import { MARKS_MAX, dirOfPath, tileCells, tileKeepsExtension, tileMarks, tileName } from "./tiles-plan.ts";
 
 const ROOT = join(fileURLToPath(import.meta.url), "../../../../..");
 
@@ -75,6 +75,21 @@ describe("3.7 the cells (CO26)", () => {
     expect(tileName("README")).toBe("README");
     expect(dirOfPath("creatures/fish.js")).toBe("creatures/");
     expect(dirOfPath("README")).toBe("");
+  });
+
+  it("3.7 amended (IR12): a repository pool's tile keeps its extension, a tide pool's does not", () => {
+    // Repository files often differ only by extension — `index.js`, `index.d.ts`,
+    // `index.browser.js` have to stay three distinct tiles.
+    expect(tileName("dist/index.js", true)).toBe("index.js");
+    expect(tileName("dist/index.d.ts", true)).toBe("index.d.ts");
+    expect(tileName("dist/index.browser.js", true)).toBe("index.browser.js");
+    expect(tileName("creatures/fish.js", true)).toBe("fish.js");
+    expect(tileName("creatures/fish.js", false)).toBe("fish");
+    // The pool's kind comes from `pool.state.app` alone (FL1): null marks the repository pool.
+    const repo = { ...emptyFloorState(), pool: { ...emptyFloorState().pool, app: null } };
+    expect(tileKeepsExtension(repo)).toBe(true);
+    expect(tileKeepsExtension(emptyFloorState())).toBe(false);
+    expect(tileKeepsExtension(tracerState())).toBe(false);
   });
 
   it("reader and writer marks come from the in-flight attempt's premises and operations", () => {
@@ -161,6 +176,25 @@ describe("3.7 the rendered table", () => {
     expect(html.match(/class="tile-mark tile-mark-r"/g)).toHaveLength(5);
     expect(html.match(/class="tile-mark tile-mark-w"/g)).toHaveLength(2);
     expect(html).toContain(">+1<");
+  });
+
+  it("3.7 amended (IR12): a repository pool renders tiles with their extensions", () => {
+    const state = withFiles(emptyFloorState(), [
+      ["dist/index.js", "auto"],
+      ["dist/index.d.ts", "auto"],
+      ["dist/index.browser.js", "auto"],
+    ]);
+    const repo = { ...state, pool: { ...state.pool, app: null } };
+    const html = markup(repo);
+    for (const name of ["index.js", "index.d.ts", "index.browser.js"]) {
+      expect(html).toContain(`>${name}<`);
+    }
+    // no bare `index` tile — the extension is what tells the three apart
+    expect(html).not.toContain(">index<");
+    const tide = markup(state);
+    for (const name of ["index", "index.d", "index.browser"]) {
+      expect(tide).toContain(`>${name}<`);
+    }
   });
 
   it("CO27/3.9: a tile with actions is a button opening the tile menu; without them it is inert", () => {

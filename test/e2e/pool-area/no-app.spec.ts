@@ -6,8 +6,9 @@
 // the spec and the copy table, not from the page (BP1).
 
 import { expect, test } from "@playwright/test";
-import type { Locator } from "@playwright/test";
-import { ev, poolState, serveStream } from "../shell/stream.ts";
+import type { Locator, Page } from "@playwright/test";
+import { ev, FLOOR_JSON, poolState, serveStream } from "../shell/stream.ts";
+import type { Frame } from "../shell/stream.ts";
 
 const CAPTION = "This repository has no live picture. Its files and the changes to them are below.";
 
@@ -46,8 +47,42 @@ const PATHS = [
 ];
 const FILES = PATHS.map((path, i) => ({ path, tier: i === 9 ? ("held" as const) : ("auto" as const) }));
 
+// Three files that differ only by extension — the reason the 3.7 amendment keeps the
+// extension on a repository pool's tiles (IR12).
+const EXT_FILES = [
+  { path: "dist/index.js", tier: "auto" as const },
+  { path: "dist/index.d.ts", tier: "auto" as const },
+  { path: "dist/index.browser.js", tier: "auto" as const },
+  { path: "package.json", tier: "auto" as const },
+];
+
 function importedStream(extra: Record<string, unknown> = {}) {
   return [poolState(1, { app: null, source: "octo/app", ...extra }), ev(2, { type: "pool.files", files: FILES })];
+}
+
+/** serveStream with a delay of its own: `frames` answer the hello `ms` late, so the pool's
+ * kind stays undecided until they land (inside the first-load wait of IR12). */
+async function serveLateStream(page: Page, frames: Frame[], ms: number): Promise<void> {
+  await page.route("**/floor.json", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify(FLOOR_JSON) }),
+  );
+  await page.routeWebSocket(/\/api\/pools\/[^/]+\/stream/, (ws) => {
+    ws.onMessage((message) => {
+      const request = JSON.parse(message.toString()) as { hello?: number };
+      if (request.hello !== 1) return;
+      setTimeout(() => ws.send(JSON.stringify({ events: frames })), ms);
+    });
+  });
+}
+
+/** Every request the page makes under /pool/ — the address family a repository pool must
+ * never touch. */
+function watchPoolRequests(page: Page): string[] {
+  const poolRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/pool/")) poolRequests.push(request.url());
+  });
+  return poolRequests;
 }
 
 async function box(locator: Locator) {
@@ -57,6 +92,7 @@ async function box(locator: Locator) {
 
 test.describe("IR12: a pool with no live picture", () => {
   test("holds no frame: no iframe, no /pool/ request, the frame.no_app caption", async ({ page }) => {
+    const poolRequests = watchPoolRequests(page);
     await page.setViewportSize({ width: 1920, height: 1080 });
     await serveStream(page, importedStream());
     await page.goto("/");
@@ -67,6 +103,31 @@ test.describe("IR12: a pool with no live picture", () => {
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
     await expect(page.locator(".pf-selftest")).toHaveCount(0);
+    // Not one request under /pool/ — not even the one the page used to fire while it still
+    // drew the seed frame's caption (the 404 in every repository pool's console).
+    await page.waitForTimeout(500);
+    expect(poolRequests).toEqual([]);
+  });
+
+  test("before pool.state the caption is neutral and no /pool/ request goes out (IR12)", async ({ page }) => {
+    const poolRequests = watchPoolRequests(page);
+    // pool.state reaches the page 2 s late — inside the first-load wait: until it lands the
+    // frame waits with the neutral caption and never asks /pool/ anything it may have to
+    // take back.
+    await serveLateStream(page, importedStream(), 2_000);
+    await page.goto("/");
+
+    await expect(page.locator(".pf-caption-text")).toHaveText("Loading the pool…");
+    await expect(page.locator(".pf-body")).toBeVisible();
+    await expect(page.locator("iframe")).toHaveCount(0);
+    expect(poolRequests).toEqual([]);
+
+    // Then pool.state names the repository: the frame gives way to frame.no_app — still
+    // without a single /pool/ request.
+    await expect(page.locator(".pf-caption-text")).toHaveText(CAPTION);
+    await expect(page.locator(".pf-body")).toHaveCount(0);
+    await page.waitForTimeout(500);
+    expect(poolRequests).toEqual([]);
   });
 
   // The seed pools' grid cap: --tile-rows × --tile-h + gaps (stage 3×56+16, laptop 2×48+8).
@@ -105,6 +166,22 @@ test.describe("IR12: a pool with no live picture", () => {
     });
   }
 
+  test("the tiles keep the extension, so files differing only by it stay distinct (3.7 amended)", async ({ page }) => {
+    await serveStream(page, [
+      poolState(1, { app: null, source: "octo/app" }),
+      ev(2, { type: "pool.files", files: EXT_FILES }),
+    ]);
+    await page.goto("/");
+    await expect(page.locator(".pf-caption-text")).toHaveText(CAPTION);
+
+    const names = await page.locator(".tiles-grid .tile:not(.tile-label) .tile-name").allInnerTexts();
+    for (const name of ["index.js", "index.d.ts", "index.browser.js", "package.json"]) {
+      expect(names).toContain(name);
+    }
+    // no tile drops to the bare stem — that is the collision the amendment prevents
+    expect(names).not.toContain("index");
+  });
+
   test("the header names the repository; Compare and key C are absent", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     // Even with a stale plain remote on the stream, an imported pool gets no Compare.
@@ -120,6 +197,7 @@ test.describe("IR12: a pool with no live picture", () => {
   });
 
   test("a seed pool's page is unchanged", async ({ page }) => {
+    const poolRequests = watchPoolRequests(page);
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.route("**/pool/**", (route) =>
       route.fulfill({ contentType: "text/html", body: "<!doctype html><title>pool</title>" }),
@@ -129,9 +207,14 @@ test.describe("IR12: a pool with no live picture", () => {
 
     await expect(page.locator(".pool-name")).toHaveText("testpool");
     const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
-    await expect(iframe).toHaveAttribute("src", /\/pool\/testpool\/main\/\?seed=\d+/);
+    // The frame loads as soon as pool.state names the kind — not when the first-load wait
+    // lapses (the hold is 3 s; this bound keeps the release honest).
+    await expect(iframe).toHaveAttribute("src", /\/pool\/testpool\/main\/\?seed=\d+/, { timeout: 2_500 });
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
     await expect(page.locator(".pf-caption")).toContainText("Premise · main · the seed, before any landing");
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    // A tide pool's tiles still drop the extension (3.7's original rule).
+    const names = await page.locator(".tiles-grid .tile:not(.tile-label) .tile-name").allInnerTexts();
+    expect(names).toEqual(["README", "package", "LICENSE"]);
   });
 });

@@ -571,6 +571,45 @@ test.describe("the Compare view", () => {
 });
 
 test.describe("the built Floor", () => {
+  // 2.3 draws the two frames on one line: the left caption bar (one line, a Pause button)
+  // and the right's two caption lines must land on the same top, and so must the bodies and
+  // badges under them — checked at the stage and the laptop size.
+  for (const size of [
+    { name: "stage", w: 1920, h: 1080 },
+    { name: "laptop", w: 1440, h: 900 },
+  ] as const) {
+    test(`2.3: at ${size.w}x${size.h} the two frames' tops, captions and badges line up within 1 px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: size.w, height: size.h });
+      await serveStream(page, [poolState(1, { plain_remote: "https://artifacts.invalid/testpool-plain" })]);
+      await page.route("**/pool/**", (route) => route.fulfill({ contentType: "text/html", body: POOL_PAGE }));
+      await page.goto("/p/testpool");
+      await page.getByRole("button", { name: "Compare" }).click();
+      await expect(page.locator(".cmp")).toBeVisible();
+
+      const boxOf = async (selector: string) => {
+        const locator = page.locator(selector);
+        await expect(locator).toBeVisible();
+        const box = await locator.boundingBox();
+        if (box === null) throw new Error(`${selector} has no box`);
+        return box;
+      };
+
+      const capMain = await boxOf('.cmp-col[data-pool="main"] .pf-caption');
+      const capPlain = await boxOf('.cmp-col[data-pool="plain"] .plf-caption');
+      const bodyMain = await boxOf('.cmp-col[data-pool="main"] .pf-body');
+      const bodyPlain = await boxOf('.cmp-col[data-pool="plain"] .plf-body');
+      const badgeMain = await boxOf('.cmp-col[data-pool="main"] .pf-selftest');
+      const badgePlain = await boxOf('.cmp-col[data-pool="plain"] .plf-selftest');
+
+      expect(Math.abs(capMain.y - capPlain.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(capMain.height - capPlain.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(bodyMain.y - bodyPlain.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(badgeMain.y - badgePlain.y)).toBeLessThanOrEqual(1);
+    });
+  }
+
   test("6.6/2.3: key C and the Compare button flip the view switch; Esc closes it", async ({ page }) => {
     await serveStream(page, [poolState(1, { plain_remote: "https://artifacts.invalid/testpool-plain" })]);
     await page.route("**/pool/**", async (route) => {

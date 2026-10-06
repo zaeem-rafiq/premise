@@ -131,6 +131,16 @@ function cursorOf(sql: ReturnType<typeof sqlOf>): RebuildCursor | null {
 
 class BudgetExceeded extends Error {}
 
+/** Every way out of the `notes` stage starts `landings` with its lists empty — a pool with no
+ * notes ref (nothing landed yet) included, which once reached `blobs` with no `blob_map`. */
+function enterLandings(cursor: RebuildCursor): void {
+  cursor.stage = "landings";
+  cursor.seq = 1;
+  cursor.unwitnessed = [];
+  cursor.undone = [];
+  cursor.blob_map = {};
+}
+
 export type RebuildApply = (name: "rebuild_begin" | "rebuild_step", input: unknown) => Promise<unknown>;
 
 /** RB1's wait for the outbox, on the push backoff: 250 ms, doubling, at most 30 s. */
@@ -262,16 +272,14 @@ async function runInner(
       if (cursor.stage === "notes") {
         if (cursor.notes_commit === null || cursor.notes_commit === undefined || cursor.notes_commit === "") {
           cursor.notes_map = {};
-          cursor.stage = "landings";
-          cursor.seq = 1;
+          enterLandings(cursor);
           continue;
         }
         if (cursor.notes_root === undefined) {
           const head = await call(() => repo.readCommit(cursor.notes_commit as string));
           if (head === null) {
             cursor.notes_map = {};
-            cursor.stage = "landings";
-            cursor.seq = 1;
+            enterLandings(cursor);
             continue;
           }
           cursor.notes_root = head.treeHash;
@@ -283,11 +291,7 @@ async function runInner(
         }
         const next = cursor.dirs?.shift();
         if (next === undefined) {
-          cursor.stage = "landings";
-          cursor.seq = 1;
-          cursor.unwitnessed = [];
-          cursor.undone = [];
-          cursor.blob_map = {};
+          enterLandings(cursor);
           continue;
         }
         const entries = await call(() => repo.readTree(next[1]));
@@ -374,7 +378,7 @@ async function runInner(
             if (target !== undefined) (cursor.undone ??= []).push({ seq: target, undone_by: seq });
           }
           for (const f of plan.files) {
-            if (f.old_oid !== "absent") cursor.blob_map![f.old_oid] ??= { seq };
+            if (f.old_oid !== "absent") (cursor.blob_map ??= {})[f.old_oid] ??= { seq };
           }
           pending.landings!.push(plan);
           cursor.seq = seq + 1;
@@ -393,7 +397,8 @@ async function runInner(
           for (const [path, [oid, mode]] of Object.entries(cursor.head_files ?? {})) {
             cursor.blob_q.push({ oid, path, mode });
           }
-          for (const [oid, ref] of Object.entries(cursor.blob_map as Record<string, { seq: number }>)) {
+          // `?? {}`: a cursor stored before every exit of `notes` set the map (a stuck pool resumes).
+          for (const [oid, ref] of Object.entries(cursor.blob_map ?? {})) {
             cursor.blob_q.push({ oid, seq: ref.seq });
           }
           continue;

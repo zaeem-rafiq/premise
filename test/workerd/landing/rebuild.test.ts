@@ -37,6 +37,7 @@ const MAIN = "rb-main";
 const DIVERGED = "rb-diverged";
 const MISMATCH = "rb-mismatch";
 const EMPTY = "rb-empty";
+const NO_NOTES = "rb-no-notes";
 
 /** `?now=` this far ahead makes every due timer due (LP5a's convention). */
 const FAR = () => Date.now() + 3_600_000;
@@ -177,7 +178,7 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
   beforeAll(async () => {
     worker = await startLandingWorker({
       ownerKey: KEY,
-      repos: [MAIN, DIVERGED, MISMATCH, EMPTY],
+      repos: [MAIN, DIVERGED, MISMATCH, EMPTY, NO_NOTES],
     });
   }, 60_000);
   afterAll(async () => {
@@ -222,6 +223,38 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     expect(state.meta.rebuild_cursor).toBeUndefined();
     expect(state.timers).toHaveLength(0);
     expect((await worker.events(EMPTY)).filter((e) => e.src === "trunk")).toHaveLength(0);
+  });
+
+  it("a pool with no landing has no notes ref, and still rebuilds to ready@0", async () => {
+    // Before any landing the remote has `main` and no `refs/notes/premise`: the job skips the notes
+    // walk. On the test deployment (2026-10-05) that path left the landings stage's lists unset, and
+    // every run of the job failed with a TypeError, so such a pool never left `rebuilding`.
+    const create = await worker.fetch(
+      "/api/pools",
+      bearer({ pool: NO_NOTES, seed: SEED, summary_only: false, request_id: "r-create-rb-no-notes" }),
+    );
+    expect(create.status, await create.clone().text()).toBe(200);
+    await waitFor(async () => (await eventsOf(worker, NO_NOTES, "batch.pushed")).length >= 1, 30_000);
+    const refsBefore = worker.refs(NO_NOTES);
+    expect(refsBefore.main).not.toBeNull();
+    expect(refsBefore.notes, "the seed push writes no note").toBeNull();
+    const epochBefore = (await floorSnapshot(worker, NO_NOTES)).pool.epoch;
+
+    expect(await rebuild(worker, NO_NOTES, "r-rb-no-notes-1")).toMatchObject({ ok: true, started: true });
+    expect(await driveRebuild(worker, NO_NOTES)).toBe("ready");
+
+    const meta = (await trunkState(worker, NO_NOTES)).meta;
+    expect(meta.head_seq).toBe("0");
+    expect(meta.head_commit).toBe(refsBefore.main);
+    const floor = await floorSnapshot(worker, NO_NOTES);
+    expect(floor.pool.epoch).toBe(epochBefore + 1); // RB5
+    expect(floor.pool.state).toBe("ready");
+    // No failure of the job itself (the harness's plain-merge stand-in has no repo, so `plain` errors
+    // are its own noise and not the rebuild's).
+    const errors = (await worker.events(NO_NOTES)).filter(
+      (e) => e.type === "trunk.error" && String(e.where).includes("rebuild"),
+    );
+    expect(errors, JSON.stringify(errors)).toHaveLength(0);
   });
 
   it("the happy path: 5 landings, a held card, two in-flight attempts — rebuild to ready@5", async () => {

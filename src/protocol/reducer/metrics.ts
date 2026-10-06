@@ -4,12 +4,14 @@
 //
 // What it cannot see: `tick_cpu_ms` — no event of 12.1 carries tick CPU time, so both percentiles
 // are null until the protocol grows a carrier (14.6 says Trunk reports it; the stream has no field).
-// `escape_rate` is null while the pool never saw `green.advanced` (14.5's "no green line" case: the
-// `features` flag of FJ1 is not part of the stream, so `green.seq === null` is the reducer's proxy).
+// `escape_rate` is null while the pool never saw a green-line event (14.5's "no green line" case:
+// the `features` flag of FJ1 is not part of the stream, so "the stream has green-line evidence" —
+// a `green.verified` or `green.advanced` — is the reducer's proxy). And 14.6's batch-full share is
+// unobservable: `tick.skipped.why` has no value for a full batch, so only `right_of_way` counts.
 
 import { METRICS_WINDOW_MS } from "../constants.ts";
 import type { PoolEvent } from "../events.ts";
-import type { FloorState, LandingView } from "./state.ts";
+import type { FloorState, LandingEntry } from "./state.ts";
 
 export type MetricsBody = Omit<Extract<PoolEvent, { type: "metrics" }>, "n" | "t" | "ts" | "pool" | "src" | "type">;
 
@@ -27,32 +29,42 @@ function percentile(sorted: number[], p: number): number | null {
 export function computeMetrics(state: FloorState, nowTs: number, windowMs: number = METRICS_WINDOW_MS): MetricsBody {
   const from = nowTs - windowMs;
 
-  // The window's confirmed landings of kind `change` (14.1 to 14.3, 14.5).
-  const landed: LandingView[] = [];
+  // The window's confirmed landings of kind `change` (14.1 to 14.3, 14.5). A landing.landed that
+  // arrived without its landing.accepted — after a rebuild from a snapshot — is kept in the count
+  // by its digest row (FE1): the event's `ts` is in the window either way.
+  const landed: LandingEntry[] = [];
   for (const entry of Object.values(state.landings)) {
-    if (entry.digest === true || entry.kind !== "change" || entry.landed === null) continue;
-    if (entry.landed.ts > from && entry.landed.ts <= nowTs) landed.push(entry);
+    if (entry.kind !== "change") continue;
+    const landedTs = entry.digest === true ? entry.landed_ts : (entry.landed?.ts ?? null);
+    if (landedTs !== null && landedTs > from && landedTs <= nowTs) landed.push(entry);
   }
 
   // 14.1: landings per second over the window.
   const landings_per_second = landed.length / (windowMs / 1000);
 
-  // 14.2: for one landing, ts(landing.landed) − ts(last submit.result of the attempt before
-  // acceptance); "time held" is the owner wait on a card inside it (approved − submit).
+  // 14.2: for one landing, ts(landing.landed) − ts(last submit.result of status validated,
+  // submitted or held before acceptance). The ts is frozen on the landing: Trunk later reports
+  // `accepted` and `landed` as submit.result, which would corrupt the base (14.2 says "before
+  // acceptance"). "Time held" is the owner wait on a card inside it (approved − submit).
   const toLand: number[] = [];
   const held: number[] = [];
   for (const landing of landed) {
-    const attempt = landing.attempt_id === null ? undefined : state.attempts[landing.attempt_id];
-    const submitTs = attempt?.submit?.ts;
-    if (submitTs !== undefined && landing.landed !== null) toLand.push(landing.landed.ts - submitTs);
-    if (submitTs !== undefined && landing.approved !== null) held.push(landing.approved.ts - submitTs);
+    const submitTs = state.landing_facts[landing.seq]?.submit_ts;
+    const landedTs = landing.digest === true ? landing.landed_ts : landing.landed?.ts;
+    if (submitTs !== undefined && submitTs !== null && landedTs !== undefined && landedTs !== null) {
+      toLand.push(landedTs - submitTs);
+    }
+    if (submitTs !== undefined && submitTs !== null && landing.digest !== true && landing.approved !== null) {
+      held.push(landing.approved.ts - submitTs);
+    }
   }
   toLand.sort((a, b) => a - b);
   held.sort((a, b) => a - b);
 
-  // 14.3: the landing counts when its attempt received a repair heads-up before acceptance (the
-  // note's go_arounds), and a confirm heads-up for the confirm rate — frozen into the LandingView.
-  const withGoAround = landed.filter((landing) => landing.go_arounds.length > 0).length;
+  // 14.3: the landing counts when its attempt RECEIVED a repair heads-up before acceptance —
+  // landing_facts, frozen at landing.accepted, not the resolved list (a summary_only pool keeps
+  // only the last heads-up view, and an unresolved heads-up still counts as received).
+  const withGoAround = landed.filter((landing) => (state.landing_facts[landing.seq]?.repair ?? 0) > 0).length;
   const go_around_rate = landed.length === 0 ? null : withGoAround / landed.length;
 
   // 14.4: go-arounds ended in the window (an attempt.state left going_around for a non-stopped
@@ -63,20 +75,25 @@ export function computeMetrics(state: FloorState, nowTs: number, windowMs: numbe
   const falseAbort = ended.filter((entry) => !entry.changed).length;
   const false_abort_rate = ended.length === 0 ? null : falseAbort / ended.length;
 
-  // 14.5: window landings of kind change reverted by the green line (`undone_by` a revert landing).
+  // 14.5: window landings of kind change whose seq is in `reverted` of an undo.planned of cause
+  // `revert` — the green line's own undos, not an owner's (an owner undo plans with cause `undo`;
+  // `undone_by` is set for both, so the plan's cause decides).
   let escape_rate: number | null = null;
-  if (state.green.seq !== null) {
+  const hasGreenLine = state.green.seq !== null || state.green.last !== null;
+  if (hasGreenLine) {
     const escaped = landed.filter((landing) => {
       if (landing.undone_by === null) return false;
       const undo = state.landings[landing.undone_by];
-      return undo !== undefined && undo.kind === "revert";
+      if (undo === undefined || undo.request_id === null) return false;
+      return state.undo[undo.request_id]?.cause === "revert";
     }).length;
     escape_rate = landed.length === 0 ? 0 : escaped / landed.length;
   }
 
   // 14.6: attempts in `validated` the last tick skipped for right_of_way; an attempt on a card waits
-  // for a person, not for a change, and is not counted. `push_backlog`: attempts in `validated`
-  // while an outbox row is pending.
+  // for a person, not for a change, and is not counted. The batch-full half of the definition has
+  // no carrier — `tick.skipped.why` names no such reason — so it cannot be measured from the
+  // stream. `push_backlog`: attempts in `validated` while an outbox row is pending.
   let waiting_behind = 0;
   let validated = 0;
   for (const attempt of Object.values(state.attempts)) {

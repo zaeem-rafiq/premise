@@ -290,6 +290,19 @@ export type FloorState = {
    * 03-floor 4.1 names no field for it; the metric cannot exist without it.
    */
   go_around_log: Array<{ attempt_id: string; go_around: number; changed: boolean; end_ts: number | null }>;
+
+  /**
+   * Metric bookkeeping 03-floor 4.1 names no view field for:
+   * `submit_answers[attempt]` — 14.2: ts of the last submit.result of status validated, submitted
+   * or held (Trunk later reports `accepted`/`landed` as submit.result; those must not move the
+   * base). `heads_sent[attempt]` — 14.3: the count of headsup.sent by result; kept beside the
+   * heads-up views because FE4's summary_only memory holds only the last one, while the metric
+   * counts every sent heads-up. Both freeze into `landing_facts` at acceptance so a reopened
+   * attempt's later submits cannot reach back into a landing already counted.
+   */
+  submit_answers: Record<string, number>;
+  heads_sent: Record<string, { repair: number; confirm: number }>;
+  landing_facts: Record<number, { submit_ts: number | null; repair: number; confirm: number }>;
 };
 
 /** The key one premise takes in `AttemptView.premises` (03-floor 4.1). */
@@ -347,5 +360,8 @@ export function emptyFloorState(): FloorState {
     repos: { ok: 0, failed: 0, first_ts: null, last_ts: null },
     counters: { landed_changes: 0, go_arounds: 0 },
     go_around_log: [],
+    submit_answers: {},
+    heads_sent: {},
+    landing_facts: {},
   };
 }

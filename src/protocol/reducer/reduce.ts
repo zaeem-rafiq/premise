@@ -498,6 +498,16 @@ function onHeadsUpSent(state: FloorState, event: Extract<PoolEvent, { type: "hea
     dropped_ops: event.dropped_ops,
     resolved: null,
   };
+  // 14.3 counts a heads-up at send: it must be booked before FE4's one-entry memory.
+  const sent = (state.heads_sent[event.attempt_id] ??= { repair: 0, confirm: 0 });
+  if (event.result === "repair") {
+    sent.repair += 1;
+    if (attempt.agent === "real" && attempt.repair_open_ts === null) {
+      attempt.repair_open_ts = event.ts; // 14.7
+    }
+  } else if (event.result === "confirm") {
+    sent.confirm += 1;
+  }
   if (state.pool.summary_only) {
     // FE4: only the last heads-up is kept, without items.
     attempt.heads_ups = { [event.hn]: view };
@@ -520,9 +530,6 @@ function onHeadsUpSent(state: FloorState, event: Extract<PoolEvent, { type: "hea
       premise.light = lightOf(item.result, item.rule);
     }
   }
-  if (event.result === "repair" && attempt.agent === "real" && attempt.repair_open_ts === null) {
-    attempt.repair_open_ts = event.ts; // 14.7
-  }
 }
 
 function onHeadsUpResolved(state: FloorState, event: Extract<PoolEvent, { type: "headsup.resolved" }>): void {
@@ -534,19 +541,22 @@ function onHeadsUpResolved(state: FloorState, event: Extract<PoolEvent, { type: 
     headsUp.resolved = { statement: event.statement, changed: event.changed, ts: event.ts };
   }
   if (event.result === "repair" && event.go_around !== null) {
-    // HU12 feeds metric 14.4: one entry per (attempt, go-around); `changed` accumulates.
-    const entry = state.go_around_log.find(
-      (log) => log.attempt_id === event.attempt_id && log.go_around === event.go_around && log.end_ts === null,
+    // HU12 feeds metric 14.4: one entry per (attempt, go-around); `changed` accumulates. A pair
+    // is counted once, when the attempt next leaves going_around — a resolution arriving after
+    // that count is history for the pair, not a second go-around.
+    const entries = state.go_around_log.filter(
+      (log) => log.attempt_id === event.attempt_id && log.go_around === event.go_around,
     );
-    if (entry === undefined) {
+    const entry = entries.find((log) => log.end_ts === null);
+    if (entry !== undefined) {
+      entry.changed ||= event.changed;
+    } else if (entries.length === 0) {
       state.go_around_log.push({
         attempt_id: event.attempt_id,
         go_around: event.go_around,
         changed: event.changed,
         end_ts: null,
       });
-    } else {
-      entry.changed ||= event.changed;
     }
   }
   if (state.pool.summary_only) return;
@@ -571,6 +581,10 @@ function onSubmitResult(state: FloorState, event: Extract<PoolEvent, { type: "su
     checks: event.checks,
     ts: event.ts,
   };
+  // 14.2: only an answered submit counts; `accepted`/`landed` reports must not move the base.
+  if (event.status === "validated" || event.status === "submitted" || event.status === "held") {
+    state.submit_answers[event.attempt_id] = event.ts;
+  }
   // 14.7: the first answered submit ends the open go-around's repair clock.
   if (
     attempt.repair_open_ts !== null &&
@@ -664,6 +678,13 @@ function onLandingAccepted(state: FloorState, event: Extract<PoolEvent, { type: 
     note: null,
   };
   state.landings[event.seq] = landing;
+  // 14.2/14.3 frozen at acceptance: the attempt's last answered submit and its received
+  // heads-ups. A landing whose attempt the stream never showed keeps null/zero.
+  state.landing_facts[event.seq] = {
+    submit_ts: state.submit_answers[event.attempt_id ?? ""] ?? null,
+    repair: state.heads_sent[event.attempt_id ?? ""]?.repair ?? 0,
+    confirm: state.heads_sent[event.attempt_id ?? ""]?.confirm ?? 0,
+  };
   state.landed_order.unshift(event.seq);
   if (attempt !== undefined) {
     attempt.landed_seq = event.seq;
@@ -706,6 +727,7 @@ function trimLandings(state: FloorState): void {
     const entry = state.landings[seq];
     if (entry !== undefined && entry.digest !== true) {
       state.landings[seq] = digestOf(entry);
+      delete state.landing_facts[seq];
       overflow -= 1;
     }
   }

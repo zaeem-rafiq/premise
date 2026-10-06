@@ -64,13 +64,17 @@ export function plainVersion(state: FloorState): string | null {
 export type CaptionCall = { readonly id: string; readonly vars: CopyVars };
 
 /** The caption of the main pool frame (3.5): live names the landed seq; before any landing it is
- * `frame.main.seed`. In Replay the frame is recorded code (RY21). `frame.replay`'s `{landing}`
- * has no seed variant in the copy, so seq 0 is filled with "the seed" (see report). */
+ * `frame.main.seed`. While the pool's kind is undecided — no `pool.state` yet (IR12) — it is the
+ * neutral `frame.loading`, not a seed caption the pool may never own (a repository pool's caption
+ * is `frame.no_app`, and the pool-area swaps to it when `app` reads null). In Replay the frame is
+ * recorded code (RY21). `frame.replay`'s `{landing}` has no seed variant in the copy, so seq 0 is
+ * filled with "the seed" (see report). */
 export function mainCaption(state: FloorState, mode: "live" | "replay"): CaptionCall {
   const seq = state.pool.landed_seq;
   if (mode === "replay") {
     return { id: "frame.replay", vars: { landing: seq === 0 ? "the seed" : landingLabel(seq) } };
   }
+  if (state.pool.state === "unknown") return { id: "frame.loading", vars: {} };
   return seq === 0
     ? { id: "frame.main.seed", vars: {} }
     : { id: "frame.main.caption", vars: { landing: landingLabel(seq) } };

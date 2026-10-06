@@ -10,6 +10,7 @@ import {
   FRAME_LOAD_TIMEOUT_MS,
   FRAME_PROBE_RETRY_MS,
   HOST_SEED,
+  OFFLINE_AFTER_MS,
   POOL_STALL_MS,
 } from "../../../protocol/constants.ts";
 import { FrameDriver } from "./frame-driver.ts";
@@ -128,6 +129,52 @@ describe("the live frame address and landing flow (CO20, CO21, SE16a)", () => {
     h.driver.onStats(stats(`c-${C2}`));
     expect(h.driver.expecting).toBeNull();
     expect(h.armed("probe-retry")).toBeUndefined();
+  });
+});
+
+describe("the kind hold before the first pool.state (IR12)", () => {
+  it("holds the first live load while the kind is undecided, then loads when pool.state lands", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ poolKnown: false });
+    expect(h.loads).toHaveLength(0);
+    expect(h.armed("kind")).toBe(OFFLINE_AFTER_MS);
+    h.target({ poolKnown: true, landedCommit: C1 });
+    expect(h.loads).toEqual([`/pool/tidepool/main/?seed=${HOST_SEED}`]);
+    expect(h.armed("kind")).toBeUndefined();
+  });
+
+  it("the wait lapses at the lost-connection window: a dead stream still gets its frame", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ poolKnown: false });
+    h.fire("kind");
+    expect(h.loads).toEqual([`/pool/tidepool/main/?seed=${HOST_SEED}`]);
+    // and once it loaded, the hold is over — a still-undecided target cannot un-load it
+    h.target({ poolKnown: false });
+    expect(h.armed("kind")).toBeUndefined();
+    expect(h.loads).toHaveLength(1);
+  });
+
+  it("a released load keeps the first-load probe expectation of the commit it carried (CO21)", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ poolKnown: false });
+    h.target({ poolKnown: false });
+    h.target({ poolKnown: true, landedCommit: C1 });
+    expect(h.armed("probe")).toBe(FRAME_ADVANCE_DEBOUNCE_MS);
+  });
+
+  it("a pause taken during the wait lands on the first load's address (AC11)", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.driver.setUserPaused(true);
+    h.target({ poolKnown: false });
+    h.target({ poolKnown: true });
+    expect(h.loads).toEqual([`/pool/tidepool/main/?seed=${HOST_SEED}&paused=1`]);
+  });
+
+  it("a replay frame does not wait on the kind — the position's commit governs (RY17)", () => {
+    const h = new Harness({ pool: POOL, mode: "replay" });
+    h.target({ landedCommit: C1, poolKnown: false });
+    expect(h.loads).toEqual([`/pool/tidepool/${C1}/?seed=${HOST_SEED}`]);
+    expect(h.armed("kind")).toBeUndefined();
   });
 });
 

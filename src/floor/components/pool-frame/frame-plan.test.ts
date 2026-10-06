@@ -131,6 +131,17 @@ describe("the caption bar (03-floor 3.5, RY21)", () => {
     });
   });
 
+  it("before the first pool.state the caption is the neutral frame.loading (IR12)", () => {
+    // `pool.state` has not arrived — the kind is undecided, so no seed caption may show:
+    // a repository pool's caption is `frame.no_app`, never the seed's.
+    expect(mainCaption(emptyFloorState(), "live")).toEqual({ id: "frame.loading", vars: {} });
+    // Replay is decided by the position itself, not the stream — it stays frame.replay.
+    expect(mainCaption(emptyFloorState(), "replay")).toEqual({
+      id: "frame.replay",
+      vars: { landing: "the seed" },
+    });
+  });
+
   it("a replay frame's caption is frame.replay — recorded code at the landing (RY21)", () => {
     expect(mainCaption(stateAt(tracerEvents().length), "replay")).toEqual({
       id: "frame.replay",

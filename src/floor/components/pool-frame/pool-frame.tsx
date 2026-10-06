@@ -215,15 +215,27 @@ export function PoolFrame(props: PoolFrameProps) {
     driver.setUserPaused(paused);
     driver.setHighlight(highlightKinds(props.highlight ?? []), props.highlight !== undefined);
     driver.setSelftest(props.selftest === true);
-    // The frame loads at once, before the stream has said anything: the live picture keeps
-    // running when the stream is slow or down. An imported pool (IR12) replaces the frame as
-    // soon as its pool.state arrives, so its one early request is never shown.
+    // IR12: the first live load waits for the stream's first `pool.state` — a pool made from
+    // a repository has no live picture, so no speculative `/pool/{pool}/main/` request may go
+    // out while the kind is undecided. The driver lapses the wait at the page's lost-connection
+    // window (OFFLINE_AFTER_MS), so a pool whose stream is slow or down still shows its frame —
+    // the promise the once-immediate load made.
     driver.setTarget({
       landedCommit: state.pool.landed_commit,
       greenCommit: state.green.commit,
       greenSeq: state.green.seq,
+      poolKnown: state.pool.state !== "unknown",
     });
-  }, [driver, paused, props.highlight, props.selftest, state.pool.landed_commit, state.green.commit, state.green.seq]);
+  }, [
+    driver,
+    paused,
+    props.highlight,
+    props.selftest,
+    state.pool.landed_commit,
+    state.pool.state,
+    state.green.commit,
+    state.green.seq,
+  ]);
 
   useEffect(() => {
     const onBlur = () => setFrameFocus(document.activeElement === iframeRef.current);

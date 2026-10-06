@@ -100,6 +100,13 @@ function markup(state: FloorState, props: Record<string, unknown> = {}): string 
 }
 
 describe("IR12: a pool with app null", () => {
+  it("before the first pool.state the caption is neutral — no seed caption a repository pool never owns", () => {
+    const html = markup(emptyFloorState());
+    expect(html).toContain("Loading the pool…");
+    expect(html).not.toContain("the seed, before any landing");
+    expect(html).not.toContain(NO_APP_CAPTION);
+  });
+
   it("reads frame.no_app on the caption bar and holds no frame", () => {
     const html = markup(importedPoolState());
     expect(html).toContain(NO_APP_CAPTION);

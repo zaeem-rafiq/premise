@@ -2,16 +2,17 @@
 // read the same values. A slice turns its feature on when the lead merges it; a feature that fails
 // its acceptance check at the freeze is switched off here (BP4).
 //
-// Slice 0b: nothing of section 10 to 12 is built, so every key is off and `green` is "none". The
-// minimal held form of HD1 — `land` and `decline` on a `held` submit — is not a feature: it exists
-// in every build.
+// On since 2026-10-06, after each slice's acceptance on main and a live check on `test`: `held`
+// (Slice 11), `race` (Slice 12) and `undo` (Slice 13). The green line, Clef and attempt repositories
+// are not built: `green` is "none", the others are off. The minimal held form of HD1 — `land` and
+// `decline` on a `held` submit — is not a feature: it exists in every build.
 
 import type { Features } from "../protocol/floor-json.ts";
 
 export const FEATURES: Features = {
-  held: false,
-  race: false,
-  undo: false,
+  held: true,
+  race: true,
+  undo: true,
   green: "none",
   clef: false,
   attempt_repos: false,

@@ -126,6 +126,40 @@ function raceState(): FloorState {
 }
 
 describe("RaceSheet render (3.14)", () => {
+  it("CO14: each dense candidate renders its count and keeps the changed lights visible", () => {
+    const state = raceState();
+    for (const id of ["a_1", "a_2"]) {
+      for (let index = 0; index < (id === "a_2" ? 32 : 30); index += 1) {
+        const key = `facts/${index}.js`;
+        state.attempts[id]!.premises[`file ${key}`] = {
+          kind: "file",
+          key,
+          read: true,
+          edit: false,
+          derived: false,
+          light: index >= 30 ? "changed" : "holds",
+          judgment: null,
+        };
+      }
+    }
+    const html = renderToString(
+      createElement(
+        ShellContext.Provider,
+        { value: makeShell(SETTINGS, true, false) },
+        createElement(RaceSheet, { floor: state, cardId: "k_r", onClose: () => undefined }),
+      ),
+    );
+    expect(html.match(/class="light light--changed"/g)).toHaveLength(2);
+    expect(html.match(/class="light light--holds"/g)).toHaveLength(26);
+    expect(html).toContain('<span class="card-sheet__more">+16</span>');
+    expect(html).toContain('<span class="card-sheet__more">+18</span>');
+    const second = html.slice(html.indexOf('data-attempt-id="a_2"'));
+    expect(second).toContain('aria-label="the file facts/30.js: Changed. the agent read it."');
+    expect(second).toContain('aria-label="the file facts/31.js: Changed. the agent read it."');
+    expect(second.indexOf('class="light light--changed"')).toBeLessThan(second.indexOf('class="light light--holds"'));
+    expect(second.lastIndexOf('class="light light--holds"')).toBeLessThan(second.indexOf('class="card-sheet__more"'));
+  });
+
   it("renders one column per candidate: preview frame, facts, state line, one Choose", () => {
     const html = renderToString(
       createElement(

@@ -16,6 +16,7 @@ import {
   POOL,
 } from "../shell/stream.ts";
 import type { Frame } from "../shell/stream.ts";
+import { densePremises, expectLightsInsideColumn, expectNoSheetOverflow } from "./sheet-lights.ts";
 
 /** The fake pool host: a document the commit iframes can load; `__tap` posts CO22's `tapped`. */
 const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><script>
@@ -130,6 +131,50 @@ async function serve(
 }
 
 test.describe("the held sheet (3.13)", () => {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    test(`CO14: dense held lights stay inside their column at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
+      const frames = [
+        poolState(1),
+        intentCreated(2, "i_1", "raise the crab's energy"),
+        attemptOpened(3),
+        attemptState(4, "a_1", "opened", "working"),
+      ];
+      const premises = densePremises(5, "a_1", 2);
+      frames.push(...premises);
+      let n = 5 + premises.length;
+      frames.push(
+        submit(n++),
+        attemptState(n++, "a_1", "working", "held", { reason: "held_path" }),
+        cardOpened(n, heldCard()),
+      );
+      await serve(page, frames, { owner: true });
+      await page.goto(`/p/${POOL}`);
+      await page.locator(".tray").getByRole("button", { name: "Open" }).click();
+      const sheet = page.getByRole("dialog", { name: "This change touches shared rules. Land it?" });
+      await expect(sheet).toBeVisible();
+      const checked = sheet
+        .locator(".card-sheet__grid > section")
+        .filter({ has: page.getByRole("heading", { name: "What was checked" }) });
+      await expectLightsInsideColumn(checked, 18, 2);
+      await expectNoSheetOverflow(sheet);
+      await sheet.screenshot({ path: testInfo.outputPath("held-sheet-lights.png") });
+      expect(errors).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
+    });
+  }
+
   test("CO36/PV5: before and after are commit iframes at their frameUrl addresses", async ({ page }) => {
     await serve(page, HELD_STREAM(heldCard()), { owner: true });
     await page.goto(`/p/${POOL}`);

@@ -14,7 +14,7 @@ import { changeName, keyLabel } from "../../../copy/names.ts";
 import { stopSentence } from "../../../copy/stops.ts";
 import { text } from "../../../copy/strings.ts";
 import { inFlight } from "../../state/derive.ts";
-import { checkRows, checksSummary, lightsInOrder, visibleLights } from "../attempt-card/model.ts";
+import { checkRows, checksSummary, visibleLights } from "../attempt-card/model.ts";
 import type { LightView } from "../attempt-card/model.ts";
 
 /** What one "What it changes" row shows (03 3.13): path, tier tag and the entity keys it names. */
@@ -25,8 +25,10 @@ export type RaceColumn = {
   attemptId: string;
   /** `modelName` of the attempt's model, resolved against `/floor.json` by the caller. */
   modelId: string;
-  /** The attempt's lights (3.3). Empty in a `summary_only` pool. */
+  /** The attempt's visible lights (CO14). Empty in a `summary_only` pool. */
   lights: LightView[];
+  /** Holds omitted by CO14, shown as `light.more` after the lights. */
+  lightsMore: number;
   /** The `why.checked.count` line of the column, or null with no submit yet. */
   checks: string | null;
   /** `race.took` or `race.unknown` when the card carries null (CO39). */
@@ -84,6 +86,7 @@ export type CardSheetModel = {
     summary: string | null;
     checks: { label: string; ok: boolean; error: string | null }[] | null;
     lights: LightView[];
+    lightsMore: number;
     blind: string | null;
   } | null;
   /** The risk block: three `RISK_LINES` and `RISK_FOOTER`, or the waiting/unavailable sentence. */
@@ -249,10 +252,12 @@ function checkedBlock(state: FloorState, view: CardView): CardSheetModel["checke
   const blind = Object.values(attempt.premises).filter(
     (premise) => premise.light === "blind_spot" || premise.judgment?.rule === "B1",
   ).length;
+  const { lights, more } = visibleLights(state, attempt);
   return {
     summary: checksSummary(attempt),
     checks: checkRows(attempt),
-    lights: lightsInOrder(attempt).length === 0 ? [] : visibleLights(state, attempt).lights,
+    lights,
+    lightsMore: more,
     blind: blind > 0 ? text("held.blind", { n: blind }) : null,
   };
 }
@@ -338,10 +343,12 @@ function raceColumn(state: FloorState, view: CardView, attemptId: string, visito
       stopped ??
       (working !== null ? `${text("race.working")} · ${working.word} · step ${working.steps}` : text("race.stopped"));
   }
+  const { lights, more } = attempt === undefined ? { lights: [], more: 0 } : visibleLights(state, attempt);
   return {
     attemptId,
     modelId: attempt?.model ?? "",
-    lights: attempt === undefined ? [] : visibleLights(state, attempt).lights,
+    lights,
+    lightsMore: more,
     checks: attempt === undefined ? null : checksSummary(attempt),
     took:
       candidate?.seconds === null || candidate?.seconds === undefined

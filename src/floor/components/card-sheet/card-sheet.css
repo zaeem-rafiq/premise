@@ -111,15 +111,27 @@
 
 .card-sheet__lights {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: 4px;
   margin: 4px 0;
 }
 
-.card-sheet__relies {
+.card-sheet__relies,
+.card-sheet__more {
+  flex: none;
+  white-space: nowrap;
   color: var(--muted, #a8bcc6);
   font-size: var(--size-small, 14px);
+}
+
+.card-sheet__relies {
   margin-right: 2px;
+}
+
+.card-sheet__more {
+  font-variant-numeric: tabular-nums;
 }
 
 .card-sheet__checklist li[data-ok="false"] {

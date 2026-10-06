@@ -7,7 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { PoolEvent } from "../../../protocol/events.ts";
 import type { Card } from "../../../protocol/cards.ts";
-import type { FloorState } from "../../../protocol/reducer/state.ts";
+import type { FloorState, PremiseView } from "../../../protocol/reducer/state.ts";
+import { LIGHTS_MAX } from "../../../protocol/constants.ts";
 import { emptyFloorState, reduce } from "../../../protocol/reducer/index.ts";
 import { text } from "../../../copy/strings.ts";
 import { cardSheetModel } from "./model.ts";
@@ -159,6 +160,78 @@ function modelOf(
     visitor: opts.visitor ?? false,
   });
 }
+
+describe.each(["held", "minimal held", "race"] as const)("CO14: %s sheet lights", (surface) => {
+  function lightsModel(lights: PremiseView["light"][], summaryOnly = false) {
+    const state = baseState();
+    openAttempt(state, "a_1", "i_1", { race: surface === "race" });
+    for (const [index, light] of lights.entries()) {
+      const key = `facts/${index}.js`;
+      reduce(
+        state,
+        ev("premise.recorded", {
+          attempt_id: "a_1",
+          tool: "read",
+          premise: { kind: "file", key, hash: "h0", seq: 0, read: true, edit: false, derived: false },
+        }),
+      );
+      must(must(state.attempts["a_1"]).premises[`file ${key}`]).light = light;
+    }
+    state.pool.summary_only = summaryOnly;
+    const card = surface === "race" ? raceCard() : heldCard();
+    reduce(state, ev("card.opened", { card }));
+    const model = modelOf(state, card.card_id, { held: surface !== "minimal held" });
+    return surface === "race" ? must(model.race?.[0]) : must(model.checked);
+  }
+
+  it.each([0, LIGHTS_MAX, 30])("caps %i holds and carries the remaining count", (count) => {
+    const model = lightsModel(Array<"holds">(count).fill("holds"));
+    expect(model.lights.map((light) => light.id)).toEqual(
+      Array.from({ length: Math.min(count, LIGHTS_MAX) }, (_, index) => `file facts/${index}.js`),
+    );
+    expect(model.lightsMore).toBe(Math.max(0, count - LIGHTS_MAX));
+  });
+
+  it("keeps two changed lights recorded after thirty holds ahead of the count", () => {
+    const model = lightsModel([...Array<"holds">(30).fill("holds"), "changed", "changed"]);
+    expect(model.lights).toHaveLength(LIGHTS_MAX);
+    expect(model.lights.slice(0, 2).map((light) => [light.id, light.light])).toEqual([
+      ["file facts/30.js", "changed"],
+      ["file facts/31.js", "changed"],
+    ]);
+    expect(model.lights.slice(2).map((light) => light.id)).toEqual(
+      Array.from({ length: LIGHTS_MAX - 2 }, (_, index) => `file facts/${index}.js`),
+    );
+    expect(model.lightsMore).toBe(32 - LIGHTS_MAX);
+    expect(model.lights[0]?.tip).toBe("the file facts/30.js: Changed. the agent read it.");
+  });
+
+  it("orders changed, blind_spot, confirm, checking, then holds in recorded order", () => {
+    const model = lightsModel(["holds", "checking", "holds", "confirm", "blind_spot", "changed"]);
+    expect(model.lights.map((light) => [light.id, light.light])).toEqual([
+      ["file facts/5.js", "changed"],
+      ["file facts/4.js", "blind_spot"],
+      ["file facts/3.js", "confirm"],
+      ["file facts/1.js", "checking"],
+      ["file facts/0.js", "holds"],
+      ["file facts/2.js", "holds"],
+    ]);
+    expect(model.lightsMore).toBe(0);
+  });
+
+  it("never hides non-holds even when they exceed LIGHTS_MAX", () => {
+    const model = lightsModel(["holds", ...Array<"changed">(LIGHTS_MAX + 2).fill("changed"), "holds"]);
+    expect(model.lights).toHaveLength(LIGHTS_MAX + 2);
+    expect(model.lights.every((light) => light.light === "changed")).toBe(true);
+    expect(model.lightsMore).toBe(2);
+  });
+
+  it("shows neither lights nor a hidden count in a summary_only pool", () => {
+    const model = lightsModel([...Array<"holds">(30).fill("holds"), "changed"], true);
+    expect(model.lights).toEqual([]);
+    expect(model.lightsMore).toBe(0);
+  });
+});
 
 describe("cardSheetModel: the held sheet's frames (3.13, CO36)", () => {
   it("frames are null in the minimal form (HD1: features.held false)", () => {

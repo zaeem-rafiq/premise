@@ -49,9 +49,13 @@ const COMPARE_CSS = `
   align-content: start; }
 .cmp-col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .cmp-col > .pf, .cmp-col > .plf { min-height: 0; }
-/* CO24's two caption lines are taller than the main frame's one; pin the caption row so both
- * frame bodies start on the same line. */
-.cmp-col .pf-caption, .cmp-col .plf-caption { min-height: 44px; }
+/* CO24's two caption lines are taller than the main frame's one (label + built-through at
+ * 1.3 line-height over the body and small type, 2px apart); pin both captions to that
+ * two-line box so the frame bodies start on the same line. The height follows the type
+ * tokens, so the key-Z size switch keeps the pin right; 44px keeps the laptop floor. */
+.cmp-col .pf-caption, .cmp-col .plf-caption {
+  min-height: max(44px, calc(1.3 * var(--size-body, 16px) + 1.3 * var(--size-small, 14px) + 2px));
+}
 /* 2.3: "under each frame is its self-test badge" — both badges take the line under the body. */
 .cmp .pf-selftest, .cmp .plf-selftest { position: static; max-width: none; margin-top: 8px;
   align-self: flex-start; }

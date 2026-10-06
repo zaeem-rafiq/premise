@@ -208,3 +208,49 @@
   margin-top: 10px;
   color: var(--confirm, #ffc857);
 }
+
+/* The commit-frame cells of the held and race sheets (03 3.13, 3.14): a fixed FrameAddress in a
+ * 16:9 box, the in-place sentence (`held.preview_building`, `held.no_preview`, `frame.loading`,
+ * `frame.error`) in place of the page while there is none or the frame is not yet loaded. */
+
+.sheet-frame {
+  margin: 0;
+  min-width: 0;
+}
+
+.sheet-frame__caption {
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+  margin-bottom: 4px;
+}
+
+.sheet-frame__body {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: var(--bg0, #0b1620);
+  border: var(--border, 1px) solid var(--line, #3a5669);
+  border-radius: var(--radius, 10px);
+  overflow: hidden;
+}
+
+.sheet-frame__body iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.sheet-frame__note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+}

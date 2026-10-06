@@ -199,6 +199,17 @@ export function replayTimes(events: readonly PoolEvent[]): number[] {
   return times;
 }
 
+/** The recording the start card, key `R` and way 1 of 8.7 play (RY26): the index's `default`
+ * when it names a listed entry, otherwise the first entry — the `default` of a stale index must
+ * not send the page to a file that is not there. `undefined` on an empty list. */
+export function defaultRecordingId(index: RecordingIndex | null): string | undefined {
+  const recordings = index?.recordings ?? [];
+  if (index?.default !== null && index?.default !== undefined && recordings.some((e) => e.id === index.default)) {
+    return index.default;
+  }
+  return recordings[0]?.id;
+}
+
 /** One chapter of 8.5: its key is its number in order of position (6.6). */
 export type ReplayChapter = {
   key: number; // 1-based, in order of position

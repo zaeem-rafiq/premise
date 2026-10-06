@@ -10,7 +10,15 @@ import { describe, expect, it } from "vitest";
 import { CHAPTER_LEAD_MS, REPLAY_MAX_GAP_MS, REPLAY_SPEEDS } from "../../protocol/constants.ts";
 import type { PoolEvent } from "../../protocol/events.ts";
 import type { ReplayHeader } from "../../protocol/replay.ts";
-import { ReplayPlayer, chapters, parseRecording, replayTimes, type PlayerTimers } from "./player.ts";
+import {
+  ReplayPlayer,
+  chapters,
+  defaultRecordingId,
+  parseRecording,
+  replayTimes,
+  type PlayerTimers,
+  type RecordingIndex,
+} from "./player.ts";
 
 const STREAMS = join(dirname(fileURLToPath(import.meta.url)), "../../../test/fixtures/streams");
 
@@ -343,5 +351,28 @@ describe("ReplayPlayer (RY13 to RY19)", () => {
       [3, "Held change"],
       [4, "Undo"],
     ]);
+  });
+});
+
+describe("defaultRecordingId (RY26)", () => {
+  const index = (def: string | null, ids: string[]): RecordingIndex => ({
+    v: 1,
+    default: def,
+    recordings: ids.map((id) => ({ id, file: `/replay/${id}.ndjson` })),
+  });
+
+  it("plays the index's default: hero once deployed, rehearsal before", () => {
+    expect(defaultRecordingId(index("rehearsal", ["rehearsal", "hero-canned"]))).toBe("rehearsal");
+    expect(defaultRecordingId(index("hero", ["hero", "rehearsal", "hero-canned", "swarm"]))).toBe("hero");
+  });
+
+  it("a default that names no listed entry falls back to the first entry", () => {
+    expect(defaultRecordingId(index("gone", ["hero-canned", "swarm"]))).toBe("hero-canned");
+    expect(defaultRecordingId(index(null, ["hero-canned"]))).toBe("hero-canned");
+  });
+
+  it("an empty or missing index plays nothing", () => {
+    expect(defaultRecordingId(index(null, []))).toBeUndefined();
+    expect(defaultRecordingId(null)).toBeUndefined();
   });
 });

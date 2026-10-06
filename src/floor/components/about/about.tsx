@@ -13,11 +13,14 @@ export function AboutSheet({
   shortcuts,
   onShortcuts,
   onClose,
+  build,
 }: {
   floor: FloorState;
   shortcuts: boolean;
   onShortcuts: (on: boolean) => void;
   onClose: () => void;
+  /** RY12: while a Replay is open, About shows the header's `build` beside the page's own. */
+  build?: { page: string; recording: string };
 }) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
@@ -64,6 +67,7 @@ export function AboutSheet({
             )}
             {floor.unknown_events > 0 && <p>{t("about.unknown_events", { n: floor.unknown_events })}</p>}
             {floor.trunk_errors > 0 && <p>{t("about.trunk_errors", { n: floor.trunk_errors })}</p>}
+            {build !== undefined && <p>{t("about.build", { build: [build.page, build.recording] })}</p>}
           </section>
           <section>
             <h3>{t("about.limits")}</h3>

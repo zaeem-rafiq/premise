@@ -1,11 +1,14 @@
-// `npm run measure:models -- --early`: the seeded-intent measurement of 05-agent section 6, early
-// variant — the in-memory pool, the local ledger, Workers AI over REST. One model per invocation;
-// writes `docs/measurements/models/<UTC date>-early-<model>.json` and `.transcripts.jsonl`.
+// `npm run measure:models`: the seeded-intent measurement of 05-agent section 6. With `--early`
+// the early variant — the in-memory pool, the local ledger, Workers AI over REST. Without it (or
+// with `--engine`) the engine variant (ME7): real pools on the deployment of `PREMISE_URL`, the
+// owner key of `PREMISE_OWNER_KEY` on mutating calls, and the pool streams as the record.
 //
-// Usage: node scripts/measure/models.ts --early --model <id> [--max-usd 3] [--runs n] [--out dir]
-//                                        [--dry-run] [--build sha]
-// Transcripts are always written beside the result file.
-// `--dry-run` runs the whole plan against a scripted fake model: no network, no credentials.
+// Usage: node scripts/measure/models.ts [--early|--engine] --model <id>
+//          [--sets additive,hero,confirm,shared] [--runs n] [--max-usd 3] [--concurrency n]
+//          [--out dir] [--seed n] [--build sha] [--dry-run (early only)] [--no-transcripts]
+// Writes `docs/measurements/models/<UTC date>-<mode>-<model>.json`; the early variant writes
+// `.transcripts.jsonl` beside it, the engine variant `.events.jsonl` (6.8: the stream stands in
+// for transcripts the engine cannot read).
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,6 +21,8 @@ import { runPlan } from "./early/intents.ts";
 import { cannedModel } from "./early/fake-model.ts";
 import { referencesEnergyMax } from "./early/score.ts";
 import { summarize } from "./early/summarize.ts";
+import { engineMain } from "./engine/main.ts";
+import { SET_NAMES, type SetName } from "./engine/plan.ts";
 
 const SEED_DIR = "seeds/tidepool";
 
@@ -43,7 +48,10 @@ type Args = {
   model: string | null;
   maxUsd: number;
   runs: number;
+  sets: SetName[] | null;
+  concurrency: number | null;
   out: string;
+  seed: number;
   dryRun: boolean;
   build: string;
   transcripts: boolean;
@@ -56,7 +64,10 @@ export function parseArgs(argv: string[]): Args {
     model: null,
     maxUsd: 3,
     runs: 1,
+    sets: null,
+    concurrency: null,
     out: "docs/measurements/models",
+    seed: 7,
     dryRun: false,
     build: "",
     transcripts: true,
@@ -78,6 +89,23 @@ export function parseArgs(argv: string[]): Args {
         break;
       case "--runs":
         args.runs = Math.max(1, Number(argv[++i] ?? "1"));
+        break;
+      case "--sets": {
+        const names = String(argv[++i] ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s !== "");
+        for (const name of names) {
+          if (!SET_NAMES.includes(name as SetName)) throw new Error(`unknown set ${name}`);
+        }
+        args.sets = names as SetName[];
+        break;
+      }
+      case "--concurrency":
+        args.concurrency = Math.max(1, Number(argv[++i] ?? "4"));
+        break;
+      case "--seed":
+        args.seed = Number(argv[++i] ?? "7");
         break;
       case "--out":
         args.out = argv[++i] ?? args.out;
@@ -110,13 +138,21 @@ function gitBuild(fallback: string): string {
 
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.engine) {
-    console.error("the engine variant is Slice 4 (ME7); this script runs --early only");
-    return 2;
-  }
   if (!args.early) {
-    console.error("usage: models.ts --early --model <id> [--max-usd 3] [--runs n] [--out dir] [--dry-run]");
-    return 2;
+    if (args.dryRun) {
+      console.error("--dry-run is the early variant's fake; the engine variant talks to PREMISE_URL");
+      return 2;
+    }
+    return engineMain({
+      model: args.model,
+      sets: args.sets ?? [...SET_NAMES],
+      runs: args.runs,
+      maxUsd: args.maxUsd,
+      concurrency: args.concurrency,
+      out: args.out,
+      build: gitBuild(args.build),
+      swarmSeed: args.seed,
+    });
   }
   if (args.model === null) {
     console.error(`--model is required; the plan names ${Object.keys(MODEL_PLAN).join(", ")}`);
@@ -239,7 +275,11 @@ if (isMain) {
     .then((code) => process.exit(code))
     .catch((error) => {
       console.error(
-        redact(String(error), [process.env.CLOUDFLARE_API_TOKEN ?? "", process.env.CLOUDFLARE_ACCOUNT_ID ?? ""]),
+        redact(String(error), [
+          process.env.CLOUDFLARE_API_TOKEN ?? "",
+          process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+          process.env.PREMISE_OWNER_KEY ?? "",
+        ]),
       );
       process.exit(1);
     });

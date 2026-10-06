@@ -7,7 +7,7 @@ import { PREWRITTEN } from "../../../src/config/prewritten.ts";
 export type IntentSpec = {
   id: string;
   text: string;
-  set: "additive" | "hero";
+  set: "additive" | "hero" | "confirm" | "shared";
   writes: string; // the file of the intent's "Writes" column
   readsEnergy: boolean; // the "Reads" column names `energy#ENERGY_MAX` (A08, A09, P1a, P1b)
   /** Hero only: the number the intent's own words carry, in points. */

@@ -98,7 +98,13 @@ export type ModelMeasurement = {
     >;
   };
   energy_creatures: { runs: number; references_energy_max: number };
-  confirm: null;
+  confirm: {
+    runs: number;
+    model_calls: { p50: number; max: number };
+    tokens: number;
+    cost_usd: number;
+    ms: { p50: number; p90: number };
+  } | null; // engine variant only (6.6: the E2m confirm window per counted confirm run)
   calls_per_agent_minute: { p50: number; p90: number };
   rate_limited: number;
   spend_usd: number;
@@ -137,6 +143,9 @@ export function summarize(opts: {
   spendUsd: number;
   incomplete: boolean;
   energyRefs: Map<string, boolean>; // "<intent>:<run>" -> references ENERGY_MAX (final writes file)
+  mode?: "early" | "engine";
+  transport?: "rest" | "binding";
+  confirm?: ModelMeasurement["confirm"];
 }): ModelMeasurement {
   const records = opts.results.map((r) => r.record);
   const rateLimited = opts.results.reduce((s, r) => s + r.rate_limited, 0);
@@ -217,7 +226,7 @@ export function summarize(opts: {
 
   return {
     v: 1,
-    mode: "early",
+    mode: opts.mode ?? "early",
     build: opts.build,
     recorded_at: opts.recordedAt,
     model: opts.model,
@@ -225,7 +234,7 @@ export function summarize(opts: {
     prompt_hash: promptHash(),
     tools_hash: toolsHash(),
     texts_hash: textsHash(),
-    request: { transport: "rest", max_tokens: MODEL_MAX_TOKENS, options: opts.options },
+    request: { transport: opts.transport ?? "rest", max_tokens: MODEL_MAX_TOKENS, options: opts.options },
     limits: {
       max_steps: MAX_STEPS,
       max_model_calls: MAX_MODEL_CALLS,
@@ -244,7 +253,7 @@ export function summarize(opts: {
       by_intent: byIntent,
     },
     energy_creatures: { runs: energyRuns.length, references_energy_max: energyRefs },
-    confirm: null,
+    confirm: opts.confirm ?? null,
     calls_per_agent_minute: { p50: percentile(callsPerMinute, 0.5), p90: percentile(callsPerMinute, 0.9) },
     rate_limited: rateLimited,
     spend_usd: opts.spendUsd,

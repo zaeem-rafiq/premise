@@ -6,7 +6,7 @@
 
 import type { AttemptView, CardView, FloorState, LandingEntry } from "../../../protocol/reducer/state.ts";
 import { premiseId } from "../../../protocol/reducer/state.ts";
-import type { CardOption } from "../../../protocol/cards.ts";
+import type { Card, CardOption, FrameAddress } from "../../../protocol/cards.ts";
 import { blastSentence, RISK_FOOTER, RISK_LINES, riskShare } from "../../../copy/cards.ts";
 import { fill } from "../../../copy/fill.ts";
 import { duration, money, share } from "../../../copy/format.ts";
@@ -35,14 +35,21 @@ export type RaceColumn = {
   cost: string;
   /** `race.blast` with the `repair` count of `Card.blast_radius[id]`. */
   blast: string;
-  /** `can_choose` of `Card.candidates[id]`: the button is only on offer while true (CO38). */
+  /** `can_choose` of `Card.candidates[id]`, the card open, and the reader the owner: the button
+   * is only on offer while true (CO38; 3.14 held row gives a visitor no button). */
   canChoose: boolean;
-  /** The still-working line: `race.working`, the status word and the step count. */
-  working: { word: string; steps: number } | null;
-  /** A stopped candidate's line: `race.stopped` + its stop sentence, `status.not_chosen` or `race.chosen`. */
-  stopped: string | null;
-  /** `held.no_preview` when the card has no preview for the column (3.14 error row). */
-  noPreview: boolean;
+  /** The column's preview frame address (`Card.preview.after[id]` of a candidate that can be
+   * chosen, 3.14 live row); null while the candidate works or is stopped (3.14 loading row: "no
+   * frame") and when no preview exists. */
+  frameAddress: FrameAddress | null;
+  /** `held.no_preview` for a choosable candidate the card has no preview for (3.14 error row —
+   * `preview.error`, no `after` entry or `preview` itself null all count); null otherwise. */
+  frameNote: string | null;
+  /** The state line of a candidate that cannot be chosen: `race.working` with the status word and
+   * step count while the attempt runs (3.14 loading row), or the stopped line (`race.stopped` +
+   * `stop.<reason>`, `race.chosen`, `status.not_chosen`, `race.superseded`). Null for a candidate
+   * that can be chosen. */
+  stateLine: string | null;
 };
 
 /** What the sheet renders, already resolved to sentences. */
@@ -58,8 +65,17 @@ export type CardSheetModel = {
   closedByOwner: boolean;
   /** `features.held` false (HD1): no frames, no `held.affects`, no risk lines. */
   minimal: boolean;
-  /** The preview placeholder sentence of the state table, or null when none applies. */
-  previewNote: string | null;
+  /** The held sheet's two commit frames of the state table (3.13, CO36): the `FrameAddress`es to
+   * play, with the in-place sentence each cell carries when it has no address
+   * (`held.preview_building` while the preview commit is being built, `held.no_preview` when none
+   * exists — FR32). Null in the minimal form (HD1), for `choice` and `race` cards and for a closed
+   * card. */
+  frames: {
+    before: FrameAddress | null;
+    beforeNote: string | null;
+    after: FrameAddress | null;
+    afterNote: string | null;
+  } | null;
   changes: ChangeRow[] | null;
   /** `held.affects` lines: the blast sentence, then `held.relied_inflight`, `held.relied_landed`. */
   affects: string[] | null;
@@ -258,9 +274,31 @@ function riskBlock(view: CardView, clef: boolean): CardSheetModel["risk"] {
   };
 }
 
+/** The held sheet's frame cells (3.13's state table): `before` is `Card.preview.before`, `after`
+ * is `Card.preview.after[attempt_id]` of the card's attempt (CO36). While the preview commit is
+ * being built (PV1) the cell carries `held.preview_building`; a `preview.error` reads
+ * `held.no_preview` in the after frame only (FR32 — the spec gives no `before`-missing row, so a
+ * null `before` keeps the building sentence). */
+function heldFrames(card: Card): NonNullable<CardSheetModel["frames"]> {
+  const preview = card.preview;
+  if (preview === null) {
+    const building = text("held.preview_building");
+    return { before: null, beforeNote: building, after: null, afterNote: building };
+  }
+  const id = card.attempt_ids[0];
+  const after = id === undefined ? undefined : preview.after[id];
+  return {
+    before: preview.before,
+    beforeNote: preview.before === null ? text("held.preview_building") : null,
+    after: after ?? null,
+    afterNote:
+      preview.error !== null ? text("held.no_preview") : after === undefined ? text("held.preview_building") : null,
+  };
+}
+
 /** One race column (03 3.14's table): facts from `Card.candidates`, `Card.blast_radius` and the
  * attempt; the state line from the candidate and the card's own `closed`. */
-function raceColumn(state: FloorState, view: CardView, attemptId: string): RaceColumn {
+function raceColumn(state: FloorState, view: CardView, attemptId: string, visitor: boolean): RaceColumn {
   const card = view.card;
   const attempt = state.attempts[attemptId];
   const candidate = card.candidates?.[attemptId];
@@ -281,6 +319,25 @@ function raceColumn(state: FloorState, view: CardView, attemptId: string): RaceC
     stopped === null && candidate !== undefined && !candidate.can_choose && attempt !== undefined && inFlight(attempt)
       ? { word: attemptStatusWord(attempt), steps: attempt.steps }
       : null;
+  const preview = card.preview;
+  const choosable = candidate?.can_choose === true;
+  let frameAddress: FrameAddress | null = null;
+  let frameNote: string | null = null;
+  let stateLine: string | null = null;
+  if (choosable && view.closed === null) {
+    // 3.14 error row: the card has no preview for a choosable candidate — `preview.error`, no
+    // `after` entry or `preview` itself null — reads `held.no_preview`. (3.14 names no
+    // preview_building state; `held.no_preview` stands in for the still-building case.)
+    const address = preview !== null && preview.error === null ? preview.after[attemptId] : undefined;
+    if (address === undefined) frameNote = text("held.no_preview");
+    else frameAddress = address;
+  } else {
+    // 3.14 loading/stopped rows: the state line, no frame. An attempt gone from `floor.attempts`
+    // with no stop reason reads `race.stopped` — the spec gives no closer sentence.
+    stateLine =
+      stopped ??
+      (working !== null ? `${text("race.working")} · ${working.word} · step ${working.steps}` : text("race.stopped"));
+  }
   return {
     attemptId,
     modelId: attempt?.model ?? "",
@@ -288,19 +345,17 @@ function raceColumn(state: FloorState, view: CardView, attemptId: string): RaceC
     checks: attempt === undefined ? null : checksSummary(attempt),
     took:
       candidate?.seconds === null || candidate?.seconds === undefined
-        ? text("race.unknown")
+        ? text("race.took", { duration: text("race.unknown") })
         : text("race.took", { duration: duration(candidate.seconds * 1000) }),
     cost:
       candidate?.cost_usd === null || candidate?.cost_usd === undefined
-        ? text("race.unknown")
+        ? text("race.cost", { money: text("race.unknown") })
         : text("race.cost", { money: money(candidate.cost_usd) }),
     blast: text("race.blast", { n: radius?.repair.length ?? 0 }),
-    canChoose: candidate?.can_choose === true && view.closed === null,
-    working,
-    stopped,
-    noPreview:
-      view.card.preview !== null &&
-      (view.card.preview.error !== null || view.card.preview.after[attemptId] === undefined),
+    canChoose: choosable && view.closed === null && !visitor,
+    frameAddress,
+    frameNote,
+    stateLine,
   };
 }
 
@@ -326,18 +381,7 @@ export function cardSheetModel(
   const card = view.card;
   const minimal = card.kind === "race" ? false : !opts.features.held;
   const closed = view.closed;
-  let previewNote: string | null = null;
-  if (!minimal && closed === null) {
-    const id = card.attempt_ids[0];
-    if (card.preview === null) {
-      previewNote = opts.features.held ? text("held.preview_building") : null;
-    } else if (
-      card.preview.error !== null ||
-      (card.kind === "held" && id !== undefined && card.preview.after[id] === undefined)
-    ) {
-      previewNote = text("held.no_preview");
-    }
-  }
+  const frames = card.kind === "held" && !minimal && closed === null ? heldFrames(card) : null;
   return {
     cardId: card.card_id,
     kind: card.kind,
@@ -347,12 +391,12 @@ export function cardSheetModel(
     closedSentence: closed === null ? null : closedSentence(state, view),
     closedByOwner: closed?.by === "owner",
     minimal,
-    previewNote,
+    frames,
     changes: card.kind === "race" ? null : changeRows(state, view),
     affects: minimal || card.kind === "race" ? null : affectsRows(state, view),
     checked: card.kind === "race" ? null : checkedBlock(state, view),
     risk: minimal || card.kind === "race" ? null : riskBlock(view, opts.features.clef),
-    race: card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id)) : null,
+    race: card.kind === "race" ? card.attempt_ids.map((id) => raceColumn(state, view, id, opts.visitor)) : null,
     reasonLabel: opts.visitor ? null : text("held.reason"),
     options: card.options.map((option) => ({
       id: option.id,

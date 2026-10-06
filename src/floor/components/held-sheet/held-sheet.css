@@ -1,0 +1,9 @@
+/* The held sheet's frame row (03 3.13): the two commit cells side by side, stacked on narrow
+ * sheets. The cells' own rules are in card-sheet.css (`sheet-frame`). */
+
+.held-sheet__frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}

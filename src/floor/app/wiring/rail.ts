@@ -3,11 +3,14 @@
 
 import type { RegistryTable } from "../registry.ts";
 
-const RAIL_SHEETS = ["sheet.card"] as const;
+const RAIL_SHEETS = ["sheet.card", "sheet.held", "sheet.race"] as const;
 
 export function wire(table: RegistryTable): void {
-  // `sheet.card` is the no-frames card sheet of 03-floor 2.4/3.13/3.14 (held, choice, race); the
-  // lane binds it in `rail.views.tsx` and `app.tsx` draws it — the one place it renders.
+  // `sheet.card` is the seam `app.tsx` draws for every card kind; its binding in
+  // `rail.views.tsx` dispatches on the card's kind to the held sheet (3.13), the race sheet
+  // (3.14) or the no-frames card sheet of `card-sheet.tsx` (choice, and any kind the dispatch
+  // does not know). `sheet.held` and `sheet.race` are the same components bound directly, for a
+  // host that opens a card by its kind.
   for (const name of RAIL_SHEETS) {
     table.entries.set(name, { kind: "sheet", name, value: name });
   }

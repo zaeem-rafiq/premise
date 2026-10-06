@@ -61,7 +61,6 @@ import {
   journalPut,
   metaAll,
   metaGet,
-  metaSet,
   opList,
   opPut,
   premiseList,
@@ -75,6 +74,7 @@ import {
   transcriptRows,
   type JournalRow,
 } from "../../core/agent/store.ts";
+import { metaSet } from "./meta.ts";
 import { abandonCall, beginCall, finishCall, journaledCall, retryCall } from "./journal.ts";
 import * as inbox from "./inbox.ts";
 import {

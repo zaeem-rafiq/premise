@@ -82,7 +82,7 @@ export function pendingEvents(sql: Sql): OutboxRow[] {
 
 /** Marks the rows as handed to the Floor at least once (EV2 keeps them until confirmation). */
 export function markEventsSent(sql: Sql, ns: readonly number[]): void {
-  for (const n of ns) sql.exec("UPDATE events_out SET sent = 1 WHERE n = ?", n);
+  for (const n of ns) sql.exec("UPDATE events_out SET sent = 1 WHERE n = ? AND sent = 0", n);
 }
 
 /** Deletes the rows the Floor confirmed: `n <= upTo` (EV2). */

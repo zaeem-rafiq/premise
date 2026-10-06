@@ -23,6 +23,7 @@ import type {
   UndoRequest,
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
+import { persistPremises, persistOps } from "./attempt-rows.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
@@ -244,6 +245,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
+  pool.savedMeta = new Map(pool.meta);
   // FJ1: `features.held` comes from the build (the caller passes FEATURES.held); a pool created
   // under a direct engine call keeps that default, but an explicit false always wins.
   pool.featuresHeld = opts.features?.held ?? pool.meta.get("features_held") === "1";
@@ -325,7 +327,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
       const h = headFromRow(hr);
       a.heads.push(h);
       a.next_hn = Math.max(a.next_hn, h.hn + 1);
-      if (h.resolved_at !== null) a.resolved.add(h.hn);
+      if (h.result !== "info" && h.resolved_at !== null) a.resolved.add(h.hn);
     }
     for (const j of judgmentsByAttempt.get(a.id) ?? []) {
       if (j.result === null) {
@@ -448,6 +450,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
+    savedMeta: new Map(),
     // `openPool` re-derives this from `meta.app` once the store is read; a fresh map starts
     // at the tide-pool set until then (a seed pool keeps it; an imported create sets `app` "").
     languages: TIDEPOOL_LANGUAGES,
@@ -878,51 +881,8 @@ function persistAttempt(pool: Pool, a: Attempt): void {
     a.next_hn,
     pool.now(),
   );
-  sql.exec("DELETE FROM premises WHERE attempt_id = ?", a.id);
-  for (const p of a.premises.values()) {
-    sql.exec(
-      `INSERT INTO premises (attempt_id, kind, key, hash, seq, members, shown, read, edit, derived, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      a.id,
-      p.kind,
-      p.key,
-      p.hash,
-      p.seq,
-      p.members === null ? null : JSON.stringify(p.members),
-      p.shown === null ? null : JSON.stringify(p.shown),
-      p.read ? 1 : 0,
-      p.edit ? 1 : 0,
-      p.derived ? 1 : 0,
-      p.status,
-    );
-  }
-  sql.exec("DELETE FROM ops WHERE attempt_id = ?", a.id);
-  for (const o of a.ops) {
-    if (o.op === "write") {
-      sql.exec(
-        `INSERT INTO ops (attempt_id, op_seq, op, path, content, old, new, base_oid, targets, dropped)
-         VALUES (?, ?, 'write', ?, ?, NULL, NULL, ?, NULL, ?)`,
-        a.id,
-        o.op_seq,
-        o.path,
-        o.content,
-        o.base_oid,
-        o.dropped ? 1 : 0,
-      );
-    } else {
-      sql.exec(
-        `INSERT INTO ops (attempt_id, op_seq, op, path, content, old, new, base_oid, targets, dropped)
-         VALUES (?, ?, 'replace', ?, NULL, ?, ?, NULL, ?, ?)`,
-        a.id,
-        o.op_seq,
-        o.path,
-        o.old,
-        o.new,
-        JSON.stringify(o.targets),
-        o.dropped ? 1 : 0,
-      );
-    }
-  }
+  persistPremises(sql, a);
+  persistOps(sql, a);
   sql.exec("DELETE FROM heads_ups WHERE attempt_id = ?", a.id);
   for (const h of a.heads) {
     sql.exec(
@@ -1241,7 +1201,10 @@ export function persist(pool: Pool): void {
   }
   pool.dirtyTrees.clear();
   for (const [k, v] of pool.meta) {
-    if (k !== "pool_id") metaSet(sql, k, v);
+    if (pool.savedMeta.get(k) !== v) metaSet(sql, k, v);
+  }
+  for (const k of pool.savedMeta.keys()) {
+    if (!pool.meta.has(k)) metaSet(sql, k, null);
   }
 }
 
@@ -1265,6 +1228,7 @@ function wrapCall<T>(pool: Pool, run: () => T): T {
     persist(pool);
     return got;
   });
+  pool.savedMeta = new Map(pool.meta);
   return r;
 }
 

@@ -57,7 +57,8 @@ export function flushEvents(pool: Pool): void {
 }
 
 export function metaWrite(pool: Pool, k: string, v: string | number | null): void {
-  pool.meta.set(k, v === null ? "" : String(v));
+  if (v === null) pool.meta.delete(k);
+  else pool.meta.set(k, String(v));
   metaSet(pool.sql, k, v);
 }
 

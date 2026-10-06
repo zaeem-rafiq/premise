@@ -303,6 +303,8 @@ export type Pool = {
   syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   meta: Map<string, string>;
+  /** Values loaded or committed by the last call; updated only after the transaction commits. */
+  savedMeta: Map<string, string>;
   /** The pool's language set (LG1): the tide-pool set for a seeded pool, the imported set for
    * one made from a repository — `meta.app` is "" exactly in the imported case. */
   languages: LanguageSet;

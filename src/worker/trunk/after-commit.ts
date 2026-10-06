@@ -98,12 +98,6 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
       recordTrunkError(ctx, "events", "transport");
       return;
     }
-    sql.transaction(() =>
-      markEventsSent(
-        sql,
-        rows.map((row) => row.n),
-      ),
-    );
     const body = (await response.json().catch(() => null)) as {
       appended?: number;
       duplicate?: boolean;
@@ -122,9 +116,23 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
     const expected = body?.error?.expected;
     if (response.status === 409 && body?.error?.code === "gap" && typeof expected === "number") {
       // The Floor is ahead: rows below `expected` are already stored — drop and resend (EV2).
-      sql.transaction(() => confirmEvents(sql, expected - 1));
+      sql.transaction(() => {
+        confirmEvents(sql, expected - 1);
+        markEventsSent(
+          sql,
+          rows.filter((row) => row.n >= expected).map((row) => row.n),
+        );
+      });
       continue;
     }
+    // Only unconfirmed rows need the diagnostic mark. A confirmed row was deleted above,
+    // without first rewriting it, and every retained row stays eligible for delivery (EV2).
+    sql.transaction(() =>
+      markEventsSent(
+        sql,
+        rows.map((row) => row.n),
+      ),
+    );
     scheduleEventsRetry(sql);
     recordTrunkError(ctx, "events", "transport");
     return;

@@ -67,6 +67,8 @@ export function wireEngineEntries(table: EngineTable): void {
     });
   });
   table.entries.set("owner", (input, ctx) => trunk(ctx).owner(input as Parameters<Trunk["owner"]>[0]));
+  table.entries.set("undo_plan", (input, ctx) => trunk(ctx).undoPlan((input as { seq: number }).seq));
+  table.entries.set("undo", (input, ctx) => trunk(ctx).undo(input as Parameters<Trunk["undo"]>[0]));
   // The effects the worker runs after a transaction (12.4): the EV2 event delivery and the LP6
   // push outbox — the kinds `src/worker/trunk/effects.ts` registers handlers under.
   table.effects.add("events");

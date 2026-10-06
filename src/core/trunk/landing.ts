@@ -380,9 +380,10 @@ export function applyClassification(
   seq: number,
   cause: HeadsUpCause,
   causeAttempt: Attempt | null,
+  reopenedItems?: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }>,
 ): void {
-  const hItems: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
-  let strongest: "info" | "confirm" | "repair" | null = null;
+  const hItems: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [...(reopenedItems ?? [])];
+  let strongest: "info" | "confirm" | "repair" | null = reopenedItems === undefined ? null : "repair";
   const e1keys: string[] = [];
   // S6a/TR5: when the attempt's triage is a `SyncTriage` the rows are decided inside this
   // transaction — the pool's port (`ScriptedTriage`) for a synthetic attempt, `OffTriage`
@@ -499,7 +500,13 @@ export function applyClassification(
     pool.dirtyAttempts.add(a.id);
     return;
   }
-  sendHeadsUp(pool, a, strongest, hItems, dropped, cause, e1keys, causeAttempt);
+  if (reopenedItems !== undefined) {
+    // T19/T19s already set the state and revision. Combine the undo repair with any
+    // later changes in this batch (HU2), without counting a second go-around.
+    const h = pushHeadsUp(pool, a, "repair", hItems, dropped, cause);
+    h.body.go_around = a.go_arounds;
+    emitSent(pool, a, h, hItems);
+  } else sendHeadsUp(pool, a, strongest, hItems, dropped, cause, e1keys, causeAttempt);
 }
 
 function firstCauseSeq(cause: HeadsUpCause): number | null {

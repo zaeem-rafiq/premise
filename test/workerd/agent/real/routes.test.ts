@@ -138,6 +138,8 @@ describe("a rota de intents contra o sistema inteiro (04-build-plan 2.5)", () =>
       ownerKey: KEY,
       modelUrl: model.url,
       repos: [POOL, "p-rcap"],
+      // FJ1 below needs race off, whatever the build ships.
+      features: { race: false },
     });
     const res = await worker.fetch(
       "/api/pools",

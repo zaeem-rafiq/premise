@@ -1,6 +1,6 @@
 // Slice 13: owner guards and FJ1 through the built Worker, and UN4/UN5 through its
-// real Trunk object. FEATURES.undo stays false, so enabled service behavior is
-// exercised through the internal object boundary without changing the build flag.
+// real Trunk object. The Worker runs with undo off (`features: { undo: false }`, whatever the
+// build ships), so enabled service behavior is exercised through the internal object boundary.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { UndoPlanResponse, UndoResponse } from "../../../src/protocol/undo.ts";
 import { startLandingWorker, type LandingWorker } from "../landing/harness.ts";
@@ -17,7 +17,8 @@ describe("Slice 13 undo routes in local workerd (UN4, UN5, FJ1, SE2, SE3)", () =
   let worker: LandingWorker;
 
   beforeAll(async () => {
-    worker = await startLandingWorker({ ownerKey: KEY, repos: [POOL], agentStub: true });
+    // These tests check the routes with undo off (FJ1), whatever the build ships.
+    worker = await startLandingWorker({ ownerKey: KEY, repos: [POOL], agentStub: true, features: { undo: false } });
     await createPool(worker, POOL);
   }, 180_000);
 

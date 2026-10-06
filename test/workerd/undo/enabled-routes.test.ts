@@ -1,5 +1,5 @@
-// The production build keeps FEATURES.undo false. This fixture changes that one
-// value in the bundle's in-memory module contents, then runs its actual public
+// This fixture sets FEATURES.undo to true in the bundle's in-memory module contents
+// (`withFeatures`), whatever the build ships, then runs its actual public
 // route handlers against a recording local Trunk stand-in. No source, config,
 // or bundle file is written, and the fake does not prove engine behavior.
 import { readFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import type { UndoPlan } from "../../../src/protocol/undo.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { bearer, KEY } from "../collide/helpers.ts";
+import { withFeatures } from "../../support/features.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://premise.test";
@@ -22,16 +23,6 @@ const PLAN: UndoPlan = {
   kept_readers: [3],
   repairs: ["shrimp"],
 };
-
-function enabledFixture(source: string): string {
-  const blocks = source.match(/var FEATURES = \{[\s\S]*?\n\};/g) ?? [];
-  if (blocks.length !== 1) throw new Error("Expected exactly one built FEATURES object for the undo fixture");
-  const block = blocks[0]!;
-  if ((block.match(/\bundo: false,/g) ?? []).length !== 1) {
-    throw new Error("Expected exactly one disabled undo property in the built FEATURES object");
-  }
-  return source.replace(block, block.replace("undo: false,", "undo: true,"));
-}
 
 const FAKE_TRUNK = `
 import { DurableObject } from "cloudflare:workers";
@@ -73,7 +64,7 @@ describe("enabled undo public handlers with an in-memory feature fixture", () =>
         workers: [
           {
             name: "premise",
-            modules: [{ type: "ESModule", path: BUNDLE, contents: enabledFixture(original) }],
+            modules: [{ type: "ESModule", path: BUNDLE, contents: withFeatures(original, { undo: true }) }],
             compatibilityDate: "2026-10-01",
             compatibilityFlags: ["nodejs_compat"],
             bindings: { OWNER_KEY: KEY },

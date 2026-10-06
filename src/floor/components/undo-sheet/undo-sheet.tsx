@@ -17,6 +17,7 @@ import type { FloorState } from "../../../protocol/reducer/state.ts";
 import type { UndoPlan, UndoPlanResponse, UndoResponse } from "../../../protocol/undo.ts";
 import { landingLabel } from "../../../copy/format.ts";
 import { errorSentence, UNDO_REFUSAL_REASONS, undoRefusalReason } from "../../../copy/errors.ts";
+import { text } from "../../../copy/strings.ts";
 import { ShellContext } from "../../app/context.ts";
 import { whyOffered } from "../../state/derive.ts";
 import { whyCard } from "../../../protocol/reducer/why.ts";
@@ -44,7 +45,9 @@ type Phase =
  * protocol does not name falls back to the plain request-error sentence for the status. */
 function refusalSentence(reason: unknown, status: number | null, code?: string): string {
   const name = String(reason);
-  return UNDO_REFUSAL_REASONS[name] !== undefined ? undoRefusalReason(name) : errorSentence(status, code);
+  return UNDO_REFUSAL_REASONS[name] !== undefined
+    ? text("undo.refused", { reason: undoRefusalReason(name) })
+    : errorSentence(status, code);
 }
 
 /**

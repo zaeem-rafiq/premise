@@ -33,7 +33,7 @@ import { Rail } from "../components/rail/rail.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
 import { ReplayMenu } from "../replay/replay-menu.tsx";
-import { loadRecordingIndex, type RecordingIndex } from "../replay/player.ts";
+import { defaultRecordingId, loadRecordingIndex, type RecordingIndex } from "../replay/player.ts";
 import { replayError } from "../../copy/replay.ts";
 import { errorSentence } from "../../copy/errors.ts";
 import { text } from "../../copy/strings.ts";
@@ -56,6 +56,13 @@ function call(entry: RegistryEntry | undefined, props: Record<string, unknown>):
 }
 
 let toastSeq = 0;
+
+/** The page's own build id for `about.build` (RY12): the content hash of the served bundle's
+ * file name (`/assets/index-<hash>.js`); "dev" while the dev server serves `./main.tsx` unhashed. */
+function pageBuild(): string {
+  const src = document.querySelector<HTMLScriptElement>('script[type="module"]')?.src ?? "";
+  return /index-([A-Za-z0-9_-]+)\.js$/.exec(src)?.[1] ?? "dev";
+}
 
 /** `ViewState.theme`/`size` are kept in the browser (6.3, VD19) under these keys. */
 const THEME_KEY = "premise.theme";
@@ -111,6 +118,12 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   const replay = route.kind === "replay";
   const session = useSession(route, settings, reducedMotion);
+  // RY12: while a recording is open, About names the page's own build and the build the
+  // recording's header was made by.
+  const aboutBuild =
+    session.replay.phase === "ready"
+      ? { page: pageBuild(), recording: session.replay.recording.header.build }
+      : undefined;
   // FR10/CO3: while the connection is lost every owner control is off and the last
   // content keeps, dimmed. Replay never is "offline" - it plays a file, not a socket.
   const offline = !replay && session.connection === "lost";
@@ -170,6 +183,21 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     [],
   );
 
+  // RY11: an event type the reducer does not know is counted (FE1) and reported once per
+  // recording with `replay.unknown` — not an error, so a toast and no banner.
+  const unknownReported = useRef<string | null>(null);
+  useEffect(() => {
+    if (route.kind !== "replay") {
+      unknownReported.current = null;
+      return;
+    }
+    const unknown = session.floor.unknown_events;
+    if (session.replay.phase === "ready" && unknown > 0 && unknownReported.current !== route.id) {
+      unknownReported.current = route.id;
+      toast(text("replay.unknown", { n: unknown }));
+    }
+  }, [route, session.replay.phase, session.floor.unknown_events, toast]);
+
   // ---- sheets: openers are remembered so focus returns to them on close (AX4) ----
   const sheetOpener = useRef<HTMLElement | null>(null);
   const openSheet = useCallback((next: SheetTarget) => {
@@ -209,8 +237,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   const openRecording = useCallback((id: string) => navigate(`/replay/${encodeURIComponent(id)}`), [navigate]);
   const defaultRecordingDuration = useCallback((): string => {
-    const list = replayIndex?.recordings;
-    const entry = list?.find((r) => r.id === replayIndex?.default) ?? list?.[0];
+    const id = defaultRecordingId(replayIndex);
+    const entry = replayIndex?.recordings?.find((r) => r.id === id);
     return entry?.duration_ms === undefined ? "…" : duration(entry.duration_ms);
   }, [replayIndex]);
   // The start card names the default recording's duration; load the index when it can show.
@@ -220,7 +248,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   const openDefaultRecording = useCallback(() => {
     void getIndex().then((list) => {
-      const id = list?.default ?? list?.recordings?.[0]?.id;
+      const id = defaultRecordingId(list);
       if (id !== undefined) openRecording(id);
     });
   }, [getIndex, openRecording]);
@@ -444,10 +472,22 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         })}
       {sheet.kind === "undo" && call(table.entries.get("sheet.undo"), { floor, seq: sheet.seq, onClose: closeSheet })}
       {sheet.kind === "about" && (
-        <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
+        <AboutSheet
+          floor={floor}
+          shortcuts={shortcuts}
+          onShortcuts={setShortcuts}
+          onClose={closeSheet}
+          build={aboutBuild}
+        />
       )}
       {sheet.kind === "shortcuts" && (
-        <AboutSheet floor={floor} shortcuts={shortcuts} onShortcuts={setShortcuts} onClose={closeSheet} />
+        <AboutSheet
+          floor={floor}
+          shortcuts={shortcuts}
+          onShortcuts={setShortcuts}
+          onClose={closeSheet}
+          build={aboutBuild}
+        />
       )}
       {sheet.kind === "owner" && (
         <OwnerDialog
@@ -661,7 +701,10 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           <Announcer lines={session.effects.announces} toasts={toasts} />
         </div>
         {replay && session.player !== null && (
-          <ReplayBar player={session.player} onClose={() => navigate(poolRoute(pool, settings.default_pool))} />
+          <ReplayBar
+            player={session.player}
+            onClose={() => navigate(pool === "" ? "/" : poolRoute(pool, settings.default_pool))}
+          />
         )}
       </div>
     </ShellContext.Provider>

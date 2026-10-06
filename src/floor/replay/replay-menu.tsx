@@ -40,7 +40,8 @@ export function ReplayMenu({
               <li key={entry.id}>
                 <button type="button" className="replay-item" onClick={() => onPick(entry.id)}>
                   {t("replay.menu.item", {
-                    title: entry.title ?? entry.id,
+                    // RY27: the title is shown in quotes in the Replay menu, as in the banner.
+                    title: `"${entry.title ?? entry.id}"`,
                     duration: duration(entry.duration_ms ?? 0),
                     date: (entry.recorded_at ?? "").slice(0, 10),
                   })}

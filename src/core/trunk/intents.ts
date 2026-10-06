@@ -20,6 +20,7 @@ import { curOps, type Attempt, type CardRec, type IntentRec, type Pool, type Pre
 import { event, emitPoolState, poolPolicy } from "./events.ts";
 import { cardPreview, enqueuePreviews } from "./preview.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
+import { updateRaceSubmit } from "./race.ts";
 
 const WAITING: readonly AttemptState[] = ["submitted", "validated", "held"];
 export const IN_FLIGHT: readonly AttemptState[] = [
@@ -90,6 +91,8 @@ export function setState(
   transition: string,
   reason: string | null = null,
 ): void {
+  // T12 resolves into held for a race, never into the automatic landing queue (RC2).
+  if (transition === "T12" && to === "validated" && a.race) to = "held";
   if (a.state !== to) {
     const from = a.state;
     a.state = to;
@@ -108,6 +111,7 @@ export function setState(
   }
   if (reason !== null) a.stop_reason = reason;
   pool.dirtyAttempts.add(a.id);
+  if (transition === "T12" && to === "held" && a.race) updateRaceSubmit(pool, a);
   if (to === "validated" && a.state === to) scheduleTick(pool);
 }
 
@@ -456,6 +460,7 @@ export type OpenArgs = {
   intent: string;
   intent_id?: string;
   race?: boolean;
+  prewritten?: boolean;
   agent_kind?: "real" | "synthetic";
   model?: string | null;
   truth?: string[] | null;
@@ -493,7 +498,7 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
       text: args.intent,
       requester: args.requester ?? "agent",
       race: args.race === true,
-      prewritten: false,
+      prewritten: args.prewritten === true,
     });
   }
   const a: Attempt = {
@@ -547,6 +552,8 @@ export function openAttempt(pool: Pool, id: string, args: OpenArgs): Attempt {
     dirtyJudgments: new Set(),
   };
   pool.attempts.set(id, a);
+  // RC3: keep the opening clock across later tools and pool reconstruction.
+  if (a.race) pool.meta.set(`race_opened:${id}`, String(a.updated_at));
   pool.dirtyAttempts.add(id);
   if (a.agent_kind === "synthetic" && pool.meta.get("synthetic") !== "1") {
     // EM1a: the synthetic flag changes once, when the first synthetic attempt opens.

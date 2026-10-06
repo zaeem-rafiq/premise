@@ -12,8 +12,8 @@ import { utf8 } from "../sync/bytes.ts";
 import { changeTier } from "../policy/policy.ts";
 import { event, poolPolicy } from "./events.ts";
 import { blast, dropFailed, lateSweep, sendHeadsUp } from "./landing.ts";
-import { openCard, setState, isWaiting, refreshCardText } from "./intents.ts";
-import { enqueuePreviews } from "./preview.ts";
+import { openCard, setState, isWaiting } from "./intents.ts";
+import { updateRaceSubmit } from "./race.ts";
 import { ref, syncPremises } from "./premises.ts";
 import type { PremiseRef } from "../../protocol/premise.ts";
 import { MAX_POOL_BYTES, MAX_POOL_FILES } from "../../protocol/constants.ts";
@@ -295,6 +295,16 @@ export function submitCall(
   // The check list is the note's `checks` (3.5); meta persists it so a pool reopen keeps it.
   pool.meta.set(`checks:${a.id}`, JSON.stringify(checks));
   const waiting = [...a.premises.values()].some((p) => p.status === "pending_triage");
+  if (a.race) {
+    if (waiting) {
+      setState(pool, a, "submitted", "T3");
+      return result({ status: "submitted", submit_id: a.submit_id, waiting_for: ["triage"], tier: a.tier }, premises);
+    }
+    // RC2: every tier waits on the intent's one race card after all answers arrive.
+    setState(pool, a, "held", "T4");
+    const card = updateRaceSubmit(pool, a);
+    return result({ status: "held", submit_id: a.submit_id, card_id: card?.card_id ?? null, tier: a.tier }, premises);
+  }
   if (a.tier === "held") {
     setState(pool, a, "held", "T4");
     a.approved_by = null;
@@ -307,27 +317,6 @@ export function submitCall(
   if (waiting) {
     setState(pool, a, "submitted", "T3");
     return result({ status: "submitted", submit_id: a.submit_id, waiting_for: ["triage"], tier: "auto" }, premises);
-  }
-  if (a.race) {
-    // RC2: a passing race candidate waits on the intent's single race card.
-    setState(pool, a, "held", "T4");
-    a.approved_by = null;
-    const card = pool.cards.find((c) => c.open && c.kind === "race" && c.attempt_ids.includes(a.id));
-    if (card !== undefined) {
-      card.body.candidates ??= {};
-      card.body.candidates[a.id] = { state: "held", can_choose: true, seconds: null, cost_usd: null };
-      if (card.body.submit_ids[a.id] !== a.submit_id && card.body.preview !== null) {
-        delete card.body.preview.after[a.id];
-      }
-      card.body.submit_ids[a.id] = a.submit_id;
-      card.body.blast_radius[a.id] = blast(pool, a);
-      // PV1: the new candidate's preview joins the queued builds.
-      enqueuePreviews(pool, card);
-      refreshCardText(pool, card);
-      pool.dirtyCards.add(card.card_id);
-      event(pool, "card.updated", { card: card.body });
-    }
-    return result({ status: "held", submit_id: a.submit_id, card_id: card?.card_id ?? null, tier: a.tier }, premises);
   }
   setState(pool, a, "validated", "T2");
   a.validated_at = ++pool.order;

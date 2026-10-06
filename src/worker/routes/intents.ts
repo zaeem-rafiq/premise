@@ -1,37 +1,29 @@
-// The owner's typed-intent route of 13.6 (Slice 4): `POST /api/pools/{pool}/intents`
-// takes a `CreateIntentRequest` and launches a real agent — the attempt opens at
-// Trunk as `agent_kind: "real"` on the model plan's workhorse, then the Agent
-// Durable Object named by the attempt id is opened with the `model` driver.
-//
-// Ids derive from `request_id`: a repeated request names the same attempt, whose
-// `open_attempt` at Trunk and `/open` at the Agent are both idempotent, so the
-// retry returns the first answer and launches nothing (9.8). `race` is a SHOULD
-// feature that stays off in this slice — such a request is `feature_off` (FJ1).
+// 13.6 / RC1: Trunk freezes every candidate before any Agent starts. Repeated
+// request ids replay that launch; each Agent open is itself idempotent (9.8).
 
 import { H } from "../../core/sync/h.ts";
 import { MAX_INTENT_CHARS } from "../../protocol/constants.ts";
 import { FEATURES } from "../../config/features.ts";
-import { WORKHORSE_MODEL } from "../../config/model-plan.ts";
+import { MODEL_PLAN } from "../../config/model-plan.ts";
 import type { CreateIntentRequest, CreateIntentResponse } from "../../protocol/routes.ts";
 import type {
   AgentOpenRequest,
   AgentOpenResponse,
-  TrunkOpenAttemptRequest,
-  TrunkOpenAttemptResponse,
+  TrunkCreateIntentRequest,
+  TrunkCreateIntentResponse,
 } from "../../protocol/internal.ts";
 import type { RouteHandler } from "../index.ts";
 
-const TRUNK_OPEN_ATTEMPT_URL = "https://trunk.internal/internal/open-attempt";
 const AGENT_OPEN_URL = "https://agent.internal/open";
-const REQUESTER = "owner";
 
 /** ULID's Crockford base32 alphabet, in order (same scheme as the swarm launcher). */
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-/** A deterministic `i_`/`a_` id for a request: the 128 bits of
- * `H("intents|<prefix>|<request_id>")` base32-encoded (9.8). */
-function intentId(prefix: "i_" | "a_", requestId: string): string {
-  let value = BigInt(`0x${H(`intents|${prefix}|${requestId}`)}`);
+/** A deterministic request id (9.8). Additional candidates use separate hash domains,
+ * so a request id containing a candidate suffix cannot alias another intent's attempt. */
+function intentId(prefix: "i_" | "a_", requestId: string, candidate = 0): string {
+  const domain = candidate === 0 ? "intents" : `intents-race-${candidate}`;
+  let value = BigInt(`0x${H(`${domain}|${prefix}|${requestId}`)}`);
   let id = "";
   for (let i = 0; i < 26; i += 1) {
     id = B32[Number(value & 0x1fn)] + id;
@@ -52,8 +44,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * `POST /api/pools/{pool}/intents`: `{ text, race, prewritten, request_id }` →
  * `{ intent_id }`. The attempt's id is derived from `request_id`, so the
  * repeated call returns the first answer without opening anything new.
- * A real attempt rides the model plan's workhorse; the model calls themselves
- * go through the gate inside the Agent object.
+ * An ordinary attempt uses the workhorse; a race uses the ordered race models.
+ * Model calls go through the gate inside each Agent object.
  */
 export const createIntent: RouteHandler = async ({ request, env, params }) => {
   const pool = params.pool ?? "";
@@ -76,31 +68,36 @@ export const createIntent: RouteHandler = async ({ request, env, params }) => {
   ) {
     return json({ error: { code: "invalid_args" } }, 400);
   }
-  // FJ1: race is a SHOULD feature, off in this build.
+  // FJ1: a disabled race changes nothing.
   if (req.race && !FEATURES.race) return json({ error: { code: "feature_off" } }, 404);
 
-  const attempt_id = intentId("a_", req.request_id);
-  const intent_id = intentId("i_", req.request_id);
-
-  // 9.2 T1: the attempt opens at Trunk first — `intent.created` and
-  // `attempt.opened` precede everything the agent does.
-  const openAttempt: TrunkOpenAttemptRequest = {
-    attempt_id,
-    intent_id,
-    intent: req.text,
-    agent_kind: "real",
-    model: WORKHORSE_MODEL,
+  const requestId = req.request_id;
+  const intent_id = intentId("i_", requestId);
+  const models = req.race ? MODEL_PLAN.race : [MODEL_PLAN.workhorse];
+  const launch: TrunkCreateIntentRequest = {
+    text: req.text,
     race: req.race,
-    requester: REQUESTER,
+    prewritten: req.prewritten,
+    request_id: req.request_id,
+    intent_id,
+    candidates: models.map((model, index) => ({
+      // Preserve the existing single-attempt id for the first candidate.
+      attempt_id: intentId("a_", requestId, index),
+      model,
+    })),
   };
-  let trunkAnswer: TrunkOpenAttemptResponse;
+  let trunkAnswer: TrunkCreateIntentResponse;
   try {
-    const response = await env.TRUNK.get(env.TRUNK.idFromName(pool)).fetch(TRUNK_OPEN_ATTEMPT_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(openAttempt),
-    });
-    trunkAnswer = (await response.json()) as TrunkOpenAttemptResponse;
+    const response = await env.TRUNK.get(env.TRUNK.idFromName(pool)).fetch(
+      "https://trunk.internal/internal/open-intent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(launch),
+      },
+    );
+    if (!response.ok) return json({ error: { code: "trunk_open_failed" } }, 502);
+    trunkAnswer = (await response.json()) as TrunkCreateIntentResponse;
   } catch {
     return json({ error: { code: "trunk_open_failed" } }, 502);
   }
@@ -108,34 +105,27 @@ export const createIntent: RouteHandler = async ({ request, env, params }) => {
     return json({ error: { code: "trunk_open_failed", detail: trunkAnswer.error } }, 502);
   }
 
-  const open: AgentOpenRequest = {
-    pool,
-    attempt_id,
-    intent_id,
-    change_id: trunkAnswer.change_id,
-    intent_text: req.text,
-    requester: REQUESTER,
-    agent_kind: "real",
-    driver: "model",
-    model: WORKHORSE_MODEL,
-    // IR9 to IR11: an imported pool's answer carries its prompt context (guide path, repository,
-    // branch); a seed pool's carries none and the field stays out of the request.
-    ...(trunkAnswer.imported !== undefined ? { imported: trunkAnswer.imported } : {}),
-  };
-  let answer: AgentOpenResponse;
-  try {
-    const response = await env.AGENT.get(env.AGENT.idFromName(attempt_id)).fetch(AGENT_OPEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(open),
-    });
-    answer = (await response.json()) as AgentOpenResponse;
-  } catch {
-    return json({ error: { code: "agent_open_failed" } }, 502);
+  for (const candidate of trunkAnswer.launches) {
+    const open: AgentOpenRequest = {
+      ...candidate,
+      ...(trunkAnswer.imported !== undefined ? { imported: trunkAnswer.imported } : {}),
+    };
+    let answer: AgentOpenResponse;
+    try {
+      const response = await env.AGENT.get(env.AGENT.idFromName(open.attempt_id)).fetch(AGENT_OPEN_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(open),
+      });
+      if (!response.ok) return json({ error: { code: "agent_open_failed" } }, 502);
+      answer = (await response.json()) as AgentOpenResponse;
+    } catch {
+      return json({ error: { code: "agent_open_failed" } }, 502);
+    }
+    if (!answer.ok) {
+      return json({ error: { code: "agent_open_failed", detail: answer.error } }, 502);
+    }
   }
-  if (!answer.ok) {
-    return json({ error: { code: "agent_open_failed", detail: answer.error } }, 502);
-  }
-  const response: CreateIntentResponse = { intent_id };
+  const response: CreateIntentResponse = { intent_id: trunkAnswer.intent_id };
   return json(response);
 };

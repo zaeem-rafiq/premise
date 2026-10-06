@@ -31,6 +31,8 @@ export type AlarmDeps = {
   plain?: (now: number) => Promise<void>;
   /** The `preview` timer's work (PV1): frozen card previews, independent of landing pushes. */
   preview?: (now: number) => Promise<void>;
+  /** RC3: read the settled model cost for newly held race candidates. */
+  raceCost?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -95,6 +97,7 @@ export async function runAlarm({
   rebuild,
   plain,
   preview,
+  raceCost,
   now: at,
 }: AlarmDeps): Promise<void> {
   const now = at ?? Date.now();
@@ -105,6 +108,7 @@ export async function runAlarm({
     ["rebuild", rebuild],
     ["plain", plain],
     ["preview", preview],
+    ["race_cost", raceCost],
   ]);
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {

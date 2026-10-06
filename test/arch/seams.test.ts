@@ -109,6 +109,8 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         // IR3: the import job's slices commit through `import_step` on the `rebuild` timer.
         "import_step",
         "open_attempt",
+        "open_intent",
+        "race_cost_done",
         "owner",
         // 11.7: the `plain` timer's entry builds the next `<pool>-plain` commit spec,
         // `plain_done` applies the push's answer and emits `plain.updated`.

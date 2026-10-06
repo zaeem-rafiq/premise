@@ -11,11 +11,13 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { REPO_ROOT } from "../../../support/source.ts";
 import { DURABLE_OBJECTS, type DurableObjectBinding } from "../../../support/workerd.ts";
+import { withFeatures } from "../../../support/features.ts";
+import type { Features } from "../../../../src/protocol/floor-json.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
@@ -508,11 +510,14 @@ export async function startRealLandingWorker(options: {
   modelUrl: string;
   spendCapUsd?: string;
   repos: string[];
+  /** The flags this test runs with, whatever the build ships (`withFeatures`, in memory). */
+  features?: Partial<Features>;
 }): Promise<LandingRealWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first.");
   }
   const projectRoot = mkdtempSync(join(tmpdir(), "premise-real-repos-"));
+  const contents = options.features === undefined ? null : withFeatures(readFileSync(BUNDLE, "utf8"), options.features);
   const directories = new Map(options.repos.map((name) => [name, createNamedRepo(projectRoot, name)]));
   const gitServer = await startGitServer(projectRoot, {});
   const readServer = await startReadServer(projectRoot);
@@ -524,7 +529,7 @@ export async function startRealLandingWorker(options: {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          modules: [{ type: "ESModule", path: BUNDLE, ...(contents === null ? {} : { contents }) }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: {

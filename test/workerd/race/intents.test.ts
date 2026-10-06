@@ -1,8 +1,8 @@
 // RC1/9.8/FJ1: the actual public route, Trunk and Floor in local workerd. Only
 // Agent execution is replaced: the recording Agent reads the committed Floor
 // stream on /open and records one launch per object, like the real Agent.
-// The enabled fixture changes FEATURES.race in memory only (the undo fixture's
-// convention). No model, Artifacts, git host or Cloudflare service is bound.
+// Both fixtures set FEATURES.race in memory only (`withFeatures`), whatever the build
+// ships. No model, Artifacts, git host or Cloudflare service is bound.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +13,7 @@ import { RACE_SIZE } from "../../../src/protocol/constants.ts";
 import { MODEL_PLAN } from "../../../src/config/model-plan.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { bearer, KEY } from "../collide/helpers.ts";
+import { withFeatures } from "../../support/features.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://premise.test";
@@ -25,16 +26,6 @@ const REQUEST = {
   prewritten: true,
   request_id: "race-intent-request",
 };
-
-function enabledFixture(source: string): string {
-  const blocks = source.match(/var FEATURES = \{[\s\S]*?\n\};/g) ?? [];
-  if (blocks.length !== 1) throw new Error("Expected exactly one built FEATURES object for the race fixture");
-  const block = blocks[0]!;
-  if ((block.match(/\brace: false,/g) ?? []).length !== 1) {
-    throw new Error("Expected exactly one disabled race property in the built FEATURES object");
-  }
-  return source.replace(block, block.replace("race: false,", "race: true,"));
-}
 
 const RECORDING_AGENT = `
 import { DurableObject } from "cloudflare:workers";
@@ -162,9 +153,9 @@ describe("race intent public handler with real Trunk and an in-memory feature fi
 
   beforeAll(async () => {
     original = readFileSync(BUNDLE, "utf8");
-    enabled = await startWorker(enabledFixture(original));
+    enabled = await startWorker(withFeatures(original, { race: true }));
     await createPool(enabled, POOL);
-    disabled = await startWorker(original);
+    disabled = await startWorker(withFeatures(original, { race: false }));
     await createPool(disabled, "race-intent-disabled");
   }, 60_000);
 

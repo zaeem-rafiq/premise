@@ -98,6 +98,36 @@ const HELD: Card = {
 };
 
 describe("HeldSheet render (3.13)", () => {
+  it("CO14: renders two changed lights, twelve holds and the eighteen remaining holds", () => {
+    const state = stateWith(HELD);
+    for (let index = 0; index < 32; index += 1) {
+      const key = `facts/${index}.js`;
+      state.attempts["a_1"]!.premises[`file ${key}`] = {
+        kind: "file",
+        key,
+        read: true,
+        edit: false,
+        derived: false,
+        light: index >= 30 ? "changed" : "holds",
+        judgment: null,
+      };
+    }
+    const html = renderToString(
+      createElement(
+        ShellContext.Provider,
+        { value: makeShell(SETTINGS, true, false) },
+        createElement(HeldSheet, { floor: state, cardId: "k_1", onClose: () => undefined }),
+      ),
+    );
+    expect(html.match(/class="light light--changed"/g)).toHaveLength(2);
+    expect(html.match(/class="light light--holds"/g)).toHaveLength(12);
+    expect(html).toContain('<span class="card-sheet__more">+18</span>');
+    expect(html).toContain('aria-label="the file facts/30.js: Changed. the agent read it."');
+    expect(html).toContain('aria-label="the file facts/31.js: Changed. the agent read it."');
+    expect(html.indexOf('class="light light--changed"')).toBeLessThan(html.indexOf('class="light light--holds"'));
+    expect(html.lastIndexOf('class="light light--holds"')).toBeLessThan(html.indexOf('class="card-sheet__more"'));
+  });
+
   it("renders title, body, intent, both frame cells building and the option buttons", () => {
     const html = renderToString(
       createElement(

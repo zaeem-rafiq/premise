@@ -17,6 +17,7 @@ import {
   POOL,
 } from "../shell/stream.ts";
 import type { Frame } from "../shell/stream.ts";
+import { densePremises, expectLightsInsideColumn, expectNoSheetOverflow } from "./sheet-lights.ts";
 
 /** The fake pool host: a document the commit iframes can load. */
 const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><script>
@@ -92,6 +93,77 @@ async function serve(
 }
 
 test.describe("the race sheet (3.14)", () => {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    test(`CO14: three dense candidates keep their lights inside each column at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
+      const ids = ["a_1", "a_2", "a_3"];
+      const card = raceCard({
+        attempt_ids: ids,
+        submit_ids: Object.fromEntries(ids.map((id, index) => [id, `s_${index + 1}`])),
+        title: "Three attempts answered. Choose one.",
+        body: ["All three passed their checks."],
+        blast_radius: Object.fromEntries(
+          ids.map((id) => [id, { repair: [], confirm: [], triage: [], right_of_way: [] }]),
+        ),
+        candidates: Object.fromEntries(
+          ids.map((id) => [id, { state: "held", can_choose: true, seconds: 42, cost_usd: 0.12 }]),
+        ),
+        preview: {
+          before: { repo: "main", commit: "c_seed" },
+          after: Object.fromEntries(ids.map((id) => [id, { repo: "main", commit: `c_${id}` }])),
+          error: null,
+        },
+      });
+      const frames = [poolState(1), { ...intentCreated(2, "i_1", "a faster crab"), race: true }];
+      let n = 3;
+      for (const [index, id] of ids.entries()) {
+        frames.push(attemptOpened(n++, id, "i_1", { race: true, model: `model-${index + 1}` }));
+        frames.push(attemptState(n++, id, "opened", "working"));
+        const premises = densePremises(n, id, index === 1 ? 2 : 0);
+        frames.push(...premises);
+        n += premises.length;
+        frames.push(
+          ev(n++, {
+            type: "submit.result",
+            attempt_id: id,
+            submit_id: `s_${index + 1}`,
+            status: "held",
+            tier: "auto",
+            checks: [{ name: "typecheck", ok: true }],
+            duplicate: false,
+          }),
+        );
+        frames.push(attemptState(n++, id, "working", "held"));
+      }
+      frames.push(ev(n, { type: "card.opened", card }));
+      await serve(page, frames, { owner: true });
+      await page.goto(`/p/${POOL}`);
+      await page.locator(".tray").getByRole("button", { name: "Open" }).click();
+      const sheet = page.getByRole("dialog", { name: "Three attempts answered. Choose one." });
+      await expect(sheet).toBeVisible();
+      const columns = sheet.locator(".card-sheet__candidate");
+      await expect(columns).toHaveCount(3);
+      for (let index = 0; index < ids.length; index += 1) {
+        await expectLightsInsideColumn(columns.nth(index), index === 1 ? 18 : 16, index === 1 ? 2 : 0);
+      }
+      await expectNoSheetOverflow(sheet);
+      await sheet.screenshot({ path: testInfo.outputPath("race-sheet-lights.png") });
+      expect(errors).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
+    });
+  }
+
   test("one column per candidate in Card.attempt_ids order: frame, model, facts, state line, Choose only where can_choose", async ({
     page,
   }) => {

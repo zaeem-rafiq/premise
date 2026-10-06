@@ -155,6 +155,9 @@ export function CardSheetFacts({ model }: { model: CardSheetModel }) {
               {model.checked.lights.map((light) => (
                 <PremiseLight key={light.id} light={light} />
               ))}
+              {model.checked.lightsMore > 0 && (
+                <span className="card-sheet__more">{t("light.more", { n: model.checked.lightsMore })}</span>
+              )}
             </span>
           )}
           {model.checked.checks !== null && (
@@ -225,6 +228,9 @@ export function RaceColumnView({
           {column.lights.map((light) => (
             <PremiseLight key={light.id} light={light} />
           ))}
+          {column.lightsMore > 0 && (
+            <span className="card-sheet__more">{t("light.more", { n: column.lightsMore })}</span>
+          )}
         </span>
       )}
       {column.checks !== null && <p className="card-sheet__checks">{column.checks}</p>}

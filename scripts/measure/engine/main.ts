@@ -120,14 +120,11 @@ export async function engineMain(args: EngineArgs, deps: EngineDeps = {}): Promi
     throw error;
   }
 
+  const intents = [...new Map(plan.map((p) => [p.intent.id, p.intent])).values()];
+  const writesById = new Map(intents.map((i) => [i.id, i.writes]));
   const energyRefs = new Map<string, boolean>();
   for (const { record } of measured.results) {
-    const path =
-      record.intent === "P1a"
-        ? "creatures/crab.js"
-        : record.intent === "P1b"
-          ? "creatures/shrimp.js"
-          : Object.keys(record.files).find((p) => p.startsWith("creatures/"));
+    const path = writesById.get(record.intent);
     if (path === undefined) continue;
     const source = record.files[path];
     if (source !== undefined) {
@@ -164,7 +161,6 @@ export async function engineMain(args: EngineArgs, deps: EngineDeps = {}): Promi
         ? { runs: 0, model_calls: { p50: 0, max: 0 }, tokens: 0, cost_usd: 0, ms: { p50: 0, p90: 0 } }
         : null;
 
-  const intents = [...new Map(plan.map((p) => [p.intent.id, p.intent])).values()];
   const measurement = summarize({
     model: args.model,
     build: args.build,

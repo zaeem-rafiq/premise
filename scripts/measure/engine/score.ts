@@ -183,7 +183,7 @@ export function scoreRun(opts: {
       finalSource,
       secondSubmitPassed,
     });
-    const resolved = hu === undefined ? undefined : obs.resolved.find((r) => r.hn === hu.n);
+    const resolved = hu === undefined ? undefined : obs.resolved.find((r) => r.hn === hu.hn);
     const repairSubmit = hu === undefined ? undefined : obs.submits.find((s) => passingSubmit(s.status) && s.n > hu.n);
     hero = {
       class: cls,
@@ -197,7 +197,7 @@ export function scoreRun(opts: {
   // The confirm window of 6.6 (E2m): headsup.sent -> headsup.resolved.
   let confirm: ConfirmWindow | null = null;
   if (spec.set === "confirm" && counted && hu !== undefined) {
-    const resolved = obs.resolved.find((r) => r.hn === hu.n && r.result === "confirm");
+    const resolved = obs.resolved.find((r) => r.hn === hu.hn && r.result === "confirm");
     if (resolved !== undefined) {
       const inside = obs.steps.filter((s) => s.ts >= hu.ts && s.ts <= resolved.ts);
       confirm = {

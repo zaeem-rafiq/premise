@@ -33,4 +33,7 @@ export function wire(table: RegistryTable): void {
   // part of the Why sheet (2.5), not a sheet of its own; the `git-drawer` key is the shell's.
   table.entries.set("sheet.why", { kind: "sheet", name: "sheet.why", value: "sheet.why" });
   table.entries.set("sheet.who", { kind: "sheet", name: "sheet.who", value: "sheet.who" });
+  // The undo sheet of 03-floor 3.12, opened from the Why card's `undo.open` (`app.tsx` calls it
+  // with `{floor, seq, onClose}`).
+  table.entries.set("sheet.undo", { kind: "sheet", name: "sheet.undo", value: "sheet.undo" });
 }

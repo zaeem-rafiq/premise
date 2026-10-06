@@ -8,6 +8,7 @@ import type { FrameStats } from "../../components/pool-frame/frame-driver.ts";
 import { Compare } from "../../components/compare/compare.tsx";
 import { WhySheet } from "../../components/why/why.tsx";
 import { WhoSheet } from "../../components/who-relies/who-relies.tsx";
+import { UndoSheet } from "../../components/undo-sheet/undo-sheet.tsx";
 
 export const views: Record<string, (props: Record<string, unknown>) => ReactNode> = {
   /** The Compare view of 03-floor 2.3/3.6 (registered in `pool-area.ts`). `floor` is the prop
@@ -58,6 +59,15 @@ export const views: Record<string, (props: Record<string, unknown>) => ReactNode
         typeof props.onOpenAttempt === "function" ? (props.onOpenAttempt as (attemptId: string) => void) : undefined
       }
       onKinds={typeof props.onKinds === "function" ? (props.onKinds as (kinds: string[]) => void) : undefined}
+    />
+  ),
+  /** The undo sheet of 03-floor 3.12 (registered in `pool-area.ts`): `app.tsx` calls it with
+   * `{floor, seq, onClose}` when the Why card's `undo.open` fires. */
+  "sheet.undo": (props) => (
+    <UndoSheet
+      floor={props.floor as FloorState}
+      seq={Number(props.seq ?? 0)}
+      onClose={typeof props.onClose === "function" ? (props.onClose as () => void) : () => undefined}
     />
   ),
 };

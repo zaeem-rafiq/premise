@@ -1,12 +1,40 @@
+import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
+import { createScratchRepo, type ScratchRepo } from "../../../test/support/git.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { ToolRequest } from "../../protocol/tools.ts";
+import { utf8 } from "../sync/bytes.ts";
+import { blobId } from "../sync/sha1.ts";
 import { Trunk } from "./registry.ts";
 import { previewBuild, previewDone } from "./preview.ts";
 
 const databases: DatabaseSync[] = [];
-afterEach(() => databases.splice(0).forEach((db) => db.close()));
+const repos: ScratchRepo[] = [];
+afterEach(() => {
+  for (const db of databases.splice(0)) db.close();
+  for (const repo of repos.splice(0)) repo.remove();
+});
+
+function scratch(): ScratchRepo {
+  const repo = createScratchRepo("premise-preview-dedupe-");
+  repos.push(repo);
+  return repo;
+}
+
+/** `git` in the scratch repository, with optional stdin (a pack for `index-pack`). */
+function git(repo: ScratchRepo, args: string[], input?: Uint8Array): string {
+  const r = spawnSync("git", args, {
+    cwd: repo.directory,
+    env: repo.env,
+    input,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (r.error) throw r.error;
+  if (r.status !== 0) throw new Error(`git ${args.join(" ")} exited ${r.status}: ${r.stderr}`);
+  return r.stdout.replace(/\r?\n$/, "");
+}
 
 function fixture(held = true) {
   const db = new DatabaseSync(":memory:");
@@ -218,5 +246,34 @@ describe("preview snapshots (PV1-PV3, HD1)", () => {
     const { trunk, card } = fixture(false);
     expect(card.body.preview).toBeNull();
     expect(previewBuild(trunk.pool)).toEqual({ state: "idle" });
+  });
+
+  it("a change writing a file identical to an existing one still builds (the pack carries the blob once)", () => {
+    const { trunk, call } = fixture();
+    // D writes a new path whose content equals the seed's world.js: head plus the submitted
+    // operations holds the same blob under two paths (PV1).
+    const same = "export const LIMIT = 100;\n";
+    trunk.openAttempt("D", { intent: "mirror the limit file", agent_kind: "real" });
+    call("D", "write", { path: "mirror.js", content: same });
+    call("D", "submit", { summary: "Mirror world.js" });
+    const card = trunk.pool.cards.find((c) => c.attempt_ids.includes("D"))!;
+    const sid = card.body.submit_ids.D!;
+    const built = trunk.preview();
+    if (built.state !== "build") throw new Error("preview missing");
+    expect(built.errors).toEqual([]);
+    const push = built.previews.find((x) => x.submit_id === sid);
+    expect(push, "a preview for D").toBeDefined();
+    // Stock git takes the pack apart and reads the commit's tree: both paths at the shared id.
+    const repo = scratch();
+    git(repo, ["index-pack", "--stdin"], push!.pack);
+    const blob = blobId(utf8(same));
+    const leaves = Object.fromEntries(
+      git(repo, ["ls-tree", "-r", push!.commit])
+        .split("\n")
+        .map((l) => l.match(/^(\d+) \w+ ([0-9a-f]{40})\t(.+)$/)!)
+        .map((m) => [m[3]!, m[2]!]),
+    );
+    expect(leaves["world.js"]).toBe(blob);
+    expect(leaves["mirror.js"]).toBe(blob);
   });
 });

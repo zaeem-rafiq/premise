@@ -9,6 +9,7 @@ import { afterAll } from "vitest";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, symlinkSync, chmodSync } from "node:fs";
 import { makeBlob, makeTree, type TreeEntry } from "../../src/core/git/objects.ts";
+import { buildPack } from "../../src/core/git/pack.ts";
 import { makeTreeFromFiles, type FileMapValue } from "../../src/core/git/tree-files.ts";
 import { utf8 } from "../../src/core/sync/bytes.ts";
 import { blobId } from "../../src/core/sync/sha1.ts";
@@ -180,5 +181,45 @@ describe("makeTreeFromFiles overlay reuse (the thin pack of IR5)", () => {
     const keepOid = blobId(utf8("k\n"));
     const expectedDir = makeTree([{ mode: "100644", name: "keep.txt", oid: keepOid }]);
     expect(second.dirs.get("dir")).toBe(expectedDir.oid);
+  });
+});
+
+describe("shared content (9.5)", () => {
+  it("paths with identical content share one blob, and the pack indexes in real git", () => {
+    const repo = scratch();
+    const same = "export const TWIN = 1;\n";
+    const files = {
+      "dup/one.js": same,
+      "dup/two.js": same,
+      "copy/one.js": same,
+      "copy/two.js": same,
+      "top.txt": "top\n",
+    };
+    for (const [path, content] of Object.entries(files)) {
+      const full = join(repo.directory, path);
+      mkdirSync(join(full, ".."), { recursive: true });
+      writeFileSync(full, content);
+    }
+    repo.git("add", "-A");
+    const real = git(repo.directory, ["write-tree"]);
+
+    const { root, objects } = makeTreeFromFiles(files);
+    expect(root.oid).toBe(real);
+    const blob = blobId(utf8(same));
+    // Four paths share the blob; `dup/` and `copy/` share one subtree tree. Each is emitted once.
+    expect(objects.filter((o) => o.oid === blob)).toHaveLength(1);
+    const oids = objects.map((o) => o.oid);
+    expect(new Set(oids).size).toBe(oids.length);
+    // Stock git indexes the pack and resolves every shared path to the one blob id.
+    git(repo.directory, ["index-pack", "--stdin"], buildPack(objects));
+    const leaves = Object.fromEntries(
+      git(repo.directory, ["ls-tree", "-r", root.oid])
+        .split("\n")
+        .map((l) => l.match(/^(\d+) \w+ ([0-9a-f]{40})\t(.+)$/)!)
+        .map((m) => [m[3]!, m[2]!]),
+    );
+    for (const path of ["dup/one.js", "dup/two.js", "copy/one.js", "copy/two.js"]) {
+      expect(leaves[path]).toBe(blob);
+    }
   });
 });

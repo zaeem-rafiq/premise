@@ -154,7 +154,11 @@ export type SoakResult = {
 /** A route or environment answer the soak cannot measure from. */
 export class SoakError extends Error {}
 
-// ---- `launchId` of src/worker/swarm/launch.ts, re-derived from its comment (SWR4) ----
+// ---- `launchId` of src/worker/swarm/launch.ts (SWR4), re-derived here: that file cannot be
+// imported — its `Env` type import pulls the worker's Cloudflare types into every program that
+// compiles this script. The derivation is the spec's: `a_<ULID>` is the 128 bits of
+// `H("swarm|<prefix>|<request_id>|<n>")` Crockford-base32-encoded. The tests re-derive it from
+// the same text once more, independently, so a drift shows as a failed fixture.
 
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
@@ -469,6 +473,9 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   );
   finishGap(col);
 
+  // The run's own window ends here: post-rebuild `pool.state` events must not stretch it (14.1).
+  const runEndTs = col.lastTs;
+
   // ---- What Artifacts answers after the run ----
 
   const remote = col.state.pool.remote;
@@ -642,9 +649,9 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
 
   // ---- metrics (the run's whole window, 14.x) ----
 
-  const firstTs = col.firstTs ?? col.lastTs;
-  const windowMs = Math.max(1, col.lastTs - firstTs);
-  const runMetrics = computeMetrics(col.state, col.lastTs, windowMs);
+  const firstTs = col.firstTs ?? runEndTs;
+  const windowMs = Math.max(1, runEndTs - firstTs);
+  const runMetrics = computeMetrics(col.state, runEndTs, windowMs);
   const withGoAround = col.landedChanges.filter(
     (landing) => (col.acceptFacts.get(landing.seq)?.repair ?? 0) > 0,
   ).length;

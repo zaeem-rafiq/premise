@@ -124,8 +124,12 @@ describe("AC7: copy ids", () => {
         if (isBanner) {
           if (entry.word !== cells[0])
             wrong.push(`${id} word: spec ${JSON.stringify(cells[0])} vs ${JSON.stringify(entry.word)}`);
-          if (entry.text !== cells[1])
-            wrong.push(`${id} text: spec ${JSON.stringify(cells[1])} vs ${JSON.stringify(entry.text)}`);
+          // "(for 1: X)" gives the whole n = 1 sentence of a banner (CP5).
+          const sentence = specCell(cells[1] ?? "");
+          if (entry.text !== sentence.text)
+            wrong.push(`${id} text: spec ${JSON.stringify(sentence.text)} vs ${JSON.stringify(entry.text)}`);
+          if (sentence.one !== undefined && entry.one !== sentence.one)
+            wrong.push(`${id} one: spec ${JSON.stringify(sentence.one)} vs ${JSON.stringify(entry.one)}`);
           continue;
         }
         if (id === "replay.error") continue; // the cell describes, the sentence is 8.3's (REPLAY_ERRORS)

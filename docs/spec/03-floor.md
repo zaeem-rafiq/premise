@@ -1428,6 +1428,8 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `rail.tab.stopped` | Stopped {n} |
 | `rail.empty.working` | No change is in flight. Type a request above. |
 | `rail.empty.working.visitor` | No change is in flight. Press Replay to watch a recorded run. |
+| `rail.empty.working.replay` | No change is in flight at this point of the recording. |
+| `view.failed` | This part of the page stopped because of an error. The rest of the page still works. Reload the page to try again. |
 | `rail.empty.landed` | Nothing has landed yet. |
 | `rail.empty.stopped` | No attempt has stopped. |
 | `rail.more` | {n} more below. |
@@ -1986,8 +1988,8 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 
 | Id | Word | Sentence | Button |
 | --- | --- | --- | --- |
-| `banner.synthetic` | SYNTHETIC | {n} scripted agents · they make no model calls · same tools, premises and landing path | |
-| `banner.synthetic.swarm` | SYNTHETIC | {n} scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool | |
+| `banner.synthetic` | SYNTHETIC | {n} scripted agents · they make no model calls · same tools, premises and landing path (for 1: 1 scripted agent · it makes no model calls · same tools, premises and landing path) | |
+| `banner.synthetic.swarm` | SYNTHETIC | {n} scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool (for 1: 1 scripted agent · it makes no model calls · same tools, premises and landing path · shared rules land without a tap in this pool) | |
 | `banner.replay` | REPLAY | Recorded {date} · "{title}" · nothing here changes a pool | |
 | `banner.killed` | AGENTS STOPPED | The kill switch is on. No model call starts. Checked changes still land. | `kill.allow` (owner) |
 | `banner.killed.landings` | AGENTS STOPPED | The kill switch is on and landings are paused. Nothing changes until you allow agents again. | `kill.allow` (owner) |
@@ -2235,6 +2237,7 @@ The owner must be able to tell, from the page alone, what happened, whether to w
 | FR30 | The address names no pool | The stream of the pool in `/p/{pool}` answers 404 | `pool.missing` and the link `pool.to_default` in place of the body. The header stays. | Nothing. | Open the default pool. |
 | FR31 | The undo plan changed | The undo request is refused with `plan_changed` (a landing arrived between the plan and the tap) | The undo sheet stays open, shows the new plan of the response under `undo.plan_changed`, and enables `undo.confirm` again (3.12). | Nothing was queued and nothing changed. | Read the new plan, then "Undo it" or "Keep it". |
 | FR32 | A card's preview could not be built | `Card.preview.error` is set | `held.no_preview` in the after frame. The rest of the sheet is complete and the buttons stay enabled. | Nothing. The card stays usable (`01-core.md` PV3). | Decide from what the change touches, whom it affects and the checks. Or decline. |
+| FR33 | A view fails while it draws | An error is thrown while the floor body, Compare view, Swarm view or an open sheet renders | That view alone shows `view.failed`. The header, the strip, the banners and the other views keep working. The error goes to the browser console. | Nothing. | Reload the page. On stage: press `R` (added 2026-10-05: a throw in one component once blanked the whole page). |
 
 - **FA1.** Every row has a fixture that produces it and a screenshot test. The fixture is a recorded stream; where the trigger is not in the stream (FR10, FR20 to FR22, FR28, FR30, FR31), it is a scripted response, socket or frame.
 - **FA2.** A failure never removes information: attempt cards, lights and counters keep their last content.

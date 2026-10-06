@@ -134,6 +134,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "rail.empty.working.visitor": {
     text: "No change is in flight. Press Replay to watch a recorded run.",
   },
+  "rail.empty.working.replay": { text: "No change is in flight at this point of the recording." },
+  "view.failed": {
+    text: "This part of the page stopped because of an error. The rest of the page still works. Reload the page to try again.",
+  },
   "rail.empty.landed": { text: "Nothing has landed yet." },
   "rail.empty.stopped": { text: "No attempt has stopped." },
   "rail.more": { text: "{n} more below." },
@@ -573,10 +577,12 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "banner.synthetic": {
     word: "SYNTHETIC",
     text: "{n} scripted agents · they make no model calls · same tools, premises and landing path",
+    one: "1 scripted agent · it makes no model calls · same tools, premises and landing path",
   },
   "banner.synthetic.swarm": {
     word: "SYNTHETIC",
     text: "{n} scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
+    one: "1 scripted agent · it makes no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
   },
   "banner.replay": {
     word: "REPLAY",

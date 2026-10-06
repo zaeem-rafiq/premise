@@ -663,6 +663,10 @@ export function blast(
   const out = { repair: [] as string[], confirm: [] as string[], triage: [] as string[], right_of_way: [] as string[] };
   for (const o of inflight(pool)) {
     if (o === a || excluded.has(o)) continue;
+    // RC3 as amended (11.4): the other candidates of a's own race are never in its blast
+    // radius — choosing it stops them in the same transaction (RC4), so none of them would
+    // receive a heads-up from it. Every other attempt is classified as today.
+    if (a.race && o.race && o.intent_id === a.intent_id) continue;
     const res = worst(classify(pool, o, head, after, null, [frozen(a)]));
     if (res !== null) out[res].push(o.id);
   }

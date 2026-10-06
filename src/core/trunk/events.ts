@@ -141,6 +141,26 @@ export function emitPoolState(pool: Pool): void {
   event(pool, "pool.state", poolStateBody(pool));
 }
 
+// 12.1/EM1: `real_agents` counts the pool's `real` attempts whose Agent's loop runs —
+// `working`, `going_around` or `needs_confirm` (05-agent 4.5; an `opened` attempt may still
+// wait for a slot, MG5). Synthetic attempts never count.
+const REAL_AGENT_RUNNING = ["working", "going_around", "needs_confirm"];
+
+/**
+ * Recompute `real_agents` against the committed attempt set; a changed number is written to
+ * `meta` and `pool.state` emitted again — at most once, at the end of the call's transaction
+ * (EM1). A store whose count drifted heals on its next call.
+ */
+export function syncRealAgents(pool: Pool): void {
+  let n = 0;
+  for (const a of pool.attempts.values()) {
+    if (a.agent_kind === "real" && REAL_AGENT_RUNNING.includes(a.state)) n += 1;
+  }
+  if (String(n) === (pool.meta.get("real_agents") ?? "0")) return;
+  metaWrite(pool, "real_agents", n);
+  emitPoolState(pool);
+}
+
 /** EM1: emit `pool.files` with the head tree's rows. */
 export function emitPoolFiles(pool: Pool): void {
   event(pool, "pool.files", { files: poolFileRows(pool, pool.files) });

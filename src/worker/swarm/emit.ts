@@ -12,7 +12,7 @@
 
 import type { Env } from "../env.ts";
 import { DEFAULT_POOL, SWARM_POOL } from "../../config/pools.ts";
-import { deliverToPool, lastSwarmEvent, type SwarmStateBody } from "./deliver.ts";
+import { deliverToPool, swarmSource, type SwarmStateBody } from "./deliver.ts";
 
 export type SwarmPatch = { running?: boolean; agents?: number; collision_dial?: number };
 
@@ -34,12 +34,12 @@ export async function currentSwarm(
 ): Promise<{ running: boolean; agents: number; collision_dial: number }> {
   for (const pool of [SWARM_POOL, DEFAULT_POOL, ...pools]) {
     try {
-      const newest = await lastSwarmEvent(env, pool);
-      if (newest !== null) {
+      const newest = (await swarmSource(env, pool)).newest?.event;
+      if (newest !== undefined) {
         return {
-          running: newest.body.running === true,
-          agents: typeof newest.body.agents === "number" ? newest.body.agents : 0,
-          collision_dial: typeof newest.body.collision_dial === "number" ? newest.body.collision_dial : 0,
+          running: newest.running === true,
+          agents: typeof newest.agents === "number" ? newest.agents : 0,
+          collision_dial: typeof newest.collision_dial === "number" ? newest.collision_dial : 0,
         };
       }
     } catch {

@@ -12,7 +12,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { PoolEvent } from "../../protocol/events.ts";
 import type { StreamFrame, StreamHello, StreamSource } from "../../protocol/stream.ts";
 import type { FloorState } from "../../protocol/reducer/index.ts";
-import type { FloorAppendRequest, FloorRead } from "../../protocol/internal.ts";
+import type { FloorAppendRequest, FloorRead, FloorSwarmSource } from "../../protocol/internal.ts";
 import { computeMetrics, emptyFloorState, reduce } from "../../protocol/reducer/index.ts";
 import { redactMatch } from "../../protocol/redact.ts";
 import { REPLAY_FORMAT, type ReplayHeader } from "../../protocol/replay.ts";
@@ -27,13 +27,21 @@ import {
   initSchema,
   loadState,
   maxN,
+  newestSnapshotN,
   recordSource,
+  recordSwarmNewest,
   sourceRow,
+  swarmNewest,
   insertEvent,
   writeSnapshot,
 } from "./store.ts";
 
 const STREAM_SOURCES = new Set<string>(["trunk", "gate", "swarm"]);
+/** The stored snapshot is rewritten once this many events have arrived since the last one, not
+ * on every event: a wake loads the newest snapshot and reduces the events after it (EV5), which
+ * gives the same state, and a busy pool (a Swarm run) does not serialize its whole state once per
+ * event. A joining socket's snapshot frame comes from the state in memory, always at the newest n. */
+const SNAPSHOT_EVERY_EVENTS = 256;
 const EVICT_CLOSE = { code: 1008, reason: "stream_closed" } as const;
 
 /** The append request a source posts to `/internal/events` (defined once in
@@ -91,6 +99,8 @@ export class Floor extends DurableObject<Env> {
   private loaded: { n: number; state: FloorState } | null = null;
   /** EV7/AC: a random token per object lifetime; an eviction replaces it (tests detect it). */
   private marker: string | null = null;
+  /** The `n` of the stored snapshot (0: none yet), read with the state after a wake. */
+  private snapshotN = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -101,6 +111,7 @@ export class Floor extends DurableObject<Env> {
   private state(): { n: number; state: FloorState } {
     if (this.loaded === null) {
       this.loaded = loadState(this.ctx.storage.sql);
+      this.snapshotN = newestSnapshotN(this.ctx.storage.sql) ?? 0;
       this.marker = crypto.randomUUID();
     }
     return this.loaded;
@@ -114,7 +125,10 @@ export class Floor extends DurableObject<Env> {
       insertEvent(this.ctx.storage.sql, appended);
       reduce(state, appended);
       this.loaded = { n: appended.n, state };
-      writeSnapshot(this.ctx.storage.sql, appended.n, state);
+      if (appended.n - this.snapshotN >= SNAPSHOT_EVERY_EVENTS) {
+        writeSnapshot(this.ctx.storage.sql, appended.n, state);
+        this.snapshotN = appended.n;
+      }
     });
     this.fanout();
     return appended;
@@ -166,6 +180,15 @@ export class Floor extends DurableObject<Env> {
     if (path === "/internal/state" && request.method === "GET") {
       const { n, state } = this.state();
       return json(floorRead(n, state));
+    }
+    if (path === "/internal/swarm-source" && request.method === "GET") {
+      const stored = sourceRow(this.ctx.storage.sql, "swarm");
+      const answer: FloorSwarmSource = {
+        epoch: stored?.epoch ?? null,
+        last_n: stored?.last_n ?? 0,
+        newest: swarmNewest(this.ctx.storage.sql),
+      };
+      return json(answer);
     }
     if (path === "/internal/marker" && request.method === "GET") {
       this.state(); // loads on the first request after an eviction, which mints a new marker
@@ -225,6 +248,8 @@ export class Floor extends DurableObject<Env> {
       appended.push(this.append(item.event));
     }
     recordSource(this.ctx.storage.sql, source, epoch, lastN + fresh.length);
+    const newest = appended[appended.length - 1];
+    if (source === "swarm" && newest?.type === "swarm.state") recordSwarmNewest(this.ctx.storage.sql, newest);
     return json({ appended: appended.length, last_n: this.state().n });
   }
 
@@ -264,8 +289,8 @@ export class Floor extends DurableObject<Env> {
       return;
     }
     const { n, state } = this.state();
-    // A snapshot answers `after` older than the oldest retained snapshot, or 0 (12.2). The stored
-    // snapshot always sits at the newest `n`, so the tail that follows it is empty.
+    // A snapshot answers `after` older than the oldest retained snapshot, or 0 (12.2). The frame is
+    // the state in memory, which always sits at the newest `n`, so the tail that follows it is empty.
     if (hello.after < n) {
       const frame: StreamFrame = { snapshot: { n, state } };
       ws.send(JSON.stringify(frame));

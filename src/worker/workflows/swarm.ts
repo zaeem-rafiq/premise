@@ -9,7 +9,8 @@
 //     scripted agents at `launch_per_second` — agent n's pattern drawn from
 //     `collision_dial` with `agentRandom(seed, n)` (SW1), one `rescale-energy` every
 //     `rescale_every_s` while the dial is positive — takes `swarm.control` events (dial,
-//     stop) and emits every change.
+//     stop) and emits every change. It ends on `stop`, on the kill switch, or by itself
+//     ATTEMPT_TIMEOUT_MS after its last regular agent was due (`runTick`).
 //
 // The step is the outbox row (EV2a): `emitSwarmState` throws while a pool's Floor has not
 // confirmed, and `step.do` retries with backoff — a step completes only when every delivery
@@ -30,6 +31,7 @@ import { launchAgent, launchId } from "../swarm/launch.ts";
 import { patternById } from "../../swarm/pattern.ts";
 import { dialPick } from "../../swarm/dial.ts";
 import { agentRandom } from "../../swarm/prng.ts";
+import { runTick } from "../../swarm/run-schedule.ts";
 import { PUSH_BACKOFF_BASE_MS } from "../../protocol/constants.ts";
 
 type SwarmParams = SwarmRegisterPoolParams | SwarmEmitParams | SwarmRunParams | { kind?: unknown };
@@ -120,11 +122,14 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
 
     // Pace one-second ticks: each waits on a `swarm.control` event; the timeout is the tick.
     // `seq` is the draw-stream index every launch takes (SW1); `regular` counts only the
-    // run's `agents`, so a rescale-energy launch never fills the configured quota.
+    // run's `agents`, so a rescale-energy launch never fills the configured quota. Each tick
+    // costs two steps (the wait and one for the kill switch and the clock) plus one per launch,
+    // well inside a Workflow instance's step limit for a run that ends by itself (`runTick`).
     let regular = 0;
     let rescaled = 0;
     let seq = 0;
     let tick = 0;
+    let doneAt: number | null = null;
     while (true) {
       let control: SwarmControlEvent["payload"] | null = null;
       try {
@@ -148,21 +153,33 @@ export class SwarmWorkflow extends WorkflowEntrypoint<Env> {
         break;
       }
 
-      // The kill switch stops launching (SE10): the loop ends and the final state says so.
-      if (await step.do<boolean>(`killed-${tick}`, async () => killed(this.env))) break;
+      // The kill switch stops launching (SE10); the clock of this tick is a step result, so a
+      // replay after a restart sees the same schedule.
+      const { stop, now } = await step.do<{ stop: boolean; now: number }>(`tick-${tick}`, async () => ({
+        stop: await killed(this.env),
+        now: Date.now(),
+      }));
+      if (stop) break;
 
-      const now = await step.do<number>(`tick-ts-${tick}`, async () => Date.now());
-      const elapsed = now - startMs;
-      const due = Math.min(agents, Math.floor((launch_per_second * elapsed) / 1000));
-      while (regular < due) {
+      const due = runTick({
+        now,
+        startMs,
+        agents,
+        launchPerSecond: launch_per_second,
+        collisionDial: collision_dial,
+        rescaleEverySecs: rescale_every_s,
+        doneAt,
+      });
+      doneAt = due.doneAt;
+      if (due.ended) break;
+      while (regular < due.regularDue) {
         const pattern = dialPick(collision_dial, agentRandom(seed, seq));
         await launch(seq, pattern.id);
         seq += 1;
         regular += 1;
       }
       // 10.4's launch schedule: one rescale-energy every rescale_every_s while d > 0.
-      const rescaleDue = collision_dial > 0 && rescale_every_s > 0 ? Math.floor(elapsed / (rescale_every_s * 1000)) : 0;
-      while (rescaled < rescaleDue) {
+      while (rescaled < due.rescaleDue) {
         await launch(seq, "rescale-energy");
         seq += 1;
         rescaled += 1;

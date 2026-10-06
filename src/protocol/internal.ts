@@ -154,6 +154,15 @@ export type FloorAppendResponse =
   | { appended: number; last_n: number; duplicate?: boolean }
   | { error: { code: "bad_source" | "bad_append" | "gap"; expected?: number } };
 
+/** `GET /internal/swarm-source` (EV2a): the `swarm` source's counter at this pool's Floor and the
+ * newest `swarm.state` it appended, so the Swarm launcher, which keeps no per-pool counter of its
+ * own, sends the next `source_n` and skips a state the stream already carries. */
+export type FloorSwarmSource = {
+  epoch: number | null; // null: the swarm source never sent to this pool
+  last_n: number;
+  newest: { ts: number; event: Record<string, unknown> } | null;
+};
+
 /** `GET /internal/state` (FS2): everything the app server's routes need from the stream — never
  * a call to Trunk (AS16). */
 export type FloorRead = {

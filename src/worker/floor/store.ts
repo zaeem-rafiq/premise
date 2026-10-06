@@ -37,6 +37,26 @@ export function initSchema(sql: SqlStorage): void {
   sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID`);
 }
 
+/** The newest `swarm.state` the swarm source appended (EV2a): read by `/internal/swarm-source`. */
+export function swarmNewest(sql: SqlStorage): { ts: number; event: Record<string, unknown> } | null {
+  const rows = sql.exec("SELECT v FROM meta WHERE k = 'swarm_newest'").toArray() as Array<{ v: string }>;
+  const raw = rows[0]?.v;
+  if (raw === undefined) return null;
+  try {
+    return JSON.parse(raw) as { ts: number; event: Record<string, unknown> };
+  } catch {
+    return null;
+  }
+}
+
+/** Records the newest `swarm.state` the swarm source appended. */
+export function recordSwarmNewest(sql: SqlStorage, event: PoolEvent): void {
+  sql.exec(
+    "INSERT INTO meta (k, v) VALUES ('swarm_newest', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v",
+    JSON.stringify({ ts: event.ts, event }),
+  );
+}
+
 /** The stored `(epoch, last_n)` of one source; null the first time it sends. */
 export function sourceRow(sql: SqlStorage, source: string): { epoch: number; last_n: number } | null {
   const rows = sql.exec("SELECT epoch, last_n FROM sources WHERE source = ?", source).toArray() as Array<{

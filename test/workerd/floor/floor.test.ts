@@ -249,3 +249,63 @@ describe("FS2: the app server's internal read", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("EV2a: the swarm source's counter, read by the Swarm launcher", () => {
+  it("/internal/swarm-source answers nothing before the first swarm event, then the counter and the newest swarm.state", async () => {
+    const before = (await (await floor.fetch("/internal/swarm-source")).json()) as Record<string, unknown>;
+    expect(before).toEqual({ epoch: null, last_n: 0, newest: null });
+    const state = (ts: number) =>
+      event(ts, "swarm", "swarm.state", {
+        synthetic: true,
+        running: true,
+        agents: 3,
+        collision_dial: 0.5,
+        pools: ["tidepool"],
+      });
+    const appended = await append("swarm", 1, [1, 2], state, 70_000);
+    expect(await appended.json()).toMatchObject({ appended: 2 });
+    const after = (await (await floor.fetch("/internal/swarm-source")).json()) as {
+      epoch: number;
+      last_n: number;
+      newest: { ts: number; event: Record<string, unknown> };
+    };
+    // The second event of the batch (ts 70_000 + 10) is the newest; its source counter is 2.
+    expect(after.epoch).toBe(1);
+    expect(after.last_n).toBe(2);
+    expect(after.newest.ts).toBe(70_010);
+    expect(after.newest.event).toMatchObject({ type: "swarm.state", src: "swarm", running: true, agents: 3 });
+  });
+});
+
+describe("EV5: a wake loads the stored snapshot and reduces the events after it", () => {
+  it("after an eviction, 300 more events give the same state as replaying the whole stream", async () => {
+    // More events than one snapshot interval, so the stored snapshot is older than the newest n
+    // and the wake must reduce the tail after it.
+    const sourceNs = Array.from({ length: 300 }, (_, index) => index + 1);
+    const appended = await append(
+      "agent:a_snapshot",
+      1,
+      sourceNs,
+      (ts) => event(ts, "agent", "trunk.error", { where: "snapshot-tail", code: "x" }),
+      80_000,
+    );
+    expect(await appended.json()).toMatchObject({ appended: 300 });
+    const before = await floor.marker();
+    await floor.evict();
+    expect(await floor.marker()).not.toBe(before);
+
+    const ws = await floor.stream();
+    ws.send(JSON.stringify({ hello: 1, after: 0 }));
+    const frame = (await nextMessage(ws)) as { snapshot: { n: number; state: unknown } };
+    const replayed = emptyFloorState();
+    const events = (await floor.fetch("/api/pools/tidepool/replay.ndjson").then((r) => r.text()))
+      .split("\n")
+      .filter((line) => line !== "")
+      .slice(1)
+      .map((line) => JSON.parse(line) as PoolEvent);
+    for (const stored of events) reduce(replayed, stored);
+    expect(frame.snapshot.n).toBe(events.length);
+    expect(JSON.stringify(frame.snapshot.state)).toBe(JSON.stringify(replayed));
+    ws.close();
+  });
+});

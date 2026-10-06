@@ -51,4 +51,17 @@ test.describe("/replay/tracer with no Worker running", () => {
     await page.goto("/replay/tracer");
     await expect(page.locator(".replay-bar").getByRole("button", { name: "Play", exact: true })).toBeVisible();
   });
+
+  test("the Working tab's empty rail reads rail.empty.working.replay (5.4)", async ({ page }) => {
+    // With reduced motion the recording opens paused at its first event (RY18), where
+    // nothing is in flight yet - the Working tab's empty text is the recording's own
+    // sentence, never the owner's and never the visitor's live one (5.4).
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/replay/tracer");
+    await expect(page.locator(".rail")).toBeVisible();
+    const empty = page.locator(".rail-empty");
+    await expect(empty).toHaveText("No change is in flight at this point of the recording.");
+    await expect(empty).not.toContainText("Type a request above");
+    await expect(empty).not.toContainText("Press Replay to watch a recorded run");
+  });
 });

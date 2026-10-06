@@ -5,7 +5,7 @@
 import { createContext } from "react";
 import type { FloorJson } from "../../protocol/floor-json.ts";
 import type { CopyVars } from "../../copy/fill.ts";
-import { text } from "../../copy/strings.ts";
+import { template, text } from "../../copy/strings.ts";
 import { modelName } from "../../copy/names.ts";
 
 export type Shell = {
@@ -25,7 +25,15 @@ export function makeShell(settings: FloorJson, owner: boolean, replay: boolean):
   return {
     settings,
     visitor,
-    t: (id, vars = {}) => text(id, { visitor, ...vars }),
+    t: (id, vars = {}) => {
+      // 5.4/CP7: a reader kind can name its own copy id (`rail.empty.working.visitor`,
+      // `rail.empty.working.replay`): the caller keeps the base id and this lookup picks
+      // the variant the table holds. Replay wins over visitor - everyone in a recording
+      // reads the recording's sentence. A caller may still pin `visitor: false`.
+      const reader = replay ? "replay" : (vars.visitor ?? visitor) ? "visitor" : null;
+      const variant = reader === null ? id : `${id}.${reader}`;
+      return text(template(variant) === undefined ? id : variant, { visitor, ...vars });
+    },
     model: (id) => settings.models[id] ?? modelName(id),
   };
 }

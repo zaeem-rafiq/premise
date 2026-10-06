@@ -25,6 +25,8 @@ import type {
 import { beginTrace } from "./sets.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState } from "./events.ts";
+import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
+import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
@@ -104,6 +106,9 @@ export function createPool(
     metaSet(sql, "epoch", "1");
     metaSet(sql, "summary_only", opts.summary_only === true ? "1" : "0");
     metaSet(sql, "synthetic", opts.synthetic === true ? "1" : "0");
+    // FJ1: the build's `features.held`, or the create call's own `features.held` — the pool
+    // remembers a direct engine override across reopen; an explicit build flag takes precedence.
+    if (opts.features?.held === true) metaSet(sql, "features_held", "1");
     metaSet(sql, "remote", opts.remote ?? "");
     metaSet(sql, "real_agents", "0");
     if (opts.request_id !== undefined) metaSet(sql, "create_request_id", opts.request_id);
@@ -224,6 +229,9 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   applySchema(sql);
   const pool = emptyPool(sql, opts);
   pool.meta = metaAll(sql);
+  // FJ1: `features.held` comes from the build (the caller passes FEATURES.held); a pool created
+  // under a direct engine call keeps that default, but an explicit false always wins.
+  pool.featuresHeld = opts.features?.held ?? pool.meta.get("features_held") === "1";
   // LG1: an imported pool (`app` "", 06-repos IR2/IR8) works in IMPORT_LANGUAGES; the tide
   // pool and any other seeded pool keep 2.1's set.
   pool.languages = pool.meta.get("app") === "" ? IMPORT_LANGUAGES : TIDEPOOL_LANGUAGES;
@@ -1322,6 +1330,15 @@ export class Trunk {
     return wrapCall(this.pool, () => reconcile(this.pool, remote_main, remote_notes ?? remote_main));
   }
 
+  /** PV1: materialize frozen preview snapshots off the landing path. */
+  preview(): PreviewBuild {
+    return wrapCall(this.pool, () => previewBuild(this.pool));
+  }
+
+  previewDone(input: PreviewDoneInput): Record<string, unknown> {
+    return wrapCall(this.pool, () => previewDone(this.pool, input));
+  }
+
   /** 11.7's `plain` timer: the next plain-merge commit spec, or `idle` when caught up. */
   plain(input: { parent_override?: string } = {}): PlainBuild {
     return wrapCall(this.pool, () => plainBuild(this.pool, input));
@@ -1385,7 +1402,9 @@ export class Trunk {
     return wrapCall(this.pool, () => {
       if (begin.summary_only !== undefined) metaSet(this.pool.sql, "summary_only", begin.summary_only ? "1" : "0");
       if (begin.synthetic !== undefined) metaSet(this.pool.sql, "synthetic", begin.synthetic ? "1" : "0");
-      return beginRebuild(this.pool, begin);
+      const result = beginRebuild(this.pool, begin);
+      if (result.ok === true) clearPreviews(this.pool);
+      return result;
     });
   }
 

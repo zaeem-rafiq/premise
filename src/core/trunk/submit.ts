@@ -12,7 +12,8 @@ import { utf8 } from "../sync/bytes.ts";
 import { changeTier } from "../policy/policy.ts";
 import { event, poolPolicy } from "./events.ts";
 import { blast, dropFailed, lateSweep, sendHeadsUp } from "./landing.ts";
-import { openCard, setState, isWaiting } from "./intents.ts";
+import { openCard, setState, isWaiting, refreshCardText } from "./intents.ts";
+import { enqueuePreviews } from "./preview.ts";
 import { ref, syncPremises } from "./premises.ts";
 import type { PremiseRef } from "../../protocol/premise.ts";
 import { MAX_POOL_BYTES, MAX_POOL_FILES } from "../../protocol/constants.ts";
@@ -298,7 +299,7 @@ export function submitCall(
     setState(pool, a, "held", "T4");
     a.approved_by = null;
     const card = openCard(pool, "held", "held_path", [a.id], {
-      blast_radius: { [a.id]: blast(pool, a) },
+      blast_radius: pool.featuresHeld ? { [a.id]: blast(pool, a) } : {},
       submit_ids: { [a.id]: a.submit_id },
     });
     return result({ status: "held", submit_id: a.submit_id, card_id: card.card_id, tier: "held" }, premises);
@@ -315,8 +316,14 @@ export function submitCall(
     if (card !== undefined) {
       card.body.candidates ??= {};
       card.body.candidates[a.id] = { state: "held", can_choose: true, seconds: null, cost_usd: null };
+      if (card.body.submit_ids[a.id] !== a.submit_id && card.body.preview !== null) {
+        delete card.body.preview.after[a.id];
+      }
       card.body.submit_ids[a.id] = a.submit_id;
       card.body.blast_radius[a.id] = blast(pool, a);
+      // PV1: the new candidate's preview joins the queued builds.
+      enqueuePreviews(pool, card);
+      refreshCardText(pool, card);
       pool.dirtyCards.add(card.card_id);
       event(pool, "card.updated", { card: card.body });
     }

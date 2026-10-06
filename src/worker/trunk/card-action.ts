@@ -11,6 +11,8 @@ import type { Card } from "../../protocol/cards.ts";
 import type { CardActionRequest } from "../../protocol/routes.ts";
 import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
+import { FEATURES } from "../../config/features.ts";
+import { text } from "../../copy/strings.ts";
 import { metaGet, metaSet } from "./sql.ts";
 import type { EntryContext, EntryResult } from "./trunk-do.ts";
 
@@ -54,7 +56,7 @@ export function cardAction(input: unknown, ctx: EntryContext): EntryResult {
   const card = readCard(ctx, card_id);
   if (card === null) return finish({ response: { error: { code: "card_unknown" } }, status: 404 });
   // C34/9.8: a tap on a card that is not open does nothing.
-  if (card.state !== "open") return finish({ response: { ok: true } });
+  if (card.state !== "open") return finish({ response: { ok: true, stale: true, message: text("held.stale") } });
   // CD4: the route accepts no id the card does not offer.
   if (!card.body.options.some((o) => o.id === body.option)) {
     return finish(invalid(`card ${card_id} does not offer ${body.option}`));
@@ -63,7 +65,9 @@ export function cardAction(input: unknown, ctx: EntryContext): EntryResult {
   // different submit is stale and changes nothing.
   const echo = typeof body.submit_ids === "object" && body.submit_ids !== null ? body.submit_ids : {};
   for (const [attempt, submit_id] of Object.entries(card.body.submit_ids)) {
-    if (echo[attempt] !== submit_id) return finish({ response: { ok: true } });
+    if (echo[attempt] !== submit_id) {
+      return finish({ response: { ok: true, stale: true, message: text("held.stale") } });
+    }
   }
   // `attempt_id` is required for `choose`; any id it names must be on the card.
   if (body.option === "choose" && body.attempt_id === undefined) return finish(invalid("choose requires attempt_id"));
@@ -72,7 +76,7 @@ export function cardAction(input: unknown, ctx: EntryContext): EntryResult {
   }
   const attempt = body.attempt_id ?? card.body.attempt_ids[0];
 
-  const trunk = TrunkEngine.open(ctx.sql, { now: () => ctx.now, syncTriage: ScriptedTriage });
+  const trunk = TrunkEngine.open(ctx.sql, { now: () => ctx.now, syncTriage: ScriptedTriage, features: FEATURES });
   const answer = trunk.owner({ action: body.option, attempt, reason: body.reason });
   if ((answer as { ok?: unknown }).ok === false) {
     return finish({

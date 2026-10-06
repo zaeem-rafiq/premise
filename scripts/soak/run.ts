@@ -3,6 +3,15 @@
 // HTTP, the pool's WebSocket stream, git, the Artifacts read token, the clock — is an injected
 // dependency, so the unit tests run the whole runner offline against fakes.
 //
+// The stream discipline is 01-core 12.2's: the shared reader of `stream.ts` probes the route
+// with a plain GET until the pool has an event (FR30), sends the one hello, accepts the
+// snapshot frame a stale `after` answers, and reconnects with `after: <last n>` on a drop. The
+// Swarm never starts before the first frame — the run's early `running: false` came from
+// treating a closed socket as a drained stream. The live stream drives the waits alone (which
+// attempts are in flight, whether the run is over; after a reconnect the snapshot's attempt
+// states): every number `SoakResult` reports is computed from the complete event list of the
+// owner Replay export fetched after the run, never from the lossy live view.
+//
 // What the runner measures, per the VE6 text:
 // - `metrics` is what the reducer computes from the stream (01-core 14). The run's window is the
 //   whole stream, first event to last: `computeMetrics` gets `window_ms = last_ts - first_ts`.
@@ -39,6 +48,7 @@ import { agentRandom } from "../../src/swarm/prng.ts";
 import { dialPattern } from "../../src/swarm/dial.ts";
 import { patternById } from "../../src/swarm/pattern.ts";
 import { sw2Escapes } from "../../src/swarm/sw2.ts";
+import { openPoolStream, parseReplayNdjson, type StreamSocket } from "./stream.ts";
 
 // ---- The dependencies the command injects (the tests fake them) ----
 
@@ -47,16 +57,6 @@ export type SoakResponse = { status: number; body: string; bytes: number };
 
 /** The owner routes the soak calls. `path` starts with `/api/`. */
 export type SoakHttp = (request: { method: "GET" | "POST"; path: string; body?: unknown }) => Promise<SoakResponse>;
-
-/**
- * The pool's event stream (`GET /api/pools/{pool}/stream`). `pending` is fed by the socket's
- * messages; the runner drains it. `closed` turns true when the socket ends.
- */
-export type SoakStream = {
-  readonly pending: PoolEvent[];
-  readonly closed: boolean;
-  close(): void;
-};
 
 /** A git invocation: `git <args...>` answered `{code, stdout, stderr}`. */
 export type SoakGit = (
@@ -69,14 +69,19 @@ export type SoakTokenSource = (repo: string) => Promise<string>;
 
 /** Wait-phase knobs; the defaults bound a real run, the tests shrink them. */
 export type SoakTunables = {
-  /** How often the stream is drained while waiting. */
+  /** How often the stream's state is re-read while waiting. */
   pollMs: number;
   /** Post-stop drain: how long without a new event before the run is called settled. */
   drainQuietMs: number;
-  /** The wall-clock bound of one wait phase, when no stream deadline applies. */
+  /** The wall-clock bound of one wait phase, and the reader's give-up bound when the pool's
+   * stream produces no frame for that long (the FR30 probe of an eventless pool included). */
   wallBudgetMs: number;
   /** The wall-clock bound of the rebuild wait (RB1 replays every landing). */
   rebuildBudgetMs: number;
+  /** The reader's wait between plain-GET probes while the route answers 404. */
+  probeMs: number;
+  /** The reader's wait after a socket close before the next probe. */
+  reconnectMs: number;
 };
 
 const DEFAULT_TUNABLES: SoakTunables = {
@@ -84,11 +89,17 @@ const DEFAULT_TUNABLES: SoakTunables = {
   drainQuietMs: 5_000,
   wallBudgetMs: 2 * ATTEMPT_TIMEOUT_MS,
   rebuildBudgetMs: ATTEMPT_TIMEOUT_MS,
+  probeMs: 250,
+  reconnectMs: 1_000,
 };
 
 export type SoakDeps = {
   http: SoakHttp;
-  openStream: (pool: string) => SoakStream;
+  /** FR30's plain-GET probe of `/api/pools/{pool}/stream`: answers the HTTP status (0 when the
+   * request itself failed). */
+  probe: (pool: string) => Promise<number>;
+  /** Opens the pool's stream WebSocket (`GET /api/pools/{pool}/stream`, upgraded). */
+  socket: (pool: string) => StreamSocket;
   git: SoakGit;
   issueToken: SoakTokenSource;
   clock: { now(): number };
@@ -398,42 +409,64 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     throw new SoakError(`POST /api/pools answered ${created.status}: ${created.body.slice(0, 200)}`);
   }
 
-  const stream = deps.openStream(pool);
-  const col = newCollected();
+  const stream = openPoolStream(
+    pool,
+    { probe: deps.probe, socket: deps.socket, now: deps.clock.now, sleep: deps.sleep },
+    {
+      deadlineMs: tunables.wallBudgetMs,
+      probeMs: tunables.probeMs,
+      reconnectMs: tunables.reconnectMs,
+    },
+  );
+
+  // Nothing starts before the stream is up: the Swarm waits for the first frame, so a socket
+  // racing the pool's first event (FR30's 404) cannot end the run's waits as "the stream
+  // closed" — the deployed `test` run that sent `running: false` a second in was exactly that.
+  if (!(await stream.ready())) {
+    stream.close();
+    throw new SoakError("the pool's stream produced no frame before its deadline");
+  }
+
+  // ---- The live view the waits read (snapshot states after a reconnect included) ----
+
+  const liveAttempts = () => Object.values(stream.state()?.attempts ?? {});
+  const inFlight = (): number =>
+    liveAttempts().filter((attempt) => attempt.state !== "landed" && attempt.state !== "stopped").length;
+  const lastOpenTs = (): number | null => {
+    const ts = liveAttempts().map((attempt) => attempt.opened_ts);
+    return ts.length === 0 ? null : Math.max(...ts);
+  };
+  const liveStreamTs = (): number => stream.state()?.ts ?? 0;
+  const runningFalseSeen = (): boolean => {
+    const swarm = stream.state()?.swarm;
+    return swarm !== null && swarm !== undefined && !swarm.running;
+  };
+  let lastSeenN = stream.lastN();
   let lastEventWall = deps.clock.now();
 
-  const pump = (): number => {
-    const batch = stream.pending.splice(0);
-    for (const event of batch) observe(col, event);
-    if (batch.length > 0) lastEventWall = deps.clock.now();
-    return batch.length;
-  };
-
-  const inFlight = (): number =>
-    col.opened.filter((id) => {
-      const state = col.attemptState.get(id);
-      return state !== "landed" && state !== "stopped";
-    }).length;
-
   /**
-   * Drains until `until()` — or until the stream's own `ts` passes `streamDeadlineTs` (the
-   * VE6 deadline: `ATTEMPT_TIMEOUT_MS` after the last launch), or `wallBudgetMs` of wall time,
-   * or the socket closes.
+   * Polls the live stream state until `until()` — or until the stream's own `ts` passes
+   * `streamDeadlineTs` (the VE6 deadline: `ATTEMPT_TIMEOUT_MS` after the last launch), or
+   * `wallBudgetMs` of wall time, or the stream gives up (`dead()`; a mid-run drop alone only
+   * reconnects, it does not end the wait).
    */
   const waitFor = async (
     until: () => boolean,
     streamDeadlineTs: () => number | null,
     wallBudgetMs: number,
   ): Promise<void> => {
-    pump();
     const start = deps.clock.now();
-    while (!until()) {
+    for (;;) {
+      if (stream.lastN() !== lastSeenN) {
+        lastSeenN = stream.lastN();
+        lastEventWall = deps.clock.now();
+      }
+      if (until()) return;
       const deadline = streamDeadlineTs();
-      if (deadline !== null && col.lastTs > deadline) return;
+      if (deadline !== null && liveStreamTs() > deadline) return;
       if (deps.clock.now() - start > wallBudgetMs) return;
-      if (stream.closed && stream.pending.length === 0) return;
+      if (stream.dead()) return;
       await deps.sleep(tunables.pollMs);
-      pump();
     }
   };
 
@@ -452,8 +485,8 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   // The run's wait: every launched agent ended (its quota launched), or the attempt timeout
   // passed after the last launch, measured on the stream's own `ts`.
   await waitFor(
-    () => col.opened.length >= config.agents && inFlight() === 0,
-    () => (col.lastOpenTs === null ? null : col.lastOpenTs + ATTEMPT_TIMEOUT_MS),
+    () => liveAttempts().length >= config.agents && inFlight() === 0,
+    () => (lastOpenTs() === null ? null : (lastOpenTs() as number) + ATTEMPT_TIMEOUT_MS),
     tunables.wallBudgetMs,
   );
 
@@ -466,15 +499,37 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   await waitFor(
     () =>
       inFlight() === 0 &&
-      col.state.push === null &&
-      (col.runningFalseSeen || deps.clock.now() - lastEventWall >= tunables.drainQuietMs),
-    () => (col.lastOpenTs === null ? null : col.lastOpenTs + 2 * ATTEMPT_TIMEOUT_MS),
+      (stream.state()?.push ?? null) === null &&
+      (runningFalseSeen() || deps.clock.now() - lastEventWall >= tunables.drainQuietMs),
+    () => (lastOpenTs() === null ? null : (lastOpenTs() as number) + 2 * ATTEMPT_TIMEOUT_MS),
     tunables.wallBudgetMs,
   );
+
+  // ---- The run's events: the complete owner export, not the lossy live view ----
+
+  // 12.3/RP1: `replay.ndjson` carries every event of the pool in `n` order. Everything
+  // `SoakResult` reports — `agents` through `stream` — is computed from this list alone;
+  // the live stream above only drove the waits. The download is the `recording_fits` one.
+  const replay = await deps.http({ method: "GET", path: `/api/pools/${pool}/replay.ndjson` });
+  const streamBytes = replay.bytes;
+  if (replay.status < 200 || replay.status >= 300) {
+    stream.close();
+    throw new SoakError(`GET replay.ndjson answered ${replay.status}: ${replay.body.slice(0, 200)}`);
+  }
+  const col = newCollected();
+  let exportEvents: PoolEvent[];
+  try {
+    exportEvents = parseReplayNdjson(replay.body).events;
+  } catch {
+    stream.close();
+    throw new SoakError("replay.ndjson did not parse");
+  }
+  for (const event of exportEvents) observe(col, event);
   finishGap(col);
 
   // The run's own window ends here: post-rebuild `pool.state` events must not stretch it (14.1).
   const runEndTs = col.lastTs;
+  const eventsAtExport = exportEvents.length;
 
   // ---- What Artifacts answers after the run ----
 
@@ -557,12 +612,6 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     }
   }
 
-  // ---- The export's size, before the rebuild adds its own events ----
-
-  const replay = await deps.http({ method: "GET", path: `/api/pools/${pool}/replay.ndjson` });
-  const streamBytes = replay.bytes;
-  const eventsAtExport = col.events;
-
   // ---- RB1: rebuild from Artifacts, then compare head_seq and the head tree ----
 
   const epochBefore = col.state.pool.epoch;
@@ -574,25 +623,31 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   if (rebuildAnswer.status < 200 || rebuildAnswer.status >= 300) {
     rebuildDetail = `POST rebuild answered ${rebuildAnswer.status}`;
   } else {
+    // The rebuild's `pool.state` events arrive after the export was fetched: they come through
+    // the live stream, the only place they still can.
     await waitFor(
-      () =>
-        (col.state.pool.epoch > epochBefore && col.state.pool.state === "ready") || col.state.pool.state === "paused",
+      () => {
+        const after = stream.state()?.pool;
+        return (
+          (after !== undefined && after.epoch > epochBefore && after.state === "ready") || after?.state === "paused"
+        );
+      },
       () => null,
       tunables.rebuildBudgetMs,
     );
-    rebuilt = col.state.pool.epoch > epochBefore && col.state.pool.state === "ready";
+    const after = stream.state()?.pool;
+    rebuilt = after !== undefined && after.epoch > epochBefore && after.state === "ready";
     if (!rebuilt) {
       rebuildDetail =
-        col.state.pool.state === "paused"
-          ? `pool paused during rebuild (${col.state.pool.reason ?? "no reason"})`
+        after?.state === "paused"
+          ? `pool paused during rebuild (${after.reason ?? "no reason"})`
           : `no rebuilt pool.state within ${tunables.rebuildBudgetMs} ms`;
     }
   }
-  const headSeqAfter = col.state.pool.head_seq;
+  const headSeqAfter = stream.state()?.pool.head_seq ?? headSeqBefore;
   const headTreeAfter = rebuilt ? await headTreeOf(deps.git, input.cloneDir, commits, headSeqAfter) : null;
 
   stream.close();
-  pump();
 
   // ---- attempt id -> draw-stream index n, the launcher's own derivation ----
 

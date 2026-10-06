@@ -3,6 +3,14 @@
 // `confirm`, the owner's intent posted, then the pool's stream watched until the attempt lands,
 // stops, or `ATTEMPT_TIMEOUT_MS` plus one minute passes. Everything the run needs — HTTP, the
 // stream, the clock — is injected, so the unit tests drive a fake service.
+//
+// The stream discipline is 01-core 12.2's, through the shared reader of `../../soak/stream.ts`:
+// the route is probed (FR30's plain GET) until it answers 426, the socket sends its one hello,
+// a stale `after` answers a snapshot (its attempt states keep driving the waits), and a dropped
+// socket is re-probed and re-helloed with `after: <last n>`. The scripted agent and the intent
+// never start before the first frame. The live stream drives the waiting alone — every number
+// `RunRecord` reports is computed from the complete event list of the owner Replay export
+// (12.3) fetched after the run ends, never from the lossy live view.
 
 import { ATTEMPT_TIMEOUT_MS } from "../../../src/protocol/constants.ts";
 import type { PoolEvent } from "../../../src/protocol/events.ts";
@@ -11,10 +19,18 @@ import type { RunRecord } from "../early/run.ts";
 import { observe } from "./observe.ts";
 import { scoreRun, type ConfirmWindow } from "./score.ts";
 import type { EngineService } from "./service.ts";
+import { openPoolStream, parseReplayNdjson } from "../../soak/stream.ts";
 import type { Clock } from "../early/run.ts";
 
 /** The attempt timed out under the measurement's own deadline, not the deployment's. */
 const RUN_BUDGET_MS = ATTEMPT_TIMEOUT_MS + 60_000;
+/** The reader's FR30 probe interval while the route answers 404. */
+const STREAM_PROBE_MS = 250;
+/** The reader's wait after a socket close before the next probe. */
+const STREAM_RECONNECT_MS = 1_000;
+/** How many sockets in a row may close without one frame before the run ends `stream_lost`
+ * (the old reader's MAX_RECONNECTS + the first connect). */
+const STREAM_GIVE_UP_DROPS = 6;
 
 /** A setup call to the service failed before or outside the attempt (pool, swarm, intent). */
 export class RunSetupError extends Error {
@@ -37,7 +53,8 @@ export class WorkhorseMismatch extends Error {
 
 export type EngineRunResult = {
   record: RunRecord;
-  /** The pool's events as seen (the whole stream — the rescale's events included). */
+  /** The pool's complete event list — the owner Replay export's (the rescale's events
+   * included), not the lossy live view. */
   events: PoolEvent[];
   counted: boolean;
   confirm: ConfirmWindow | null;
@@ -100,8 +117,28 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
     throw new RunSetupError(`pool_create:${errorCode(created.body)}_${created.status}`);
   }
 
-  const stream = service.openStream(pool);
-  const events: PoolEvent[] = [];
+  const stream = openPoolStream(
+    pool,
+    {
+      probe: (name) => service.probe(name),
+      socket: (name) => service.socket(name),
+      now: clock.now,
+      sleep: clock.sleep,
+    },
+    {
+      deadlineMs: RUN_BUDGET_MS,
+      probeMs: STREAM_PROBE_MS,
+      reconnectMs: STREAM_RECONNECT_MS,
+      giveUpDrops: STREAM_GIVE_UP_DROPS,
+    },
+  );
+
+  // Nothing scripted starts before the stream is up: the first frame — usually the snapshot a
+  // fresh pool answers `after: 0` with — is the gate the rescale swarm and the intent wait on.
+  if (!(await stream.ready())) {
+    stream.close();
+    throw new RunSetupError("stream_not_ready");
+  }
 
   // ME7: for `hero` and `confirm` the canned `rescale-energy` opens first, held before submit.
   const needsRescale = spec.set === "hero" || spec.set === "confirm";
@@ -145,6 +182,9 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
   }
 
   // -- the watch loop -----------------------------------------------------------
+  // The live stream decides only the waiting: which attempt is ours, when the rescale may
+  // release, when the run is over. After a reconnect the snapshot's attempt states carry the
+  // events the gap folded away — `events()` alone cannot see them (12.2).
   let ourAttempt: string | null = null;
   let openedModel: string | null = null;
   let acceptedSeq: number | null = null;
@@ -152,6 +192,7 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
   let released = false;
   let ended: "landed" | "stopped" | "paused" | "deadline" | "stream_lost" = "deadline";
   const deadline = clock.now() + RUN_BUDGET_MS;
+  let cursor = 0;
 
   const sendRelease = async (): Promise<void> => {
     releaseTries++;
@@ -165,63 +206,120 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
     released = isOk(answer.status, answer.body) && Array.isArray(body.released) && body.released.length > 0;
   };
 
-  for (;;) {
-    const event = await stream.next(deadline);
-    if (event === null) {
-      if (stream.dead()) ended = "stream_lost"; // the socket gave up before the deadline
-      break; // else: the deadline passed
-    }
-    events.push(event);
-    if (event.type === "limits") {
-      opts.onLimits?.({ spend_usd: event.spend_usd, reserved_usd: event.reserved_usd });
-    }
-    if (event.type === "attempt.opened" && event.agent === "real" && event.intent_id === intentId) {
-      if (ourAttempt === null) {
-        ourAttempt = event.attempt_id;
-        openedModel = event.model;
-        opts.onOpenedModel?.(event.model);
-        if (event.model !== opts.model) {
-          // ME7's check: the deployment's workhorse is not the model under test. Stop the attempt
-          // best-effort so it does not keep spending, then refuse the measurement.
-          await service
-            .postJson(`/api/pools/${encodeURIComponent(pool)}/attempts/${encodeURIComponent(event.attempt_id)}/stop`, {
-              request_id: rid("stop"),
-            })
-            .catch(() => {});
-          stream.close();
-          throw new WorkhorseMismatch(event.model, opts.model);
-        }
+  const mismatch = async (attemptId: string, model: string | null): Promise<never> => {
+    // ME7's check: the deployment's workhorse is not the model under test. Stop the attempt
+    // best-effort so it does not keep spending, then refuse the measurement.
+    await service
+      .postJson(`/api/pools/${encodeURIComponent(pool)}/attempts/${encodeURIComponent(attemptId)}/stop`, {
+        request_id: rid("stop"),
+      })
+      .catch(() => {});
+    stream.close();
+    throw new WorkhorseMismatch(model, opts.model);
+  };
+
+  /** Reads the newest stream state (the snapshot's, reduced by every event since): the attempt
+   * list a gap folded into, and the terminal states the waits end on. True: the run is over. */
+  const reconcile = async (): Promise<boolean> => {
+    const st = stream.state();
+    if (st === null) return false;
+    if (ourAttempt === null) {
+      const ours = Object.values(st.attempts).find(
+        (attempt) => attempt.intent_id === intentId && attempt.agent === "real",
+      );
+      if (ours !== undefined) {
+        ourAttempt = ours.id;
+        openedModel = ours.model;
+        opts.onOpenedModel?.(ours.model);
+        if (ours.model !== opts.model) await mismatch(ours.id, ours.model);
       }
     }
-    if (
-      needsRescale &&
-      !released &&
-      releaseTries < 3 &&
-      event.type === "op.recorded" &&
-      event.attempt_id === ourAttempt &&
-      releasePath(spec, event.path)
-    ) {
-      await sendRelease(); // an empty `released` means the hold was not registered yet; retry on the next op
+    if (ourAttempt !== null) {
+      const att = st.attempts[ourAttempt];
+      if (att?.state === "landed") {
+        ended = "landed";
+        return true;
+      }
+      if (att?.state === "stopped") {
+        ended = "stopped";
+        return true;
+      }
     }
-    if (event.type === "landing.accepted" && event.attempt_id === ourAttempt && acceptedSeq === null) {
-      acceptedSeq = event.seq;
-    }
-    if (event.type === "landing.landed" && acceptedSeq !== null && event.seq === acceptedSeq) {
-      ended = "landed";
-      break;
-    }
-    if (event.type === "attempt.state" && event.attempt_id === ourAttempt && event.to === "stopped") {
-      ended = "stopped";
-      break;
-    }
-    if (event.type === "pool.paused") {
+    if (st.pool.state === "paused") {
       ended = "paused";
-      break;
+      return true;
+    }
+    return false;
+  };
+
+  for (;;) {
+    const list = stream.events();
+    for (; cursor < list.length; cursor++) {
+      const event = list[cursor] as PoolEvent;
+      if (event.type === "limits") {
+        opts.onLimits?.({ spend_usd: event.spend_usd, reserved_usd: event.reserved_usd });
+      }
+      if (event.type === "attempt.opened" && event.agent === "real" && event.intent_id === intentId) {
+        if (ourAttempt === null) {
+          ourAttempt = event.attempt_id;
+          openedModel = event.model;
+          opts.onOpenedModel?.(event.model);
+          if (event.model !== opts.model) {
+            await mismatch(event.attempt_id, event.model);
+          }
+        }
+      }
+      if (
+        needsRescale &&
+        !released &&
+        releaseTries < 3 &&
+        event.type === "op.recorded" &&
+        event.attempt_id === ourAttempt &&
+        releasePath(spec, event.path)
+      ) {
+        await sendRelease(); // an empty `released` means the hold was not registered yet; retry on the next op
+      }
+      if (event.type === "landing.accepted" && event.attempt_id === ourAttempt && acceptedSeq === null) {
+        acceptedSeq = event.seq;
+      }
+      if (event.type === "landing.landed" && acceptedSeq !== null && event.seq === acceptedSeq) {
+        ended = "landed";
+      }
+      if (event.type === "attempt.state" && event.attempt_id === ourAttempt && event.to === "stopped") {
+        ended = "stopped";
+      }
+      if (event.type === "pool.paused") {
+        ended = "paused";
+      }
+    }
+    if (ended !== "deadline" || (await reconcile())) break;
+    const more = await stream.wait(deadline);
+    if (!more) {
+      if (ended === "deadline" && stream.dead()) ended = "stream_lost"; // the socket gave up before the deadline
+      break; // else: the deadline passed
     }
   }
   stream.close();
 
+  // ---- The run's events: the complete owner export, not the lossy live view ----
+
+  const replay = await service.getAuthed(`/api/pools/${encodeURIComponent(pool)}/replay.ndjson`);
+  if (replay.status !== 200) {
+    throw new RunSetupError(`replay:${replay.status}`);
+  }
+  let events: PoolEvent[];
+  try {
+    events = parseReplayNdjson(replay.text).events;
+  } catch {
+    throw new RunSetupError("replay:unparseable");
+  }
+
   const obs = observe(events, intentId);
+  if (obs.attemptId !== null && obs.openedModel !== opts.model) {
+    // The `attempt.opened` never reached the live stream (a socket's gap folded it into a
+    // snapshot): the export still answers the workhorse check.
+    await mismatch(obs.attemptId, obs.openedModel);
+  }
 
   // `files`: the text of every path the run wrote, read at the landed commit (02-tidepool 4.2;
   // the public app-server route carries no credentials).
@@ -239,7 +337,7 @@ export async function engineRunOnce(opts: EngineRunOpts): Promise<EngineRunResul
     events,
     counted: scored.counted,
     confirm: scored.confirm,
-    openedModel,
+    openedModel: obs.openedModel ?? openedModel,
     rateLimited: scored.rateLimited,
   };
 }

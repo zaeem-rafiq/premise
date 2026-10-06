@@ -71,7 +71,7 @@ export async function engineMain(args: EngineArgs, deps: EngineDeps = {}): Promi
   }
   secrets.push(ownerKey);
 
-  const service = deps.service ?? httpService({ origin, ownerKey, clock });
+  const service = deps.service ?? httpService({ origin, ownerKey });
 
   // The workhorse check, first chance: `/floor.json` names it only on a build that adds the field.
   const floor = await service.getJson("/floor.json").catch(() => ({ status: 0, body: null }));

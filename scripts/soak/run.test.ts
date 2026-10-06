@@ -15,7 +15,8 @@ import { dialPattern } from "../../src/swarm/dial.ts";
 import { patternById } from "../../src/swarm/pattern.ts";
 import { REPLAY_MAX_BYTES } from "../../src/protocol/constants.ts";
 import { runDial } from "./run.ts";
-import type { SoakDeps, SoakResult, SoakRunInput, SoakStream } from "./run.ts";
+import type { SoakDeps, SoakResult, SoakRunInput } from "./run.ts";
+import { fakeFloor, type FakeFloor } from "./fake-floor.ts";
 
 // ---- The ids of SWR4, derived from the spec text once more (independent of run.ts) ----
 
@@ -491,31 +492,32 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
 // ---- The fakes ----
 
 type GitCall = { args: string[]; cwd: string | undefined; env: Record<string, string> | undefined };
-type HttpCall = { method: string; path: string; body: unknown };
+/** `frames` is how many stream frames the fake Floor had sent when the call was answered — the
+ * stream gate's tests read it to prove what came first. */
+type HttpCall = { method: string; path: string; body: unknown; frames: number };
 
 type Fake = {
   deps: SoakDeps;
+  floor: FakeFloor;
   gitCalls: GitCall[];
   httpCalls: HttpCall[];
   tokenCalls: string[];
 };
 
-function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}): Fake {
+type FakeHooks = {
+  /** FR30 probes that answer 404 before the route exists. */
+  probeMisses?: number;
+  /** Runs inside the `POST /api/swarm` `running: true` answer — where a mid-run drop is staged. */
+  onSwarmStart?: (floor: FakeFloor) => void;
+};
+
+function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks = {}): Fake {
   const gitCalls: GitCall[] = [];
   const httpCalls: HttpCall[] = [];
   const tokenCalls: string[] = [];
   let nowMs = 0;
 
-  let streamClosed = false;
-  const stream: SoakStream = {
-    pending: [...run.pre],
-    get closed() {
-      return streamClosed;
-    },
-    close() {
-      streamClosed = true;
-    },
-  };
+  const floor = fakeFloor(run.pre, { probeMisses: hooks.probeMisses });
 
   const gitOk = (stdout: string) => ({ code: 0, stdout, stderr: "" });
   const git: SoakDeps["git"] = async (args, opts) => {
@@ -545,14 +547,20 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}): Fake {
   };
 
   const http: SoakDeps["http"] = async ({ method, path, body }) => {
-    httpCalls.push({ method, path, body });
+    httpCalls.push({ method, path, body, frames: floor.framesSent });
     if (method === "POST" && path === "/api/pools") return { status: 200, body: "{}", bytes: 2 };
-    if (method === "POST" && path === "/api/swarm") return { status: 200, body: "{}", bytes: 2 };
+    if (method === "POST" && path === "/api/swarm") {
+      if ((body as { running?: unknown }).running === true) hooks.onSwarmStart?.(floor);
+      return { status: 200, body: "{}", bytes: 2 };
+    }
     if (method === "GET" && path.endsWith("/replay.ndjson")) {
-      return { status: 200, body: "", bytes: over.replayBytes ?? DEFAULT_PLAN.replayBytes };
+      // The owner export the runner parses: every event the Floor holds (12.3). `bytes` stays
+      // plan-driven so `recording_fits` can be pushed over the limit.
+      const text = floor.exportNdjson(POOL);
+      return { status: 200, body: text, bytes: over.replayBytes ?? DEFAULT_PLAN.replayBytes };
     }
     if (method === "POST" && path.endsWith("/rebuild")) {
-      stream.pending.push(...run.post);
+      floor.push(...run.post);
       return { status: 200, body: "{}", bytes: 2 };
     }
     return { status: 404, body: "", bytes: 0 };
@@ -561,7 +569,8 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}): Fake {
   return {
     deps: {
       http,
-      openStream: () => stream,
+      probe: (pool) => floor.probe(pool),
+      socket: (pool) => floor.socket(pool),
       git,
       issueToken: async (repo) => {
         tokenCalls.push(repo);
@@ -571,8 +580,16 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}): Fake {
       sleep: async (ms) => {
         nowMs += ms;
       },
-      tunables: { pollMs: 50, drainQuietMs: 100, wallBudgetMs: 400, rebuildBudgetMs: 400 },
+      tunables: {
+        pollMs: 50,
+        drainQuietMs: 100,
+        wallBudgetMs: 400,
+        rebuildBudgetMs: 400,
+        probeMs: 5,
+        reconnectMs: 5,
+      },
     },
+    floor,
     gitCalls,
     httpCalls,
     tokenCalls,
@@ -893,5 +910,81 @@ describe("the soak runner of VE6", () => {
     }
     // The token is asked once, for the pool's repo — and nothing else is asked.
     expect(fake.tokenCalls).toEqual([POOL]);
+  });
+});
+
+describe("the stream gate and the export", () => {
+  it("probes through FR30's 404s and starts the Swarm only after the stream's first frame", async () => {
+    // The route answers 404 twice (the pool's first event has not reached the Floor) and 426
+    // on the third probe; the Swarm's POST must land after the first frame was delivered.
+    const run = buildRun();
+    const fake = makeFake(run, {}, { probeMisses: 2 });
+    const result = await runDial(input, fake.deps);
+
+    expect(fake.floor.probes).toBe(3);
+    const swarmStart = fake.httpCalls.find((call) => call.path === "/api/swarm");
+    expect(swarmStart?.frames).toBeGreaterThanOrEqual(1);
+    for (const check of result.checks) {
+      expect(check.ok, `${check.name}: ${check.detail ?? ""}`).toBe(true);
+    }
+    expect(result.stream.events).toBe(48);
+  });
+
+  it("never posts /api/swarm — running true or false — while the stream has not produced a frame", async () => {
+    // The pool's stream never exists within the deadline: the dial fails and the only HTTP the
+    // runner did was creating the pool. `running: false` while still connecting is the exact
+    // defect this guards (the deployed soak stopped a second after starting).
+    const run = buildRun();
+    const fake = makeFake(run, {}, { probeMisses: 10_000 });
+    await expect(runDial(input, fake.deps)).rejects.toThrow(/stream produced no frame/);
+    expect(fake.httpCalls.map((call) => call.path)).toEqual(["/api/pools"]);
+  });
+
+  it("scores a mid-run drop from the export — a landing.landed that lived only in the gap counts", async () => {
+    // Agent 0's ladder is on the floor up front. When the Swarm starts, agent 1's ladder is
+    // pushed live, the socket drops, and agents 2, 3 and the run's tail land in the gap: they
+    // reach the run only through the reconnect's snapshot (for the waits) and the owner export
+    // (for every reported number).
+    const run = buildRun();
+    const split = run.pre.findIndex((event) => event.type === "intent.created" && event.intent_id === iid(1));
+    expect(split).toBe(12);
+    const tail = run.pre.slice(split);
+    const fake = makeFake(
+      { ...run, pre: run.pre.slice(0, split) },
+      {},
+      {
+        onSwarmStart: (floor) => {
+          floor.push(...tail.slice(0, 15)); // agent 1's ladder: delivered live on socket 0
+          floor.dropAll();
+          floor.push(...tail.slice(15)); // n 28..48: pushed while no socket is open — the gap
+        },
+      },
+    );
+    const result = await runDial(input, fake.deps);
+
+    // Two sockets were opened; the reconnect's first frame is the snapshot that covers the gap.
+    expect(fake.floor.sockets).toHaveLength(2);
+    const second = fake.floor.sockets[1];
+    expect(second?.frames[0]).toHaveProperty("snapshot");
+
+    // The gap's events (n 28..48 — landings 2, 3 and the rescale's `landing.landed` among them)
+    // were never carried on an events frame.
+    const deliveredNs = new Set<number>();
+    for (const ws of fake.floor.sockets) {
+      for (const frame of ws.frames) {
+        if (!("events" in frame)) continue;
+        for (const event of frame.events) deliveredNs.add(event.n);
+      }
+    }
+    expect(deliveredNs.has(28)).toBe(false);
+    expect(deliveredNs.has(48)).toBe(false);
+
+    // Every reported number is the export's: identical to the undropped run's hand-worked values.
+    expect(result.agents).toEqual({ launched: 4, landed: 4, stopped: {}, in_flight_at_end: 0 });
+    expect(result.landings).toEqual({ count: 4, commits_on_main: 4, notes: 4, batches: 1, pushes: 1, push_retries: 0 });
+    expect(result.stream).toEqual({ events: 48, bytes: 1234 });
+    for (const check of result.checks) {
+      expect(check.ok, `${check.name}: ${check.detail ?? ""}`).toBe(true);
+    }
   });
 });

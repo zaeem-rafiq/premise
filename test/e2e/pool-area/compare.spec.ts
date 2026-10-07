@@ -21,7 +21,9 @@ import { ev, intentCreated, attemptOpened, poolState, serveStream } from "../she
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../../..");
-const HARNESS_DIR = join(ROOT, ".tmp-test/e2e-compare");
+// fullyParallel runs beforeAll in every worker, and a build rewrites files in place: each worker
+// builds into a directory of its own, so no test reads a file that another worker is rewriting.
+const HARNESS_DIR = join(ROOT, `.tmp-test/e2e-compare-${process.env.TEST_PARALLEL_INDEX ?? "0"}`);
 const HARNESS_DIST = join(HARNESS_DIR, "dist");
 
 const COMMIT_1 = "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c1"; // landing.landed seq 1

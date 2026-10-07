@@ -13,7 +13,9 @@ import type { Page } from "@playwright/test";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../../..");
-const HARNESS_DIR = join(ROOT, ".tmp-test/e2e-why");
+// fullyParallel runs beforeAll in every worker, and a build rewrites files in place: each worker
+// builds into a directory of its own, so no test reads a file that another worker is rewriting.
+const HARNESS_DIR = join(ROOT, `.tmp-test/e2e-why-${process.env.TEST_PARALLEL_INDEX ?? "0"}`);
 const HARNESS_DIST = join(HARNESS_DIR, "dist");
 
 function load(name: string): Record<string, unknown>[] {

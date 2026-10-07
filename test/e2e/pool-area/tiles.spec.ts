@@ -13,7 +13,9 @@ import type { Page } from "@playwright/test";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../../..");
-const HARNESS_DIR = join(ROOT, ".tmp-test/e2e-tiles");
+// fullyParallel runs beforeAll in every worker, and a build rewrites files in place: each worker
+// builds into a directory of its own, so no test reads a file that another worker is rewriting.
+const HARNESS_DIR = join(ROOT, `.tmp-test/e2e-tiles-${process.env.TEST_PARALLEL_INDEX ?? "0"}`);
 const HARNESS_DIST = join(HARNESS_DIR, "dist");
 
 const TRACER = readFileSync(join(ROOT, "test/fixtures/streams/tracer.ndjson"), "utf8")
@@ -139,8 +141,6 @@ const REMOVE_SNAIL = [
 
 const TILES = ".tiles .tiles-scroll";
 
-// fullyParallel runs beforeAll per worker: the build may overlap another worker's reads, so
-// emptyOutDir stays off — overwriting identical hashed assets is safe, wiping them mid-read is not.
 test.beforeAll(() => {
   mkdirSync(HARNESS_DIR, { recursive: true });
   writeFileSync(join(HARNESS_DIR, "index.html"), HARNESS_HTML);

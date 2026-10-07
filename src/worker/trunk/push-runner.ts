@@ -19,7 +19,7 @@ export type PushBatch = {
 export type PushDeps = {
   tokenSource: TokenSource;
   pusher: Pusher;
-  /** Each request's timeout in ms (LP5c); default `PUSH_TIMEOUT_MS`. */
+  /** Each token mint and push request's timeout in ms (LP5c); default `PUSH_TIMEOUT_MS`. */
   timeoutMs?: number;
 };
 
@@ -36,6 +36,25 @@ function isAuthRefusal(result: PushResult): boolean {
   return !result.ok && result.kind === "transport" && (result.http_status === 401 || result.http_status === 403);
 }
 
+/** Bound S2's mint even when the source never settles. The port cannot cancel a late mint. */
+export async function writeTargetWithTimeout(
+  source: TokenSource,
+  pool_id: string,
+  timeoutMs = PUSH_TIMEOUT_MS,
+): Promise<PushOutcome["target"]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      source.writeTarget(pool_id),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("Write token mint timed out")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /**
  * Mints a write target, sends the batch's one request, and on a 401 or 403 mints once more
  * and sends once more (LP5a: "mints a new one after a 401 or 403"). A rejected result is
@@ -43,7 +62,7 @@ function isAuthRefusal(result: PushResult): boolean {
  */
 export async function runPush(batch: PushBatch, deps: PushDeps): Promise<PushOutcome> {
   const timeout = deps.timeoutMs ?? PUSH_TIMEOUT_MS;
-  let target = await deps.tokenSource.writeTarget(batch.pool_id);
+  let target = await writeTargetWithTimeout(deps.tokenSource, batch.pool_id, timeout);
   let result = await deps.pusher.push({
     remote: target.remote,
     token: target.token,
@@ -53,7 +72,7 @@ export async function runPush(batch: PushBatch, deps: PushDeps): Promise<PushOut
     signal: AbortSignal.timeout(timeout),
   });
   if (isAuthRefusal(result)) {
-    target = await deps.tokenSource.writeTarget(batch.pool_id);
+    target = await writeTargetWithTimeout(deps.tokenSource, batch.pool_id, timeout);
     result = await deps.pusher.push({
       remote: target.remote,
       token: target.token,

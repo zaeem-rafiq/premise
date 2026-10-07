@@ -27,6 +27,17 @@ function repositoryName(remote: unknown): string | null {
   return /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(name) && name !== ".." ? name : null;
 }
 
+/** SE22 from the Floor's projection, which carries the newest `pool.state`'s remotes and app. */
+export function registeredFromProjection(read: FloorRead): RegisteredFloorRead {
+  const main = repositoryName(read.pool.remote);
+  if (main === null) throw new PoolNotRegistered();
+  return {
+    ...read,
+    pool: { ...read.pool, app: read.pool.app === null ? null : "tidepool" },
+    repositories: { main, plain: repositoryName(read.pool.plain_remote) },
+  };
+}
+
 /** SE22: pool.state is the registration emitted by Trunk and retained by Floor.
  * Use the latest event, including an absent plain remote; never infer a name. */
 export function registeredFloorRead(pool: string, read: FloorRead, replay: string): RegisteredFloorRead {

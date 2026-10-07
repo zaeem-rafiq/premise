@@ -9,12 +9,18 @@ import { artifactsPoolSource } from "../adapters/pool-source/artifacts.ts";
 import { createApp, type AppInput } from "./app.ts";
 import { HOST_BUILD, HOST_SOURCE } from "./host-bundle.ts";
 import { RateLimiter } from "./respond.ts";
-import { PoolNotRegistered, registeredFloorRead, type RegisteredFloorRead } from "./registration.ts";
+import {
+  PoolNotRegistered,
+  registeredFloorRead,
+  registeredFromProjection,
+  type RegisteredFloorRead,
+} from "./registration.ts";
 import { repoOf } from "../adapters/pool-source/resolve.ts";
 
 /** The pool's Floor state (FS2): the DO's `/internal/state` endpoint. A non-200 or a transport
- * failure throws; the app maps it to 503 (AS4). The projection omits registered remotes,
- * so the latest pool.state in replay supplies both repositories (SE22) and pool.app (IR8). */
+ * failure throws; the app maps it to 503 (AS4). The projection carries the registered remotes
+ * (SE22) and pool.app (IR8); only a projection older than those fields falls back to the newest
+ * pool.state of the whole replay, which costs a read of every event. */
 async function floorState(env: Env, pool: string): Promise<RegisteredFloorRead> {
   // Same identifier shape as the pool-create route; namespace paths are never pool ids.
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(pool)) throw new PoolNotRegistered();
@@ -22,6 +28,7 @@ async function floorState(env: Env, pool: string): Promise<RegisteredFloorRead> 
   const response = await stub.fetch("https://floor.internal/internal/state");
   if (!response.ok) throw new Error(`floor state: ${response.status}`);
   const read = (await response.json()) as FloorRead;
+  if (read.pool.remote !== undefined) return registeredFromProjection(read);
   const replay = await stub.fetch(`https://floor.internal/api/pools/${pool}/replay.ndjson`);
   if (replay.status === 404) throw new PoolNotRegistered();
   if (!replay.ok) throw new Error(`floor registration: ${replay.status}`);

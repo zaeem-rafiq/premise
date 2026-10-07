@@ -70,6 +70,11 @@ export function floorRead(n: number, state: FloorState): FloorRead {
       head_commit: state.pool.head_commit,
       landed_seq: state.pool.landed_seq,
       landed_commit: state.pool.landed_commit,
+      // SE22/IR8: the app server reads the registration and the app kind from here, not from a
+      // replay of the whole stream on every request.
+      app: state.pool.app,
+      remote: state.pool.remote,
+      plain_remote: state.pool.plain_remote,
     },
     green: { seq: state.green.seq, commit: state.green.commit },
     plain:

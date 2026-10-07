@@ -131,6 +131,26 @@ describe("registered app repositories", () => {
     ]);
   });
 
+  it("SE22: a Floor projection that carries the registration serves without reading the replay", async () => {
+    const f = fixture();
+    Object.assign(f.read.pool, { remote: MAIN, plain_remote: PLAIN, app: "tidepool" });
+    for (const [prefix, name] of [
+      ["c", "registered-main"],
+      ["p", "registered-plain"],
+    ]) {
+      const response = await f.get(POOL, `${prefix}-${COMMIT}`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(`export const repo = "${name}";`);
+    }
+    expect(f.floorCalls.length).toBeGreaterThan(0);
+    expect(f.floorCalls.filter((url) => url.endsWith("/replay.ndjson"))).toEqual([]);
+    // A projection whose remote is null registers nothing: 404, with no Artifacts read.
+    const g = fixture();
+    Object.assign(g.read.pool, { remote: null, plain_remote: null, app: "tidepool" });
+    expect((await g.get(POOL)).status).toBe(404);
+    expect(g.calls).toEqual([]);
+  });
+
   it("SE22/SE13/SE14: unregistered, other-namespace and attempt names return sandboxed 404s without Artifacts reads", async () => {
     const f = fixture();
     for (const name of [

@@ -203,6 +203,10 @@ export type FloorRead = {
      * Absent when the Floor's projection does not carry it; the app server's own read merges
      * the stream's `pool.state.app` over this field. */
     app?: "tidepool" | null;
+    /** SE22: the registered `main` and plain-merge repositories (the newest `pool.state`'s
+     * `remote` and `plain_remote`). Absent from a projection older than these fields. */
+    remote?: string | null;
+    plain_remote?: string | null;
   };
   green: { seq: number | null; commit: string | null }; // resolves `green`
   plain: { commit: string; tree: string; through_seq: number } | null; // resolves `plain`

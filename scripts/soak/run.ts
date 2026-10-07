@@ -73,8 +73,10 @@ export type SoakTunables = {
   pollMs: number;
   /** Post-stop drain: how long without a new event before the run is called settled. */
   drainQuietMs: number;
-  /** The wall-clock bound of one wait phase, and the reader's give-up bound when the pool's
-   * stream produces no frame for that long (the FR30 probe of an eventless pool included). */
+  /** The reader's give-up bound when the pool's stream produces no frame for that long (the
+   * FR30 probe of an eventless pool included), and the ceiling of each wait's post-launch
+   * tail: a run's wait is bounded by the launch phase (`agents` / `launch_per_second`) plus at
+   * most one `ATTEMPT_TIMEOUT_MS` after the last launch. */
   wallBudgetMs: number;
   /** The wall-clock bound of the rebuild wait (RB1 replays every landing). */
   rebuildBudgetMs: number;
@@ -417,6 +419,14 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     return response;
   };
 
+  // The waits' wall bounds scale with the run: the launch phase — `agents` at
+  // `launch_per_second` — plus at most one `ATTEMPT_TIMEOUT_MS` after the last launch (the
+  // 1,024-agent soak of 2026-10-05 ran a fixed 2×ATTEMPT_TIMEOUT_MS out while 11 agents were
+  // still in flight). The tunable stays the tests' stand-in for the tail.
+  const launchPhaseMs = config.launch_per_second > 0 ? Math.ceil((config.agents / config.launch_per_second) * 1000) : 0;
+  const tailBudgetMs = Math.min(tunables.wallBudgetMs, ATTEMPT_TIMEOUT_MS);
+  const runBudgetMs = launchPhaseMs + tailBudgetMs;
+
   // PL1: one summary-only pool per dial value. A server error is tried again with the same
   // request_id, which names the same pool (9.8): the deployment once answered 500 after the pool
   // was already made (2026-10-05).
@@ -508,22 +518,24 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   await waitFor(
     () => liveAttempts().length >= config.agents && inFlight() === 0,
     () => (lastOpenTs() === null ? null : (lastOpenTs() as number) + ATTEMPT_TIMEOUT_MS),
-    tunables.wallBudgetMs,
+    runBudgetMs,
   );
 
   // `running: false`: the run's agents in flight finish; launching stops.
   await post("/api/swarm", { pool, running: false, request_id: requestId("stop") });
 
-  // The settle: stragglers the stop did not prevent (a launch step already running) end, the
-  // outbox drains its pending push, and the launcher's `running: false` emission is seen — or
-  // the stream has been quiet for `drainQuietMs`.
+  // The settle, before any check: stragglers the stop did not prevent (a launch step already
+  // running) end, the outbox drains its pending push, and the launcher's `running: false`
+  // emission is seen — or the stream has been quiet for `drainQuietMs`. It waits until no
+  // attempt is in flight, one `ATTEMPT_TIMEOUT_MS` more at most: a `rebuildable` run while an
+  // agent still works pauses the pool by design (RB3) and freezes the run.
   await waitFor(
     () =>
       inFlight() === 0 &&
       (stream.state()?.push ?? null) === null &&
       (runningFalseSeen() || deps.clock.now() - lastEventWall >= tunables.drainQuietMs),
     () => (lastOpenTs() === null ? null : (lastOpenTs() as number) + 2 * ATTEMPT_TIMEOUT_MS),
-    tunables.wallBudgetMs,
+    tailBudgetMs,
   );
 
   // ---- The run's events: the complete owner export, not the lossy live view ----
@@ -645,13 +657,24 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
 
   // ---- RB1: rebuild from Artifacts, then compare head_seq and the head tree ----
 
+  // Attempts still in flight per the complete export: while any exist the rebuild must not
+  // run — it pauses the pool by design (RB3) and the pause freezes the agents mid-flight (the
+  // soak of 2026-10-05 rebuilt under 11 in-flight agents and the run never finished).
+  const inFlightIds = col.opened.filter((id) => {
+    const state = col.attemptState.get(id);
+    return state !== "landed" && state !== "stopped";
+  });
+
   const epochBefore = col.state.pool.epoch;
   const headSeqBefore = col.state.pool.head_seq;
   const headTreeBefore = await headTreeOf(deps.git, input.cloneDir, commits, headSeqBefore);
   let rebuilt = false;
   let rebuildDetail = "";
-  const rebuildAnswer = await post(`/api/pools/${pool}/rebuild`, { request_id: requestId("rebuild") });
-  if (rebuildAnswer.status < 200 || rebuildAnswer.status >= 300) {
+  const rebuildAnswer =
+    inFlightIds.length === 0 ? await post(`/api/pools/${pool}/rebuild`, { request_id: requestId("rebuild") }) : null;
+  if (rebuildAnswer === null) {
+    rebuildDetail = `not rebuilt: ${inFlightIds.length} attempt(s) still in flight`;
+  } else if (rebuildAnswer.status < 200 || rebuildAnswer.status >= 300) {
     rebuildDetail = `POST rebuild answered ${rebuildAnswer.status}`;
   } else {
     // The rebuild's `pool.state` events arrive after the export was fetched: they come through
@@ -728,11 +751,6 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
     const key = reason ?? "unknown";
     stopped[key] = (stopped[key] ?? 0) + 1;
   }
-  const inFlightIds = col.opened.filter((id) => {
-    const state = col.attemptState.get(id);
-    return state !== "landed" && state !== "stopped";
-  });
-
   // ---- metrics (the run's whole window, 14.x) ----
 
   const firstTs = col.firstTs ?? runEndTs;

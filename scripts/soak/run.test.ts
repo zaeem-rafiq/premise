@@ -347,6 +347,9 @@ type RunPlan = {
   pushDelay: Record<number, number>;
   /** Agent indices whose ladder stops after `working` (in flight at end). */
   stopAfterWorking: number[];
+  /** Agent indices whose post-`working` events are held out of `pre` — `lateEvents(base)` mints
+   * them fresh so a `push` during a wait delivers them live (a late finisher). */
+  lateFinish: number[];
   /** Extra events appended just before the tail (batch.pushed, metrics, swarm stop). */
   extraTail: (landed: { spec: AgentSpec; seq: number }[]) => PoolEvent[];
   /** Extra events appended after the swarm stop (still before rebuild). */
@@ -374,6 +377,7 @@ const DEFAULT_PLAN: RunPlan = {
   acceptDelay: {},
   pushDelay: {},
   stopAfterWorking: [],
+  lateFinish: [],
   extraTail: () => [],
   extraLate: () => [],
   judgmentsOf: (spec, _seq) =>
@@ -390,12 +394,17 @@ const DEFAULT_PLAN: RunPlan = {
 
 type BuiltRun = {
   pre: PoolEvent[];
-  post: PoolEvent[];
+  /** Minted lazily: the fake Floor pushes it on `/rebuild`, and fresh `n` at that moment
+   * is what keeps it deliverable after any mid-run `lateEvents` push. */
+  post: () => PoolEvent[];
   landed: { spec: AgentSpec; seq: number }[];
   commits: string[];
   notesList: string;
   noteBodies: Map<string, string>;
   lastPreTs: number;
+  /** The completion events of `lateFinish` agents, minted at call time so their `n` tops the
+   * whole fixture and a live `push` delivers them. */
+  lateEvents: (base: number) => PoolEvent[];
 };
 
 function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
@@ -430,12 +439,9 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
   ];
 
   const landed: { spec: AgentSpec; seq: number }[] = [];
+  const lateSpecs: { spec: AgentSpec; seq: number }[] = [];
   let seq = 0;
-  specs.forEach((spec, index) => {
-    const stops = plan.stopAfterWorking.includes(index);
-    if (!stops) seq += 1;
-    const agentSeq = stops ? null : seq;
-    if (agentSeq !== null) landed.push({ spec, seq: agentSeq });
+  const emit = (spec: AgentSpec, index: number, agentSeq: number | null, stopAfterWorking: boolean): void => {
     const goAround =
       plan.goAroundOn.includes(index) && agentSeq !== null && agentSeq > 1
         ? { causeSeqs: [agentSeq - 1] }
@@ -448,11 +454,33 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
         goAround,
         acceptDelay: plan.acceptDelay[index],
         pushDelay: plan.pushDelay[index],
-        stopAfterWorking: stops,
+        stopAfterWorking,
         timeToLand: [400, 900, 500, 400][index] ?? 400,
       }),
     );
+  };
+  specs.forEach((spec, index) => {
+    // A late finisher's ladder is emitted below: it lands after every other landing, so its
+    // seq tops theirs — the seq a real late finisher would be assigned.
+    if (plan.lateFinish.includes(index)) return;
+    const stops = plan.stopAfterWorking.includes(index);
+    if (!stops) seq += 1;
+    const agentSeq = stops ? null : seq;
+    if (agentSeq !== null) landed.push({ spec, seq: agentSeq });
+    emit(spec, index, agentSeq, stops);
   });
+  for (const index of plan.lateFinish) {
+    const spec = specs[index];
+    if (spec === undefined) continue;
+    seq += 1;
+    landed.push({ spec, seq });
+    lateSpecs.push({ spec, seq });
+    emit(spec, index, seq, true);
+  }
+  // The held-out completion ladders: minted on demand so their event `n` is fresh — past every
+  // `n` the fixture minted — which is what lets a live `push` carry them to the reader.
+  const lateEvents = (base: number): PoolEvent[] =>
+    lateSpecs.flatMap(({ spec, seq }) => agentLadder(spec, seq, { base }).slice(3));
   // A stream is in arrival order: a delayed push or accept lands among the later agents' events
   // (the sort is stable, so ladders that do not overlap keep their order).
   pre.sort((x, y) => x.ts - y.ts);
@@ -475,7 +503,7 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
   pre.push(...plan.extraLate());
   const lastPreTs = Math.max(...pre.map((e) => e.ts));
 
-  const post: PoolEvent[] = [
+  const post = (): PoolEvent[] => [
     poolState(lastPreTs + 400, {
       epoch: 1,
       head_seq: plan.rebuildHeadSeq ?? lastSeq,
@@ -493,7 +521,7 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
   for (const l of landed) {
     noteBodies.set(`n${l.seq}`, noteJson(l.spec, l.seq, plan.judgmentsOf(l.spec, l.seq)));
   }
-  return { pre, post, landed, commits, notesList: noteLines, noteBodies, lastPreTs };
+  return { pre, post, landed, commits, notesList: noteLines, noteBodies, lastPreTs, lateEvents };
 }
 
 // ---- The fakes ----
@@ -501,7 +529,7 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
 type GitCall = { args: string[]; cwd: string | undefined; env: Record<string, string> | undefined };
 /** `frames` is how many stream frames the fake Floor had sent when the call was answered — the
  * stream gate's tests read it to prove what came first. */
-type HttpCall = { method: string; path: string; body: unknown; frames: number };
+type HttpCall = { method: string; path: string; body: unknown; frames: number; ms: number };
 
 type Fake = {
   deps: SoakDeps;
@@ -516,6 +544,9 @@ type FakeHooks = {
   probeMisses?: number;
   /** Runs inside the `POST /api/swarm` `running: true` answer — where a mid-run drop is staged. */
   onSwarmStart?: (floor: FakeFloor) => void;
+  /** Runs inside every `deps.sleep` — where a wait's poll ticks — so a test can push a late
+   * finisher while the runner is waiting on it. */
+  onSleep?: (floor: FakeFloor, count: number, ms: number) => void;
   /** Server errors `POST /api/pools` answers before it answers 200. */
   createErrors?: number;
 };
@@ -525,6 +556,7 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
   const httpCalls: HttpCall[] = [];
   const tokenCalls: string[] = [];
   let nowMs = 0;
+  let sleepCount = 0;
 
   const floor = fakeFloor(run.pre, { probeMisses: hooks.probeMisses });
 
@@ -557,7 +589,7 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
   };
 
   const http: SoakDeps["http"] = async ({ method, path, body }) => {
-    httpCalls.push({ method, path, body, frames: floor.framesSent });
+    httpCalls.push({ method, path, body, frames: floor.framesSent, ms: nowMs });
     if (method === "POST" && path === "/api/pools") {
       if ((hooks.createErrors ?? 0) > 0) {
         hooks.createErrors = (hooks.createErrors ?? 0) - 1;
@@ -576,7 +608,7 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
       return { status: 200, body: text, bytes: over.replayBytes ?? DEFAULT_PLAN.replayBytes };
     }
     if (method === "POST" && path.endsWith("/rebuild")) {
-      floor.push(...run.post);
+      floor.push(...run.post());
       return { status: 200, body: "{}", bytes: 2 };
     }
     return { status: 404, body: "", bytes: 0 };
@@ -595,6 +627,8 @@ function makeFake(run: BuiltRun, over: Partial<RunPlan> = {}, hooks: FakeHooks =
       clock: { now: () => nowMs },
       sleep: async (ms) => {
         nowMs += ms;
+        sleepCount += 1;
+        hooks.onSleep?.(floor, sleepCount, nowMs);
       },
       tunables: {
         pollMs: 50,
@@ -877,9 +911,63 @@ describe("the soak runner of VE6", () => {
       judgmentsOf: (spec) =>
         spec.pattern === "rescale-energy" ? [repair("entity", "world/energy.js#ENERGY_MAX", "E2", null)] : [],
     });
-    const result = await runDial(input, makeFake(run).deps);
+    const fake = makeFake(run);
+    const result = await runDial(input, fake.deps);
     expect(result.agents.in_flight_at_end).toBe(1);
-    expect(failed(result)).toEqual(["all_ended"]);
+    // The in-flight agent also gates `rebuildable`: the POST /rebuild never fires and the check
+    // fails saying why — rebuilding a running pool pauses it (RB3) and freezes the run.
+    expect(fake.httpCalls.some((call) => call.path.endsWith("/rebuild"))).toBe(false);
+    const rebuildable = result.checks.find((check) => check.name === "rebuildable");
+    expect(rebuildable?.detail).toContain("1 attempt(s) still in flight");
+    expect(failed(result)).toEqual(["all_ended", "rebuildable"]);
+  });
+
+  it("waits out the launch-scaled wall budget, then stops the run, before its checks", async () => {
+    // agents / launch_per_second = 4 s of launch phase; no stream deadline is ever in sight
+    // (no late events carry the ts past it), so only the wall bound can end the run's wait.
+    // The old fixed bound — min(wallBudgetMs, ...) = 400 ms — would stop the run at ~400 ms.
+    const run = buildRun({ agents: 4, stopAfterWorking: [3] });
+    const fake = makeFake(run);
+    const result = await runDial({ ...input, config: { ...input.config, agents: 4, launch_per_second: 1 } }, fake.deps);
+    const stop = fake.httpCalls.find(
+      (call) => call.path === "/api/swarm" && (call.body as { running?: unknown }).running === false,
+    );
+    expect(stop).toBeDefined();
+    expect(stop?.ms).toBeGreaterThanOrEqual(4000);
+    // The stop does not make the still-working agent end: the drain gives up after the tail,
+    // the export still shows it in flight, and nothing is rebuilt over it.
+    expect(result.agents.in_flight_at_end).toBe(1);
+    expect(fake.httpCalls.some((call) => call.path.endsWith("/rebuild"))).toBe(false);
+    expect(failed(result)).toEqual(["all_ended", "rebuildable"]);
+  });
+
+  it("drains a late finisher after the stop POST and rebuilds once it is landed", async () => {
+    // Agent 2's completion events are held out of the fixture; the `onSleep` hook pushes them
+    // during the settle wait — 150 ms of fake wall time after the stop POST — so the runner is
+    // observed waiting on an in-flight agent that then lands.
+    const run = buildRun({ lateFinish: [2] });
+    let pushed = false;
+    let calls: HttpCall[] = [];
+    const fake = makeFake(
+      run,
+      {},
+      {
+        onSleep: (floor, _count, ms) => {
+          const stopMs = calls.find(
+            (call) => call.path === "/api/swarm" && (call.body as { running?: unknown }).running === false,
+          )?.ms;
+          if (stopMs === undefined || pushed || ms < stopMs + 150) return;
+          pushed = true;
+          floor.push(...run.lateEvents(run.lastPreTs + 200));
+        },
+      },
+    );
+    calls = fake.httpCalls;
+    const result = await runDial(input, fake.deps);
+    expect(pushed).toBe(true);
+    expect(result.agents.in_flight_at_end).toBe(0);
+    expect(fake.httpCalls.some((call) => call.path.endsWith("/rebuild"))).toBe(true);
+    expect(failed(result)).toEqual([]);
   });
 
   it("one_commit_per_landing fails when a landing's note is missing", async () => {

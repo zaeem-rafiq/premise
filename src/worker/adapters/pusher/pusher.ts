@@ -9,9 +9,11 @@ import {
   buildReceivePackRequest,
   parseReceivePackReport,
   RECEIVE_PACK_CAPABILITIES,
+  type ReceivePackReport,
   type RefCommand,
 } from "../../../core/git/receive-pack.ts";
 import type { ErrCode } from "../../../protocol/events.ts";
+import { redact } from "../../../protocol/redact.ts";
 import type { Pusher, PushResult } from "../../../protocol/ports.ts";
 
 // Messages name the endpoint and status only; a token never appears in any error or result
@@ -85,6 +87,16 @@ async function fetchAdvertisement(remote: string, token: string, signal: AbortSi
   }
 }
 
+/** What the operator's log sees of a refusal. Every string the remote sent — the unpack error and
+ * each ref's refusal text — runs through `redact()` first (SE5b, hardening), so nothing the remote
+ * echoes reaches the log unredacted. */
+export function refusalLog(report: ReceivePackReport): { unpack: string | null; refs: string[] } {
+  return {
+    unpack: report.unpackError === null ? null : redact(report.unpackError),
+    refs: report.results.map((result) => redact(result.ok ? `ok ${result.ref}` : `ng ${result.ref} ${result.error}`)),
+  };
+}
+
 /**
  * The receive-pack adapter. `atomic` in the input means the batch wants all-or-nothing
  * semantics: the adapter reads the ref advertisement and requests the `atomic` capability
@@ -143,10 +155,7 @@ export function receivePackPusher(): Pusher {
       }
       // LP5 decides from the remote's ref values, never from this text. The text is for the
       // operator's log only: it names why the server refused (no request data, no token).
-      console.warn("git-receive-pack refused the push", {
-        unpack: report.unpackError,
-        refs: report.results.map((result) => (result.ok ? `ok ${result.ref}` : `ng ${result.ref} ${result.error}`)),
-      });
+      console.warn("git-receive-pack refused the push", refusalLog(report));
       return { ok: false, kind: "rejected", refs };
     },
 

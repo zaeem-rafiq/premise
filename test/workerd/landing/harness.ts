@@ -8,7 +8,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { convertV4MiniflareOptions, Miniflare } from "miniflare";
+import { convertV4MiniflareOptions, Miniflare, type DurableObjectStorageHandle } from "miniflare";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { REPO_ROOT } from "../../support/source.ts";
@@ -35,6 +35,65 @@ const ORIGIN = "http://premise.test";
 
 type Stub = { fetch(url: string, init?: RequestInit): Promise<Response> };
 
+export type FloorFaultMode = "pass" | "block" | "hold";
+export type FloorFaultState = {
+  mode: FloorFaultMode;
+  held: boolean;
+  epoch: number | null;
+  sourceNumbers: number[];
+};
+
+// Appended only to an opted-in test's in-memory bundle. The production Floor has no fault
+// controls. A hold stores a real batch first, then withholds its confirmation while further
+// Trunk batches fail: the test can rebuild Trunk before releasing that old-epoch answer.
+const FLOOR_FAULT_CLASS = `
+export class FaultFloor extends Floor {
+  faultMode = "pass";
+  held = false;
+  heldEpoch = null;
+  heldSourceNumbers = [];
+
+  async fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === "/__test/floor-fault") {
+      if (request.method === "POST") {
+        const { mode } = await request.json();
+        if (!["pass", "block", "hold"].includes(mode) || this.held) {
+          return Response.json({ error: "invalid_fault_mode" }, { status: 409 });
+        }
+        this.faultMode = mode;
+      }
+      return Response.json({
+        mode: this.faultMode, held: this.held,
+        epoch: this.heldEpoch, sourceNumbers: this.heldSourceNumbers,
+      });
+    }
+    if (path === "/__test/floor-release" && request.method === "POST") {
+      this.held = false;
+      return Response.json({ ok: true });
+    }
+    if (path !== "/internal/events" || request.method !== "POST") return super.fetch(request);
+    const body = await request.clone().json();
+    if (body.source !== "trunk" || this.faultMode === "pass") return super.fetch(request);
+    if (this.faultMode === "block") {
+      return Response.json({ error: { code: "test_delivery_blocked" } }, { status: 503 });
+    }
+    this.faultMode = "block";
+    const response = await super.fetch(request);
+    if (!response.ok) {
+      this.faultMode = "hold";
+      return response;
+    }
+    this.heldEpoch = body.epoch;
+    this.heldSourceNumbers = body.events.map((event) => event.source_n);
+    this.held = true;
+    // A timer keeps the pending request live in workerd while another request releases it.
+    while (this.held) await new Promise((resolve) => setTimeout(resolve, 10));
+    return response;
+  }
+}
+`;
+
 export type ObjectHandle = {
   fetch(path: string, init?: RequestInit): Promise<Response>;
   /** JSON body of `GET /internal/state`. */
@@ -46,6 +105,17 @@ export type LandingWorker = {
   object(binding: DurableObjectBinding, name: string): ObjectHandle;
   trunk(pool: string): ObjectHandle;
   floor(pool: string): ObjectHandle;
+  /** Direct workerd SQLite access for assertions and fault injection, with no production route. */
+  sql(
+    binding: DurableObjectBinding,
+    pool: string,
+    ...args: Parameters<DurableObjectStorageHandle["exec"]>
+  ): ReturnType<DurableObjectStorageHandle["exec"]>;
+  /** Opt-in Floor fault controls. A hold blocks later Trunk deliveries until set to pass. */
+  setFloorFault(pool: string, mode: FloorFaultMode): Promise<void>;
+  floorFaultState(pool: string): Promise<FloorFaultState>;
+  /** Release only the captured confirmation. Subsequent deliveries remain blocked. */
+  releaseFloorResponse(pool: string): Promise<void>;
   /** The Floor's replay export: every reduced event, as `type` list. */
   eventTypes(pool: string): Promise<string[]>;
   /** The Floor's replay export: every reduced event body. */
@@ -317,6 +387,8 @@ export async function startLandingWorker(options: {
    * (2.3 item 9's "a stub Agent bound in place of the real one"): `/resume` calls are logged
    * and answered by the mode the test sets through `/internal/mode`. */
   agentStub?: boolean;
+  /** Add a test-only Floor subclass that blocks or delays Trunk delivery confirmations. */
+  floorFaults?: boolean;
   /** Local repositories the fake Artifacts `import` clones from (IR1/IR2's stand-in): each name
    * is a repo under the test root the test fills itself — `repoDir(name)` reaches it. The fake
    * maps a source url's last path segment to the same name. */
@@ -335,7 +407,8 @@ export async function startLandingWorker(options: {
   // A test's own flags ride an in-memory copy of the module (FJ1, `withFeatures`): no file is
   // written, and the build's shipped flags apply only where a test names none.
   const features: Partial<Features> = { ...(options.held === true ? { held: true } : {}), ...options.features };
-  const contents = Object.keys(features).length === 0 ? null : withFeatures(readFileSync(BUNDLE, "utf8"), features);
+  let contents = Object.keys(features).length === 0 ? null : withFeatures(readFileSync(BUNDLE, "utf8"), features);
+  if (options.floorFaults === true) contents = (contents ?? readFileSync(BUNDLE, "utf8")) + FLOOR_FAULT_CLASS;
   const directories = new Map(
     [...options.repos, ...(options.importSources ?? [])].map((name) => [name, createNamedRepo(projectRoot, name)]),
   );
@@ -363,6 +436,7 @@ export async function startLandingWorker(options: {
     convertV4MiniflareOptions({
       cf: false,
       telemetry: { enabled: false },
+      ...(options.floorFaults === true ? { unsafeInspectDurableObjects: true } : {}),
       // The Durable Objects' SQLite under the test root — a `restart()` then starts a new
       // Worker over the same storage, which is what LP7 reconciles on (C20-C22).
       resourcePersistencePath: join(projectRoot, "persist"),
@@ -385,7 +459,9 @@ export async function startLandingWorker(options: {
                 ? { className: "StubAgent", scriptName: "stub-agent" }
                 : binding === "TRUNK" && trunkDown
                   ? { className: "TrunkDown", scriptName: "trunk-down" }
-                  : { className, useSQLite: true },
+                  : binding === "FLOOR" && options.floorFaults === true
+                    ? { className: "FaultFloor", useSQLite: true }
+                    : { className, useSQLite: true },
             ]),
           ),
           ...(options.swarm === true
@@ -482,11 +558,36 @@ export async function startLandingWorker(options: {
       .slice(1)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
   }
+  async function floorControl(pool: string, path: string, init?: RequestInit): Promise<Response> {
+    if (options.floorFaults !== true) throw new Error("startLandingWorker requires floorFaults for this control");
+    const response = await object("FLOOR", pool).fetch(path, init);
+    if (!response.ok) throw new Error(`Floor fault control failed: ${response.status} ${await response.text()}`);
+    return response;
+  }
   return {
     fetch: (path, init) => miniflare.dispatchFetch(`${ORIGIN}${path}`, init as never),
     object,
     trunk: (pool) => object("TRUNK", pool),
     floor: (pool) => object("FLOOR", pool),
+    sql: async (binding, pool, ...args) => {
+      const className = binding === "FLOOR" && options.floorFaults === true ? "FaultFloor" : DURABLE_OBJECTS[binding];
+      const storage = await miniflare.unsafeGetDurableObjectStorage("premise", className, { name: pool });
+      return storage.exec(...args);
+    },
+    setFloorFault: async (pool, mode) => {
+      await floorControl(pool, "/__test/floor-fault", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+    },
+    floorFaultState: async (pool) => {
+      const response = await floorControl(pool, "/__test/floor-fault");
+      return (await response.json()) as FloorFaultState;
+    },
+    releaseFloorResponse: async (pool) => {
+      await floorControl(pool, "/__test/floor-release", { method: "POST" });
+    },
     events,
     eventTypes: async (pool) => (await events(pool)).map((event) => String(event.type)),
     repoDir: (repo) => {

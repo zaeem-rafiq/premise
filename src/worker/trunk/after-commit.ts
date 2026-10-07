@@ -9,6 +9,7 @@
 import { PUSH_BACKOFF_BASE_MS, PUSH_BACKOFF_MAX_MS } from "../../protocol/constants.ts";
 import type { Env } from "../env.ts";
 import { effectTable, type EffectInput } from "./effects.ts";
+import { restoreRebuildBootstrap } from "./event-recovery.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import {
   appendEvent,
@@ -94,6 +95,9 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
         }),
       });
     } catch {
+      // A rebuild may replace the outbox while the request is in flight (RB5). An old
+      // transport failure must not alter the replacement epoch's rows or retry schedule.
+      if (Number(metaGet(sql, "epoch") ?? "1") !== epoch) continue;
       scheduleEventsRetry(sql);
       recordTrunkError(ctx, "events", "transport");
       return;
@@ -103,6 +107,10 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
       duplicate?: boolean;
       error?: { code?: string; expected?: number };
     } | null;
+    // Both fetch and response.json yield. Confirmation is scoped to the captured epoch,
+    // not just source_n: a rebuild reuses n=1 while an old response can still be arriving.
+    // Everything below, through each transaction, is synchronous until the next send.
+    if (Number(metaGet(sql, "epoch") ?? "1") !== epoch) continue;
     if (response.ok && body !== null && (body.duplicate === true || Number.isInteger(body.appended))) {
       // EV2: every sent row is stored — appended now or already there — so all are confirmed.
       const last = rows[rows.length - 1]?.n ?? 0;
@@ -114,7 +122,15 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
       return;
     }
     const expected = body?.error?.expected;
-    if (response.status === 409 && body?.error?.code === "gap" && typeof expected === "number") {
+    if (
+      response.status === 409 &&
+      body?.error?.code === "gap" &&
+      typeof expected === "number" &&
+      Number.isSafeInteger(expected) &&
+      expected >= 1 &&
+      expected <= (rows[rows.length - 1]?.n ?? 0) + 1
+    ) {
+      if (expected < (rows[0]?.n ?? 0) && restoreRebuildBootstrap(sql, epoch, expected, Date.now())) continue;
       // The Floor is ahead: rows below `expected` are already stored — drop and resend (EV2).
       sql.transaction(() => {
         confirmEvents(sql, expected - 1);

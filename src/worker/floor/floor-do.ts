@@ -117,19 +117,40 @@ export class Floor extends DurableObject<Env> {
     return this.loaded;
   }
 
-  /** Appends an already-checked event: assigns `n` and `t` (EV1), stores it, reduces it, fans out. */
-  private append(event: Omit<PoolEvent, "n" | "t">): PoolEvent {
+  /** Stores a whole checked batch and its source counter together, before notifying sockets. */
+  private appendBatch(
+    events: Array<Omit<PoolEvent, "n" | "t">>,
+    source?: { id: string; epoch: number; lastN: number },
+  ): PoolEvent[] {
     const { state } = this.state();
-    const appended = { ...event, n: maxN(this.ctx.storage.sql) + 1, t: Date.now() } as PoolEvent;
-    this.ctx.storage.transactionSync(() => {
-      insertEvent(this.ctx.storage.sql, appended);
-      reduce(state, appended);
-      this.loaded = { n: appended.n, state };
-      if (appended.n - this.snapshotN >= SNAPSHOT_EVERY_EVENTS) {
-        writeSnapshot(this.ctx.storage.sql, appended.n, state);
-        this.snapshotN = appended.n;
-      }
-    });
+    const appended: PoolEvent[] = [];
+    try {
+      this.ctx.storage.transactionSync(() => {
+        let n = maxN(this.ctx.storage.sql);
+        for (const event of events) {
+          const next = { ...event, n: ++n, t: Date.now() } as PoolEvent;
+          insertEvent(this.ctx.storage.sql, next);
+          reduce(state, next);
+          this.loaded = { n, state };
+          appended.push(next);
+        }
+        if (n - this.snapshotN >= SNAPSHOT_EVERY_EVENTS) {
+          writeSnapshot(this.ctx.storage.sql, n, state);
+          this.snapshotN = n;
+        }
+        if (source !== undefined) {
+          recordSource(this.ctx.storage.sql, source.id, source.epoch, source.lastN);
+          const newest = appended[appended.length - 1];
+          if (source.id === "swarm" && newest?.type === "swarm.state") {
+            recordSwarmNewest(this.ctx.storage.sql, newest);
+          }
+        }
+      });
+    } catch (error) {
+      // SQLite rolled back; discard the reducer's in-memory mutations as well.
+      this.loaded = null;
+      throw error;
+    }
     this.fanout();
     return appended;
   }
@@ -156,7 +177,7 @@ export class Floor extends DurableObject<Env> {
     const { state } = this.state();
     if (state.n === 0) return;
     const now = Date.now();
-    this.append({ ts: now, pool: this.poolId(), src: "floor", type: "metrics", ...computeMetrics(state, now) });
+    this.appendBatch([{ ts: now, pool: this.poolId(), src: "floor", type: "metrics", ...computeMetrics(state, now) }]);
     await this.scheduleAlarm();
   }
 
@@ -239,17 +260,15 @@ export class Floor extends DurableObject<Env> {
     const fresh = epoch > currentEpoch ? events : events.filter((item) => item.source_n > lastN);
     const first = fresh[0];
     if (first === undefined) return json({ appended: 0, duplicate: true, last_n: this.state().n });
-    if (first.source_n !== lastN + 1) {
-      return jsonError("gap", 409, { expected: lastN + 1 });
-    }
-    const appended: PoolEvent[] = [];
+    // Validate before any append. A rejected batch confirms no prefix: `expected` always
+    // names the first event the Floor still needs, even when the hole is later in the list.
     for (const [index, item] of fresh.entries()) {
-      if (item.source_n !== lastN + 1 + index) return jsonError("gap", 409, { expected: lastN + 1 + index });
-      appended.push(this.append(item.event));
+      if (item.source_n !== lastN + 1 + index) return jsonError("gap", 409, { expected: lastN + 1 });
     }
-    recordSource(this.ctx.storage.sql, source, epoch, lastN + fresh.length);
-    const newest = appended[appended.length - 1];
-    if (source === "swarm" && newest?.type === "swarm.state") recordSwarmNewest(this.ctx.storage.sql, newest);
+    const appended = this.appendBatch(
+      fresh.map((item) => item.event),
+      { id: source, epoch, lastN: lastN + fresh.length },
+    );
     return json({ appended: appended.length, last_n: this.state().n });
   }
 

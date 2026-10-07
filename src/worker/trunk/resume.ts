@@ -6,22 +6,17 @@
 // `reopen_failed` and opens the choice card of UN6 — T20r — unless the attempt took a step
 // of its own meanwhile (T20r's "took no step" guard, read on `last_call_id`).
 //
-// The engine has no T20r entry: the transition, its card.opened and the deletion of the
-// attempt's premises and operations are the shell's work, in one transaction.
+// The engine owns T20r and updates its retained Pool in the same transaction as the rows.
+// The shell owns delivery, deadlines and the durable resume-cycle bookkeeping.
 
 import { HEADS_UP_REPUSH_MS, RESUME_ACK_TIMEOUT_MS } from "../../protocol/constants.ts";
 import type { ResumeRequest, ResumeResponse } from "../../protocol/tools.ts";
 import type { AgentOpenRequest, AgentOpenResponse } from "../../protocol/internal.ts";
-import type { Card } from "../../protocol/cards.ts";
-import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Sql } from "../../protocol/ports.ts";
-import { CARD_TEMPLATES } from "../../copy/cards.ts";
-import { fill } from "../../copy/fill.ts";
-import { changeName } from "../../copy/names.ts";
-import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import type { Env } from "../env.ts";
+import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
+import { FEATURES } from "../../config/features.ts";
 import {
-  appendEvent,
   metaAll,
   metaDelete,
   metaGet,
@@ -134,139 +129,16 @@ function causeOf(sql: Sql, attempt_id: string): ResumeCycle["cause"] {
  * operations deleted (it is not parked), and the choice card of UN6 opened with the options
  * `new_attempt` and `stop`.
  */
-function applyReopenFailed(ctx: DurableObjectState, a: AttemptRow, now: number): void {
-  const sql = sqlOf(ctx);
-  const pool = ctx.id.name ?? "";
-  sql.transaction(() => {
-    // closeCard (intents.ts) first, like T20: a race card takes the attempt's state into
-    // `candidates` and closes `superseded` when nobody on it is in flight anymore; every other
-    // open non-choice card goes `stale`. The states read here are pre-stop, as the engine's are.
-    const states = new Map<string, string>();
-    for (const row of sql.exec("SELECT attempt_id, state FROM attempts").toArray()) {
-      states.set(String(row.attempt_id), String(row.state));
-    }
-    for (const row of sql.exec("SELECT card_id, kind, body FROM cards WHERE state = 'open'").toArray()) {
-      const card_id = String(row.card_id);
-      const kind = String(row.kind);
-      const body = JSON.parse(String(row.body)) as Card;
-      if (!body.attempt_ids.includes(a.attempt_id)) continue;
-      if (kind === "race") {
-        body.candidates ??= {};
-        const cand = body.candidates[a.attempt_id];
-        if (cand === undefined) {
-          body.candidates[a.attempt_id] = {
-            state: a.state as AttemptState,
-            can_choose: false,
-            seconds: null,
-            cost_usd: null,
-          };
-        } else {
-          cand.state = a.state as AttemptState;
-          cand.can_choose = false;
-        }
-        const inFlight = body.attempt_ids.some((id) => {
-          const state = states.get(id);
-          return state !== undefined && state !== "stopped" && state !== "accepted" && state !== "landed";
-        });
-        sql.exec("UPDATE cards SET body = ? WHERE card_id = ?", JSON.stringify(body), card_id);
-        appendEvent(sql, now, { ts: now, pool, src: "trunk", type: "card.updated", card: body });
-        if (!inFlight) {
-          sql.exec("UPDATE cards SET state = 'closed', closed_at = ? WHERE card_id = ?", now, card_id);
-          appendEvent(sql, now, {
-            ts: now,
-            pool,
-            src: "trunk",
-            type: "card.closed",
-            card_id,
-            action: "superseded",
-            by: "system",
-            attempt_id: null,
-            reason: null,
-          });
-        }
-        continue;
-      }
-      if (kind === "choice") continue;
-      sql.exec("UPDATE cards SET state = 'closed', closed_at = ? WHERE card_id = ?", now, card_id);
-      appendEvent(sql, now, {
-        ts: now,
-        pool,
-        src: "trunk",
-        type: "card.closed",
-        card_id,
-        action: "stale",
-        by: "system",
-        attempt_id: null,
-        reason: null,
-      });
-    }
-    sql.exec(
-      "UPDATE attempts SET state = 'stopped', stop_reason = 'reopen_failed', approved_by = NULL, updated_at = ? WHERE attempt_id = ?",
-      now,
-      a.attempt_id,
-    );
-    appendEvent(sql, now, {
-      ts: now,
-      pool,
-      src: "trunk",
-      type: "attempt.state",
-      attempt_id: a.attempt_id,
-      from: a.state,
-      to: "stopped",
-      transition: "T20r",
-      reason: "reopen_failed",
-      go_arounds: a.go_arounds,
-      pull_backs: a.pull_backs,
-      right_of_way: a.right_of_way_at !== null,
-    });
-    // CD5: the card's texts are filled from the copy module before the premises it names go.
-    const intentText = String(
-      sql.exec("SELECT text FROM intents WHERE intent_id = ?", a.intent_id).toArray()[0]?.text ?? "",
-    );
-    const attemptMeta = sql.exec("SELECT race, model FROM attempts WHERE attempt_id = ?", a.attempt_id).toArray()[0];
-    const name = changeName({
-      intentText,
-      race: Number(attemptMeta?.race ?? 0) === 1,
-      model: attemptMeta?.model === null || attemptMeta?.model === undefined ? null : String(attemptMeta.model),
-      premises: sql
-        .exec("SELECT kind, key, edit, hash FROM premises WHERE attempt_id = ?", a.attempt_id)
-        .toArray()
-        .map((p) => ({ kind: String(p.kind), key: String(p.key), edit: Number(p.edit) === 1, hash: String(p.hash) })),
-    });
-    // T20r: the attempt is not parked — its premises and operations are deleted.
-    sql.exec("DELETE FROM premises WHERE attempt_id = ?", a.attempt_id);
-    sql.exec("DELETE FROM ops WHERE attempt_id = ?", a.attempt_id);
-    const counter = Number(sql.exec("SELECT COUNT(*) AS m FROM cards").toArray()[0]?.m ?? 0) + 1;
-    const card_id = `k_${String(counter).padStart(4, "0")}`;
-    const template = CARD_TEMPLATES["choice:reopen_failed"];
-    const card: Card = {
-      card_id,
-      kind: "choice",
-      attempt_ids: [a.attempt_id],
-      intent_ids: [a.intent_id],
-      submit_ids: {},
-      title: fill(template.title, {}),
-      body: [fill(template.body, { changeName: name })],
-      options: template.options.map((o) => ({ id: o.id, label: o.label })),
-      paths: [],
-      blast_radius: {},
-      preview: null,
-      candidates: null,
-      risk: null,
-      reason: "reopen_failed",
-    };
-    sql.exec(
-      "INSERT INTO cards (card_id, kind, state, body, created_at, closed_at) VALUES (?, ?, 'open', ?, ?, NULL)",
-      card_id,
-      "choice",
-      JSON.stringify(card),
-      now,
-    );
-    appendEvent(sql, now, { ts: now, pool, src: "trunk", type: "card.opened", card });
-    metaSet(sql, `${DONE}${a.attempt_id}`, a.resumes);
-    metaDelete(sql, `${CYCLE}${a.attempt_id}`);
-    timerDelete(sql, "resume", a.attempt_id);
-  });
+function applyReopenFailed(ctx: DurableObjectState, a: AttemptRow, cycle: ResumeCycle, now: number): void {
+  sqlOf(ctx).run("resume_failed", { now: () => now, syncTriage: ScriptedTriage, features: FEATURES }, (trunk) =>
+    trunk.resumeFailed({ attempt_id: a.attempt_id, resume_n: cycle.resume_n, since_call: cycle.since_call }),
+  );
+}
+
+function stopLost(ctx: DurableObjectState, attempt_id: string, at: number): void {
+  sqlOf(ctx).run("stop", { now: () => at, syncTriage: ScriptedTriage, features: FEATURES }, (trunk) =>
+    trunk.stop({ attempt_id, reason: "lost" }),
+  );
 }
 
 /** UN6a: an explicit new-attempt choice starts a fresh model driver, not a resume.
@@ -303,7 +175,7 @@ async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): 
     if (at >= cycle.deadline) {
       // This Agent has never resumed: T20r only follows T19/T21. A fresh Agent
       // that cannot start is lost (T20), rather than an orphan in `opened`.
-      TrunkEngine.open(sql, { now: () => at }).stop({ attempt_id: id, reason: "lost" });
+      stopLost(ctx, id, at);
       finish(id);
       continue;
     }
@@ -341,7 +213,7 @@ async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): 
         !["stopped", "accepted", "landed"].includes(current.state) &&
         current.last_call_id === cycle.since_call
       )
-        TrunkEngine.open(sql, { now: () => at }).stop({ attempt_id: id, reason: "lost" });
+        stopLost(ctx, id, at);
       finish(id);
     }
   }
@@ -409,7 +281,7 @@ export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: nu
       continue;
     }
     if (at >= cycle.deadline) {
-      applyReopenFailed(ctx, a, at);
+      applyReopenFailed(ctx, a, cycle, at);
       continue;
     }
     if (cycle.next_send > at) continue;
@@ -449,7 +321,7 @@ export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: nu
         REOPEN_STATES.has(current.state) &&
         current.last_call_id === cycle.since_call
       ) {
-        applyReopenFailed(ctx, current, at);
+        applyReopenFailed(ctx, current, cycle, at);
       } else {
         endCycle(sql, a.attempt_id, a.resumes);
       }

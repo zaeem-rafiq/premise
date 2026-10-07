@@ -127,6 +127,70 @@ describe("4.4 sentBack / pushStalled / greenRed / quietPool", () => {
     expect(greenRed(state)).toBe(false);
   });
 
+  it("FR19: only a confirmed failure announces the revert, and its banner leaves when the revert lands", () => {
+    const first = stream("green-confirmed-fail", 17);
+    const firstCell = stripCells(first, first.ts, { greenFeature: "full" }).find((cell) => cell.id === "strip.green");
+    expect(firstCell?.value).toBe("checking landing 1 again");
+    expect(bannerList(first, first.ts, LIVE).some((row) => row.id === "banner.green_red")).toBe(false);
+    expect(Object.keys(first.undo)).toEqual([]);
+
+    const second = stream("green-confirmed-fail", 18);
+    expect(
+      stripCells(second, second.ts, { greenFeature: "full" }).find((cell) => cell.id === "strip.green")?.value,
+    ).toBe("failed at landing 1");
+    expect(bannerList(second, second.ts, LIVE).find((row) => row.id === "banner.green_red")?.sentence).toBe(
+      "The check failed twice at 1: visible.",
+    );
+
+    const state = stream("green-confirmed-fail");
+    expect(state.undo.r_g1).toMatchObject({ cause: "revert", reverted: [1], reopened: ["a_G"] });
+    expect(bannerList(state, state.ts, LIVE).find((row) => row.id === "banner.green_red")?.sentence).toBe(
+      "The check failed twice at 1: visible. Trunk is taking back #1 and reopening their agents.",
+    );
+    const base = { pool: "tidepool", src: "trunk" as const, ts: state.ts + 100, t: state.ts + 105 };
+    reduce(state, {
+      ...base,
+      n: 20,
+      type: "landing.accepted",
+      seq: 2,
+      batch_id: 2,
+      kind: "revert",
+      attempt_id: null,
+      change_id: "c-revert-1",
+      intent_id: null,
+      request_id: "r_g1",
+      paths: ["creatures/crab.js"],
+      writes: [{ kind: "entity", key: "creatures/crab.js#spawn", old: "h-crab-spawn", new: "absent" }],
+    });
+    expect(state.landings[2]?.kind).toBe("revert");
+    expect(bannerList(state, state.ts, LIVE).some((row) => row.id === "banner.green_red")).toBe(true);
+    reduce(state, {
+      ...base,
+      n: 21,
+      type: "landing.landed",
+      seq: 2,
+      batch_id: 2,
+      commit: "e".repeat(40),
+      tree: "f".repeat(40),
+      note: "a".repeat(40),
+      note_json: null,
+      time_to_land_ms: 100,
+    });
+    expect(bannerList(state, state.ts, LIVE).some((row) => row.id === "banner.green_red")).toBe(false);
+    expect(state.landings[1]?.undone_by).toBe(2);
+    reduce(state, {
+      ...base,
+      n: 22,
+      type: "attempt.reopened",
+      attempt_id: "a_G",
+      cause: "revert",
+      revision: 1,
+      model_changed: false,
+    });
+    expect(state.working_order).toContain("a_G");
+    expect(state.attempts.a_G).toMatchObject({ reopened_by: "revert", landed_seq: null, revision: 1 });
+  });
+
   it("quietPool (RY23): no attempt in flight and no landing in the last 60 s", () => {
     const state = stream("tracer", 1); // pool.state only: quiet
     expect(quietPool(state, state.ts + 61_000)).toBe(true);
@@ -135,6 +199,49 @@ describe("4.4 sentBack / pushStalled / greenRed / quietPool", () => {
     const landed = stream("tracer", 25);
     expect(quietPool(landed, landed.ts + 10_000)).toBe(false); // landing within 60 s
     expect(quietPool(landed, landed.ts + 70_000)).toBe(true);
+  });
+
+  it("FR19: a compacted revert clears the banner only after landing, never for a newer failure", () => {
+    const state = stream("green-confirmed-fail");
+    state.landings[2] = {
+      digest: true,
+      seq: 2,
+      kind: "revert",
+      batch_id: 2,
+      attempt_id: null,
+      change_id: "c-revert-1",
+      intent_id: null,
+      request_id: "r_g1",
+      paths: ["creatures/crab.js"],
+      premise_keys: [],
+      accepted_ts: state.ts,
+      landed_ts: null,
+      commit: null,
+      tree: null,
+      undone_by: null,
+    };
+    state.landed_order.unshift(2);
+    expect(greenRed(state)).toBe(true);
+    reduce(state, {
+      pool: "tidepool",
+      src: "trunk",
+      ts: state.ts + 100,
+      t: state.ts + 105,
+      n: 20,
+      type: "landing.landed",
+      seq: 2,
+      batch_id: 2,
+      commit: "e".repeat(40),
+      tree: "f".repeat(40),
+      note: "a".repeat(40),
+      note_json: null,
+      time_to_land_ms: 100,
+    });
+    expect(greenRed(state)).toBe(false);
+    for (const seq of [2, 3]) {
+      state.green.last = { seq, ok: false, confirmed: true, failed: [{ name: "selftest", code: "x" }] };
+      expect(greenRed(state)).toBe(true);
+    }
   });
 });
 

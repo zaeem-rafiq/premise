@@ -40,8 +40,13 @@ export function greenRed(state: FloorState): boolean {
   for (const seq of state.landed_order) {
     const landing = state.landings[seq];
     if (landing === undefined) continue;
-    if (landing.kind === "revert" && landing.request_id !== null) return false;
     if (landing.seq <= last.seq) break;
+    if (
+      landing.kind === "revert" &&
+      landing.request_id !== null &&
+      (landing.digest === true ? landing.landed_ts !== null : landing.landed !== null)
+    )
+      return false;
   }
   return true;
 }

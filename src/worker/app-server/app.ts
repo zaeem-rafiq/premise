@@ -16,6 +16,7 @@ import {
 } from "./respond.ts";
 import { isVersionToken, resolveSource, type PoolFloorRead, type Resolved } from "../adapters/pool-source/resolve.ts";
 import { bootModule, headModule, registryModule } from "./modules.ts";
+import { PoolNotRegistered } from "./registration.ts";
 
 /** The request the seam hands a pool route, plus which route row matched. */
 export type AppInput = {
@@ -69,6 +70,8 @@ export function createApp(deps: AppDeps) {
     answer(request, 404, JSON.stringify({ error: { code: "no_app" } }), "application/json", CACHE_NO_STORE);
   const unavailable = (request: Request) =>
     answer(request, 503, UNAVAILABLE_BODY, "text/plain; charset=utf-8", CACHE_NO_STORE);
+  const failed = (request: Request, error: unknown) =>
+    error instanceof PoolNotRegistered ? notFound(request) : unavailable(request);
   const rateLimited = (request: Request) =>
     answer(request, 429, RATE_LIMITED_BODY, "text/plain; charset=utf-8", CACHE_NO_STORE);
 
@@ -108,8 +111,8 @@ export function createApp(deps: AppDeps) {
     let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, params.source ?? "");
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
@@ -117,8 +120,8 @@ export function createApp(deps: AppDeps) {
       const file = await deps.pools.read(pool, resolved.version, "index.html");
       if (file === null) return notFound(request);
       return answer(request, 200, file.bytes, TYPE_HTML, CACHE_NO_STORE);
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
   };
 
@@ -130,8 +133,8 @@ export function createApp(deps: AppDeps) {
     let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, source);
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
@@ -146,8 +149,8 @@ export function createApp(deps: AppDeps) {
     let resolved: Resolved | null | typeof NO_APP;
     try {
       resolved = await resolve(pool, params.source ?? "");
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     if (resolved === NO_APP) return noApp(request);
     if (resolved === null) return notFound(request);
@@ -160,15 +163,15 @@ export function createApp(deps: AppDeps) {
     let read: PoolFloorRead;
     try {
       read = await deps.floorState(pool); // AS11's newest-paths cut needs `paths` even on a commit route
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     if (read.pool.app === null) return noApp(request);
     let module: string | null;
     try {
       module = await registryModule(deps.pools, pool, version, read.paths);
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     if (module === null) return notFound(request);
     return answer(request, 200, module, TYPE_JS, CACHE_IMMUTABLE, true);
@@ -184,16 +187,16 @@ export function createApp(deps: AppDeps) {
     // IR7: an imported pool has no live picture — its files are not served, whatever the token.
     try {
       if ((await deps.floorState(pool)).pool.app === null) return noApp(request);
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     let bytes: Uint8Array;
     try {
       const found = await deps.pools.read(pool, version, path);
       if (found === null) return notFound(request);
       bytes = found.bytes;
-    } catch {
-      return unavailable(request);
+    } catch (error) {
+      return failed(request, error);
     }
     return answer(request, 200, bytes, type, CACHE_IMMUTABLE, type === TYPE_JS);
   };
@@ -222,11 +225,16 @@ export function createApp(deps: AppDeps) {
 
   /** The immutable-route wrapper: cache first (SE20), rate-limit the misses (AS8), store 200s. */
   const cached = async (request: Request, produce: () => Promise<Response>): Promise<Response> => {
-    const hit = await deps.cache?.match(request);
+    // SE22: pre-registration cache entries must not survive this boundary change.
+    // Only a response authorized on a miss can populate this cache namespace.
+    const url = new URL(request.url);
+    url.pathname = `/.premise-app-cache/se22-v1${url.pathname}`;
+    const key = new Request(url, request);
+    const hit = await deps.cache?.match(key);
     if (hit !== undefined) return hit;
     if (!fileRateOk(request)) return rateLimited(request);
     const response = await produce();
-    if (response.status === 200) await deps.cache?.put(request, response.clone());
+    if (response.status === 200) await deps.cache?.put(key, response.clone());
     return response;
   };
 

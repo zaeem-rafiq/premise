@@ -87,16 +87,21 @@ function transientTool(request: ToolRequest, code: "pool_not_ready" | "timeout")
 function fixture(
   outcomes: ToolOutcome[] = [],
   stopFailures = 0,
-  opts: { stops?: StopOutcome[]; trunkState?: AttemptState } = {},
+  opts: { stops?: StopOutcome[]; trunkState?: AttemptState; readContinuously?: boolean; usdPerModelCall?: number } = {},
 ) {
   const db = new DatabaseSync(":memory:");
   // What the fake Trunk's mirror reports: the answers `/stop` gives next, and
   // the attempt state `/sync` mirrors (stopping the attempt flips it).
-  const trunk = { stops: [...(opts.stops ?? [])], state: opts.trunkState ?? ("opened" as AttemptState) };
+  const trunk = {
+    stops: [...(opts.stops ?? [])],
+    state: opts.trunkState ?? ("opened" as AttemptState),
+    sync: null as Promise<void> | null,
+  };
   databases.push(db);
   const background: Promise<unknown>[] = [];
   const tools: Array<{ at: number; request: ToolRequest }> = [];
   const stops: string[] = [];
+  const model = { replies: [] as Array<"list" | "empty" | "error">, calls: 0 };
   let alarmAt: number | null = null;
   let transaction = 0;
   const storage = {
@@ -175,6 +180,7 @@ function fixture(
         });
       }
       if (path === "/sync") {
+        await trunk.sync;
         return Response.json({
           head_seq: 0,
           heads_ups: [],
@@ -190,17 +196,28 @@ function fixture(
       if (path === "/internal/reserve") {
         return Response.json({ ok: true, reservation_id: `r_${++reservation}`, expires_at: Date.now() + 60_000 });
       }
-      if (path === "/internal/settle") return Response.json({ ok: true, charged_usd: 0 });
+      if (path === "/internal/settle") return Response.json({ ok: true, charged_usd: opts.usdPerModelCall ?? 0 });
       return Response.json({ ok: true });
     }),
     AI: {
       async run() {
+        model.calls++;
+        const reply = model.replies.shift();
+        if (reply === "error") throw new Error("model unavailable");
         return {
           choices: [
             {
               message: {
                 content: "",
-                tool_calls: [{ id: "model_submit", function: { name: "submit", arguments: '{"summary":"test"}' } }],
+                tool_calls:
+                  reply === "empty"
+                    ? []
+                    : opts.readContinuously || reply === "list"
+                      ? (opts.readContinuously ? [0, 1] : [0]).map((n) => ({
+                          id: `model_list_${n}`,
+                          function: { name: "list", arguments: '{"path":"creatures/"}' },
+                        }))
+                      : [{ id: "model_submit", function: { name: "submit", arguments: '{"summary":"test"}' } }],
               },
               finish_reason: "tool_calls",
             },
@@ -225,6 +242,7 @@ function fixture(
   const inspect = async () =>
     (await (await agent.fetch(new Request("https://agent.test/internal/inspect"))).json()) as Inspection;
   return {
+    model,
     tools,
     stops,
     trunk,
@@ -285,6 +303,92 @@ function headsUp(): HeadsUp {
     created_at: NOW,
   };
 }
+
+describe("Agent resume budgets", () => {
+  it.each(["empty", "error"] as const)(
+    "AG6: a %s reply at the resumed model-call limit cannot send another call",
+    async (lastReply) => {
+      const f = fixture();
+      await f.open(true);
+      await f.post("/stop");
+      await f.drain();
+      expect(f.model.calls).toBe(1);
+      f.model.replies = [...Array<"list">(11).fill("list"), lastReply];
+      f.trunk.state = "working";
+      await f.post("/resume", { resume_n: 1, revision: 2, attempt_id: "a_backoff" });
+      await f.drain();
+      if (lastReply === "error") {
+        const parked = await f.inspect();
+        expect(parked.journal?.kind).toBe("model");
+        await f.alarm(parked.journal!.deadline_at);
+      }
+      const stopped = await f.inspect();
+      expect(stopped.meta).toMatchObject({
+        state: "stopped",
+        stop_reason: "budget",
+        model_calls: "13",
+        model_limit: "13",
+      });
+      expect(f.model.calls).toBe(13); // One before stopping, then AG6's 12-call allowance.
+      expect(stopped.journal).toBeNull();
+    },
+  );
+
+  it.each([false, true])("AG6/RS2: resume grants fresh allowances from usage, at step limit=%s", async (atLimit) => {
+    const f = fixture([], 0, { readContinuously: atLimit, usdPerModelCall: 0.001 });
+    await f.open(true);
+    if (!atLimit) {
+      await f.post("/stop");
+      await f.drain();
+    }
+    const before = await f.inspect();
+    expect(before.meta.state).toBe("stopped");
+    expect(before.meta.stop_reason).toBe(atLimit ? "budget" : "cancelled");
+    expect(before.meta.tool_steps).toBe(atLimit ? "40" : "1");
+    expect(before.meta.model_calls).toBe(atLimit ? "20" : "1");
+    expect(Number(before.meta.usd_spent)).toBeCloseTo(atLimit ? 0.02 : 0.001, 10);
+
+    // Hold the resume's sync so the snapshot observes acceptance, before any new spend.
+    let release!: () => void;
+    f.trunk.sync = new Promise<void>((resolve) => (release = resolve));
+    f.trunk.state = "working";
+    vi.setSystemTime(NOW + 60_000);
+    expect(await (await f.post("/resume", { resume_n: 1, revision: 2, attempt_id: "a_backoff" })).json()).toEqual({
+      ok: true,
+      resume_n: 1,
+    });
+    const resumed = await f.inspect();
+    // AG6: 15 steps, 12 model calls, and 300,000 ms counted from this resume.
+    expect(resumed.meta.step_limit).toBe(atLimit ? "55" : "16");
+    expect(resumed.meta.model_limit).toBe(atLimit ? "32" : "13");
+    expect(resumed.meta.deadline_at).toBe(String(NOW + 60_000 + 300_000));
+    expect(resumed.timers).toContainEqual({ kind: "attempt_timeout", key: "main", due_at: NOW + 360_000 });
+    for (const key of [
+      "tool_steps",
+      "model_calls",
+      "tokens_in",
+      "tokens_out",
+      "usd_spent",
+      "token_limit",
+      "usd_limit",
+    ]) {
+      expect(resumed.meta[key], key).toBe(before.meta[key]);
+    }
+    expect(resumed.meta.token_limit).toBe("400000");
+    expect(resumed.meta.usd_limit).toBe("1");
+    expect(resumed.meta.stop_reason).toBeUndefined();
+
+    // RS2: retrying the accepted resume cannot accumulate another allowance or deadline.
+    vi.setSystemTime(NOW + 61_000);
+    await f.post("/resume", { resume_n: 1, revision: 2, attempt_id: "a_backoff" });
+    expect((await f.inspect()).meta).toEqual(resumed.meta);
+    release();
+    await f.drain();
+    const after = await f.inspect();
+    expect(after.meta.state).toBe(atLimit ? "stopped" : "validated");
+    expect(after.meta.tool_steps).toBe(atLimit ? "55" : "2");
+  });
+});
 
 describe("Agent tool backoff", () => {
   it.each(["overloaded", "503", "transport"] as const)(

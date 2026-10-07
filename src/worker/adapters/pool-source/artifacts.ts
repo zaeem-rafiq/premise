@@ -22,10 +22,8 @@ export type ArtifactsLike = {
 /**
  * The Artifacts repository name that holds `version` of `pool`.
  *
- * The spec gives no naming scheme: SE22 constrains which repositories are served, and `pool.state`'s
- * `remote`/`plain_remote` carry their addresses — but the Floor's read does not expose those fields yet,
- * so the names are the pool's own by convention: `<pool>` and `<pool>-plain`. When the Floor read
- * grows the remote fields this function should follow them ("the app server follows it", SE19).
+ * Naming convention for trusted internal callers. The public app-server wiring
+ * supplies a resolver over pool.state.remote/plain_remote instead (SE22).
  */
 export function repoName(pool: string, version: Version): string {
   return poolRepoName(pool, repoOf(version) === "plain" ? "plain" : "main");
@@ -36,16 +34,27 @@ function isMissingRepo(error: unknown): boolean {
 }
 
 /** The PoolSource over the `POOLS` Artifacts binding (4.9, option B). One instance per request. */
-export function artifactsPoolSource(deps: { pools: ArtifactsLike; floorState: FloorStateReader }): PoolSource {
-  let read: Promise<PoolFloorRead> | null = null;
+export function artifactsPoolSource(deps: {
+  pools: ArtifactsLike;
+  floorState: FloorStateReader;
+  /** Required at the public boundary: null denies access before any binding call. */
+  repository?: (pool: string, version: Version) => Promise<string | null>;
+}): PoolSource {
+  const reads = new Map<string, Promise<PoolFloorRead>>();
   const state = (pool: string) => {
-    read ??= deps.floorState(pool);
+    let read = reads.get(pool);
+    if (read === undefined) {
+      read = deps.floorState(pool);
+      reads.set(pool, read);
+    }
     return read;
   };
 
   const repoFor = async (pool: string, version: Version) => {
+    const name = deps.repository === undefined ? repoName(pool, version) : await deps.repository(pool, version);
+    if (name === null) return null;
     try {
-      return await deps.pools.get(repoName(pool, version));
+      return await deps.pools.get(name);
     } catch (error) {
       if (isMissingRepo(error)) return null; // a pool that was never provisioned: unknown, so 404
       throw error;

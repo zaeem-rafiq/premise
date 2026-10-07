@@ -497,7 +497,7 @@ Anatomy, collapsed (stage size 696×132):
 
 Line 1: requester, tags (`attempt.tag.prewritten`, `attempt.tag.synthetic`, `attempt.tag.reopened`, `attempt.tag.right_of_way`), model short name, time since `opened_ts`. Line 2: the intent text, at most two lines, then an ellipsis. Line 3: status shape and word (5.3), then `attempt.sent_back_n` when `go_arounds + pull_backs` is above 0, then the lights (3.3). Line 4: the activity line (5.5), or the newest heads-up sentence, or the stop sentence.
 
-Expanded (tap or Enter on the attempt card) adds, in this order: heads-up panels (3.4), "Relies on" as a list (3.3), "What it changes" (paths and entities from `ops`), checks (5.7), and for an owner the button `attempt.stop` (the stop route of 4.5).
+Expanded (tap or Enter on the attempt card) adds, in this order: heads-up panels (3.4), "Relies on" as a list (3.3), "What it changes" (paths and entities from `ops`), checks (5.7), and for an owner the button `attempt.stop` (the stop route of 4.5). While the stop request is in flight the button is disabled and reads `attempt.stopping` (FL10, amended 2026-10-07).
 
 | State | When (`AttemptView.state`) | Status word | Line 4 |
 | --- | --- | --- | --- |
@@ -768,6 +768,7 @@ The button `undo.open` is on the Why card of a landing of kind `change` (`01-cor
 | held | the landing is older than `UNDO_WINDOW` landings | button disabled with `undo.too_old` |
 | loading | the plan is being fetched | sheet with `undo.planning` |
 | live | the plan arrived (`ok: true`) | sheet: `undo.title`, `undo.also` (the landings of `plan.reverted` other than the target; `undo.also.none` when there is none), `undo.kept` (`plan.kept_readers`), `undo.in_flight` (`plan.repairs`), buttons `undo.confirm` and `undo.cancel` |
+| loading | the confirm is in flight | the same sheet with both buttons disabled; `undo.confirm` reads `undo.sending` (FL10, amended 2026-10-07) |
 | live | the confirm was refused with `plan_changed` | the same sheet with the new plan of the response, under the notice `undo.plan_changed`. Nothing was queued. `undo.confirm` is enabled again and now carries the new plan (7, row FR31). |
 | error | the plan was refused (`ok: false`), the confirm was refused with another reason, or a request failed | `undo.refused` with the reason sentence (5.9), or the request error; nothing changed |
 | live | `undo.planned` arrived, its landing is not yet landed | undo row in the Landed tab: `undo.landing` |
@@ -846,6 +847,7 @@ Shows (2.6): the SYNTHETIC banner; four large numbers (`swarm.lps` with a small 
 | --- | --- | --- |
 | empty | no `swarm.state` yet | `swarm.empty`, controls (owner) |
 | loading | `swarm.running` and no synthetic attempt yet | `swarm.starting` |
+| loading | a start or stop request is in flight | the controls disabled; the start button reads `swarm.starting` with the requested `agents`, the stop button `swarm.stopping` (FL10, amended 2026-10-07) |
 | live | `swarm.running` | live numbers and wall |
 | stopped | `swarm.running` is false after a run | the last numbers, frozen, with `swarm.final` |
 | held | visitor | everything except the controls |
@@ -1449,6 +1451,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `attempt.landing` | Recorded by Trunk. Being pushed to main. |
 | `attempt.landed_as` | On main as landing {seq}. |
 | `attempt.stop` | Stop this agent |
+| `attempt.stopping` | Stopping… |
 | `attempt.again` | Send this request again |
 | `attempt.slow` | The model has not answered for {seconds} s. It is tried again by itself. If that fails, the attempt stops. |
 | `attempt.relies` | Relies on |
@@ -1586,6 +1589,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `undo.in_flight` | {n} changes in flight get a heads-up: {names}. |
 | `undo.plan_changed` | The pool changed while this was open. This is what the undo takes back now. |
 | `undo.confirm` | Undo it |
+| `undo.sending` | Undoing… |
 | `undo.cancel` | Keep it |
 | `undo.refused` | Trunk refused the undo: {reason}. Nothing changed. |
 | `undo.landing` | Undo of {landing} is landing… |
@@ -1641,6 +1645,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `swarm.start` | Start |
 | `swarm.starting` | Starting {n} scripted agents… |
 | `swarm.stop` | Stop |
+| `swarm.stopping` | Stopping… |
 | `swarm.empty` | No Swarm run yet. A run uses scripted agents and makes no model calls. |
 | `swarm.final` | The run has ended. These are its last measured numbers, at {time of day}. |
 | `swarm.no_agents` | The Swarm is running and no scripted agent has started yet. Stop it and start again. |

@@ -177,6 +177,26 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
     expect(typeof posts[0]!["request_id"]).toBe("string");
   });
 
+  test("FL10: while Start is in flight it reads Starting {n} scripted agents… and is disabled", async ({ page }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await serveStream(page, [poolState(1), swarmState(2, { running: false })]);
+    await serveSession(page, true);
+    await page.route("**/api/swarm", async (route) => {
+      await held;
+      await route.fulfill({ contentType: "application/json", body: '{"ok":true}' });
+    });
+    await page.goto(`/p/${POOL}`);
+    await openSwarm(page);
+    const start = page.locator(".swarm-controls button");
+    await expect(start).toHaveText("Start");
+    await start.click();
+    // The controls adopted the stopped run's 7 agents (CO48).
+    await expect(start).toHaveText("Starting 7 scripted agents…");
+    await expect(start).toBeDisabled();
+    release!();
+  });
+
   test("Start sends the whole SwarmConfig (SWR1): the controls' values and the deployment's defaults", async ({
     page,
   }) => {

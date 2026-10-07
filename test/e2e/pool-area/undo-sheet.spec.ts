@@ -219,6 +219,34 @@ test.describe("the undo sheet (3.12)", () => {
     await expect(sheet.getByRole("button", { name: "Keep it" })).toBeVisible();
   });
 
+  test("FL10: while the confirm is in flight, Undo it reads Undoing… and both buttons are disabled", async ({
+    page,
+  }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await serve(page, BASE_STREAM, {
+      owner: true,
+      confirm: async (route) => {
+        const body = (await route.request().postDataJSON()) as Record<string, unknown>;
+        await held;
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, request_id: body["request_id"] }),
+        });
+      },
+    });
+    await page.goto(`/p/${POOL}`);
+    await openUndoSheet(page);
+    const sheet = page.locator(".undo-sheet");
+    const confirm = sheet.locator(".sheet-actions button.primary");
+    await expect(confirm).toHaveText("Undo it");
+    await confirm.click();
+    await expect(confirm).toHaveText("Undoing…");
+    await expect(confirm).toBeDisabled();
+    await expect(sheet.getByRole("button", { name: "Keep it" })).toBeDisabled();
+    release!();
+  });
+
   test("CO34a: Undo it POSTs seq and expect_reverted of the plan on screen, with a request_id", async ({ page }) => {
     const sent: Captured[] = [];
     await serve(page, BASE_STREAM, { owner: true, sent });

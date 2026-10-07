@@ -130,7 +130,7 @@ function StopControl({
           });
         }}
       >
-        {text("attempt.stop")}
+        {busy ? text("attempt.stopping") : text("attempt.stop")}
       </button>
       {error !== null && <p className="attempt-card__error">{error}</p>}
     </div>

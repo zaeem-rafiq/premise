@@ -194,7 +194,7 @@ export function UndoSheet({ floor, seq, onClose }: UndoSheetProps) {
                 {t("undo.cancel")}
               </button>
               <button type="button" className="primary" disabled={busy} onClick={() => confirm(phase.plan)}>
-                {t("undo.confirm")}
+                {busy ? t("undo.sending") : t("undo.confirm")}
               </button>
             </div>
           </>

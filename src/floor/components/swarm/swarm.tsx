@@ -20,7 +20,9 @@ function share(x: number): string {
 export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: boolean; pool: string }) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
-  const [busy, setBusy] = useState(false);
+  // FL10: the request in flight, so its button says what is being waited for.
+  const [pending, setPending] = useState<"start" | "stop" | null>(null);
+  const busy = pending !== null;
   const [error, setError] = useState<string | null>(null);
   const [agents, setAgents] = useState(12);
   const [dial, setDial] = useState(0);
@@ -43,7 +45,7 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
   const landing = wall.filter((a) => a.state === "landed").length;
 
   const send = async (running: boolean) => {
-    setBusy(true);
+    setPending(running ? "start" : "stop");
     setError(null);
     try {
       const body = running
@@ -58,7 +60,7 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
         : { pool, running: false, request_id: crypto.randomUUID() };
       await post(body);
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
@@ -185,11 +187,19 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
           </label>
           {swarm?.running ? (
             <button type="button" disabled={busy || blocked} onClick={() => void send(false)}>
-              {t("swarm.stop")}
+              {pending === "start"
+                ? t("swarm.starting", { n: agents })
+                : pending === "stop"
+                  ? t("swarm.stopping")
+                  : t("swarm.stop")}
             </button>
           ) : (
             <button type="button" disabled={busy || blocked} onClick={() => void send(true)}>
-              {t("swarm.start")}
+              {pending === "start"
+                ? t("swarm.starting", { n: agents })
+                : pending === "stop"
+                  ? t("swarm.stopping")
+                  : t("swarm.start")}
             </button>
           )}
           {blocked && <p className="field-error">{t("swarm.blocked")}</p>}

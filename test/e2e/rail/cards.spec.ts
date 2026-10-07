@@ -389,8 +389,13 @@ test.describe("the tray and the card sheet", () => {
     await page.goto(`/p/${POOL}`);
     const card = page.locator('.attempt-card[data-attempt-id="a_1"]');
     await card.locator(".attempt-card__intent").click(); // expand (03 3.2)
-    const stop = card.getByRole("button", { name: "Stop this agent" });
+    // The control is found by its place, not its name: while the request is in flight it is
+    // renamed `attempt.stopping` and disabled (FL10), and the second tap lands on it anyway.
+    const stop = card.locator(".attempt-card__stop button");
+    await expect(stop).toHaveText("Stop this agent");
     await stop.click();
+    await expect(stop).toHaveText("Stopping…");
+    await expect(stop).toBeDisabled();
     await stop.click({ force: true });
     await expect.poll(() => sent.length, { timeout: 5_000 }).toBe(1);
     await page.waitForTimeout(600);

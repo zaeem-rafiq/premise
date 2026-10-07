@@ -162,6 +162,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "attempt.landing": { text: "Recorded by Trunk. Being pushed to main." },
   "attempt.landed_as": { text: "On main as landing {seq}." },
   "attempt.stop": { text: "Stop this agent" },
+  "attempt.stopping": { text: "Stopping…" },
   "attempt.again": { text: "Send this request again" },
   "attempt.slow": {
     text: "The model has not answered for {seconds} s. It is tried again by itself. If that fails, the attempt stops.",
@@ -378,6 +379,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     text: "The pool changed while this was open. This is what the undo takes back now.",
   },
   "undo.confirm": { text: "Undo it" },
+  "undo.sending": { text: "Undoing…" },
   "undo.cancel": { text: "Keep it" },
   "undo.refused": { text: "Trunk refused the undo: {reason}. Nothing changed." },
   "undo.landing": { text: "Undo of {landing} is landing…" },
@@ -459,6 +461,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "swarm.start": { text: "Start" },
   "swarm.starting": { text: "Starting {n} scripted agents…" },
   "swarm.stop": { text: "Stop" },
+  "swarm.stopping": { text: "Stopping…" },
   "swarm.empty": {
     text: "No Swarm run yet. A run uses scripted agents and makes no model calls.",
   },

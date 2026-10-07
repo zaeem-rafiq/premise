@@ -117,7 +117,7 @@ function lineAt(text: string, index: number): number {
 
 /** `docs/measurements/…` paths inside one backtick span or one Markdown link target. */
 function measurementPaths(segment: string, out: Set<string>): void {
-  for (const match of segment.matchAll(/docs\/measurements\/[^\s'"`)]+/g)) {
+  for (const match of segment.matchAll(/(?<![/\w])docs\/measurements\/[^\s'"`)]+/g)) {
     out.add(match[0].replace(/[.,;:!?]+$/, ""));
   }
 }

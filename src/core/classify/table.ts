@@ -114,7 +114,6 @@ export function rowFor(
 export type Classification = {
   items: ClassifyItem[];
   failed: Array<{ op_seq: number; path: string; rule: string }>;
-  sets: Sets;
 };
 
 /**
@@ -130,8 +129,12 @@ export function classify(
   setsOverride: Sets | null,
   landers: Array<{ premises: Premise[]; attempt_id?: string }> = [],
 ): Classification {
-  const s = setsOverride ?? setsOf(a, before, pool?.languages ?? TIDEPOOL_LANGUAGES);
-  const L = s.languages;
+  const L = setsOverride?.languages ?? pool?.languages ?? TIDEPOOL_LANGUAGES;
+  let computedSets = setsOverride;
+  // Most right-of-way and batch comparisons change no premise. Reference analysis
+  // of the attempt view is needed only when a rule can actually decide something.
+  // The sets remain local to this synchronous call and always use the pre-change tree (V6).
+  const getSets = (): Sets => (computedSets ??= setsOf(a, before, L));
   const items: ClassifyItem[] = [];
   for (const p of a.premises.values()) {
     const cur = keyHash(after, p.kind, p.key, L);
@@ -197,7 +200,7 @@ export function classify(
       }
       it.context.sort();
     }
-    const row = rowFor(pool, a, p, it, s, before, after);
+    const row = rowFor(pool, a, p, it, getSets(), before, after);
     it.rule = row[0];
     it.result = row[1];
     it.reason = row[2];
@@ -206,6 +209,7 @@ export function classify(
   // HU2a: a file item is folded when entity items of the same classification carry every relevant
   // changed entity.
   for (const it of items) {
+    const s = getSets();
     if (
       it.kind === "file" &&
       (it.rule === "F3" || it.rule === "F3m") &&
@@ -224,21 +228,34 @@ export function classify(
     }
   }
   // QR4: a landing that only read K, while this attempt alters K.
+  // Its hash can be unchanged, so this scan is independent of the changed items.
+  // Match frozen readers first to avoid computing the attempt's sets when QR4
+  // cannot apply. Keep the first matching lander, as required for its decider.
+  const readers = new Map<string, (typeof landers)[number]>();
+  if (landers.length > 0) {
+    for (const p of a.premises.values()) {
+      if (p.kind !== "query" || !p.key.startsWith("refs:")) continue;
+      const K = p.key.slice(5);
+      const reader = landers.find((l) =>
+        l.premises.some(
+          (q) =>
+            q.read &&
+            !q.edit &&
+            !q.derived &&
+            ((q.kind === "entity" && q.key === K) ||
+              (q.kind === "file" &&
+                q.key === pathOf(K) &&
+                !l.premises.some((r) => r.kind === "entity" && r.key === K && (r.edit || r.derived)))),
+        ),
+      );
+      if (reader !== undefined) readers.set(K, reader);
+    }
+  }
+  // OP7: an operation can fail even when every premise hash still holds.
   const rep = replayOps(curOps(a), after, {}, L);
-  for (const K of s.Altered) {
+  for (const K of readers.size === 0 ? [] : getSets().Altered) {
     if (entityAt(before, K, L) === null || rep.failed.some((f) => f.path === pathOf(K))) continue;
-    const reader = landers.find((l) =>
-      l.premises.some(
-        (q) =>
-          q.read &&
-          !q.edit &&
-          !q.derived &&
-          ((q.kind === "entity" && q.key === K) ||
-            (q.kind === "file" &&
-              q.key === pathOf(K) &&
-              !l.premises.some((r) => r.kind === "entity" && r.key === K && (r.edit || r.derived)))),
-      ),
-    );
+    const reader = readers.get(K);
     if (reader === undefined) continue;
     const p = a.premises.get(`query|refs:${K}`);
     if (p === undefined) continue;
@@ -267,5 +284,5 @@ export function classify(
     // TR8: the reader decides the triage of QR4 (its truth list, its frozen premise on K).
     if (reader.attempt_id !== undefined) it.decider = reader.attempt_id;
   }
-  return { items, failed: rep.failed, sets: s };
+  return { items, failed: rep.failed };
 }

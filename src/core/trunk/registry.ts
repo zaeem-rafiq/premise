@@ -23,7 +23,7 @@ import type {
   UndoRequest,
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
-import { persistPremises, persistOps } from "./attempt-rows.ts";
+import { persistPremises, persistOps, persistHeadsUps } from "./attempt-rows.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
@@ -1122,24 +1122,7 @@ function persistAttempt(pool: Pool, a: Attempt): void {
   );
   persistPremises(sql, a);
   persistOps(sql, a);
-  sql.exec("DELETE FROM heads_ups WHERE attempt_id = ?", a.id);
-  for (const h of a.heads) {
-    sql.exec(
-      `INSERT INTO heads_ups (attempt_id, hn, result, wake, body, created_at, received_at, delivered_at, resolved_at, statement, op_mark)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      a.id,
-      h.hn,
-      h.result,
-      h.wake ? 1 : 0,
-      JSON.stringify(h.body),
-      h.created_at,
-      h.received_at,
-      h.delivered_at,
-      h.resolved_at,
-      h.statement,
-      h.op_mark,
-    );
-  }
+  persistHeadsUps(sql, a);
 }
 
 function persistJudgment(pool: Pool, j: Judgment): void {

@@ -7,7 +7,9 @@
 
 import type { Env } from "./env.ts";
 import { forbidden, notBuilt, notConfigured, notFound, unauthorized, unsupportedMediaType } from "./not-built.ts";
+import { PUBLIC_RATE_PER_MIN } from "../protocol/constants.ts";
 import { serveFloorAsset } from "./security/floor-page.ts";
+import { clientAddress, publicReads } from "./security/rate-limit.ts";
 import { credentialKind, originOkFor } from "./security/session.ts";
 import { APP_ROUTES, ROUTES, type Route } from "../protocol/routes.ts";
 import { wire as wireTrunk } from "./routes/wiring.ts";
@@ -184,6 +186,12 @@ function routeRequest(request: Request, env: Env): Response | Promise<Response> 
     if (params === null) continue;
     const blocked = guard(route, request, env);
     if (blocked !== null) return blocked;
+    // SE21: the stream handshake is counted per client address under PUBLIC_RATE_PER_MIN — the
+    // session read's own limiter and its own 429 answer. (The page is counted where it is served,
+    // in `serveFloorAsset`; the ninth-socket rule of `openSocket` is unchanged.)
+    if (route.method === "WS" && publicReads.record(`stream:${clientAddress(request)}`) > PUBLIC_RATE_PER_MIN) {
+      return Response.json({ error: { code: "rate_limited" } }, { status: 429 });
+    }
     const handler = ROUTE_TABLE.handlers.get(routeKey(route));
     if (handler !== undefined) {
       return handler({ request, env, params, route });

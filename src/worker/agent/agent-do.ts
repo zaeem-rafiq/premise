@@ -380,7 +380,7 @@ export class Agent extends DurableObject<Env> {
         case "/stop":
           return await this.#ownerStop();
         case "/internal/inspect":
-          return this.#inspect();
+          return await this.#inspect();
         case "/internal/spend":
           return this.#spend(body);
         case "/internal/recover":
@@ -1601,8 +1601,10 @@ export class Agent extends DurableObject<Env> {
 
   // -- inspection for tests -----------------------------------------------------------
 
-  #inspect(): Response {
+  async #inspect(): Promise<Response> {
     return json({
+      // The platform alarm itself: a timer row without it never fires (AL1).
+      alarm: await this.ctx.storage.getAlarm(),
       meta: metaAll(this.#sql),
       journal: journaledCall(this.#sql),
       inbox: inboxRows(this.#sql).map((r) => ({

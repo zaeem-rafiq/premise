@@ -77,10 +77,15 @@ describe("SE2: the premise_owner session cookie", () => {
     expect(originOkFor(new Request("https://premise.test/"), "none")).toBe(true);
   });
 
-  it("timingSafeEqual compares only equal-length keys", () => {
+  it("timingSafeEqual matches equal keys, and nothing else whatever the lengths", () => {
     expect(timingSafeEqual(KEY, KEY)).toBe(true);
+    // Keys of different lengths do not match — and the compare has no early return.
     expect(timingSafeEqual(KEY, `${KEY}x`)).toBe(false);
+    expect(timingSafeEqual(KEY, KEY.slice(0, -1))).toBe(false);
+    expect(timingSafeEqual(KEY, "")).toBe(false);
+    // A key that differs in one character does not match.
     expect(timingSafeEqual(KEY, `${KEY.slice(0, -1)}x`)).toBe(false);
+    expect(timingSafeEqual(KEY, `x${KEY.slice(1)}`)).toBe(false);
     expect(bearerAuths(new Request("https://x", { headers: { authorization: `Bearer ${KEY}` } }), env)).toBe(true);
     expect(bearerAuths(new Request("https://x", { headers: { authorization: `bearer ${KEY}` } }), env)).toBe(false);
   });

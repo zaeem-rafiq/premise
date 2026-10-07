@@ -47,6 +47,7 @@ import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 import { buildsPlain } from "./plain.ts";
+import { metaGet } from "./schema.ts";
 
 import { planUndo } from "../undo/plan.ts";
 import { confirmUndo, undoPlan } from "./undo-apply.ts";
@@ -713,10 +714,23 @@ export function tick(pool: Pool): void {
   }
 
   // 9.4 step 5: the batch commits. Next batch id, landings table, head, outbox.
-  const batchId = Number(pool.meta.get("next_batch_id") ?? "1");
-  pool.meta.set("next_batch_id", String(batchId + 1));
   const oldMain = pool.meta.get("head_commit") ?? "";
   const oldNotes = pool.meta.get("notes_commit") ?? "";
+  // SQLite is authoritative even when the caller retained its Pool. Fail inside the
+  // accept transaction before writing a batch or announcing any accepted landing.
+  if (
+    oldMain !== (metaGet(pool.sql, "head_commit") ?? "") ||
+    oldNotes !== (metaGet(pool.sql, "notes_commit") ?? "") ||
+    batch[0]!.parent_oid !== oldMain
+  )
+    throw new Error("batch parent differs from SQLite head");
+  if (
+    pool.sql.exec("SELECT batch_id FROM outbox WHERE state IN ('pending', 'notes_pending') LIMIT 1").toArray().length >
+    0
+  )
+    throw new Error("batch would replace an unpushed SQLite outbox");
+  const batchId = Number(pool.meta.get("next_batch_id") ?? "1");
+  pool.meta.set("next_batch_id", String(batchId + 1));
   const causedEvents = pool.eventBuffer;
   pool.eventBuffer = null;
   for (const l of batch) {

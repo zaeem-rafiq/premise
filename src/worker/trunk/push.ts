@@ -57,6 +57,22 @@ export function outboxRow(ctx: DurableObjectState): OutboxState | null {
   };
 }
 
+/** Network answers belong to the batch and epoch that sent them. Startup reconciliation
+ * can overlap a push: after A is confirmed, a tick can accept B before A's ref read returns.
+ * Applying that read to B would announce an unpushed landing and discard B's pack. */
+function currentBatch(ctx: DurableObjectState, sent: OutboxState, epoch: string | null): boolean {
+  if (metaGet(sqlOf(ctx), "epoch") !== epoch) return false;
+  const current = outboxRow(ctx);
+  return (
+    current !== null &&
+    current.batch_id === sent.batch_id &&
+    current.old_main === sent.old_main &&
+    current.new_main === sent.new_main &&
+    current.old_notes === sent.old_notes &&
+    current.new_notes === sent.new_notes
+  );
+}
+
 /** The batch's stored pack bytes (LP6: the same bytes on every retry). */
 function outboxPack(ctx: DurableObjectState, batch_id: number): Uint8Array {
   const chunks = sqlOf(ctx)
@@ -212,11 +228,14 @@ async function pushOutboxInner(
   // LP5b, LP8: a pool paused for a refused or diverged push does not push again; the owner
   // rebuilds it. A pause by the owner does not stop an accepted batch (SE11).
   if (pushHalted(ctx)) return;
+  const epoch = metaGet(sqlOf(ctx), "epoch");
+  const current = () => currentBatch(ctx, outbox, epoch);
 
   let target;
   try {
     target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
   } catch (cause) {
+    if (!current()) return;
     // BP7: an operator's line — the error's name and message, never the request or the target
     // (which carries secret material).
     console.error("push writeTarget failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
@@ -224,6 +243,7 @@ async function pushOutboxInner(
     recordTrunkError(ctx, "push", "transport");
     return;
   }
+  if (!current()) return;
   // LP6's command list is the subset of the two commands whose ref still has its old value. On a
   // retry (`tries > 0`) the remote's own advertisement is what says which subset — a lost first
   // answer can leave the outbox behind the remote, and an in-memory per-ref flag does not survive
@@ -241,10 +261,12 @@ async function pushOutboxInner(
         signal: AbortSignal.timeout(30_000),
       });
     } catch {
+      if (!current()) return;
       scheduleRetry(ctx, outbox, "transport");
       recordTrunkError(ctx, "push", "transport");
       return;
     }
+    if (!current()) return;
     remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
     remote_notes =
       outbox.new_notes === ""
@@ -253,7 +275,7 @@ async function pushOutboxInner(
     updates = updates.filter((u) => (u.ref === MAIN_REF ? remote_main : remote_notes) === "old");
     if (updates.length === 0) {
       const action = await apply("push_result", { remote_main, remote_notes });
-      if (action === "repush" || action === "retry_main" || action === "retry_notes") {
+      if (current() && (action === "repush" || action === "retry_main" || action === "retry_notes")) {
         scheduleRetry(ctx, outbox, "transport");
       }
       return;
@@ -265,11 +287,13 @@ async function pushOutboxInner(
   try {
     outcome = await runPush(batch, { tokenSource: deps.tokenSource, pusher: deps.pusher });
   } catch (cause) {
+    if (!current()) return;
     console.error("push transport failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;
   }
+  if (!current()) return;
   target = outcome.target;
   const { result } = outcome;
 
@@ -288,11 +312,13 @@ async function pushOutboxInner(
       signal: AbortSignal.timeout(30_000),
     });
   } catch {
+    if (!current()) return;
     // The read itself failed (LP5's last row): the outbox stands, the retry is scheduled.
     scheduleRetry(ctx, outbox, "transport");
     recordTrunkError(ctx, "push", "transport");
     return;
   }
+  if (!current()) return;
   remote_main = refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main);
   remote_notes =
     outbox.new_notes === ""
@@ -306,6 +332,7 @@ async function pushOutboxInner(
   if (rejected && remote_main === "old" && notesUnchanged) countReject(ctx, outbox);
 
   const action = await apply("push_result", { remote_main, remote_notes });
+  if (!current()) return;
   switch (action) {
     case "mark_pushed":
     case "pause":
@@ -340,14 +367,18 @@ export async function reconcileOnStart(
 ): Promise<void> {
   const outbox = outboxRow(ctx);
   if (outbox === null) return;
+  const epoch = metaGet(sqlOf(ctx), "epoch");
+  const current = () => currentBatch(ctx, outbox, epoch);
   try {
     const target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
+    if (!current()) return;
     const refs = await deps.pusher.readRefs({
       remote: target.remote,
       token: target.token,
       refs: [MAIN_REF, NOTES_REF],
       signal: AbortSignal.timeout(30_000),
     });
+    if (!current()) return;
     await restart({
       remote_main: refValue(refs[MAIN_REF] ?? null, outbox.old_main, outbox.new_main),
       remote_notes:
@@ -356,7 +387,7 @@ export async function reconcileOnStart(
   } catch {
     // The remote is unreachable or the entry failed: the outbox stands and the next
     // start (an evicted object reconciles again) or a `push` timer retries.
-    recordTrunkError(ctx, "restart", "transport");
+    if (current()) recordTrunkError(ctx, "restart", "transport");
   }
 }
 

@@ -1,0 +1,122 @@
+{
+  "v": 2,
+  "build": "4005768",
+  "recorded_at": "2026-10-07T09:51:13.784Z",
+  "pool": "soak-muxuq7e6-d1",
+  "config": {
+    "seed": 7,
+    "agents": 256,
+    "launch_per_second": 2,
+    "collision_dial": 1,
+    "think_ms": [
+      50,
+      400
+    ],
+    "rescale_every_s": 15
+  },
+  "agents": {
+    "launched": 264,
+    "landed": 210,
+    "stopped": {
+      "withdrawn": 26
+    },
+    "in_flight_at_end": 28
+  },
+  "landings": {
+    "count": 210,
+    "commits_on_main": 210,
+    "notes": 210,
+    "batches": 45,
+    "pushes": 46,
+    "push_retries": 0
+  },
+  "metrics": {
+    "landings_per_second": 0.1566704690340818,
+    "time_to_land_ms": {
+      "p50": 19619,
+      "p99": 152451
+    },
+    "go_around_rate": 0.1,
+    "confirm_rate": 0.08571428571428572,
+    "false_abort_rate": 0.037037037037037035,
+    "escape_rate": null,
+    "waiting_behind_max": 14,
+    "push_backlog_max": 14,
+    "longest_gap_ms": 46888,
+    "tick_cpu_ms": {
+      "p50": null,
+      "p99": null
+    },
+    "push_ms": {
+      "p50": 15341,
+      "p99": 81613
+    }
+  },
+  "truth": {
+    "repairs": 23,
+    "repairs_outside_truth": 2,
+    "false_abort_rate": 0.08695652173913043,
+    "escapes": 0
+  },
+  "stream": {
+    "events": 4585,
+    "bytes": 1877413
+  },
+  "checks": [
+    {
+      "name": "all_ended",
+      "ok": false,
+      "detail": "in_flight_at_end=28 (a_32GAGRH9PZEDN900MWKBYNMRPW,a_2D3K2SB7R4H91SKX0HDCXKD92P,a_5CHF1ZPVDTZZNSWZ88EG8MNDYA,a_746KNDXPPPE00S89NEA295FF0A,a_2AK0FB3YRZ7WSMJFT2DW04TFQH…+23); stopped_without_reason=0"
+    },
+    {
+      "name": "one_commit_per_landing",
+      "ok": true,
+      "detail": "commits_on_main=210 landings=210 notes=210"
+    },
+    {
+      "name": "oracle",
+      "ok": true,
+      "detail": "escapes=0 over 146 files at head"
+    },
+    {
+      "name": "no_go_around_at_zero",
+      "ok": true,
+      "detail": "dial=1 go_around_rate=0.1"
+    },
+    {
+      "name": "cosmetic_is_silent",
+      "ok": false,
+      "detail": "24 violations: hn1@5FQE7FRN->sweep-search,hn1@29QJ0F8R->edit-creature,hn1@WEH9FYGZ->edit-creature,hn1@D6ZZ2X1Y->retune,hn1@6VE9KV11->sweep-search…+19"
+    },
+    {
+      "name": "never_paused",
+      "ok": true,
+      "detail": "no pool.paused"
+    },
+    {
+      "name": "no_stall",
+      "ok": false,
+      "detail": "longest_gap_ms=46888 (limit 10000)"
+    },
+    {
+      "name": "fsck",
+      "ok": true,
+      "detail": "git fsck --strict passed; token issued"
+    },
+    {
+      "name": "rebuildable",
+      "ok": false,
+      "detail": "head_seq 210->210; head tree ae44744e6122069b15b06ab2f4ed840e64e1d906->?; not rebuilt: 28 attempt(s) still in flight"
+    },
+    {
+      "name": "false_abort_reported",
+      "ok": true,
+      "detail": "metrics.false_abort_rate=0.037037037037037035; truth.false_abort_rate=0.08695652173913043 (repairs=23, outside=2)"
+    },
+    {
+      "name": "recording_fits",
+      "ok": true,
+      "detail": "replay.ndjson 1877413 bytes of 26214400"
+    }
+  ]
+}

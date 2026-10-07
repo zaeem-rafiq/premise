@@ -1,0 +1,124 @@
+{
+  "v": 2,
+  "build": "4005768",
+  "recorded_at": "2026-10-07T09:28:37.284Z",
+  "pool": "soak-muxuq7e6-d0-5",
+  "config": {
+    "seed": 7,
+    "agents": 256,
+    "launch_per_second": 2,
+    "collision_dial": 0.5,
+    "think_ms": [
+      50,
+      400
+    ],
+    "rescale_every_s": 15
+  },
+  "agents": {
+    "launched": 264,
+    "landed": 222,
+    "stopped": {
+      "withdrawn": 16,
+      "budget": 1,
+      "stalled": 1
+    },
+    "in_flight_at_end": 24
+  },
+  "landings": {
+    "count": 222,
+    "commits_on_main": 222,
+    "notes": 222,
+    "batches": 33,
+    "pushes": 34,
+    "push_retries": 0
+  },
+  "metrics": {
+    "landings_per_second": 0.16633811143304778,
+    "time_to_land_ms": {
+      "p50": 18331,
+      "p99": 165740
+    },
+    "go_around_rate": 0.06306306306306306,
+    "confirm_rate": 0.04504504504504504,
+    "false_abort_rate": 0.03571428571428571,
+    "escape_rate": null,
+    "waiting_behind_max": 9,
+    "push_backlog_max": 18,
+    "longest_gap_ms": 63524,
+    "tick_cpu_ms": {
+      "p50": null,
+      "p99": null
+    },
+    "push_ms": {
+      "p50": 13639,
+      "p99": 66860
+    }
+  },
+  "truth": {
+    "repairs": 24,
+    "repairs_outside_truth": 2,
+    "false_abort_rate": 0.08333333333333333,
+    "escapes": 0
+  },
+  "stream": {
+    "events": 4401,
+    "bytes": 1839559
+  },
+  "checks": [
+    {
+      "name": "all_ended",
+      "ok": false,
+      "detail": "in_flight_at_end=24 (a_2KV0BTKSJ8SYBXEET0V38QCQ76,a_3SSQN8EAJ3BBD441705PTM8417,a_42ZBBRZMFNCEDE4NP0YNC9GDXG,a_1A0AHYQ96WCRADC99YA3DAP80D,a_78MW2JFXBHN5HASFYP56B3YGRP…+19); stopped_without_reason=0"
+    },
+    {
+      "name": "one_commit_per_landing",
+      "ok": true,
+      "detail": "commits_on_main=222 landings=222 notes=222"
+    },
+    {
+      "name": "oracle",
+      "ok": true,
+      "detail": "escapes=0 over 203 files at head"
+    },
+    {
+      "name": "no_go_around_at_zero",
+      "ok": true,
+      "detail": "dial=0.5 go_around_rate=0.06306306306306306"
+    },
+    {
+      "name": "cosmetic_is_silent",
+      "ok": false,
+      "detail": "5 violations: hn1@7BVVY7QJ->edit-creature,hn1@EV1T2RNP->sweep-search,hn3@GMWAYPG3->sweep-search,hn3@DRXH6KBC->sweep-search,hn2@B8N473DY->sweep-colour"
+    },
+    {
+      "name": "never_paused",
+      "ok": true,
+      "detail": "no pool.paused"
+    },
+    {
+      "name": "no_stall",
+      "ok": false,
+      "detail": "longest_gap_ms=63524 (limit 10000)"
+    },
+    {
+      "name": "fsck",
+      "ok": true,
+      "detail": "git fsck --strict passed; token issued"
+    },
+    {
+      "name": "rebuildable",
+      "ok": false,
+      "detail": "head_seq 222->222; head tree 943685674bfe5a6580b5c7e4f464a6fc38046568->?; not rebuilt: 24 attempt(s) still in flight"
+    },
+    {
+      "name": "false_abort_reported",
+      "ok": true,
+      "detail": "metrics.false_abort_rate=0.03571428571428571; truth.false_abort_rate=0.08333333333333333 (repairs=24, outside=2)"
+    },
+    {
+      "name": "recording_fits",
+      "ok": true,
+      "detail": "replay.ndjson 1839559 bytes of 26214400"
+    }
+  ]
+}

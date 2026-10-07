@@ -1,0 +1,122 @@
+{
+  "v": 2,
+  "build": "e499190",
+  "recorded_at": "2026-10-07T03:31:06.127Z",
+  "pool": "soak-muxi31pi-d0",
+  "config": {
+    "seed": 7,
+    "agents": 1024,
+    "launch_per_second": 16,
+    "collision_dial": 0,
+    "think_ms": [
+      50,
+      400
+    ],
+    "rescale_every_s": 15
+  },
+  "agents": {
+    "launched": 399,
+    "landed": 372,
+    "stopped": {
+      "tool_timeout": 16
+    },
+    "in_flight_at_end": 11
+  },
+  "landings": {
+    "count": 372,
+    "commits_on_main": 0,
+    "notes": 0,
+    "batches": 131,
+    "pushes": 132,
+    "push_retries": 1
+  },
+  "metrics": {
+    "landings_per_second": 0.1544954436303439,
+    "time_to_land_ms": {
+      "p50": 21863,
+      "p99": 72824
+    },
+    "go_around_rate": 0,
+    "confirm_rate": 0.04838709677419355,
+    "false_abort_rate": null,
+    "escape_rate": null,
+    "waiting_behind_max": 0,
+    "push_backlog_max": 6,
+    "longest_gap_ms": 19833,
+    "tick_cpu_ms": {
+      "p50": null,
+      "p99": null
+    },
+    "push_ms": {
+      "p50": 13498,
+      "p99": 46776
+    }
+  },
+  "truth": {
+    "repairs": 0,
+    "repairs_outside_truth": 0,
+    "false_abort_rate": null,
+    "escapes": 0
+  },
+  "stream": {
+    "events": 6893,
+    "bytes": 4032451
+  },
+  "checks": [
+    {
+      "name": "all_ended",
+      "ok": false,
+      "detail": "in_flight_at_end=11 (a_1G9E2AT4VPPGJKQHNVZMSC2GSF,a_7ZVF87SE46TQSE1N54E9N7QNWM,a_7FZGYGTCTMX6K3V6H8E79HWTVW,a_3ZV0JY0KSVKG0B7KMPRJ3T20C2,a_0QM414ZCPEG6R5MXBX7NZD9F0Z…+6); stopped_without_reason=0"
+    },
+    {
+      "name": "one_commit_per_landing",
+      "ok": false,
+      "detail": "commits_on_main=0 landings=372 notes=0; no clone"
+    },
+    {
+      "name": "oracle",
+      "ok": true,
+      "detail": "escapes=0 over 0 files at head"
+    },
+    {
+      "name": "no_go_around_at_zero",
+      "ok": true,
+      "detail": "dial=0 go_around_rate=0"
+    },
+    {
+      "name": "cosmetic_is_silent",
+      "ok": true,
+      "detail": "no cosmetic-caused heads-up reached another pattern"
+    },
+    {
+      "name": "never_paused",
+      "ok": true,
+      "detail": "no pool.paused"
+    },
+    {
+      "name": "no_stall",
+      "ok": false,
+      "detail": "longest_gap_ms=19833 (limit 10000)"
+    },
+    {
+      "name": "fsck",
+      "ok": false,
+      "detail": "read token: Command failed: npx wrangler artifacts repos issue-token soak-muxi31pi-d0 --namespace premise-test-pools --scope read --ttl 900 --json\n\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mA request to the Cloudflare API (/accounts/ca70033ccf6b734579b4ed3035be3c27/artifacts/namespaces/premise-test-pools/tokens) failed.\u001b[0m\n\n  Authentication error [code: 10000]\n\n\n🪵  Logs were written to \"/Users/zaeemkhan/Library/Preferences/.wrangler/logs/wrangler-2026-10-07_03-20-51_555.log\"\n"
+    },
+    {
+      "name": "rebuildable",
+      "ok": false,
+      "detail": "head_seq 372->376; head tree ?->?; no rebuilt pool.state within 600000 ms"
+    },
+    {
+      "name": "false_abort_reported",
+      "ok": true,
+      "detail": "nothing to rate; metrics.false_abort_rate=null; truth.false_abort_rate=null (repairs=0, outside=0)"
+    },
+    {
+      "name": "recording_fits",
+      "ok": true,
+      "detail": "replay.ndjson 4032451 bytes of 26214400"
+    }
+  ]
+}

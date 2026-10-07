@@ -1,0 +1,122 @@
+{
+  "v": 2,
+  "build": "77f7636",
+  "recorded_at": "2026-10-07T05:36:44.332Z",
+  "pool": "soak-muxnc6q3-d0",
+  "config": {
+    "seed": 7,
+    "agents": 512,
+    "launch_per_second": 1,
+    "collision_dial": 0,
+    "think_ms": [
+      50,
+      400
+    ],
+    "rescale_every_s": 15
+  },
+  "agents": {
+    "launched": 368,
+    "landed": 346,
+    "stopped": {
+      "tool_timeout": 7
+    },
+    "in_flight_at_end": 15
+  },
+  "landings": {
+    "count": 346,
+    "commits_on_main": 346,
+    "notes": 346,
+    "batches": 76,
+    "pushes": 76,
+    "push_retries": 0
+  },
+  "metrics": {
+    "landings_per_second": 0.20128754216275901,
+    "time_to_land_ms": {
+      "p50": 28627,
+      "p99": 73869
+    },
+    "go_around_rate": 0,
+    "confirm_rate": 0.049132947976878616,
+    "false_abort_rate": null,
+    "escape_rate": null,
+    "waiting_behind_max": 0,
+    "push_backlog_max": 9,
+    "longest_gap_ms": 14738,
+    "tick_cpu_ms": {
+      "p50": null,
+      "p99": null
+    },
+    "push_ms": {
+      "p50": 19510,
+      "p99": 49868
+    }
+  },
+  "truth": {
+    "repairs": 0,
+    "repairs_outside_truth": 0,
+    "false_abort_rate": null,
+    "escapes": 0
+  },
+  "stream": {
+    "events": 5700,
+    "bytes": 2975362
+  },
+  "checks": [
+    {
+      "name": "all_ended",
+      "ok": false,
+      "detail": "in_flight_at_end=15 (a_5H032ESYPKKH17EKFRGBDHYVXF,a_47P48D05DMAGNPQJ54VHXFKYB2,a_7DZ3RPCA792V9V8CBP3TW71FZZ,a_4CA2DQHDA300T5CFXQ5G1TP31P,a_00GR1VZW6CRMKPN2RMF6D13EPY…+10); stopped_without_reason=0"
+    },
+    {
+      "name": "one_commit_per_landing",
+      "ok": true,
+      "detail": "commits_on_main=346 landings=346 notes=346"
+    },
+    {
+      "name": "oracle",
+      "ok": true,
+      "detail": "escapes=0 over 371 files at head"
+    },
+    {
+      "name": "no_go_around_at_zero",
+      "ok": true,
+      "detail": "dial=0 go_around_rate=0"
+    },
+    {
+      "name": "cosmetic_is_silent",
+      "ok": true,
+      "detail": "no cosmetic-caused heads-up reached another pattern"
+    },
+    {
+      "name": "never_paused",
+      "ok": true,
+      "detail": "no pool.paused"
+    },
+    {
+      "name": "no_stall",
+      "ok": false,
+      "detail": "longest_gap_ms=14738 (limit 10000)"
+    },
+    {
+      "name": "fsck",
+      "ok": true,
+      "detail": "git fsck --strict passed; token issued"
+    },
+    {
+      "name": "rebuildable",
+      "ok": false,
+      "detail": "head_seq 352->352; head tree ?->?; not rebuilt: 15 attempt(s) still in flight"
+    },
+    {
+      "name": "false_abort_reported",
+      "ok": true,
+      "detail": "nothing to rate; metrics.false_abort_rate=null; truth.false_abort_rate=null (repairs=0, outside=0)"
+    },
+    {
+      "name": "recording_fits",
+      "ok": true,
+      "detail": "replay.ndjson 2975362 bytes of 26214400"
+    }
+  ]
+}

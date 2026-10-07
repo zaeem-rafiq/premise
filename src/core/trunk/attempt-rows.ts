@@ -104,3 +104,60 @@ export function persistOps(sql: Sql, a: Attempt): void {
     sql.exec("DELETE FROM ops WHERE attempt_id = ? AND op_seq = ?", a.id, seq);
   }
 }
+
+/** Heads-up history stays intact when an attempt changes an unrelated field. */
+export function persistHeadsUps(sql: Sql, a: Attempt): void {
+  const stored = new Map(
+    sql
+      .exec("SELECT * FROM heads_ups WHERE attempt_id = ?", a.id)
+      .toArray()
+      .map((row) => [Number(row.hn), row]),
+  );
+  for (const h of a.heads) {
+    const row = stored.get(h.hn);
+    const values = [
+      h.result,
+      h.wake ? 1 : 0,
+      JSON.stringify(h.body),
+      h.created_at,
+      h.received_at,
+      h.delivered_at,
+      h.resolved_at,
+      h.statement,
+      h.op_mark,
+    ];
+    if (row === undefined) {
+      sql.exec(
+        `INSERT INTO heads_ups (attempt_id, hn, result, wake, body, created_at, received_at, delivered_at, resolved_at, statement, op_mark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        a.id,
+        h.hn,
+        ...values,
+      );
+    } else if (
+      [
+        "result",
+        "wake",
+        "body",
+        "created_at",
+        "received_at",
+        "delivered_at",
+        "resolved_at",
+        "statement",
+        "op_mark",
+      ].some((column, i) => row[column] !== values[i])
+    ) {
+      sql.exec(
+        `UPDATE heads_ups SET result = ?, wake = ?, body = ?, created_at = ?, received_at = ?, delivered_at = ?, resolved_at = ?, statement = ?, op_mark = ?
+         WHERE attempt_id = ? AND hn = ?`,
+        ...values,
+        a.id,
+        h.hn,
+      );
+    }
+    stored.delete(h.hn);
+  }
+  for (const hn of stored.keys()) {
+    sql.exec("DELETE FROM heads_ups WHERE attempt_id = ? AND hn = ?", a.id, hn);
+  }
+}

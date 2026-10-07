@@ -16,7 +16,7 @@ import type { PremiseKind } from "../../protocol/premise.ts";
 import { ABSENT } from "../../protocol/premise.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
-import { isModulePath, parentKey, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
+import { isModulePath, languageOfPath, parentKey, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import type { LanguageSet } from "../keys/paths.ts";
 import { membersHash, listingMembers } from "../keys/members.ts";
 import { occurrences } from "../keys/search.ts";
@@ -421,10 +421,25 @@ export function an(files: FileMap, languages: LanguageSet = TIDEPOOL_LANGUAGES):
   return made;
 }
 
+/** Syntax-only lookups need one parsed module, not reference resolution across the pool.
+ * parseModule caches by content and language. Read the current content here so mutable
+ * replay/undo input maps cannot reuse stale regions from an earlier version of a file. */
+function moduleOf(files: FileMap, path: string, languages: LanguageSet): ModuleInfo | undefined {
+  const language = languageOfPath(path, languages);
+  const content = files.get(path);
+  if (language === null || content === undefined) return undefined;
+  try {
+    return parseModule(content, language);
+  } catch {
+    // As in analyse: a module that does not parse is opaque (2.1).
+    return undefined;
+  }
+}
+
 export function entityAt(files: FileMap, key: string, languages: LanguageSet = TIDEPOOL_LANGUAGES) {
   const path = pathOf(key);
   const name = key.slice(key.indexOf("#") + 1);
-  const mod = an(files, languages).modules.get(path);
+  const mod = moduleOf(files, path, languages);
   if (mod === undefined) return null;
   return mod.entities.find((e) => e.name === name) ?? null;
 }
@@ -434,13 +449,13 @@ export function entityKeysOf(
   path: string,
   languages: LanguageSet = TIDEPOOL_LANGUAGES,
 ): string[] | null {
-  const mod = an(files, languages).modules.get(path);
+  const mod = moduleOf(files, path, languages);
   if (mod === undefined) return null;
   return mod.entities.map((e) => `${path}#${e.name}`);
 }
 
 export function moduleHashOf(files: FileMap, path: string, languages: LanguageSet = TIDEPOOL_LANGUAGES): string {
-  const mod = an(files, languages).modules.get(path);
+  const mod = moduleOf(files, path, languages);
   return mod === undefined ? "" : moduleHash(mod);
 }
 
@@ -456,7 +471,7 @@ export function targetsOf(
   end: number,
   languages: LanguageSet = TIDEPOOL_LANGUAGES,
 ): string[] {
-  const mod = isModulePath(path, languages) ? an(files, languages).modules.get(path) : undefined;
+  const mod = moduleOf(files, path, languages);
   if (mod === undefined) return [path];
   const names: string[] = [];
   for (const r of mod.regions) {
@@ -471,7 +486,7 @@ export function targetsOf(
 export function sourceOf(files: FileMap, key: string, languages: LanguageSet = TIDEPOOL_LANGUAGES): string | null {
   const path = pathOf(key);
   const name = key.slice(key.indexOf("#") + 1);
-  const mod = an(files, languages).modules.get(path);
+  const mod = moduleOf(files, path, languages);
   if (mod === undefined) return null;
   const content = files.get(path);
   if (content === undefined) return null;
@@ -510,7 +525,7 @@ export function outlineMembersOf(
   path: string,
   languages: LanguageSet = TIDEPOOL_LANGUAGES,
 ): string[] | null {
-  const mod = an(files, languages).modules.get(path);
+  const mod = moduleOf(files, path, languages);
   if (mod === undefined) return files.has(path) ? [] : null;
   return outlineLines(mod).sort();
 }
@@ -644,13 +659,16 @@ export type Sets = {
 
 /** The sets of 6.3 for `a`, computed on its view over `tree` (the head before the change). */
 export function setsOf(a: Attempt, tree: FileMap, languages: LanguageSet = TIDEPOOL_LANGUAGES): Sets {
-  const v = view(a, tree, languages);
+  const ops = curOps(a);
+  // With no operations the view is head. Reuse its analysis instead of resolving an
+  // identical copy for every observer classified after a batch.
+  const v = ops.length === 0 ? tree : replayOps(ops, tree, {}, languages).files;
   const A = an(v, languages);
   const Hd = an(tree, languages);
   const added: string[] = [];
   const altered: string[] = [];
   const removed: string[] = [];
-  const paths = new Set(curOps(a).map((o) => o.path));
+  const paths = new Set(ops.map((o) => o.path));
   for (const p of paths) {
     const hk = entityKeysOf(tree, p, languages) ?? [];
     const vk = entityKeysOf(v, p, languages) ?? [];

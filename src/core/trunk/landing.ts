@@ -504,7 +504,9 @@ export function applyClassification(
   const dropped = dropFailed(pool, a, c.failed);
   if (dropped.length > 0) strongest = "repair";
   if (strongest === null) {
-    pool.dirtyAttempts.add(a.id);
+    // Holds/delete items still repin or remove premises. An empty classification
+    // changes nothing and must not rewrite this attempt or its heads-up history.
+    if (c.items.length > 0) pool.dirtyAttempts.add(a.id);
     return;
   }
   if (reopenedItems !== undefined) {

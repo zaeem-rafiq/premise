@@ -2,7 +2,7 @@
 // in About turns them off, AX13). Keys do nothing while a field, a button or a sheet has
 // focus, except Escape, which closes the topmost thing. Replay adds its own keys (RY26).
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 export type KeyAction =
   | "focus-intent" // /
@@ -82,10 +82,14 @@ export function keysHeld(target: EventTarget | null): boolean {
 /**
  * Installs the page keymap. `Escape` always reaches `onKey`; the rest fire only when no
  * control or sheet holds focus and `shortcuts` is on (AX13).
+ *
+ * A layout effect, so the handler is swapped during the commit: a key pressed as soon as
+ * the page shows a new state (the owner's header) reaches the `onKey` of that state, never
+ * the one of the render before it.
  */
 export function useKeys(opts: { replay: boolean; shortcuts: boolean; onKey: (event: KeyEvent) => void }): void {
   const { replay, shortcuts, onKey } = opts;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onKey({ action: "escape" });

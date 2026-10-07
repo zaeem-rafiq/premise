@@ -10,6 +10,7 @@ import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { deliverEvents, recordTrunkError } from "./after-commit.ts";
 import { metaGet, metaSet, timerDelete, timerDue, timerGetDue, timerMin, timerPut, type TimerRow } from "./sql.ts";
+import { EngineSession } from "./engine-session.ts";
 
 export type AlarmDeps = {
   env: Env;
@@ -41,11 +42,9 @@ export type AlarmDeps = {
 /** AL1: the alarm is always set to the smallest `due_at` — or deleted when `timers` is empty. */
 export async function armAlarm(ctx: DurableObjectState, sql: Sql): Promise<void> {
   const min = timerMin(sql);
-  if (min === null) {
-    await ctx.storage.deleteAlarm();
-    return;
-  }
-  await ctx.storage.setAlarm(min);
+  const write = () => (min === null ? ctx.storage.deleteAlarm() : ctx.storage.setAlarm(min));
+  if (sql instanceof EngineSession) await sql.alarmWrite(write);
+  else await write();
 }
 
 /** A thrown value as one short line for the operator's log: its name and message only. */

@@ -553,6 +553,7 @@ export class Trunk extends DurableObject<Env> {
           ? []
           : this.#sql.exec("SELECT seq, kind, commit_oid, note_oid, undone_by FROM landings ORDER BY seq").toArray(),
       served: Object.fromEntries(this.#served),
+      engine_session: this.#sql.metrics(),
     });
   }
 

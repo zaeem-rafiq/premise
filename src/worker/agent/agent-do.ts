@@ -75,7 +75,7 @@ import {
   type JournalRow,
 } from "../../core/agent/store.ts";
 import { metaSet } from "./meta.ts";
-import { abandonCall, beginCall, finishCall, journaledCall, retryCall } from "./journal.ts";
+import { abandonCall, beginCall, finishCall, journaledCall } from "./journal.ts";
 import * as inbox from "./inbox.ts";
 import {
   TrunkCalls,
@@ -113,7 +113,14 @@ import {
 type PushRequest = AgentPushRequest;
 
 type JournalRequest =
-  | { call: "tool"; request: ToolRequest; model_call_id?: string; target?: string | null; waits?: number }
+  | {
+      call: "tool";
+      request: ToolRequest;
+      model_call_id?: string;
+      target?: string | null;
+      waits?: number;
+      waiting?: boolean;
+    }
   | {
       call: "model";
       model: string;
@@ -148,6 +155,10 @@ export class Agent extends DurableObject<Env> {
   #driver: Driver | null = null;
   #model: ModelDriver | null = null;
   #running = false;
+  // Alarms can send a retry outside the pump. One send per retry generation
+  // prevents a concurrent wake from bypassing its wait; a timed-out older
+  // send may still finish while the next generation is in flight.
+  readonly #retrySends = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -661,6 +672,8 @@ export class Agent extends DurableObject<Env> {
       for (;;) {
         const pending = this.#meta("pending_stop");
         if (pending !== null) {
+          const retry = timerList(this.#sql).find((timer) => timer.kind === "call" && timer.key === "stop");
+          if (retry !== undefined && retry.due_at > Date.now()) return;
           await this.#sendStop(pending as AgentStopReason);
           return;
         }
@@ -684,14 +697,10 @@ export class Agent extends DurableObject<Env> {
 
         const journal = journaledCall(this.#sql);
         if (journal !== null) {
-          // A model call parked on its `call` timer (SE8's gate wait or TL12's
-          // provider rate limit) is re-served when the timer fires — a heads-up
-          // or a sync must not cut the wait short.
-          if (
-            journal.kind === "model" &&
-            (journal.request as { waiting?: boolean }).waiting === true &&
-            journal.deadline_at > Date.now()
-          ) {
+          if (journal.kind === "tool" && this.#retrySends.has(this.#toolSendKey(journal))) return;
+          // A call parked on its `call` timer is re-served when the timer
+          // fires. A heads-up, sync or recovery must not cut its wait short.
+          if ((journal.request as { waiting?: boolean }).waiting === true && journal.deadline_at > Date.now()) {
             return;
           }
           await this.#serve(journal);
@@ -933,21 +942,56 @@ export class Agent extends DurableObject<Env> {
   // Send the journaled call — the same request, the same call_id, whether the
   // pump is sending it for the first time or again after a timeout or a
   // restart (AG4, TL12). A `model` journal is the driver's own call.
-  async #serve(journal: JournalRow): Promise<void> {
+  async #serve(journal: JournalRow, now = Date.now()): Promise<void> {
     if (journal.kind === "model") {
       await this.#serveModel(journal);
       return;
     }
-    const { request } = journal.request as JournalRequest & { call: "tool" };
+    const sendKey = this.#toolSendKey(journal);
+    if (this.#retrySends.has(sendKey)) return;
+    const waiting = (journal.request as JournalRequest & { call: "tool" }).waiting === true;
+    if (waiting) {
+      // A delayed alarm or recovery can arrive after both the retry and the
+      // attempt deadline. Respect the attempt's timer before sending again.
+      // Held attempts have no such timer; accepted attempts sync instead.
+      const timeout = timerList(this.#sql).find((timer) => timer.kind === "attempt_timeout");
+      if (timeout !== undefined && timeout.due_at <= now && this.#meta("state") !== "accepted") {
+        this.#set("pending_stop", "timeout");
+        return;
+      }
+      if (journal.deadline_at > now) return;
+      // The retry wait has ended, not the retry itself. Give this send its
+      // full existing timeout without counting a second failure at the alarm.
+      journal = {
+        ...journal,
+        request: { ...(journal.request as JournalRequest), waiting: false },
+        deadline_at: now + TOOL_TIMEOUT_MS,
+      };
+      this.#sql.transaction(() => {
+        journalPut(this.#sql, journal);
+        timerPut(this.#sql, "call", journal.call_id, journal.deadline_at);
+      });
+    }
+    const jreq = journal.request as JournalRequest & { call: "tool" };
+    const { request } = jreq;
+    const retry = journal.tries > 0 || (jreq.waits ?? 0) > 0;
+    if (retry) this.#retrySends.add(sendKey);
     try {
       const response = await (this.#trunk as TrunkCalls).tool(request);
       this.#applyToolResponse(journal, response);
     } catch (e) {
       this.#callFailed(journal, e);
+    } finally {
+      if (retry) this.#retrySends.delete(sendKey);
     }
     // EV2: the step just committed is on its way to the Floor now — not at the
     // end of the pump's run.
     await this.#deliverEvents();
+  }
+
+  #toolSendKey(journal: JournalRow): string {
+    const request = journal.request as JournalRequest & { call: "tool" };
+    return JSON.stringify([journal.call_id, journal.tries, request.waits ?? 0]);
   }
 
   // The model driver's serve: `applied` means the assistant row landed and the
@@ -1086,6 +1130,15 @@ export class Agent extends DurableObject<Env> {
     const code = response.ok ? null : (response.error?.code ?? null);
     const now = Date.now();
 
+    if (
+      (code === "pool_not_ready" || code === "attempt_unknown" || code === "timeout") &&
+      (current.tries !== journal.tries ||
+        current.deadline_at !== journal.deadline_at ||
+        (current.request as { waiting?: boolean }).waiting === true)
+    ) {
+      return; // an obsolete transient answer cannot replace a newer wait or send
+    }
+
     if (code === "pool_not_ready") {
       // TL12: wait like a provider rate limit; the row's deadline_at moves with
       // it so the watchdog sees a call in progress.
@@ -1095,7 +1148,7 @@ export class Agent extends DurableObject<Env> {
         journalPut(this.#sql, {
           kind: "tool",
           call_id: journal.call_id,
-          request: { ...jreq, waits },
+          request: { ...jreq, waits, waiting: true },
           tries: journal.tries,
           started_at: journal.started_at,
           deadline_at: now + wait,
@@ -1222,7 +1275,15 @@ export class Agent extends DurableObject<Env> {
       return;
     }
     const current = journaledCall(this.#sql);
-    if (current === null || current.call_id !== journal.call_id) return;
+    if (
+      current === null ||
+      current.call_id !== journal.call_id ||
+      current.tries !== journal.tries ||
+      current.deadline_at !== journal.deadline_at ||
+      (current.request as { waiting?: boolean }).waiting === true
+    ) {
+      return; // a late failure cannot spend a retry already parked by its deadline
+    }
     const { request } = journal.request as JournalRequest & { call: "tool" };
     if (current.tries + 1 > TOOL_RETRIES) {
       const now = Date.now();
@@ -1256,7 +1317,27 @@ export class Agent extends DurableObject<Env> {
       });
       return;
     }
-    retryCall(this.#sql, journal.call_id, Date.now() + TOOL_TIMEOUT_MS);
+    this.#retryTool(current);
+  }
+
+  // TL12 leaves the delay for counted tool retries open. Reuse its wait
+  // bounds, with equal jitter so overloaded objects get a real pause and
+  // concurrent Agents do not all retry together. The call id and retry budget
+  // stay unchanged; only the next send's time is recorded here.
+  #retryTool(journal: JournalRow): void {
+    const tries = journal.tries + 1;
+    const backoff = Math.min(WAIT_BACKOFF_BASE_MS * 2 ** (tries - 1), WAIT_BACKOFF_MAX_MS);
+    const wait = Math.ceil(backoff / 2 + (Math.random() * backoff) / 2);
+    const deadline_at = Date.now() + wait;
+    this.#sql.transaction(() => {
+      journalPut(this.#sql, {
+        ...journal,
+        request: { ...(journal.request as JournalRequest), waiting: true },
+        tries,
+        deadline_at,
+      });
+      timerPut(this.#sql, "call", journal.call_id, deadline_at);
+    });
   }
 
   // A real agent's transport failure (TL12/TL14): the failure is the tool's
@@ -1265,7 +1346,15 @@ export class Agent extends DurableObject<Env> {
   // the record here. The last retry ends the journal and stops tool_timeout.
   #callFailedReal(journal: JournalRow): void {
     const current = journaledCall(this.#sql);
-    if (current === null || current.call_id !== journal.call_id) return;
+    if (
+      current === null ||
+      current.call_id !== journal.call_id ||
+      current.tries !== journal.tries ||
+      current.deadline_at !== journal.deadline_at ||
+      (current.request as { waiting?: boolean }).waiting === true
+    ) {
+      return; // a late failure cannot shorten or consume a parked retry
+    }
     const jreq = journal.request as JournalRequest & { call: "tool" };
     const request = jreq.request;
     const now = Date.now();
@@ -1284,7 +1373,7 @@ export class Agent extends DurableObject<Env> {
       });
       return;
     }
-    retryCall(this.#sql, journal.call_id, now + TOOL_TIMEOUT_MS);
+    this.#retryTool(current);
   }
 
   // -- sync, stop, register --------------------------------------------------------
@@ -1405,12 +1494,16 @@ export class Agent extends DurableObject<Env> {
           } else if (t.kind === "call") {
             const j = journaledCall(this.#sql);
             if (j === null || j.call_id !== t.key) timerDelete(this.#sql, "call", t.key);
+            else if (j.deadline_at > now)
+              continue; // a previous awaited handler moved this timer
             else if (j.kind === "model") {
               // Only a parked wait is re-served here: a journal marked `waiting`
               // has no send in flight, so re-entering cannot start a second one.
               // A non-parked model journal belongs to a live send — its own
               // MODEL_TIMEOUT decides — or to a dead one, which recover sees.
               if ((j.request as { waiting?: boolean }).waiting === true) await this.#serve(j);
+            } else if ((j.request as { waiting?: boolean }).waiting === true) {
+              await this.#serve(j, now);
             } else this.#callFailed(j, new TrunkTransportError("call deadline passed"));
           } else if (t.kind === "events") {
             timerDelete(this.#sql, "events", t.key);
@@ -1421,7 +1514,10 @@ export class Agent extends DurableObject<Env> {
           } else if (t.kind === "watchdog") {
             await this.#watchdog(now);
           } else if (t.kind === "attempt_timeout") {
-            if (this.#meta("state") === "accepted") {
+            if (TERMINAL_STATES.has(this.#meta("state") as AttemptState)) {
+              // A due retry may already have stopped this expired attempt.
+              timerDelete(this.#sql, "attempt_timeout", "main");
+            } else if (this.#meta("state") === "accepted") {
               await this.#sync();
               timerPut(this.#sql, "attempt_timeout", "main", now + AGENT_WATCHDOG_MS);
             } else {
@@ -1491,6 +1587,10 @@ export class Agent extends DurableObject<Env> {
     const j = journaledCall(this.#sql);
     if (j === null || (this.#running && j.kind === "model")) {
       await this.#run();
+      return;
+    }
+    if ((j.request as { waiting?: boolean }).waiting === true) {
+      this.ctx.waitUntil(this.#run());
       return;
     }
     // The send runs in the background: the caller (or a test) gets its

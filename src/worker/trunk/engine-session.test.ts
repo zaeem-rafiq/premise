@@ -4,11 +4,12 @@ import type { Sql } from "../../protocol/ports.ts";
 import type { ToolRequest } from "../../protocol/tools.ts";
 import { Trunk } from "../../core/trunk/registry.ts";
 import { EngineSession } from "./engine-session.ts";
+import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
 import { appendEvent, confirmEvents, metaDelete, metaSet, timerDelete, timerPut } from "./sql.ts";
 
 const databases: DatabaseSync[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
-function fixture(extraFiles: Record<string, string> = {}) {
+function fixture(extraFiles: Record<string, string> = {}, scriptedTriage = false) {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
   const reads: string[] = [];
@@ -31,7 +32,7 @@ function fixture(extraFiles: Record<string, string> = {}) {
     },
   };
   const session = new EngineSession(raw);
-  const opts = { now: () => 1_000 };
+  const opts = { now: () => 1_000, syncTriage: scriptedTriage ? ScriptedTriage : undefined };
   const trunk = Trunk.create(
     session,
     { ".premise/policy.json": '{"v":1,"default":"auto"}', "guide.txt": "Guide\n", ...extraFiles },
@@ -51,6 +52,19 @@ function fixture(extraFiles: Record<string, string> = {}) {
 const opens = (reads: string[]) => reads.filter((q) => q === "SELECT * FROM attempts ORDER BY attempt_id").length;
 
 describe("Trunk engine session", () => {
+  it("counts every engine call and identifies an invalidating statement without its values", () => {
+    const { session, read } = fixture();
+    read();
+    session.exec("UPDATE attempts SET attempt_repo = 'private--value' WHERE attempt_id = 'probe'");
+    read();
+    expect(session.metrics()).toEqual({
+      calls: { open_attempt: { reused: 0, reopened: 1 }, tool: { reused: 1, reopened: 1 } },
+      invalidations: { "shell: UPDATE attempts SET attempt_repo = ? WHERE attempt_id = ?": 1 },
+    });
+    const snapshot = session.metrics();
+    snapshot.calls.tool!.reused = 99;
+    expect(session.metrics().calls.tool!.reused).toBe(1);
+  });
   it("retains the pool across shell timers, event acknowledgments and trunk.error numbering", () => {
     const { session, read, reads } = fixture();
     expect(read().ok).toBe(true);
@@ -79,6 +93,142 @@ describe("Trunk engine session", () => {
     expect(opens(reads)).toBe(1);
     Trunk.open(session).stop({ attempt_id: "probe", reason: "cancelled" });
     run("sync", (t) => expect(t.state("probe")).toBe("stopped"));
+    expect(opens(reads)).toBe(3);
+  });
+
+  it("mirrors outbox retries and rejects before reconciliation without reopening", () => {
+    const { session, run, read, reads } = fixture();
+    run("tool", (t) =>
+      t.tool({
+        attempt_id: "probe",
+        call_id: "write",
+        tool: "write",
+        args: { path: "new.txt", content: "new\n" },
+        ack: 0,
+      }),
+    );
+    run("tool", (t) =>
+      t.tool({ attempt_id: "probe", call_id: "submit", tool: "submit", args: { summary: "New file" }, ack: 0 }),
+    );
+    run("tick", (t) => t.tick());
+    const batch = run("sync", (t) => {
+      expect(t.pool.outbox?.state).toBe("pending");
+      return t.pool.outbox!.batch_id;
+    });
+    session.exec(
+      "UPDATE outbox SET tries = ?, next_try = ?, last_error = ? WHERE batch_id = ?",
+      2,
+      5_000,
+      "transport",
+      batch,
+    );
+    for (let n = 0; n < 5; n += 1) session.exec("UPDATE outbox SET rejects = rejects + 1 WHERE batch_id = ?", batch);
+    run("push_result", (t) => {
+      expect(t.pool.outbox).toMatchObject({ tries: 2, next_try: 5_000, last_error: "transport", rejects: 5 });
+      expect(t.pushResult("old", "old")).toBe("pause");
+    });
+    expect(session.exec("SELECT tries, rejects, next_try FROM outbox").toArray()[0]).toEqual({
+      tries: 2,
+      rejects: 5,
+      next_try: 5_000,
+    });
+    expect(opens(reads)).toBe(0);
+    // Unrecognized outbox writes still discard the working set.
+    session.exec("UPDATE outbox SET tries = 7");
+    read();
+    expect(opens(reads)).toBe(1);
+  });
+
+  it("preserves a heads-up receipt through attempt persistence and duplicate delivery", () => {
+    const { session, run, read, reads } = fixture({}, true);
+    expect(read().ok).toBe(true);
+    run("open_attempt", (t) => t.openAttempt("changer", { intent: "Change guide", agent_kind: "synthetic" }));
+    expect(
+      run("tool", (t) =>
+        t.tool({ attempt_id: "changer", call_id: "read-guide", tool: "read", args: { path: "guide.txt" }, ack: 0 }),
+      ).ok,
+    ).toBe(true);
+    run("tool", (t) =>
+      t.tool({
+        attempt_id: "changer",
+        call_id: "change",
+        tool: "write",
+        args: { path: "guide.txt", content: "Changed\n" },
+        ack: 0,
+      }),
+    );
+    run("tool", (t) =>
+      t.tool({ attempt_id: "changer", call_id: "submit", tool: "submit", args: { summary: "Guide" }, ack: 0 }),
+    );
+    run("tick", (t) => t.tick());
+    const hn = run("sync", (t) => {
+      expect(t.pool.attempts.get("probe")!.heads).toHaveLength(1);
+      return t.pool.attempts.get("probe")!.heads[0]!.hn;
+    });
+    const query = "UPDATE heads_ups SET received_at = ? WHERE attempt_id = ? AND hn = ? AND received_at IS NULL";
+    session.exec(query, 2_000, "probe", hn);
+    session.exec(query, 3_000, "probe", hn);
+    expect(read().ok).toBe(true);
+    expect(
+      session.exec("SELECT received_at FROM heads_ups WHERE attempt_id = ? AND hn = ?", "probe", hn).toArray()[0]
+        ?.received_at,
+    ).toBe(2_000);
+    expect(opens(reads)).toBe(0);
+  });
+
+  it("discards mirrored outbox changes when their shell transaction rolls back", () => {
+    const { session, run, reads } = fixture();
+    run("tool", (t) =>
+      t.tool({
+        attempt_id: "probe",
+        call_id: "write",
+        tool: "write",
+        args: { path: "new.txt", content: "new\n" },
+        ack: 0,
+      }),
+    );
+    run("tool", (t) =>
+      t.tool({ attempt_id: "probe", call_id: "submit", tool: "submit", args: { summary: "New file" }, ack: 0 }),
+    );
+    run("tick", (t) => t.tick());
+    const batch = run("sync", (t) => t.pool.outbox!.batch_id);
+    expect(() =>
+      session.transaction(() => {
+        session.exec("UPDATE outbox SET rejects = rejects + 1 WHERE batch_id = ?", batch);
+        throw new Error("rollback retry");
+      }),
+    ).toThrow("rollback retry");
+    run("sync", (t) => expect(t.pool.outbox!.rejects).toBe(0));
+    expect(opens(reads)).toBe(1);
+  });
+
+  it("accounts for synchronous native alarm writes without swallowing later bypass writes", async () => {
+    const { session, raw, run, reads } = fixture();
+    await session.alarmWrite(() => {
+      raw.exec("CREATE TABLE _cf_METADATA (key INTEGER PRIMARY KEY, value BLOB)");
+      raw.exec("INSERT INTO _cf_METADATA VALUES (1, 2000)");
+      return Promise.resolve();
+    });
+    run("sync", (t) => expect(t.state("probe")).toBe("opened"));
+    expect(opens(reads)).toBe(0);
+    let resolve!: () => void;
+    const pending = session.alarmWrite(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        }),
+    );
+    raw.exec("UPDATE attempts SET attempt_repo = 'after-alarm' WHERE attempt_id = 'probe'");
+    resolve();
+    await pending;
+    run("sync", (t) => expect(t.pool.attempts.get("probe")!.attempt_repo).toBe("after-alarm"));
+    expect(opens(reads)).toBe(1);
+    raw.exec("UPDATE attempts SET attempt_repo = 'before-alarm' WHERE attempt_id = 'probe'");
+    await session.alarmWrite(() => Promise.resolve());
+    run("sync", (t) => expect(t.pool.attempts.get("probe")!.attempt_repo).toBe("before-alarm"));
+    expect(opens(reads)).toBe(2);
+    await expect(session.alarmWrite(() => Promise.reject(new Error("alarm failed")))).rejects.toThrow("alarm failed");
+    run("sync", (t) => expect(t.state("probe")).toBe("opened"));
     expect(opens(reads)).toBe(3);
   });
 

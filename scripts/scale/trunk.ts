@@ -164,6 +164,32 @@ for (const mode of ["cold", "retained", "cached"] as const) {
     });
   }
 }
+// A real accepted landing leaves its pack pending while other calls arrive. Interleave the
+// exact shell retry bookkeeping with those calls; the network wait itself consumes no CPU.
+trunk = Trunk.open(sql, opts);
+trunk.openAttempt("pushing", { intent: "Pending push", agent_kind: "synthetic" });
+tool(trunk, "pushing", "write", { path: "pushing.txt", content: "pending\n" });
+tool(trunk, "pushing", "submit", { summary: "Pending push" });
+trunk.tick();
+assert.equal(trunk.pool.outbox?.state, "pending");
+const batch = trunk.pool.outbox!.batch_id;
+const session = new EngineSession(sql);
+session.run("sync", opts, () => undefined);
+const pushCpu: number[] = [];
+for (let sample = -1; sample < samples; sample += 1) {
+  const start = process.cpuUsage();
+  session.exec(
+    "UPDATE outbox SET tries = ?, next_try = ?, last_error = ? WHERE batch_id = ?",
+    1,
+    1_002_000,
+    "transport",
+    batch,
+  );
+  session.exec("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", "events_tries", "1");
+  session.run("tool", opts, (current) => tool(current, "probe", "read", { path: "counter.txt" }));
+  const used = process.cpuUsage(start);
+  if (sample >= 0) pushCpu.push((used.user + used.system) / 1000);
+}
 console.log(
   JSON.stringify(
     {
@@ -176,6 +202,15 @@ console.log(
       notes:
         "Cold includes openPool. Retained excludes openPool. Cached measures the production EngineSession, including its freshness witness and scratch release. SQL groups time SQLite and row materialization only; open minus SQL includes hydration. Clean persist is a separate no-change save, not the call's entire persistence cost. These local CPU measurements do not prove live-soak throughput.",
       results,
+      pushing: {
+        attempts: size + 1,
+        landings: size + 1,
+        cpu_ms_p50: round(quantile(pushCpu, 0.5)),
+        cpu_ms_p95: round(quantile(pushCpu, 0.95)),
+        metrics: session.metrics(),
+        notes:
+          "Pending accepted batch; each timed read includes shell outbox retry and metadata writes. Local SQLite CPU, not network latency or live workerd CPU.",
+      },
     },
     null,
     2,

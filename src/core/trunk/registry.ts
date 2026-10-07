@@ -32,7 +32,7 @@ import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse 
 import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { buildPack } from "../git/pack.ts";
-import { clearRightOfWay, openAttempt, type OpenArgs } from "./intents.ts";
+import { clearRightOfWay, openAttempt, openCard, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { tool } from "./tools-edit.ts";
 import { tick, pushOk, reconcile, restart, triage, owner, recordLanding, seedCommit } from "./tick.ts";
@@ -1671,6 +1671,35 @@ export class Trunk {
   /** 4.12 `register`: an Agent's post-rebuild re-registration (3.6 steps 6-8, T17/T17a). */
   register(req: RegisterRequest): RegisterResponse {
     return wrapCall(this.pool, () => registerAttempt(this.pool, req));
+  }
+
+  /** RS4/T20r: a refused or unanswered resume leaves a recorded choice, never an orphan. */
+  resumeFailed(req: { attempt_id: string; resume_n: number; since_call: string | null }): boolean {
+    return wrapCall(this.pool, () => {
+      const pool = this.pool;
+      const a = pool.attempts.get(req.attempt_id);
+      // The shell may have yielded while sending the resume. Recheck the transition's
+      // no-step guard and cycle identity against the current working state.
+      if (
+        a === undefined ||
+        a.resumes !== req.resume_n ||
+        a.last_call_id !== req.since_call ||
+        !["working", "going_around", "needs_confirm"].includes(a.state)
+      )
+        return false;
+      closeCardLocal(pool, a, "stale");
+      setStateLocal(pool, a, "stopped", "T20r", "reopen_failed");
+      // CD5: fill the choice text before deleting the premises that name the change.
+      openCard(pool, "choice", "reopen_failed", [a.id], { body: { paths: [] } });
+      a.premises.clear();
+      a.ops = [];
+      a.opCount = 0;
+      pool.pendingTriage = pool.pendingTriage.filter((pending) => pending.a !== a);
+      pool.meta.set(`resume_done:${a.id}`, String(a.resumes));
+      pool.meta.delete(`resume_cycle:${a.id}`);
+      pool.sql.exec("DELETE FROM timers WHERE kind = ? AND key = ?", "resume", a.id);
+      return true;
+    });
   }
 
   /** TA9 `stop`: the Agent ends its own attempt. */

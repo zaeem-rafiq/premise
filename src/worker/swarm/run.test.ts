@@ -38,6 +38,8 @@ class FakeStep {
   nowMs = 0;
   /** Set to flip the gate's kill switch at a chosen tick. */
   killed = false;
+  readonly failBeforeWait = new Set<string>();
+  onWait?: (name: string) => void;
 
   constructor(
     opts: {
@@ -67,6 +69,8 @@ class FakeStep {
 
   private waitForEvent(name: string): Promise<WorkflowStepEvent<SwarmControlEvent["payload"]>> {
     this.calls.push(name);
+    this.onWait?.(name);
+    if (this.failBeforeWait.delete(name)) return Promise.reject(new Error("fixture workflow interruption"));
     let outcome = this.waits.get(name);
     if (outcome === undefined) {
       outcome = this.queue.shift() ?? { timeout: true };
@@ -89,15 +93,19 @@ class FakeStep {
 
 // ---- The fake Durable Object namespaces the launches hit ----
 
-type OpenRecord = { pool: string; attempt_id: string; intent_id: string };
+type OpenRecord = { pool: string; attempt_id: string; intent_id: string; truth: string[] };
+type OpenFailure = { remaining: number; mode: "timeout" | "503" | "trunk_open_failed" };
 
 /** The pool's Trunk: `/internal/open-attempt` opens the attempt (9.2 T1). */
 class FakeTrunk {
   readonly opens: OpenRecord[] = [];
   inFlight = 0;
   maxInFlight = 0;
-  /** attempt ids whose first `open-attempt` answer is a failure (a mid-tick crash fixture). */
-  readonly failFirstOpen = new Set<string>();
+  readonly failOpen = new Map<string, OpenFailure>();
+  readonly requests: OpenRecord[] = [];
+  readonly failHold = new Map<string, { remaining: number; mode: "timeout" | "503" }>();
+  readonly holdRequests: string[] = [];
+  readonly holds: string[] = [];
 
   idFromName(name: string): string {
     return name;
@@ -116,10 +124,22 @@ class FakeTrunk {
           if (path === "/internal/open-attempt") {
             const payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
             const attemptId = String(payload.attempt_id);
-            if (trunk.failFirstOpen.delete(attemptId)) {
-              return Response.json({ ok: false, error: "fixture failure" });
+            const record = {
+              pool,
+              attempt_id: attemptId,
+              intent_id: String(payload.intent_id),
+              truth: payload.truth as string[],
+            };
+            trunk.requests.push(record);
+            const failure = trunk.failOpen.get(attemptId);
+            if (failure !== undefined && failure.remaining > 0) {
+              failure.remaining -= 1;
+              if (failure.mode === "timeout") throw new Error("Trunk request timed out");
+              // Even a misleading JSON body must not make an HTTP 503 a successful open.
+              if (failure.mode === "503") return Response.json({ ok: true }, { status: 503 });
+              return Response.json({ ok: false, error: "trunk_open_failed" });
             }
-            trunk.opens.push({ pool, attempt_id: attemptId, intent_id: String(payload.intent_id) });
+            trunk.opens.push(record);
             return Response.json({
               ok: true,
               attempt_id: attemptId,
@@ -127,7 +147,18 @@ class FakeTrunk {
               intent_id: payload.intent_id,
             });
           }
-          if (path === "/internal/swarm-hold") return Response.json({ ok: true });
+          if (path === "/internal/swarm-hold") {
+            const payload = JSON.parse(String(init?.body)) as { attempt_id: string };
+            trunk.holdRequests.push(payload.attempt_id);
+            const failure = trunk.failHold.get(payload.attempt_id);
+            if (failure !== undefined && failure.remaining > 0) {
+              failure.remaining -= 1;
+              if (failure.mode === "timeout") throw new Error("Trunk hold request timed out");
+              return Response.json({ ok: false }, { status: 503 });
+            }
+            trunk.holds.push(payload.attempt_id);
+            return Response.json({ ok: true });
+          }
           if (path === "/internal/swarm-held") return Response.json({ attempts: [] });
           return new Response("not found", { status: 404 });
         } finally {
@@ -146,6 +177,7 @@ class FakeAgents {
   inFlight = 0;
   maxInFlight = 0;
   private readonly assignments = new Map<string, string>();
+  readonly failFirstOpen = new Set<string>();
 
   idFromName(name: string): string {
     return name;
@@ -162,6 +194,7 @@ class FakeAgents {
           await Promise.resolve();
           const path = new URL(input).pathname;
           if (path === "/open") {
+            if (agents.failFirstOpen.delete(name)) return Response.json({ ok: false, error: "fixture failure" });
             const payload = JSON.parse(String(init?.body)) as { agent_n: number; pattern: string };
             const key = JSON.stringify(payload);
             const already = agents.assignments.get(name) === key;
@@ -303,13 +336,13 @@ describe("runSwarmLaunch: one step per tick launches every due agent at once (SW
   });
 
   it("a replayed tick launches the same ids, and the DOs deduplicate them (9.8)", async () => {
-    // First pass: 8 agents at 4 a second; seq 5's open-attempt fails once inside `tick-2`, so
-    // the run dies mid-tick after tick 1 committed seqs 0-3.
+    // An unexpected Agent failure still retries the Workflow step. Busy Trunk failures are
+    // covered below: they now complete the step and defer the launch to the next tick.
     const params = runParams({ agents: 8, launch_per_second: 4 });
     const first = fixture();
-    first.trunk.failFirstOpen.add(aid("req-run", 5));
+    first.agents.failFirstOpen.add(aid("req-run", 5));
     await expect(runSwarmLaunch(first.env, params, first.step.asStep(), { now: first.step.now })).rejects.toThrow(
-      /trunk_open_failed/,
+      /agent_open_failed/,
     );
     expect(first.trunk.opens.map((open) => open.attempt_id)).toEqual([
       aid("req-run", 0),
@@ -317,6 +350,7 @@ describe("runSwarmLaunch: one step per tick launches every due agent at once (SW
       aid("req-run", 2),
       aid("req-run", 3),
       aid("req-run", 4),
+      aid("req-run", 5),
       aid("req-run", 6),
       aid("req-run", 7),
     ]);
@@ -333,13 +367,113 @@ describe("runSwarmLaunch: one step per tick launches every due agent at once (SW
     second.step.nowMs = first.step.nowMs;
     await runSwarmLaunch(env, params, second.step.asStep(), { now: second.step.now });
 
-    const reopened = first.trunk.opens.slice(7).map((open) => open.attempt_id);
+    const reopened = first.trunk.opens.slice(8).map((open) => open.attempt_id);
     expect(reopened).toEqual([aid("req-run", 4), aid("req-run", 5), aid("req-run", 6), aid("req-run", 7)]);
     // Every attempt id is distinct and still in SW1 order; the re-opened ones answered `already`.
     expect(new Set(first.trunk.opens.map((open) => open.attempt_id)).size).toBe(8);
     const alreadyByName = new Map(first.agents.opens.map((open) => [open.name, open.already]));
     expect(alreadyByName.get(aid("req-run", 4))).toBe(true);
     expect(alreadyByName.get(aid("req-run", 5))).toBe(false);
+  });
+
+  it.each(["timeout", "503", "trunk_open_failed"] as const)(
+    "defers %s failures across more than six ticks without ending the run",
+    async (mode) => {
+      const { env, step, trunk, agents } = fixture();
+      trunk.failOpen.set(aid("req-run", 0), { mode, remaining: 8 });
+      await runSwarmLaunch(env, runParams({ agents: 2, launch_per_second: 2 }), step.asStep(), { now: step.now });
+
+      expect(step.calls.filter((name) => name.startsWith("tick-"))).toHaveLength(9);
+      expect(trunk.requests.filter((open) => open.attempt_id === aid("req-run", 0))).toHaveLength(9);
+      expect(trunk.requests.filter((open) => open.attempt_id === aid("req-run", 1))).toHaveLength(1);
+      expect(agents.opens.map((open) => open.agent_n)).toEqual([1, 0]);
+      expect(trunk.maxInFlight).toBe(2);
+      expect(step.memo.get("tick-1")).toMatchObject({ regular: 1, rescale: 0, ended: false });
+      expect(step.memo.get("tick-9")).toMatchObject({ regular: 2, rescale: 0, pending: [], ended: true });
+    },
+  );
+
+  it.each(["timeout", "503"] as const)(
+    "retries a held agent after a Trunk hold %s without counting its quota twice",
+    async (mode) => {
+      const { env, step, trunk, agents } = fixture();
+      const attemptId = aid("req-run", 0);
+      trunk.failHold.set(attemptId, { mode, remaining: 1 });
+      await runSwarmLaunch(
+        env,
+        runParams({ agents: 1, launch_per_second: 1, hold_before_submit: ["reader"] }),
+        step.asStep(),
+        { now: step.now },
+      );
+
+      expect(agents.opens).toEqual([
+        { name: attemptId, agent_n: 0, pattern: "reader", already: false },
+        { name: attemptId, agent_n: 0, pattern: "reader", already: true },
+      ]);
+      expect(trunk.requests).toHaveLength(2);
+      expect(trunk.requests[1]).toEqual(trunk.requests[0]);
+      expect(trunk.holdRequests).toEqual([attemptId, attemptId]);
+      expect(trunk.holds).toEqual([attemptId]);
+      expect(step.memo.get("tick-1")).toMatchObject({ regular: 0, rescale: 0, ended: false });
+      expect(step.memo.get("tick-2")).toMatchObject({ regular: 1, rescale: 0, pending: [], ended: true });
+    },
+  );
+
+  it("replays pending draws with their truth and rescale order after a dial change", async () => {
+    const params = runParams({ agents: 4, launch_per_second: 2, collision_dial: 1, rescale_every_s: 1 });
+    const first = fixture();
+    first.trunk.failOpen.set(aid("req-run", 0), { mode: "timeout", remaining: 1 });
+    first.step.failBeforeWait.add("control-1");
+    await expect(runSwarmLaunch(first.env, params, first.step.asStep(), { now: first.step.now })).rejects.toThrow(
+      "fixture workflow interruption",
+    );
+    const saved = first.step.memo.get("tick-1") as { pending: { input: { agentN: number; pattern: unknown } }[] };
+    expect(saved.pending.map((item) => item.input.agentN)).toEqual([0, 2]);
+    expect(first.agents.opens.map((open) => open.agent_n)).toEqual([1]);
+
+    const second = fixture({
+      memo: first.step.memo,
+      waits: first.step.waits,
+      queue: [{ payload: { op: "dial", collision_dial: 0 } }],
+    });
+    const env = { TRUNK: first.trunk, AGENT: first.agents, GATE: new FakeGate(second.step) } as unknown as Env;
+    await runSwarmLaunch(env, params, second.step.asStep(), { now: second.step.now });
+
+    expect(first.agents.opens.map((open) => open.agent_n)).toEqual([1, 0, 2, 3, 4]);
+    const byIndex = new Map(first.agents.opens.map((open) => [open.agent_n, open]));
+    expect(byIndex.get(0)?.pattern).toBe(dialPattern(1, agentRandom(7, 0)));
+    expect(byIndex.get(1)?.pattern).toBe(dialPattern(1, agentRandom(7, 1)));
+    expect(byIndex.get(2)?.pattern).toBe("rescale-energy");
+    expect(byIndex.get(3)?.pattern).toBe(dialPattern(0, agentRandom(7, 3)));
+    expect(byIndex.get(4)?.pattern).toBe(dialPattern(0, agentRandom(7, 4)));
+    const retried = first.trunk.requests.filter((open) => open.attempt_id === aid("req-run", 0));
+    expect(retried).toHaveLength(2);
+    expect(retried[1]).toEqual(retried[0]);
+    expect(new Set(first.agents.opens.map((open) => open.name)).size).toBe(5);
+    expect(first.trunk.maxInFlight).toBe(2);
+  });
+
+  it("keeps reserved regular draws when an agents control reduces the remaining quota", async () => {
+    const { env, step, trunk, agents } = fixture({
+      queue: [{ timeout: true }, { payload: { op: "agents", agents: 0 } }],
+    });
+    trunk.failOpen.set(aid("req-run", 0), { mode: "503", remaining: 1 });
+    await runSwarmLaunch(env, runParams({ agents: 8, launch_per_second: 2 }), step.asStep(), { now: step.now });
+    expect(agents.opens.map((open) => open.agent_n)).toEqual([1, 0]);
+    expect(step.memo.get("tick-2")).toMatchObject({ regular: 2, pending: [], ended: true });
+  });
+
+  it.each(["stop", "kill"] as const)("honours %s before retrying a pending launch", async (control) => {
+    const { env, step, trunk } = fixture({
+      queue: [{ timeout: true }, ...(control === "stop" ? [{ payload: { op: "stop" as const } }] : [])],
+    });
+    trunk.failOpen.set(aid("req-run", 0), { mode: "timeout", remaining: 20 });
+    step.onWait = (name) => {
+      if (control === "kill" && name === "control-1") step.killed = true;
+    };
+    await runSwarmLaunch(env, runParams({ agents: 1, launch_per_second: 1 }), step.asStep(), { now: step.now });
+    expect(trunk.requests).toHaveLength(1);
+    expect(trunk.opens).toHaveLength(0);
   });
 
   it("a `stop` control event ends the run without launching the rest", async () => {

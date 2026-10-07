@@ -18,6 +18,7 @@ import {
 import { greenCheckLabel } from "../../../copy/checks.ts";
 import { FrameDriver } from "./frame-driver.ts";
 import type { DriverSink, FrameStats, TimerKey } from "./frame-driver.ts";
+import { adoptCss } from "../../styles/adopt.ts";
 
 /** The props the shell hands the pool area (registered as "pool-area", see app/wiring/pool-area.ts).
  * Everything the frame shows derives from `state` (FL1); `paused`, `highlight` and the callbacks
@@ -322,9 +323,9 @@ export function PoolFrame(props: PoolFrameProps) {
     </div>
   );
 
+  adoptCss(FRAME_CSS);
   return (
     <div className="pf" data-frame={name} ref={rootRef}>
-      <style>{FRAME_CSS}</style>
       <div className="pf-caption">
         <span className="pf-caption-text">{text(caption.id, caption.vars)}</span>
         {pending > 0 && <span className="pf-chip pf-chip-landing">{text("frame.landing", { n: pending })}</span>}

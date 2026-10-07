@@ -17,6 +17,7 @@ import { PoolFrame } from "../pool-frame/pool-frame.tsx";
 import type { FrameStats } from "../pool-frame/frame-driver.ts";
 import { PlainFrame } from "../plain-frame/plain-frame.tsx";
 import { conflictCount, diffLines, plainSameAsLanded } from "./compare-plan.ts";
+import { adoptCss } from "../../styles/adopt.ts";
 
 export type CompareProps = {
   /** The main pool id — the `{pool}` of every `/pool/{pool}/…` address of both frames. */
@@ -97,9 +98,9 @@ export function Compare(props: CompareProps) {
   const sameAsLanded = useMemo(() => plainSameAsLanded(state), [state]);
   const conflicts = conflictCount(state);
 
+  adoptCss(COMPARE_CSS);
   return (
     <div className="cmp">
-      <style>{COMPARE_CSS}</style>
       <div className="cmp-col" data-pool="main">
         <PoolFrame
           pool={pool}

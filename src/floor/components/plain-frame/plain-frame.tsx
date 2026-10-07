@@ -14,6 +14,7 @@ import { landingLabel } from "../../../copy/format.ts";
 import { PlainFrameDriver } from "./plain-driver.ts";
 import type { DriverSink, FrameStats, TimerKey } from "./plain-driver.ts";
 import { plainBehind } from "../compare/compare-plan.ts";
+import { adoptCss } from "../../styles/adopt.ts";
 
 /** The props the Compare view hands the plain-merge frame. Everything the frame shows derives
  * from `state` (FL1) — the `plain` field of FloorState drives both the caption's "through"
@@ -248,9 +249,9 @@ export function PlainFrame(props: PlainFrameProps) {
     </div>
   );
 
+  adoptCss(PLAIN_FRAME_CSS);
   return (
     <div className="plf" data-frame={name} ref={rootRef}>
-      <style>{PLAIN_FRAME_CSS}</style>
       <div className="plf-caption">
         <span className="plf-caption-label">{text("plain.label")}</span>
         <span className="plf-caption-built">{text("plain.constructed", { landing: through })}</span>

@@ -11,6 +11,7 @@ import { PoolFrame, FRAME_CSS } from "./pool-frame.tsx";
 import type { PoolFrameProps } from "./pool-frame.tsx";
 import { FileTiles } from "../tiles/tiles.tsx";
 import { text } from "../../../copy/strings.ts";
+import { adoptCss } from "../../styles/adopt.ts";
 
 /** The tiles region never drops below one row (LY1). */
 const TILES_MIN_PX = 64;
@@ -73,12 +74,12 @@ export function PoolArea(props: PoolAreaProps) {
   // badge. Before that event the kind is undecided; the frame holds its first load.
   const noApp = props.state.pool.app === null;
 
+  adoptCss(AREA_CSS);
+  adoptCss(FRAME_CSS);
   return (
     <div className="pool-area" ref={areaRef} data-app={noApp ? "none" : undefined}>
-      <style>{AREA_CSS}</style>
       {noApp ? (
         <div className="pf">
-          <style>{FRAME_CSS}</style>
           <div className="pf-caption">
             <span className="pf-caption-text">{text("frame.no_app")}</span>
           </div>

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { text } from "../../../copy/strings.ts";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
 import { tileCells, tileKeepsExtension, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
+import { adoptCss } from "../../styles/adopt.ts";
 
 /** How long a landed change glows and a removed file keeps its tile (6.4, 3.7). */
 const FLASH_MS = 2_000;
@@ -264,9 +265,9 @@ export function FileTiles(props: FileTilesProps) {
     );
   };
 
+  adoptCss(TILES_CSS);
   return (
     <section className="tiles" data-open={open} aria-label={text("tiles.files")}>
-      <style>{TILES_CSS}</style>
       <button type="button" className="tiles-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {text("tiles.files")}
         <span className="tiles-caret" aria-hidden>

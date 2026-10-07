@@ -14,7 +14,7 @@ describe("held preview commits in local workerd (PV1-PV5)", () => {
   });
   afterAll(async () => worker?.dispose());
 
-  it("pushes a parentless seed-plus-change tree and serves immutable preview files with sandbox headers", async () => {
+  it("PV2/PV4: pushes a parentless seed-plus-change tree and serves immutable preview files with sandbox headers", async () => {
     const pool = pools[0]!;
     await createPool(worker, pool, { seed: "tidepool" });
     const seed = worker.refs(pool).main!;

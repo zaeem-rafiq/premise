@@ -529,7 +529,7 @@ describe("Agent tool backoff", () => {
   });
 });
 
-describe("Agent liveness", () => {
+describe("Agent liveness (AL3)", () => {
   // The soak's invariant: while the attempt is neither landed nor stopped the
   // Agent holds a timer due within a watchdog interval and the platform alarm
   // is armed no later than it.

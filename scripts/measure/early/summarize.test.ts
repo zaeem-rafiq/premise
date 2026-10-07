@@ -109,7 +109,7 @@ describe("the ModelMeasurement of 6.8", () => {
       ]),
     });
 
-  it("has v 1, mode early, the agent spec, the three hashes, request and limits", () => {
+  it("PR1: has v 1, mode early, the agent spec, the three hashes, request and limits", () => {
     const m = build();
     expect(m.v).toBe(1);
     expect(m.mode).toBe("early");

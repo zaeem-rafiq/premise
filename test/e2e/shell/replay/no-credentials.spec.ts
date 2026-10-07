@@ -41,12 +41,16 @@ function allowedInReplay(pathname: string): boolean {
 
 /** Every request path and every WebSocket the page opens, in order. A socket that the fixture
  * answers itself (`routeWebSocket`) raises no `websocket` event: `serveFixture` records those. */
-function networkLog(page: Page): { requests: string[]; sockets: string[] } {
+function networkLog(page: Page): { requests: string[]; sockets: string[]; methods: string[] } {
   const requests: string[] = [];
   const sockets: string[] = [];
-  page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+  const methods: string[] = [];
+  page.on("request", (request) => {
+    requests.push(new URL(request.url()).pathname);
+    methods.push(request.method());
+  });
   page.on("websocket", (socket) => sockets.push(new URL(socket.url()).pathname));
-  return { requests, sockets };
+  return { requests, sockets, methods };
 }
 
 /** `fixture` only: serves the recordings index and the one recording file (8.2, RY6), plus
@@ -153,11 +157,11 @@ async function expectReturnToLive(
 }
 
 test.describe("Replay with no credentials (RY25)", () => {
-  test("way 3 of 8.7: /replay/{id} loads and plays to its end", async ({ page, context }, testInfo) => {
+  test("way 3 of 8.7: /replay/{id} loads and plays to its end (AC6, RY1)", async ({ page, context }, testInfo) => {
     const deployed = testInfo.project.name === "deployed";
     const id = deployed ? "hero-canned" : FIXTURE_ID;
     test.setTimeout(deployed ? 180_000 : 60_000);
-    const { requests, sockets } = networkLog(page);
+    const { requests, sockets, methods } = networkLog(page);
     if (!deployed) await serveFixture(page, sockets);
     await context.clearCookies(); // the context carries none; make the no-credential visit explicit
 
@@ -167,6 +171,7 @@ test.describe("Replay with no credentials (RY25)", () => {
 
     // RY1/RY2: while the recording loaded and played, the page asked for nothing else —
     // no /api, no WebSocket, no credentials.
+    expect([...new Set(methods)]).toEqual(["GET"]);
     const api = requests.filter((p) => p.startsWith("/api/"));
     expect(api, `Replay asked the API: ${api.join(", ")}`).toEqual([]);
     const outside = requests.filter((p) => !allowedInReplay(p));

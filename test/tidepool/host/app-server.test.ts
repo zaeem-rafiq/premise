@@ -272,7 +272,7 @@ describe("content types and served paths (AS3, AS5, SE15)", () => {
     expect(nested.headers.get("Content-Type")).toBe("text/javascript; charset=utf-8");
   });
 
-  it("AS15/SE14: the full header set travels on every response, errors included", async () => {
+  it("AS15/SE13/SE14: the full header set travels on every response, errors included", async () => {
     const root = join(".tmp-test", "app", "headers");
     await writeStandard(root, `c-${LANDED}`);
     const { get } = await makeApp(root, floorRead());

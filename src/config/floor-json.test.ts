@@ -184,10 +184,14 @@ describe("floorJson() (03-floor 4.5)", () => {
     expect(MODEL_PLAN.race.slice(1).sort()).toEqual(ids.slice(1).sort());
   });
 
-  it("limits is the limits list of 5.12 for this build's features", () => {
+  it("GR5: limits and the green runtime describe this build's features", () => {
     const spec = specLimits();
     expect(spec.length).toBeGreaterThanOrEqual(14);
     expect(json.limits).toEqual(spec);
+    expect(json.features.green).toBe(FEATURES.green);
+    if (FEATURES.green === "none") {
+      expect(json.limits).toContain("The green line is not in this build.");
+    }
   });
 
   it("related is the verbatim text of `about.related.body`", () => {
@@ -211,6 +215,33 @@ describe("floorJson() (03-floor 4.5)", () => {
         out: Number(price?.[2]),
       });
     }
+  });
+
+  it("ME11: the model plan follows the recorded lead decision, including the six-agent override", () => {
+    const record = readFileSync(`${REPO_ROOT}/docs/measurements/models/2026-10-06-engine.md`, "utf8");
+    const decision = record.split("## Decision\n")[1];
+    expect(decision).toBeDefined();
+    const workhorse = /^- Workhorse: `([^`]+)`/m.exec(decision ?? "")?.[1];
+    const maxAgents = /^- `max_real_agents` stays (\d+)\./m.exec(decision ?? "")?.[1];
+    expect(workhorse).toBe("@cf/openai/gpt-oss-120b");
+    expect(maxAgents).toBe("6");
+    expect(decision).toContain("240 / 7.6 = 31; 6 keeps the spend and the");
+    expect(decision).toContain("(`gpt-oss-120b`, `kimi-k2.7-code`, `glm-5.3-flash`)");
+    expect(decision).toContain("keeps `per_minute` at 16 for the two race models");
+
+    // ME11 permits the lead to override its default reading, provided the decision is recorded.
+    expect(MODEL_PLAN.workhorse).toBe(workhorse);
+    expect(MODEL_PLAN.max_real_agents).toBe(Number(maxAgents));
+    expect(MODEL_PLAN.race).toEqual([
+      "@cf/openai/gpt-oss-120b",
+      "@cf/moonshotai/kimi-k2.7-code",
+      "@cf/zai-org/glm-5.3-flash",
+    ]);
+    expect(MODEL_PLAN.per_minute).toEqual({
+      "@cf/openai/gpt-oss-120b": 240,
+      "@cf/moonshotai/kimi-k2.7-code": 16,
+      "@cf/zai-org/glm-5.3-flash": 16,
+    });
   });
 
   it("features carries the six keys of Features (FJ1) and no other", () => {

@@ -34,7 +34,7 @@ function markup(state: FloorState, props: Record<string, unknown> = {}): string 
 }
 
 describe("the iframe contract (CO20, SE16a)", () => {
-  it("the pool frame's only sandbox token is allow-scripts", () => {
+  it("SE13: the pool frame's only sandbox token is allow-scripts", () => {
     const attrs = iframeAttrs("/pool/tidepool/main/?seed=7", "title");
     expect(attrs.sandbox).toBe("allow-scripts");
     expect(attrs.sandbox.split(" ")).toHaveLength(1);

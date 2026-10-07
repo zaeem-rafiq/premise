@@ -98,7 +98,7 @@ describe("premise case vectors through the Trunk engine", () => {
 });
 
 describe("synchronous triage (01-core S6a, TR5)", () => {
-  it("C06 with CLEF_TRIAGE off answers confirm/triage_unavailable in the same heads-up", () => {
+  it("S6: C06 with CLEF_TRIAGE off answers confirm/triage_unavailable in the same heads-up", () => {
     // Plan 2.3 item 1: the vector's steps as far as the landing, with CLEF_TRIAGE off. The
     // OffTriage answers every premise null inside the accept transaction: the batch's own
     // heads-up carries the final `confirm` item with reason `triage_unavailable` — no pending

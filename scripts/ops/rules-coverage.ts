@@ -15,6 +15,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FEATURES } from "../../src/config/features.ts";
+import type { Features } from "../../src/protocol/floor-json.ts";
 
 const RULE_ID = /^[A-Z]{1,4}\d+[a-z]?$/;
 const RULE_ID_WORD = /\b[A-Z]{1,4}\d+[a-z]?\b/g;
@@ -218,15 +220,78 @@ export interface CoverageInput {
   buildPlan: string;
   /** Test sources (*.test.ts, *.test.tsx, *.spec.ts), path -> contents. */
   testFiles: Record<string, string>;
+  /** Build switches read from src/config/features.ts by the command. */
+  features: Features;
 }
 
 export interface RuleCoverage {
   rows: CoverageRow[];
-  counts: { required: number; coveredByCase: number; coveredOnlyByTests: number; notCovered: number };
+  counts: {
+    required: number;
+    coveredByCase: number;
+    coveredOnlyByTests: number;
+    featureOff: number;
+    notCovered: number;
+  };
+  featureOff: FeatureOffRule[];
   /** Required ids that nothing covers. */
   uncovered: string[];
   /** Ids a required source names that no spec file defines (not part of the required set). */
   namedButUndefined: string[];
+}
+
+export interface FeatureOffRule {
+  id: string;
+  switch: string;
+  specFile: string;
+  sentence: string;
+}
+
+// Deliberately enumerate rules, not prefixes: GR5 still describes the advertised build when
+// green is none; TR2 also guards batching and held approval; S6 includes synchronous triage.
+// Neither those rules nor any other rule is exempt just because it mentions a disabled feature.
+const FEATURE_RULES = [
+  {
+    ids: ["AG5", "S3a", "S3b"],
+    specFile: "docs/spec/01-core.md",
+    feature: "attempt_repos",
+    off: false,
+    sentence: "With `features.attempt_repos = false` nothing is provisioned.",
+  },
+  {
+    ids: ["GR1", "GR2", "GR4", "GR6", "GR7", "GR8"],
+    specFile: "docs/spec/01-core.md",
+    feature: "green",
+    off: "none",
+    sentence: 'With `features.green = "none"` no verification runs and the Floor shows no green line.',
+  },
+  {
+    ids: ["TR7"],
+    specFile: "docs/spec/04-build-plan.md",
+    feature: "clef",
+    off: false,
+    sentence:
+      "Slice 15 adapters (`features.clef` is false: the build runs with the three Clef switches `off`; the eight cases still pass).",
+  },
+] as const;
+
+/** Only disabled, exclusively feature-specific rules with evidence in the current spec qualify. */
+function featureOffRules(input: CoverageInput, required: ReadonlySet<string>): FeatureOffRule[] {
+  const rules: FeatureOffRule[] = [];
+  for (const group of FEATURE_RULES) {
+    if (input.features[group.feature] !== group.off) continue;
+    const ids = group.ids.filter((id) => required.has(id));
+    if (ids.length === 0) continue;
+    const specFile = group.specFile;
+    const spec = (input.specFiles[specFile] ?? "").replace(/\s+/g, " ");
+    if (!spec.includes(group.sentence)) {
+      throw new Error(`rules-coverage: missing feature evidence in ${specFile}: ${group.sentence}`);
+    }
+    for (const id of ids) {
+      rules.push({ id, switch: `${group.feature}: ${JSON.stringify(group.off)}`, specFile, sentence: group.sentence });
+    }
+  }
+  return rules.sort((a, b) => compareRuleIds(a.id, b.id));
 }
 
 /** Natural order: family, then number, then suffix letter (A2 before A10, LP5a before LP5c). */
@@ -281,15 +346,20 @@ export function ruleCoverage(input: CoverageInput): RuleCoverage {
     cases: byCase.get(id) ?? [],
     tests: hits.get(id) ?? [],
   }));
-  const uncovered = rows.filter((row) => row.cases.length === 0 && row.tests.length === 0);
+  const featureOff = featureOffRules(input, required);
+  const offIds = new Set(featureOff.map(({ id }) => id));
+  const activeRows = rows.filter((row) => !offIds.has(row.id));
+  const uncovered = activeRows.filter((row) => row.cases.length === 0 && row.tests.length === 0);
   return {
     rows,
     counts: {
       required: rows.length,
-      coveredByCase: rows.filter((row) => row.cases.length > 0).length,
-      coveredOnlyByTests: rows.filter((row) => row.cases.length === 0 && row.tests.length > 0).length,
+      coveredByCase: activeRows.filter((row) => row.cases.length > 0).length,
+      coveredOnlyByTests: activeRows.filter((row) => row.cases.length === 0 && row.tests.length > 0).length,
+      featureOff: featureOff.length,
       notCovered: uncovered.length,
     },
+    featureOff,
     uncovered: uncovered.map((row) => row.id),
     namedButUndefined,
   };
@@ -314,6 +384,7 @@ export function renderReport(result: RuleCoverage, commit: string, date: string)
   lines.push(`- ids required: ${result.counts.required}`);
   lines.push(`- covered by a case: ${result.counts.coveredByCase}`);
   lines.push(`- covered only by tests: ${result.counts.coveredOnlyByTests}`);
+  lines.push(`- rules of features switched off: ${result.counts.featureOff}`);
   lines.push(`- not covered: ${result.counts.notCovered}`);
   lines.push("");
   lines.push(
@@ -331,6 +402,21 @@ export function renderReport(result: RuleCoverage, commit: string, date: string)
     const tests =
       row.tests.length === 0 ? "—" : row.tests.map(({ file, title }) => `${cell(file)}: ${cell(title)}`).join("<br>");
     lines.push(`| ${row.id} | ${definedIn} | ${cases} | ${tests} |`);
+  }
+  lines.push("");
+  lines.push("## Rules of features switched off in this build");
+  lines.push("");
+  lines.push(
+    "These rules are not counted as covered or uncovered. Switch values come from `FEATURES` at generation time.",
+  );
+  lines.push("");
+  if (result.featureOff.length === 0) lines.push("None.");
+  else {
+    lines.push("| id | switch | spec sentence tying the rule to the feature |");
+    lines.push("| --- | --- | --- |");
+    for (const rule of result.featureOff) {
+      lines.push(`| ${rule.id} | \`${cell(rule.switch)}\` | ${cell(rule.specFile)}: ${cell(rule.sentence)} |`);
+    }
   }
   lines.push("");
   lines.push("## Required ids with no coverage");
@@ -375,7 +461,7 @@ function main(): number {
   const testFiles: Record<string, string> = {};
   for (const dir of TEST_DIRS) collectTestFiles(join(root, dir), root, testFiles);
 
-  const result = ruleCoverage({ specFiles, casesJson, buildPlan, testFiles });
+  const result = ruleCoverage({ specFiles, casesJson, buildPlan, testFiles, features: FEATURES });
   const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
   const date = new Date().toISOString().slice(0, 10);
   const target = join(root, "docs", "measurements", "rules.md");

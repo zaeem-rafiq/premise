@@ -12,7 +12,7 @@ function input(premises: TriageInput["premises"], truth: string[] | null): Triag
   return { attempt_id: "a0", intent: "t", patch: [], premises, truth };
 }
 
-describe("scripted-triage (01-core TR8, S6a; 02-tidepool 10.1 SW5)", () => {
+describe("scripted-triage (01-core TR8, S6a; S6; 02-tidepool 10.1 SW5)", () => {
   it("answers 1 for a premise in the truth list and 0 for any other", () => {
     const out = ScriptedTriage.judgeNow(
       input(

@@ -516,7 +516,7 @@ describe("5.10 card texts (CD5: Trunk fills Card.title, Card.body and Card.optio
 // ---------- 8.3 / 8.5 / 5.12 / 6.6 ----------
 
 describe("8.3 replay checks", () => {
-  it("8.3: each failed recording check has the spec's replay.error sentence", () => {
+  it("8.3/AC30: each failed recording check has the spec's replay.error sentence", () => {
     expect(replayError("download")).toBe("This recording could not be downloaded. Check the connection and try again.");
     expect(replayError("too_large")).toBe("This recording is too large to play here.");
     expect(replayError("not_a_recording")).toBe("This file is not a Premise recording that this page can play.");

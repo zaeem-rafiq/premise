@@ -1,7 +1,10 @@
-// Fixtures for scripts/ops/rules-coverage.ts. Rule ids in the fixtures use the made-up ZX and QW
-// families so nothing here collides with a real rule id.
+// Fixtures for scripts/ops/rules-coverage.ts. Parser fixtures use made-up ZX and QW families.
+// Feature-switch fixtures use real ids inside source strings, never in the enclosing test titles.
 
 import { describe, expect, it } from "vitest";
+import type { Features } from "../../src/protocol/floor-json.ts";
+
+const ENABLED: Features = { held: true, race: true, undo: true, green: "full", clef: true, attempt_repos: true };
 import {
   acceptanceCheckIds,
   caseCoverage,
@@ -191,6 +194,7 @@ describe("ruleCoverage", () => {
     "### 5.3 Security review (VE7)",
   ].join("\n");
   const input = {
+    features: ENABLED,
     specFiles: {
       "docs/spec/01-fixture.md": [
         "- **ZX1.** case-covered",
@@ -206,7 +210,13 @@ describe("ruleCoverage", () => {
 
   it("requires the union of case rules, acceptance checks and the VE2 column", () => {
     const result = ruleCoverage(input);
-    expect(result.counts).toEqual({ required: 3, coveredByCase: 1, coveredOnlyByTests: 1, notCovered: 1 });
+    expect(result.counts).toEqual({
+      required: 3,
+      coveredByCase: 1,
+      coveredOnlyByTests: 1,
+      featureOff: 0,
+      notCovered: 1,
+    });
     const row = result.rows.find((row) => row.id === "ZX1");
     expect(row?.definedIn).toEqual(["docs/spec/01-fixture.md"]);
     expect(row?.cases).toEqual(["C01"]);
@@ -231,5 +241,91 @@ describe("ruleCoverage", () => {
 describe("compareRuleIds", () => {
   it("orders by family, number, suffix", () => {
     expect(["T10", "A2", "T9c", "T9", "A10"].sort(compareRuleIds)).toEqual(["A2", "A10", "T9", "T9c", "T10"]);
+  });
+});
+
+describe("rules of disabled features", () => {
+  const ids = ["AG5", "GR1", "GR2", "GR4", "GR5", "GR6", "GR7", "GR8", "S3a", "S3b", "S6", "TR2", "TR7"];
+  const input = {
+    features: { ...ENABLED, green: "none", clef: false, attempt_repos: false } satisfies Features,
+    specFiles: {
+      "docs/spec/01-core.md": [
+        ...ids.map((id) => `- **${id}.** fixture definition`),
+        'With `features.green = "none"` no verification runs and the Floor shows no green line.',
+        "With `features.attempt_repos = false` nothing is provisioned.",
+      ].join("\n"),
+      "docs/spec/04-build-plan.md":
+        "Slice 15 adapters (`features.clef` is false: the build runs with the three Clef switches `off`; the eight cases still pass).",
+    },
+    casesJson: '{"cases":[]}',
+    buildPlan: `## 2. Vertical slices\n### 2.1 Fixture\nAcceptance:\n1. ${ids.join(" ")}\n## 3. Parallelism`,
+    testFiles: {},
+  };
+
+  it("separates exclusively disabled rules, retaining mixed obligations as uncovered", () => {
+    const result = ruleCoverage(input);
+    expect(result.featureOff.map(({ id }) => id)).toEqual([
+      "AG5",
+      "GR1",
+      "GR2",
+      "GR4",
+      "GR6",
+      "GR7",
+      "GR8",
+      "S3a",
+      "S3b",
+      "TR7",
+    ]);
+    expect(result.uncovered).toEqual(["GR5", "S6", "TR2"]);
+    expect(result.counts).toEqual({
+      required: 13,
+      coveredByCase: 0,
+      coveredOnlyByTests: 0,
+      featureOff: 10,
+      notCovered: 3,
+    });
+    const report = renderReport(result, "fixture", "2026-10-07");
+    expect(report).toContain("## Rules of features switched off in this build");
+    expect(report).toContain(
+      '| GR1 | `green: "none"` | docs/spec/01-core.md: With `features.green = "none"` no verification runs and the Floor shows no green line. |',
+    );
+    expect(report).toContain("| AG5 | `attempt_repos: false` |");
+    expect(report).toContain("| TR7 | `clef: false` | docs/spec/04-build-plan.md: Slice 15 adapters");
+    expect(report.split("## Required ids with no coverage")[1]).not.toContain("`GR1`");
+  });
+
+  it.each(["static", "full"] as const)("requires green verification rules when green is %s", (green) => {
+    const result = ruleCoverage({ ...input, features: { ...ENABLED, green } });
+    expect(result.featureOff).toEqual([]);
+    expect(result.uncovered).toEqual(ids.toSorted(compareRuleIds));
+    expect(result.counts.notCovered).toBe(13);
+  });
+
+  it("reactivates only the feature whose switch changes", () => {
+    const result = ruleCoverage({ ...input, features: { ...input.features, attempt_repos: true } });
+    expect(result.uncovered).toEqual(["AG5", "GR5", "S3a", "S3b", "S6", "TR2"]);
+    expect(result.featureOff.map(({ switch: value }) => value)).not.toContain("attempt_repos: false");
+  });
+
+  it("counts a disabled rule once even when a test and a case name it", () => {
+    const result = ruleCoverage({
+      ...input,
+      casesJson: '{"cases":[{"id":"C01","rules":["AG5"]}]}',
+      testFiles: { "test/a.test.ts": 'it("AG5 fixture", () => {});' },
+    });
+    expect(result.counts).toEqual({
+      required: 13,
+      coveredByCase: 0,
+      coveredOnlyByTests: 0,
+      featureOff: 10,
+      notCovered: 3,
+    });
+    expect(result.rows.find(({ id }) => id === "AG5")?.cases).toEqual(["C01"]);
+  });
+
+  it("refuses a stale exemption when its spec evidence disappears", () => {
+    expect(() =>
+      ruleCoverage({ ...input, specFiles: { ...input.specFiles, "docs/spec/04-build-plan.md": "" } }),
+    ).toThrow("missing feature evidence");
   });
 });

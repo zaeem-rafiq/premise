@@ -18,7 +18,14 @@ describe("Slice 13 undo routes in local workerd (UN4, UN5, FJ1, SE2, SE3)", () =
 
   beforeAll(async () => {
     // These tests check the routes with undo off (FJ1), whatever the build ships.
-    worker = await startLandingWorker({ ownerKey: KEY, repos: [POOL], agentStub: true, features: { undo: false } });
+    // The `<pool>-plain` repo keeps the plain-merge build from failing and logging a `trunk.error`
+    // between this file's before/after state reads (11.7).
+    worker = await startLandingWorker({
+      ownerKey: KEY,
+      repos: [POOL, `${POOL}-plain`],
+      agentStub: true,
+      features: { undo: false },
+    });
     await createPool(worker, POOL);
   }, 180_000);
 

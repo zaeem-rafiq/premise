@@ -123,6 +123,7 @@ describe("undo batches preserve classification, event order and batch limits", (
     expect(speedItems()[0]).toMatchObject({
       rule: "E2",
       result: "repair",
+      cause_seq: 4,
       diff: {
         kind: "entity",
         before: expect.stringContaining("MAX_SPEED = 10"),
@@ -133,8 +134,15 @@ describe("undo batches preserve classification, event order and batch limits", (
       "pending_repair",
     );
     expect(t.pool.attempts.get("crab")!.heads.flatMap((head) => head.body.items)).toContainEqual(
-      expect.objectContaining({ premise: expect.objectContaining({ key: "world/energy.js#ENERGY_MAX" }), rule: "E2" }),
+      expect.objectContaining({
+        premise: expect.objectContaining({ key: "world/energy.js#ENERGY_MAX" }),
+        rule: "E2",
+        cause_seq: 3,
+      }),
     );
+    expect(
+      [...t.pool.judgments.values()].find((j) => j.attempt_id === "crab" && j.key === "world/movement.js#MAX_SPEED"),
+    ).toMatchObject({ rule: "E2", cause_seq: 4 });
   });
 
   it.each([1, MAX_REVISIONS])(

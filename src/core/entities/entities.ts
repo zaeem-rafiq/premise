@@ -34,30 +34,35 @@ const TS_DECLARATION_KINDS: Readonly<Record<string, TsEntityKind>> = {
 };
 
 /** A syntax node or a cleaned syntax node. `[key]` holds child nodes, arrays of them, or values. */
-export type AstNode = { type: string; start?: number; end?: number; [key: string]: unknown };
+export type AstNode = {
+  readonly type: string;
+  readonly start?: number;
+  readonly end?: number;
+  readonly [key: string]: unknown;
+};
 
 /** One entity of a module (2.3), with the canonical form and hash of 2.4. */
-export type Entity = {
+export type Entity = Readonly<{
   name: string; // the entity name: a binding name, `(import <spec>)`, `*<spec>`, `(top)` or `default`
   kind: EntityKind;
-  exports: string[]; // the entity's export names, sorted
-  nodes: AstNode[]; // the cleaned nodes of 2.4 step 1, in source order
+  exports: readonly string[]; // the entity's export names, sorted
+  nodes: readonly AstNode[]; // the cleaned nodes of 2.4 step 1, in source order
   canonical: string; // the canonical form of 2.4 step 4
   hash: string; // H(canonical)
   arity: number | null; // parameter count for kind `function` (2.7), null otherwise
-};
+}>;
 
 /** A region (EN6): every character of a module belongs to exactly one. */
-export type Region = { start: number; end: number; names: string[] };
+export type Region = Readonly<{ start: number; end: number; names: readonly string[] }>;
 
 /** The local bindings an import declares: local name -> (source specifier text, imported name). */
-export type ImportTable = Map<string, { source: string; imported: string }>;
+export type ImportTable = ReadonlyMap<string, Readonly<{ source: string; imported: string }>>;
 
-export type ModuleInfo = {
-  entities: Entity[]; // in the order their first contributing statement appears
-  regions: Region[];
+export type ModuleInfo = Readonly<{
+  entities: readonly Entity[]; // in the order their first contributing statement appears
+  regions: readonly Region[];
   imports: ImportTable;
-};
+}>;
 
 // ---- 2.4 step 2: cleaning a node ----
 
@@ -197,13 +202,58 @@ function declareTs(
   names.push(name);
 }
 
+// Half a million UTF-16 source units holds roughly four of the measured 127 KB pools,
+// including changed versions, while limiting isolate retention. This is a source budget,
+// not a heap-byte claim: entities, cleaned syntax nodes and canonical strings cost more.
+export const MODULE_CACHE_SOURCE_LENGTH = 512 * 1024;
+
+/** A content cache with its own source budget, also useful for isolated/cold analyses.
+ * Returned modules are shared read-only values. Resolution remains tree- and path-specific
+ * in analyse; nothing resolved is retained here. Failed parses throw and are not cached.
+ */
+export function createModuleParser(maxSourceLength = MODULE_CACHE_SOURCE_LENGTH) {
+  if (!Number.isSafeInteger(maxSourceLength) || maxSourceLength < 0) {
+    throw new RangeError("module cache source length must be a nonnegative safe integer");
+  }
+  const entries = new Map<string, { length: number; info: ModuleInfo }>();
+  let sourceLength = 0;
+  return (source: string, language: Language = "javascript"): ModuleInfo => {
+    // Language is from a finite set; a separator makes the exact source unambiguous.
+    // At most four empty-source entries can be retained without using source budget.
+    const key = `${language}\0${source}`;
+    const found = entries.get(key);
+    if (found !== undefined) {
+      entries.delete(key);
+      entries.set(key, found); // refresh recency, without increasing the source budget
+      return found.info;
+    }
+    const info = parseUncached(source, language);
+    if (maxSourceLength === 0 || source.length > maxSourceLength) return info;
+    while (sourceLength + source.length > maxSourceLength) {
+      const oldest = entries.keys().next().value!;
+      sourceLength -= entries.get(oldest)!.length;
+      entries.delete(oldest);
+    }
+    entries.set(key, { length: source.length, info });
+    sourceLength += source.length;
+    return info;
+  };
+}
+
+const sharedParser = createModuleParser();
+
 /**
  * Parses `source` into entities and regions (2.3, LG2). `language` is the path's language
  * (LG1): `javascript` is acorn with the 2.3 options, `jsx` adds JSX, `typescript` and `tsx`
  * go through `@sveltejs/acorn-typescript`. Throws the parser's `SyntaxError` when the module
  * does not parse; the caller decides whether the file is a module at all (2.1: opaque).
+ * Results use the shared, bounded language/source cache. Callers must not mutate them.
  */
 export function parseModule(source: string, language: Language = "javascript"): ModuleInfo {
+  return sharedParser(source, language);
+}
+
+function parseUncached(source: string, language: Language): ModuleInfo {
   const program = (language === "javascript"
     ? acorn.parse(source, PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" })
     : (language === "typescript" ? TS_PARSER : TSX_PARSER).parse(
@@ -212,7 +262,7 @@ export function parseModule(source: string, language: Language = "javascript"): 
       )) as unknown as AstNode;
   const body = program.body as AstNode[];
   const entities = new Map<string, WorkingEntity>();
-  const imports: ImportTable = new Map();
+  const imports = new Map<string, { source: string; imported: string }>();
   const regions: Region[] = [];
   const get = (name: string, kind: EntityKind): WorkingEntity => {
     let entity = entities.get(name);

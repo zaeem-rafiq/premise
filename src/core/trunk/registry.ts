@@ -43,7 +43,7 @@ import type { ApplyPayload } from "../rebuild/plan.ts";
 import type { RegisterRequest, RegisterResponse } from "../../protocol/tools.ts";
 import { IMPORT_LANGUAGES, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import { blobId } from "../sync/sha1.ts";
-import { utf8, text as fromUtf8, blobBytes } from "../sync/bytes.ts";
+import { utf8, text as fromUtf8, blobBytes, compareBytes } from "../sync/bytes.ts";
 import type { GitObject } from "../git/objects.ts";
 
 import { undoPlan, confirmUndo } from "./undo-apply.ts";
@@ -312,23 +312,21 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     "attempt_id",
   );
   const opsByAttempt = groupRows(sql.exec("SELECT * FROM ops ORDER BY attempt_id, op_seq").toArray(), "attempt_id");
+  const firstOps = new Set(
+    sql
+      .exec("SELECT attempt_id, revision FROM ops_first")
+      .toArray()
+      .map((row) => JSON.stringify([str(row.attempt_id), num(row.revision)])),
+  );
   const headsByAttempt = groupRows(sql.exec("SELECT * FROM heads_ups ORDER BY attempt_id, hn").toArray(), "attempt_id");
   for (const row of sql.exec("SELECT * FROM attempts ORDER BY attempt_id").toArray()) {
-    const a = attemptFromRow(pool, row);
-    for (const pr of premisesByAttempt.get(a.id) ?? []) {
-      const p = premiseFromRow(pr);
-      a.premises.set(`${p.kind}|${p.key}`, p);
-    }
-    for (const or of opsByAttempt.get(a.id) ?? []) {
-      a.ops.push(opFromRow(or));
-      a.opCount = Math.max(a.opCount, num(or.op_seq));
-    }
-    for (const hr of headsByAttempt.get(a.id) ?? []) {
-      const h = headFromRow(hr);
-      a.heads.push(h);
-      a.next_hn = Math.max(a.next_hn, h.hn + 1);
-      if (h.result !== "info" && h.resolved_at !== null) a.resolved.add(h.hn);
-    }
+    const a = attemptFromRow(pool, row, firstOps.has(JSON.stringify([str(row.attempt_id), num(row.revision)])));
+    hydrateAttemptChildren(
+      a,
+      premisesByAttempt.get(a.id) ?? [],
+      opsByAttempt.get(a.id) ?? [],
+      headsByAttempt.get(a.id) ?? [],
+    );
     for (const j of judgmentsByAttempt.get(a.id) ?? []) {
       if (j.result === null) {
         a.pending.push(j);
@@ -429,6 +427,7 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     pool.undoLog.set(u.request_id, u);
     if (u.state === "queued") pool.undoQueue.push(u);
   }
+  clearLoadedTracking(pool);
   return pool;
 }
 
@@ -622,11 +621,236 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       return n;
     },
   } satisfies Pool;
+  installTracking(pool);
   return pool;
+}
+
+// A retained pool needs work lists, rather than a fresh scan of historical rows on every
+// save. Keep these details outside Pool's public shape: callers still use ordinary Map and
+// Array operations, including rebuild replacing the collections and tests editing records.
+class ChangedMeta extends Map<string, string> {
+  readonly changed = new Set<string>();
+
+  constructor(values: Map<string, string>, previous: Iterable<string> = []) {
+    super();
+    for (const key of previous) this.changed.add(key);
+    for (const [key, value] of values) this.set(key, value);
+  }
+
+  override set(key: string, value: string): this {
+    if (this.get(key) !== value) this.changed.add(key);
+    return super.set(key, value);
+  }
+
+  override delete(key: string): boolean {
+    if (this.has(key)) this.changed.add(key);
+    return super.delete(key);
+  }
+
+  override clear(): void {
+    for (const key of this.keys()) this.changed.add(key);
+    super.clear();
+  }
+}
+
+type Tracking = {
+  meta: ChangedMeta;
+  attempts: Set<Attempt>;
+  landings: Set<Landing>;
+  judgments: Set<Judgment>;
+  snapshots: Set<Landing>;
+};
+const tracking = new WeakMap<Pool, Tracking>();
+const landingFields = [
+  "kind",
+  "batch_id",
+  "commit_oid",
+  "parent_oid",
+  "tree_oid",
+  "note_oid",
+  "submitted_at",
+  "accepted_at",
+  "pushed_at",
+  "undone_by",
+] as const;
+
+/** Observe an existing object's field without replacing the object held by other records. */
+function observeField<T extends object, K extends keyof T>(record: T, key: K, changed: () => void): void {
+  let value = record[key];
+  Object.defineProperty(record, key, {
+    get: () => value,
+    set: (next: T[K]) => {
+      if (next !== value) {
+        value = next;
+        changed();
+      }
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function installTracking(pool: Pool): void {
+  const state: Tracking = {
+    meta: new ChangedMeta(pool.meta),
+    attempts: new Set(),
+    landings: new Set(),
+    judgments: new Set(),
+    snapshots: new Set(),
+  };
+  tracking.set(pool, state);
+  Object.defineProperty(pool, "meta", {
+    get: () => state.meta,
+    set: (values: Map<string, string>) => {
+      state.meta = new ChangedMeta(values, state.meta.keys());
+    },
+    enumerable: true,
+  });
+  const observedLandings = new WeakSet<Landing>();
+  function observeLanding(landing: Landing): void {
+    state.landings.add(landing);
+    if (observedLandings.has(landing)) return;
+    observedLandings.add(landing);
+    state.snapshots.add(landing);
+    for (const field of landingFields) observeField(landing, field, () => state.landings.add(landing));
+  }
+  function landingArray(values: Landing[]): Landing[] {
+    for (const landing of values) observeLanding(landing);
+    return new Proxy(values, {
+      set(target, key, value: unknown) {
+        // Array indices only: length and standard Array methods carry no landing.
+        if (typeof key === "string" && /^(0|[1-9][0-9]*)$/.test(key)) observeLanding(value as Landing);
+        return Reflect.set(target, key, value);
+      },
+    });
+  }
+  let landings = landingArray(pool.landings);
+  Object.defineProperty(pool, "landings", {
+    get: () => landings,
+    set: (values: Landing[]) => {
+      state.landings.clear();
+      state.snapshots.clear();
+      landings = landingArray(values);
+    },
+    enumerable: true,
+  });
+  const observedJudgments = new WeakSet<Judgment>();
+  class Judgments extends Map<number, Judgment> {
+    override set(key: number, judgment: Judgment): this {
+      const previous = this.get(key);
+      if (previous !== undefined && previous !== judgment) state.judgments.delete(previous);
+      if (!observedJudgments.has(judgment)) {
+        observedJudgments.add(judgment);
+        observeField(judgment, "dirty", () => {
+          if (judgment.dirty) state.judgments.add(judgment);
+        });
+      }
+      if (judgment.dirty) state.judgments.add(judgment);
+      return super.set(key, judgment);
+    }
+    override delete(key: number): boolean {
+      const judgment = this.get(key);
+      if (judgment !== undefined) state.judgments.delete(judgment);
+      return super.delete(key);
+    }
+    override clear(): void {
+      state.judgments.clear();
+      super.clear();
+    }
+  }
+  let judgments: Map<number, Judgment> = new Judgments(pool.judgments);
+  Object.defineProperty(pool, "judgments", {
+    get: () => judgments,
+    set: (values: Map<number, Judgment>) => {
+      state.judgments.clear();
+      judgments = new Judgments(values);
+    },
+    enumerable: true,
+  });
+}
+
+function clearLoadedTracking(pool: Pool): void {
+  const state = tracking.get(pool)!;
+  state.meta.changed.clear();
+  state.attempts.clear();
+  state.landings.clear();
+  state.judgments.clear();
+  state.snapshots.clear();
+}
+
+/** Drop call-local scratch data before retaining a Pool in the Durable Object. */
+export function releaseWorkingState(pool: Pool): void {
+  pool.objects.clear();
+  pool.analyses.clear();
+  pool.order = 0;
+  const state = tracking.get(pool)!;
+  // A fresh open reads these rows in SQLite's binary key order. Restore that order only
+  // for changed records, so retaining a Pool cannot change heads-up or note item order.
+  const byPremise = (a: Pick<Premise, "kind" | "key">, b: Pick<Premise, "kind" | "key">): number =>
+    compareBytes(utf8(a.kind), utf8(b.kind)) || compareBytes(utf8(a.key), utf8(b.key));
+  // Rehydrate only attempts written by this call, using the same row readers as openPool.
+  // Besides child ordering, this restores every transient and metadata-derived field exactly
+  // as an evicted object would. Keep the Attempt identity held by callers and other records.
+  // A pending triage holds child-object references: the shell reopens that path instead, and
+  // a direct caller must finish its triage before these children can be replaced safely.
+  if (pool.pendingTriage.length === 0) {
+    for (const attempt of state.attempts) {
+      if (pool.attempts.get(attempt.id) !== attempt) continue;
+      const row = pool.sql.exec("SELECT * FROM attempts WHERE attempt_id = ?", attempt.id).toArray()[0];
+      if (row === undefined) {
+        pool.attempts.delete(attempt.id);
+        continue;
+      }
+      const restored = attemptFromRow(pool, row);
+      hydrateAttemptChildren(
+        restored,
+        pool.sql.exec("SELECT * FROM premises WHERE attempt_id = ? ORDER BY kind, key", attempt.id).toArray(),
+        pool.sql.exec("SELECT * FROM ops WHERE attempt_id = ? ORDER BY op_seq", attempt.id).toArray(),
+        pool.sql.exec("SELECT * FROM heads_ups WHERE attempt_id = ? ORDER BY hn", attempt.id).toArray(),
+      );
+      for (const pending of pool.sql
+        .exec("SELECT * FROM judgments WHERE attempt_id = ? AND result IS NULL ORDER BY judgment_id", attempt.id)
+        .toArray()) {
+        restored.pending.push(pool.judgments.get(num(pending.judgment_id)) ?? judgmentFromRow(pending));
+      }
+      Object.assign(attempt, restored);
+    }
+    state.attempts.clear();
+  }
+  for (const landing of state.snapshots) {
+    landing.files = new Map([...landing.files].sort(([a], [b]) => compareBytes(utf8(a), utf8(b))));
+    landing.writes.sort(byPremise);
+    landing.premises.sort(byPremise);
+    lazyFileMaps(pool, landing);
+  }
+  state.snapshots.clear();
 }
 
 // ---------------------------------------------------------------------------
 // Row (de)serialisation.
+
+/** Populate a freshly deserialized attempt from its child rows in database key order. */
+function hydrateAttemptChildren(
+  attempt: Attempt,
+  premises: Record<string, unknown>[],
+  ops: Record<string, unknown>[],
+  heads: Record<string, unknown>[],
+): void {
+  for (const row of premises) {
+    const premise = premiseFromRow(row);
+    attempt.premises.set(`${premise.kind}|${premise.key}`, premise);
+  }
+  for (const row of ops) {
+    attempt.ops.push(opFromRow(row));
+    attempt.opCount = Math.max(attempt.opCount, num(row.op_seq));
+  }
+  for (const row of heads) {
+    const head = headFromRow(row);
+    attempt.heads.push(head);
+    attempt.next_hn = Math.max(attempt.next_hn, head.hn + 1);
+    if (head.result !== "info" && head.resolved_at !== null) attempt.resolved.add(head.hn);
+  }
+}
 
 function premiseFromRow(row: Record<string, unknown>): Premise {
   return {
@@ -760,7 +984,7 @@ function outboxFromRow(row: Record<string, unknown>): OutboxRow {
   };
 }
 
-export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attempt {
+export function attemptFromRow(pool: Pool, row: Record<string, unknown>, opsFirstDone?: boolean): Attempt {
   const intent = pool.intents.get(str(row.intent_id));
   return {
     id: str(row.attempt_id),
@@ -823,6 +1047,7 @@ export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attemp
     // PM2: whether this revision already wrote its `ops_first` row — hydrated from the table,
     // so a pool reopen never writes a second snapshot over the first.
     opsFirstDone:
+      opsFirstDone ??
       pool.sql
         .exec(
           "SELECT 1 AS x FROM ops_first WHERE attempt_id = ? AND revision = ?",
@@ -840,6 +1065,7 @@ export function attemptFromRow(pool: Pool, row: Record<string, unknown>): Attemp
 
 function persistAttempt(pool: Pool, a: Attempt): void {
   const sql = pool.sql;
+  const updatedAt = pool.now();
   sql.exec(
     `INSERT OR REPLACE INTO attempts (
       attempt_id, intent_id, change_id, agent_kind, model, race, truth, resumes, state, stop_reason,
@@ -879,7 +1105,7 @@ function persistAttempt(pool: Pool, a: Attempt): void {
     a.last_response === null ? null : JSON.stringify(a.last_response),
     a.ack,
     a.next_hn,
-    pool.now(),
+    updatedAt,
   );
   persistPremises(sql, a);
   persistOps(sql, a);
@@ -954,15 +1180,15 @@ function groupRows(rows: Record<string, unknown>[], column: string): Map<string,
 
 /**
  * A loaded landing's `before` and `after` are the file maps at `seq - 1` and `seq`, computed when
- * first read (`fileMapAt` walks back from head) and kept: copying the whole map twice for every
- * landing on every open made each open quadratic in the landings, and its memory grew with them.
+ * read (`fileMapAt` walks back from head). They are not retained: a cached pool must not keep
+ * a copy of the whole tree for every historical landing.
  * An assignment replaces the map, as for a landing made in this call.
  */
 function lazyFileMaps(pool: Pool, l: Landing): void {
   let before: FileMap | undefined;
   let after: FileMap | undefined;
   Object.defineProperty(l, "before", {
-    get: () => (before ??= pool.fileMapAt(l.seq - 1)),
+    get: () => before ?? pool.fileMapAt(l.seq - 1),
     set: (value: FileMap) => {
       before = value;
     },
@@ -970,7 +1196,7 @@ function lazyFileMaps(pool: Pool, l: Landing): void {
     configurable: true,
   });
   Object.defineProperty(l, "after", {
-    get: () => (after ??= pool.fileMapAt(l.seq)),
+    get: () => after ?? pool.fileMapAt(l.seq),
     set: (value: FileMap) => {
       after = value;
     },
@@ -1072,7 +1298,10 @@ export function persist(pool: Pool): void {
   const sql = pool.sql;
   for (const id of pool.dirtyAttempts) {
     const a = pool.attempts.get(id);
-    if (a !== undefined) persistAttempt(pool, a);
+    if (a !== undefined) {
+      persistAttempt(pool, a);
+      tracking.get(pool)!.attempts.add(a);
+    }
   }
   pool.dirtyAttempts.clear();
   for (const id of pool.dirtyIntents) {
@@ -1090,7 +1319,9 @@ export function persist(pool: Pool): void {
     }
   }
   pool.dirtyIntents.clear();
-  for (const j of pool.judgments.values()) if (j.dirty) persistJudgment(pool, j);
+  for (const j of tracking.get(pool)!.judgments) {
+    if (j.dirty && pool.judgments.get(j.judgment_id) === j) persistJudgment(pool, j);
+  }
   for (const l of pool.newLandings) {
     persistLanding(pool, l);
     pool.landingMarks.set(l.seq, landingMark(l));
@@ -1099,7 +1330,8 @@ export function persist(pool: Pool): void {
   // Only a landing whose row changed since it was loaded or persisted (its push, its undo) is
   // written again: rewriting every pushed landing on every save made each call write a number of
   // rows that grew with the pool.
-  for (const l of pool.landings) {
+  for (const l of tracking.get(pool)!.landings) {
+    if (!pool.landings.includes(l)) continue;
     const mark = landingMark(l);
     if (pool.landingMarks.get(l.seq) === mark) continue;
     persistLanding(pool, l);
@@ -1200,11 +1432,9 @@ export function persist(pool: Pool): void {
     if (oid !== undefined) sql.exec("INSERT OR REPLACE INTO trees (dir, oid) VALUES (?, ?)", dir, oid);
   }
   pool.dirtyTrees.clear();
-  for (const [k, v] of pool.meta) {
-    if (pool.savedMeta.get(k) !== v) metaSet(sql, k, v);
-  }
-  for (const k of pool.savedMeta.keys()) {
-    if (!pool.meta.has(k)) metaSet(sql, k, null);
+  for (const k of tracking.get(pool)!.meta.changed) {
+    const value = pool.meta.get(k);
+    if (pool.savedMeta.get(k) !== value) metaSet(sql, k, value ?? null);
   }
 }
 
@@ -1228,7 +1458,15 @@ function wrapCall<T>(pool: Pool, run: () => T): T {
     persist(pool);
     return got;
   });
-  pool.savedMeta = new Map(pool.meta);
+  const state = tracking.get(pool)!;
+  for (const key of state.meta.changed) {
+    const value = pool.meta.get(key);
+    if (value === undefined) pool.savedMeta.delete(key);
+    else pool.savedMeta.set(key, value);
+  }
+  state.meta.changed.clear();
+  state.landings.clear();
+  state.judgments.clear();
   return r;
 }
 

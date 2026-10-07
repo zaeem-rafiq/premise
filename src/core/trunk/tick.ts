@@ -569,7 +569,8 @@ export function tick(pool: Pool): void {
     .sort(
       (x, y) =>
         (x.right_of_way_at ?? Infinity) - (y.right_of_way_at ?? Infinity) ||
-        (x.validated_at ?? 0) - (y.validated_at ?? 0),
+        (x.validated_at ?? 0) - (y.validated_at ?? 0) ||
+        (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
     );
   const inBatch = new Set<Attempt>();
   const members: Array<{ premises: Premise[]; attempt_id: string }> = [];

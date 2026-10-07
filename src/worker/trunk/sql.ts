@@ -6,10 +6,18 @@
 
 import type { Sql } from "../../protocol/ports.ts";
 import { sqlOver } from "../sql-port.ts";
+import { EngineSession } from "./engine-session.ts";
+
+const sessions = new WeakMap<DurableObjectStorage, EngineSession>();
 
 /** The `Sql` port of a Durable Object. */
-export function sqlOf(ctx: DurableObjectState): Sql {
-  return sqlOver(ctx.storage);
+export function sqlOf(ctx: DurableObjectState): EngineSession {
+  let session = sessions.get(ctx.storage);
+  if (session === undefined) {
+    session = new EngineSession(sqlOver(ctx.storage));
+    sessions.set(ctx.storage, session);
+  }
+  return session;
 }
 
 /** The shell's schema (01-core 3.2): `meta`, `events_out`, `timers`. `IF NOT EXISTS` leaves the

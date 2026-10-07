@@ -23,7 +23,7 @@ import type { SwarmControlEvent, SwarmRunParams } from "../../protocol/internal.
 import { SWARM_CONTROL_EVENT } from "../../protocol/internal.ts";
 import { PUSH_BACKOFF_BASE_MS } from "../../protocol/constants.ts";
 import { emitSwarmState } from "./emit.ts";
-import { launchAgent, launchId, type LaunchResult } from "./launch.ts";
+import { launchAgent, launchId, type LaunchInput } from "./launch.ts";
 import { patternById, type Pattern } from "../../swarm/pattern.ts";
 import { dialPick } from "../../swarm/dial.ts";
 import { agentRandom } from "../../swarm/prng.ts";
@@ -35,8 +35,8 @@ const EMIT_RETRY = {
   retries: { limit: 12, delay: PUSH_BACKOFF_BASE_MS, backoff: "exponential" as const },
 };
 /**
- * The tick's step retried with backoff — a launch failure retries the whole tick; the agents it
- * already opened deduplicate by attempt id (9.8), so a retry launches the same ids again safely.
+ * Unexpected launch failures retry the step. A busy Trunk completes the step with pending
+ * launches instead, so its retry budget cannot end the run while Trunk is unavailable.
  */
 const TICK_RETRY = {
   retries: { limit: 6, delay: PUSH_BACKOFF_BASE_MS, backoff: "exponential" as const },
@@ -53,7 +53,10 @@ async function killed(env: Env): Promise<boolean> {
   }
 }
 
-/** What a `tick-<n>` step leaves the loop: the schedule met so far, in cumulative counts. */
+/** A reserved SW1 draw, including its truth, survives dial changes and Workflow replay. */
+type PendingLaunch = { kind: "regular" | "rescale"; input: LaunchInput };
+
+/** What a `tick-<n>` step leaves the loop: completed counts and launches still owed. */
 type TickOutcome = {
   /** The kill switch: stop launching, end the run. */
   stop: boolean;
@@ -61,7 +64,9 @@ type TickOutcome = {
   regular: number;
   /** Rescale agents due and launched so far (`runTick`'s `rescaleDue`). */
   rescale: number;
-  /** The last regular agent was due this tick: the run ends after these launches. */
+  /** Reserved launches that must finish before any new draws are assigned. */
+  pending: PendingLaunch[];
+  /** All launches due by the end of the run have completed. */
   ended: boolean;
 };
 
@@ -91,11 +96,11 @@ export async function runSwarmLaunch(
     emits += 1;
   };
 
-  /** One scripted agent's launch; `seq` is its draw-stream index (SW1) and its name's `n`. */
-  const launchOne = (seq: number, pattern: Pattern): Promise<LaunchResult> => {
+  /** Freeze one launch; `seq` is its draw-stream index (SW1) and its name's `n`. */
+  const reserve = (seq: number, pattern: Pattern): LaunchInput => {
     const rand = agentRandom(seed, seq);
     const truth = pattern.truthOf === undefined ? pattern.truth : pattern.truthOf(rand);
-    return launchAgent(env, {
+    return {
       pool,
       attemptId: launchId("a_", request_id, seq),
       intentId: launchId("i_", request_id, seq),
@@ -104,7 +109,7 @@ export async function runSwarmLaunch(
       agentN: seq,
       hold: hold.has(pattern.id),
       thinkMs: think_ms,
-    });
+    };
   };
 
   const startMs = await step.do<number>("start", async () => now());
@@ -117,6 +122,7 @@ export async function runSwarmLaunch(
   // fan-out — well inside a Workflow instance's step limit for a run that ends by itself.
   let regular = 0;
   let rescale = 0;
+  let pending: PendingLaunch[] = [];
   let tick = 0;
   while (true) {
     let control: SwarmControlEvent["payload"] | null = null;
@@ -135,7 +141,8 @@ export async function runSwarmLaunch(
       collision_dial = control.collision_dial;
       await emit({ collision_dial });
     } else if (control?.op === "agents") {
-      agents = Math.max(regular, control.agents);
+      const reservedRegular = pending.filter((item) => item.kind === "regular").length;
+      agents = Math.max(regular + reservedRegular, control.agents);
       await emit({ agents });
     } else if (control?.op === "stop") {
       break;
@@ -146,9 +153,10 @@ export async function runSwarmLaunch(
     // bounded at `launch_per_second` in flight.
     const regularBefore = regular;
     const rescaleBefore = rescale;
+    const pendingBefore = pending;
     const outcome = await step.do<TickOutcome>(`tick-${tick}`, TICK_RETRY, async () => {
       if (await killed(env)) {
-        return { stop: true, regular: regularBefore, rescale: rescaleBefore, ended: false };
+        return { stop: true, regular: regularBefore, rescale: rescaleBefore, pending: pendingBefore, ended: false };
       }
       const due = runTick({
         now: now(),
@@ -158,31 +166,55 @@ export async function runSwarmLaunch(
         collisionDial: collision_dial,
         rescaleEverySecs: rescale_every_s,
       });
-      // The launches this tick owes, in the draw order of SW1: the regular draws first, then the
-      // rescales — `seq` is the shared draw-stream index of both.
-      const batch: { seq: number; pattern: Pattern }[] = [];
-      let seq = regularBefore + rescaleBefore;
-      for (let dueN = regularBefore; dueN < due.regularDue; dueN += 1, seq += 1) {
-        batch.push({ seq, pattern: dialPick(collision_dial, agentRandom(seed, seq)) });
+      // Pending draws were reserved under an earlier dial and schedule. Finish them before
+      // assigning new indices, so a slow Trunk cannot turn a rescale into a regular agent.
+      const batch: PendingLaunch[] = [...pendingBefore];
+      if (batch.length === 0) {
+        let seq = regularBefore + rescaleBefore;
+        for (let dueN = regularBefore; dueN < due.regularDue; dueN += 1, seq += 1) {
+          batch.push({ kind: "regular", input: reserve(seq, dialPick(collision_dial, agentRandom(seed, seq))) });
+        }
+        for (let dueN = rescaleBefore; dueN < due.rescaleDue; dueN += 1, seq += 1) {
+          const pattern = patternById("rescale-energy");
+          if (pattern === undefined) throw new Error("swarm run: unknown pattern rescale-energy");
+          batch.push({ kind: "rescale", input: reserve(seq, pattern) });
+        }
       }
-      for (let dueN = rescaleBefore; dueN < due.rescaleDue; dueN += 1, seq += 1) {
-        const pattern = patternById("rescale-energy");
-        if (pattern === undefined) throw new Error("swarm run: unknown pattern rescale-energy");
-        batch.push({ seq, pattern });
-      }
+      let regularDone = regularBefore;
+      let rescaleDone = rescaleBefore;
+      const remaining: PendingLaunch[] = [];
       const bound = Math.max(1, Math.floor(launch_per_second));
       for (let at = 0; at < batch.length; at += bound) {
         const chunk = batch.slice(at, at + bound);
-        const results = await Promise.all(chunk.map((item) => launchOne(item.seq, item.pattern)));
+        const results = await Promise.all(chunk.map((item) => launchAgent(env, item.input)));
         for (const [i, result] of results.entries()) {
-          if (!result.ok) throw new Error(`tick ${tick} launch ${chunk[i]?.seq}: ${result.code}`);
+          const item = chunk[i]!;
+          if (result.ok) {
+            if (item.kind === "regular") regularDone += 1;
+            else rescaleDone += 1;
+          } else if (result.code === "trunk_open_failed" || result.code === "trunk_hold_failed") {
+            remaining.push(item);
+          } else {
+            throw new Error(`tick ${tick} launch ${item.input.agentN}: ${result.code}`);
+          }
+        }
+        if (remaining.length > 0) {
+          remaining.push(...batch.slice(at + bound));
+          break;
         }
       }
-      return { stop: false, regular: due.regularDue, rescale: due.rescaleDue, ended: due.ended };
+      return {
+        stop: false,
+        regular: regularDone,
+        rescale: rescaleDone,
+        pending: remaining,
+        ended: remaining.length === 0 && regularDone >= agents && rescaleDone >= due.rescaleDue,
+      };
     });
     if (outcome.stop) break;
     regular = outcome.regular;
     rescale = outcome.rescale;
+    pending = outcome.pending;
     // The last agent is launched: the run is over (its agents finish on their own).
     if (outcome.ended) break;
   }

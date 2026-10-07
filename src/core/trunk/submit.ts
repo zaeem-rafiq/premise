@@ -36,12 +36,12 @@ export function policyTier(pool: Pool, files: Map<string, string>, paths: Iterab
   return changeTier(poolPolicy(pool, files), [...paths]);
 }
 
-/** The paths whose blob ids differ between `before` and `after` (CK3's non_empty). */
+/** The paths whose blob ids differ, in lexical file order (CK3's non_empty). */
 export function changedPaths(before: Map<string, string>, after: Map<string, string>): string[] {
   const out: string[] = [];
   for (const p of before.keys()) if (!after.has(p)) out.push(p);
   for (const [p, c] of after) if (before.get(p) !== c) out.push(p);
-  return out;
+  return out.sort();
 }
 
 const DEFAULT_GLOBALS = [

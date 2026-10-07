@@ -72,6 +72,7 @@ export async function launchAgent(env: Env, input: LaunchInput): Promise<LaunchR
       headers: { "content-type": "application/json" },
       body: JSON.stringify(openAttempt),
     });
+    if (!response.ok) return { ok: false, code: "trunk_open_failed" };
     trunkAnswer = (await response.json()) as TrunkOpenAttemptResponse;
   } catch {
     return { ok: false, code: "trunk_open_failed" };

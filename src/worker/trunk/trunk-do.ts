@@ -151,7 +151,7 @@ async function seedFiles(env: Env, seed: string): Promise<Record<string, string>
 const REBUILD_ENTRIES = new Set(["rebuild", "rebuild_begin", "rebuild_step", "rebuild_lost"]);
 
 export class Trunk extends DurableObject<Env> {
-  readonly #sql: Sql;
+  readonly #sql: ReturnType<typeof sqlOf>;
   readonly #engine: EngineTable;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -333,12 +333,11 @@ export class Trunk extends DurableObject<Env> {
       // of synthetic attempts (TR8). Real attempts never use it.
       // A driven `now` (the alarm's `?now=` hook) is the engine clock for the call, so a test
       // drives time-dependent rules — RW1's lapse — without sleeping (LP5a's convention).
-      const trunk = TrunkEngine.open(this.#sql, {
-        now: () => now ?? Date.now(),
-        syncTriage: ScriptedTriage,
-        features: FEATURES,
-      });
-      const result = await Promise.resolve(entry(input, trunk));
+      const result = this.#sql.run(
+        name,
+        { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES },
+        (trunk) => entry(input, trunk),
+      );
       return { result };
     } catch {
       recordTrunkError(this.ctx, `entry:${name}`, "engine_error");

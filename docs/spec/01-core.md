@@ -2170,7 +2170,9 @@ type PoolEvent = EventBase & (
       path: string; targets: string[]; altered: string[]; added: string[]; removed: string[] }
   | { type: "op.dropped"; attempt_id: string; op_seqs: number[]; path: string; rule: string }
   | { type: "headsup.sent"; attempt_id: string; hn: number; result: "info" | "confirm" | "repair";
-      wake: boolean; cause: HeadsUp["cause"]; keys: Array<{ kind: PremiseKind | "check"; key: string; rule: string }>;
+      wake: boolean; cause: HeadsUp["cause"];
+      keys: Array<{ kind: PremiseKind | "check"; key: string; rule: string;
+                    cause_seq?: number | null }>;             // the item's cause_seq (8.2), also when items is null; always sent, absent only in streams recorded before 2026-10-07
       items: HeadsUpItem[] | null;                           // the items as sent (8.2); null in a summary_only pool (EV6)
       dropped_ops: HeadsUp["dropped_ops"]; go_around: number | null }
   | { type: "headsup.resolved"; attempt_id: string; hn: number; result: "confirm" | "repair";

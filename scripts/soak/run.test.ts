@@ -868,6 +868,54 @@ describe("the soak runner of VE6", () => {
     expect(failed(result)).toEqual(["cosmetic_is_silent"]);
   });
 
+  // 04 VE6 (amended 2026-10-07): the cause of a heads-up is the `cause_seq` of its keys; a
+  // `cosmetic` landing that only shares the batch with the key's cause is not the cause.
+  for (const [name, causeIsCosmetic, expected] of [
+    ["passes when a cosmetic landing only shares the batch with the key's cause", false, []],
+    ["fails when a key's cause_seq is the cosmetic landing", true, ["cosmetic_is_silent"]],
+  ] as const) {
+    it(`cosmetic_is_silent ${name}`, async () => {
+      const dialOne: SoakRunInput = { ...input, config: { ...input.config, agents: 10, collision_dial: 1 } };
+      const run = buildRun({
+        dial: 1,
+        agents: 10,
+        rescale: true,
+        goAroundOn: [1],
+        extraTail: (landed) => {
+          const cosmetic = landed.find((l) => l.spec.pattern === "cosmetic");
+          const receiver = landed[0];
+          const other = landed.find((l) => l.spec.pattern !== "cosmetic" && l !== receiver);
+          if (cosmetic === undefined || receiver === undefined || other === undefined) return [];
+          return [
+            ev(4600, "trunk", {
+              type: "headsup.sent",
+              attempt_id: receiver.spec.attempt,
+              hn: 2,
+              result: "info",
+              wake: false,
+              cause: { type: "landing", seqs: [other.seq, cosmetic.seq].sort((x, y) => x - y), changes: [] },
+              keys: [
+                {
+                  kind: "listing",
+                  key: "creatures/",
+                  rule: "L1",
+                  cause_seq: causeIsCosmetic ? cosmetic.seq : other.seq,
+                },
+              ],
+              items: null,
+              dropped_ops: [],
+              go_around: null,
+            }),
+          ];
+        },
+        judgmentsOf: (spec) =>
+          spec.pattern === "add-energy" ? [repair("entity", "world/energy.js#ENERGY_MAX", "E2", 2)] : [],
+      });
+      const result = await runDial(dialOne, makeFake(run).deps);
+      expect(failed(result)).toEqual(expected);
+    });
+  }
+
   it("fsck fails when git fsck --strict exits nonzero", async () => {
     const run = buildRun({ fsckCode: 1 });
     const result = await runDial(input, makeFake(run, { fsckCode: 1 }).deps);

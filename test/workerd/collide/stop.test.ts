@@ -61,7 +61,7 @@ describe("item 8 (E1, TA9, TA9a): the losing rescale ends its own attempt throug
     const sent = (await eventsOf(worker, POOL, "headsup.sent")).filter((e) => e.attempt_id === loser);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("repair");
-    expect(sent[0]?.keys).toContainEqual({ kind: "entity", key: ENERGY_KEY, rule: "E1" });
+    expect(sent[0]?.keys).toContainEqual({ kind: "entity", key: ENERGY_KEY, rule: "E1", cause_seq: 1 });
     expect(sent[0]?.dropped_ops).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "world/energy.js", rule: "OP1" })]),
     );

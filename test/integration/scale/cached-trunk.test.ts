@@ -39,7 +39,12 @@ it("a retained Trunk lands one rescale and delivers E1 to the other across shell
     const heads = (await eventsOf(worker, pool, "headsup.sent")).filter((event) => event.attempt_id === loser);
     expect(heads).toHaveLength(1);
     expect(heads[0]).toMatchObject({ result: "repair" });
-    expect(heads[0]!.keys).toContainEqual({ kind: "entity", key: "world/energy.js#ENERGY_MAX", rule: "E1" });
+    expect(heads[0]!.keys).toContainEqual({
+      kind: "entity",
+      key: "world/energy.js#ENERGY_MAX",
+      rule: "E1",
+      cause_seq: 1,
+    });
     expect(heads[0]!.dropped_ops).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "world/energy.js", rule: "OP1" })]),
     );

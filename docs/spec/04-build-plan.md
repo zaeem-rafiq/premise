@@ -1135,7 +1135,7 @@ Checks. These are about correctness. Speed has no pass mark: the numbers are pub
 | `one_commit_per_landing` | `commits_on_main` equals `count`; `notes` equals `count`; each note's `seq` is its commit's position. |
 | `oracle` | SW2: `truth.escapes` is 0 (`ESCAPE_TARGET`). |
 | `no_go_around_at_zero` | At dial 0 the go-around rate is 0 (`02` 10.4). |
-| `cosmetic_is_silent` | No `headsup.sent` whose cause is a `cosmetic` landing reaches an attempt of another pattern. |
+| `cosmetic_is_silent` | No `headsup.sent` whose cause is a `cosmetic` landing reaches an attempt of another pattern. The cause of a heads-up is the `cause_seq` of its keys, not every landing of its batch (amended 2026-10-07: a `cosmetic` landing that only shared a batch with the landing that changed the key was counted). |
 | `never_paused` | No `pool.paused`. |
 | `no_stall` | `metrics.longest_gap_ms` is at most 10,000: at no time did more than 10 s pass without a `landing.accepted` while at least one attempt was in `validated` and no accepted batch was waiting for its push. A sweep that holds right of way must not stop every creature-adding landing (RW3); the sweep patterns withdraw at their second repair so that it cannot (2.9). The time a batch waits for its push is not a stall: the tick accepts nothing then by design (LP1), and that time is published as `push_ms` (amended 2026-10-05: pushes to Artifacts of 6 to 20 s under load failed the check with no stall of the engine). |
 | `fsck` | `git fsck --strict` passes on a fresh clone. |

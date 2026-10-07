@@ -94,6 +94,13 @@ describe("batch cause_seq", () => {
       .map((row) => JSON.parse(String(row.body)) as Record<string, unknown>)
       .find((event) => event.type === "premise.judged" && event.attempt_id === "observer" && event.key === key);
     expect.soft(event?.cause_seq).toBe(3);
+    // The heads-up event names the cause per key too, also where `items` is null (EV6).
+    const sent = sql
+      .exec("SELECT body FROM events_out")
+      .toArray()
+      .map((row) => JSON.parse(String(row.body)) as { type: string; attempt_id?: string; keys?: unknown[] })
+      .find((event) => event.type === "headsup.sent" && event.attempt_id === "observer");
+    expect.soft(sent?.keys).toContainEqual(expect.objectContaining({ key, rule, cause_seq: 3 }));
     trunk.pushOk();
     expect(
       call("observer", "submit", {

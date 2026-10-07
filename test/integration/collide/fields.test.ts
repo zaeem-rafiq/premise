@@ -235,7 +235,7 @@ describe("event fields of 12.1, worked by hand (BP1)", () => {
           seqs: [1],
           changes: [{ seq: 1, change_id: expect.stringMatching(/^c_/), intent_text: "rescale ENERGY_MAX" }],
         },
-        keys: [{ kind: "entity", key: ENERGY_KEY, rule: "E2" }],
+        keys: [{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }],
         dropped_ops: [],
         go_around: 1, // the go-around this heads-up starts
       }),

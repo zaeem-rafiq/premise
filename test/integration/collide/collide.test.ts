@@ -71,7 +71,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const sent = sentTo(sim, ae);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("repair");
-    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }]);
     const item = (sent[0]?.items as HeadsUpItem[])[0] as HeadsUpItem;
     expect(item.diff.kind).toBe("entity");
     if (item.diff.kind === "entity") {
@@ -129,7 +129,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const sent = sentTo(sim, rescale);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("repair");
-    expect(sent[0]?.keys).toContainEqual({ kind: "query", key: REFS_KEY, rule: "QR1" });
+    expect(sent[0]?.keys).toContainEqual({ kind: "query", key: REFS_KEY, rule: "QR1", cause_seq: 1 });
     const item = (sent[0]?.items as HeadsUpItem[])[0] as HeadsUpItem;
     expect(item.diff.kind).toBe("query");
     if (item.diff.kind === "query") {
@@ -180,7 +180,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     expect(sim.state(rescale)).toBe("landed");
     const sent = sentTo(sim, ar);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }]);
 
     // The designed false abort: it acknowledges with no new operation, so the resolution's
     // `changed` is false (HU12).
@@ -211,7 +211,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
 
     const sent = sentTo(sim, ae);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }]);
     expect(sent[0]?.items).toBeNull();
     const landed = sim.eventsOf("landing.landed");
     expect(landed.length).toBeGreaterThan(0);
@@ -291,7 +291,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const sent = sentTo(sim, second);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("repair");
-    expect(sent[0]?.keys).toContainEqual({ kind: "entity", key: ENERGY_KEY, rule: "E1" });
+    expect(sent[0]?.keys).toContainEqual({ kind: "entity", key: ENERGY_KEY, rule: "E1", cause_seq: 1 });
     expect(sent[0]?.dropped_ops).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "world/energy.js", rule: "OP1" })]),
     );
@@ -336,7 +336,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const sent = sentTo(sim, ae);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("info");
-    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0" }]);
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0", cause_seq: 1 }]);
 
     // The write that follows uses the new value: 0.3 = 0.3 x 1, and the file lands.
     sim.resume(ae);
@@ -366,7 +366,7 @@ describe("collide (04-build-plan 2.3, 02-tidepool 10.3): scripted agents through
     const sent = sentTo(sim, ae);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.result).toBe("info");
-    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0" }]);
+    expect(sent[0]?.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "X0", cause_seq: 1 }]);
 
     sim.release(ae);
     sim.settle();

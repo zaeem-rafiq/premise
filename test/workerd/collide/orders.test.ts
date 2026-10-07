@@ -78,7 +78,7 @@ describe("items 2 to 5: the two orders and the undisturbed, in local workerd", (
     }, 60_000);
     sent = sent!;
     expect(sent).toMatchObject({ attempt_id: a, result: "repair" });
-    expect(sent.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
+    expect(sent.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }]);
     const item = (sent.items as Array<Record<string, unknown>>)[0]!;
     const diff = item.diff as { before?: string; after?: string };
     expect(diff.before).toContain("ENERGY_MAX = 100");
@@ -230,7 +230,7 @@ describe("items 2 to 5: the two orders and the undisturbed, in local workerd", (
     }, 60_000);
     // Identical `keys` to the full stream, but `items` is null (EV6).
     expect(sent).toMatchObject({ attempt_id: a, result: "repair", items: null });
-    expect(sent!.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2" }]);
+    expect(sent!.keys).toEqual([{ kind: "entity", key: ENERGY_KEY, rule: "E2", cause_seq: 1 }]);
 
     await release(worker, pool, ["add-energy"]);
     await waitFor(async () => (await eventsOf(worker, pool, "landing.landed")).length >= 2, 120_000);

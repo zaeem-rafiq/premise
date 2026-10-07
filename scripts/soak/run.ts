@@ -192,7 +192,8 @@ function swarmLaunchId(prefix: "a_" | "i_" | "c_", requestId: string, n: number)
 
 // ---- What one drained stream accumulates ----
 
-type HeadsUpSeen = { attempt_id: string; hn: number; seqs: number[] };
+/** `causes`: each key's `cause_seq`; null when there are no keys or the stream predates them. */
+type HeadsUpSeen = { attempt_id: string; hn: number; seqs: number[]; causes: Array<number | null> | null };
 
 type Collected = {
   state: FloorState;
@@ -314,6 +315,11 @@ function observe(col: Collected, event: PoolEvent): void {
         attempt_id: event.attempt_id,
         hn: event.hn,
         seqs: event.cause.seqs,
+        // A heads-up with no keys (dropped operations only) keeps its batch as its cause.
+        causes:
+          event.keys.length > 0 && event.keys.every((key) => key.cause_seq !== undefined)
+            ? event.keys.map((key) => key.cause_seq ?? null)
+            : null,
       });
       break;
     case "landing.accepted": {
@@ -867,12 +873,15 @@ export async function runDial(input: SoakRunInput, deps: SoakDeps): Promise<Soak
   });
   {
     // `cosmetic` landings sweep no one: a heads-up caused by one may reach only `cosmetic` agents.
+    // The cause is each key's `cause_seq` (VE6, amended 2026-10-07); a stream recorded before
+    // keys carried one falls back to every landing of the batch.
     const violations: string[] = [];
+    const isCosmetic = (seq: number | null): boolean => {
+      const attemptId = seq === null ? undefined : col.accepted.get(seq)?.attempt_id;
+      return attemptId !== null && attemptId !== undefined && patternIdOf(attemptId) === "cosmetic";
+    };
     for (const headsUp of col.sentHeadsUps) {
-      const cosmeticCause = headsUp.seqs.some((seq) => {
-        const attemptId = col.accepted.get(seq)?.attempt_id;
-        return attemptId !== null && attemptId !== undefined && patternIdOf(attemptId) === "cosmetic";
-      });
+      const cosmeticCause = (headsUp.causes ?? headsUp.seqs).some(isCosmetic);
       if (!cosmeticCause) continue;
       const receiver = patternIdOf(headsUp.attempt_id);
       if (receiver !== "cosmetic") {

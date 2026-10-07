@@ -186,7 +186,9 @@ export type PoolEvent = EventBase &
         result: "info" | "confirm" | "repair";
         wake: boolean;
         cause: HeadsUp["cause"];
-        keys: Array<{ kind: PremiseKind | "check"; key: string; rule: string }>;
+        // `cause_seq` is the item's (8.2), also when `items` is null; streams recorded before
+        // 2026-10-07 have none.
+        keys: Array<{ kind: PremiseKind | "check"; key: string; rule: string; cause_seq?: number | null }>;
         items: HeadsUpItem[] | null; // the items as sent (8.2); null in a summary_only pool (EV6)
         dropped_ops: HeadsUp["dropped_ops"];
         go_around: number | null;

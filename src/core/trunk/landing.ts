@@ -261,7 +261,12 @@ export function emitSent(
     result: h.body.result,
     wake: h.body.wake,
     cause: h.body.cause,
-    keys: items.map((x) => ({ kind: x.item.premise.kind, key: x.item.premise.key, rule: x.item.rule })),
+    keys: items.map((x) => ({
+      kind: x.item.premise.kind,
+      key: x.item.premise.key,
+      rule: x.item.rule,
+      cause_seq: x.item.cause_seq,
+    })),
     items: h.body.items,
     dropped_ops: h.body.dropped_ops,
     go_around: h.body.go_around,

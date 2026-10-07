@@ -8,7 +8,7 @@ import { REPO_ROOT } from "../../test/support/source.ts";
 import { FEATURES } from "./features.ts";
 import { floorJson } from "./floor-json.ts";
 import { MODEL_OPTIONS, MODEL_PLAN } from "./model-plan.ts";
-import { MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
+import { IMPORT_MAX_ENTRIES, IMPORT_MAX_TEXT_BYTES, MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
 
 const floor = readFileSync(`${REPO_ROOT}/docs/spec/03-floor.md`, "utf8");
 const tidepool = readFileSync(`${REPO_ROOT}/docs/spec/02-tidepool.md`, "utf8");
@@ -89,7 +89,15 @@ function specLimits(): string[] {
     }
     // The parenthetical notes of lines 7 and 15 are the conditions, not part of the shown line.
     line = line.replace(/ \(Or:.*\)$/, "").replace(/ \(Left out.*\)$/, "");
-    lines.push(line.replace("{MAX_FILE_BYTES}", String(MAX_FILE_BYTES)).replace("{max}", String(MAX_REAL_AGENTS)));
+    // 5.12: a number in a line is written with a comma every three places.
+    const n = (value: number) => value.toLocaleString("en-US");
+    lines.push(
+      line
+        .replace("{MAX_FILE_BYTES}", n(MAX_FILE_BYTES))
+        .replace("{IMPORT_MAX_ENTRIES}", n(IMPORT_MAX_ENTRIES))
+        .replace("{IMPORT_MAX_TEXT_BYTES}", n(IMPORT_MAX_TEXT_BYTES))
+        .replace("{max}", n(MAX_REAL_AGENTS)),
+    );
   }
   return lines;
 }

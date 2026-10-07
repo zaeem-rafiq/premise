@@ -2,7 +2,7 @@
 // A line whose condition is false for the build is left out. The README generator and the Floor read
 // this file.
 
-import { MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
+import { IMPORT_MAX_ENTRIES, IMPORT_MAX_TEXT_BYTES, MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
 import type { Features } from "../protocol/floor-json.ts";
 
 /** The names line 15 uses for a switched-off feature (03-floor 5.12). Green and Clef have their own
@@ -21,14 +21,17 @@ const GREEN_SENTENCE: Record<Features["green"], string> = {
   none: "",
 };
 
+/** Digits with a comma every three places, as the page writes counts. */
+const thousands = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
 /** The limits list of 03-floor 5.12 for this build's `features`, lines whose condition is false left out. */
 export function limitsList(features: Features): string[] {
   const off = (Object.keys(FEATURE_OFF_NAMES) as Array<keyof typeof FEATURE_OFF_NAMES>).filter(
     (key) => features[key] === false,
   );
   const lines = [
-    "Premise understands JavaScript ES modules. Other files are tracked as whole files.",
-    `One Trunk serves one pool. A pool is small: each file is at most ${MAX_FILE_BYTES} bytes.`,
+    "Premise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.",
+    `One Trunk serves one pool. Agents read and write files of at most ${thousands(MAX_FILE_BYTES)} bytes. A repository with more than ${thousands(IMPORT_MAX_ENTRIES)} entries or ${thousands(IMPORT_MAX_TEXT_BYTES)} bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.`,
     `Real agents are limited by the Workers AI rate limits. This build runs at most ${MAX_REAL_AGENTS} at once.`,
     "Numbers in the Swarm view come from scripted agents. They make no model calls.",
     "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
@@ -37,8 +40,8 @@ export function limitsList(features: Features): string[] {
       ? "The green line is not in this build."
       : `The green line checks ${GREEN_SENTENCE[features.green]}.`,
     `Clef judgments are ${features.clef ? "on" : "off"} in this build.`,
-    "Not built: text merge, TypeScript parsing, outside agents over MCP, audience input.",
-    "References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value.",
+    "Not built: text merge, Python and Go modules, outside agents over MCP, audience input.",
+    "References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.",
     "A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.",
     "Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.",
     "A sweep is recognised from the edits an agent makes, not from the words of the request.",

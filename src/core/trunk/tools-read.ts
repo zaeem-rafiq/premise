@@ -81,7 +81,7 @@ export function toolOutline(pool: Pool, a: Attempt, args: { path: string }): Too
     entities: mod.entities.map((e) => ({
       name: e.name,
       kind: e.kind,
-      exports: e.exports,
+      exports: [...e.exports],
       signature: e.canonical.split("\n")[0] ?? e.name,
       lines: linesRange(content, mod.regions, e.name, lines.length),
     })),
@@ -91,7 +91,7 @@ export function toolOutline(pool: Pool, a: Attempt, args: { path: string }): Too
 
 function linesRange(
   content: string,
-  regions: readonly { start: number; end: number; names: string[] }[],
+  regions: readonly { start: number; end: number; names: readonly string[] }[],
   name: string,
   total: number,
 ): [number, number] {
@@ -158,7 +158,7 @@ export function toolRead(pool: Pool, a: Attempt, args: { path: string; entity?: 
   const result: ReadResult = {
     key,
     kind: e.kind,
-    exports: e.exports,
+    exports: [...e.exports],
     source: sourceOf(v, key, pool.languages) ?? "",
     lines: linesRange(v.get(args.path) ?? "", mod.regions, args.entity, 1),
     edited_by_you: headE === null ? false : headE.hash !== e.hash,

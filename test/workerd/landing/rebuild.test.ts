@@ -22,13 +22,27 @@
 //   not a pool      a repository that exists but was never seeded (no `main`) arms
 //                   the wipe probe, finds nothing to rebuild and disarms quietly.
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { git, gitBytes } from "../../git/helpers.ts";
 import { REGISTER_TIMEOUT_MS } from "../../../src/protocol/constants.ts";
 import { startLandingWorker, type LandingWorker } from "./harness.ts";
 import { bearer, eventsOf, openAttempt, tool, waitFor } from "../collide/helpers.ts";
+
+// This file inspects the queued undo's durable storage before and after rebuild.
+// Enable Miniflare's test inspection API here without changing the shared harness.
+vi.mock("miniflare", async (original) => {
+  const module = await original<typeof import("miniflare")>();
+  return {
+    ...module,
+    Miniflare: class extends module.Miniflare {
+      constructor(options: ConstructorParameters<typeof module.Miniflare>[0]) {
+        super({ ...options, unsafeInspectDurableObjects: true });
+      }
+    },
+  };
+});
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
 const SEED = "tidepool";
@@ -257,7 +271,7 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     expect(errors, JSON.stringify(errors)).toHaveLength(0);
   });
 
-  it("the happy path: 5 landings, a held card, two in-flight attempts — rebuild to ready@5", async () => {
+  it("RB0: 5 landings, a held card, a queued undo, two in-flight attempts — rebuild to ready@5", async () => {
     // ---- arrange: five landings (auto tier), one held card, two in-flight attempts. ----
     const create = await worker.fetch(
       "/api/pools",
@@ -299,6 +313,22 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     const epochBefore = (await floorSnapshot(worker, MAIN)).pool.epoch;
     const refsBefore = worker.refs(MAIN);
 
+    // Seed the durable queued request without arming a new tick: the fixture represents an
+    // undo awaiting its turn when the rebuild starts. RB0 must discard this transient state.
+    await worker.sql(
+      "TRUNK",
+      MAIN,
+      "INSERT INTO undo_requests (request_id, target_seq, cause, state, detail) VALUES (?, ?, ?, ?, ?)",
+      "r-rb-queued-undo",
+      5,
+      "undo",
+      "queued",
+      JSON.stringify({ requested_by: "owner", reverted: [5] }),
+    );
+    expect(await worker.sql("TRUNK", MAIN, "SELECT request_id, state FROM undo_requests")).toEqual([
+      { request_id: "r-rb-queued-undo", state: "queued" },
+    ]);
+
     // ---- act 1: the owner's request arms the job; a repeat is `already`. ----
     expect(await rebuild(worker, MAIN, "r-rb-main-1")).toMatchObject({ ok: true, started: true });
     expect(await rebuild(worker, MAIN, "r-rb-main-1")).toMatchObject({ ok: true, already: true });
@@ -312,6 +342,7 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     await new Promise((r) => setTimeout(r, 200));
     let meta = (await trunkState(worker, MAIN)).meta;
     expect(meta.pool_state, "begin ran; the walk's log read failed").toBe("rebuilding");
+    expect(await worker.sql("TRUNK", MAIN, "SELECT request_id FROM undo_requests")).toEqual([]);
 
     const during = await worker.trunk(MAIN).fetch("/register", {
       method: "POST",
@@ -342,6 +373,7 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     expect(meta.head_seq).toBe("5");
     expect(meta.head_commit).toBe(refsBefore.main);
     expect(meta.notes_commit).toBe(refsBefore.notes);
+    expect(await worker.sql("TRUNK", MAIN, "SELECT request_id FROM undo_requests")).toEqual([]);
     const floor = await floorSnapshot(worker, MAIN);
     expect(floor.pool.epoch).toBe(epochBefore + 1); // RB5
     expect(floor.pool.state).toBe("ready");

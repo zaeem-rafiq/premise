@@ -85,7 +85,7 @@ describe("8.3 loading checks", () => {
     ["a non-JSON line 1", "not json at all\n"],
     ["premise_replay other than 2", '{"premise_replay":1,"events":0}\n'],
     ["a header that is not the recording's", '{"pool":"tidepool"}\n'],
-  ])("%s fails not_a_recording", (_name, text) => {
+  ])("AC30: %s fails not_a_recording", (_name, text) => {
     const parsed = parseRecording(text);
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) expect(parsed.failure.check).toBe("not_a_recording");
@@ -104,7 +104,7 @@ describe("8.3 loading checks", () => {
     expect(parsed).toEqual({ ok: false, failure: { check: "damaged_line", vars: { line: 4 } } });
   });
 
-  it("an event line without n, t, ts or type fails damaged_line", () => {
+  it("AC30: an event line without n, t, ts or type fails damaged_line", () => {
     const lines = good.split("\n").filter((line) => line !== "");
     const event = JSON.parse(lines[5]!) as Record<string, unknown>;
     delete event.ts;
@@ -142,7 +142,7 @@ describe("8.3 loading checks", () => {
 });
 
 describe("RY13 replay times", () => {
-  it("the replay time of event k is the largest ts among events 1 to k", () => {
+  it("AC30: the replay time of event k is the largest ts among events 1 to k", () => {
     const events = [event(1, 100), event(2, 50), event(3, 400), event(4, 300)];
     expect(replayTimes(events)).toEqual([100, 100, 400, 400]);
   });
@@ -255,6 +255,44 @@ describe("ReplayPlayer (RY13 to RY19)", () => {
     const p = new ReplayPlayer(recording, timers, opts);
     return { timers, p, recording };
   }
+
+  it("AC30: playback keeps stream order and spaces events by the running maximum ts", () => {
+    // 8.3 permits source clocks to arrive out of order. RY13 gives these four events
+    // replay times 100, 100, 400, 400, regardless of their increasing arrival times.
+    const events = [
+      event(1, 100, {
+        type: "intent.created",
+        intent_id: "i_clock",
+        text: "draw a crab",
+        requester: "owner",
+        race: false,
+        prewritten: false,
+      }),
+      event(2, 50, { type: "intent.state", intent_id: "i_clock", state: "landed" }),
+      event(3, 400, { type: "intent.state", intent_id: "i_clock", state: "stopped" }),
+      event(4, 300, { type: "intent.state", intent_id: "i_clock", state: "undone" }),
+    ].map((value, index) => ({ ...value, t: 1_000 + index }));
+    const header = { ...fixture("tracer").header, events: 4 };
+    const parsed = parseRecording([header, ...events].map((value) => JSON.stringify(value)).join("\n"));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error("the nonmonotonic source-clock recording must load");
+
+    const timers = fakeTimers();
+    const p = new ReplayPlayer(parsed.recording, timers, { speed: 1 });
+    expect(p.snapshot().applied).toBe(2);
+    expect(p.snapshot().floor.intents.i_clock?.state).toBe("landed");
+    expect(p.snapshot().clock).toBe(100);
+
+    timers.advance(299);
+    expect(p.snapshot().applied).toBe(2);
+    expect(p.snapshot().floor.intents.i_clock?.state).toBe("landed");
+    timers.advance(1);
+    expect(p.snapshot().applied).toBe(4);
+    expect(p.snapshot().floor.intents.i_clock?.state).toBe("undone");
+    expect(p.snapshot().clock).toBe(400);
+    expect(p.snapshot().ended).toBe(true);
+    p.close();
+  });
 
   it("starts at the replay time of event 1 with event 1 applied (RY13)", () => {
     const { p, recording } = player();

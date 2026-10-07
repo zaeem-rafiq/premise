@@ -9,7 +9,7 @@ import type { Attempt, Head } from "./sets.ts";
 const databases: DatabaseSync[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
 
-function fixture() {
+function fixture(summaryOnly = false) {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
   const changes = () => Number(db.prepare("SELECT total_changes() AS n").get()!.n);
@@ -41,7 +41,7 @@ function fixture() {
       "GUIDE.md": "# Pool\n",
       "creatures/seed.js": "export const energy = 1;\n",
     },
-    { now: () => 1_000 },
+    { now: () => 1_000, summary_only: summaryOnly },
   );
   trunk.pushOk();
   trunk.openAttempt("observer", { intent: "Read the pool" });
@@ -213,7 +213,7 @@ describe("post-batch attempt persistence", () => {
     expect(events().filter((event) => Number(event.n) >= firstEvent && event.attempt_id === observer.id)).toEqual([]);
   });
 
-  it("still persists a holds judgment, its event, and the changed listing pin", () => {
+  it("JE1: still persists a holds judgment, its event, and the changed listing pin", () => {
     const { sql, trunk, observer, call, events } = fixture();
     call(observer.id, "list", { path: "creatures/" });
     const pinned = observer.premises.get("listing|creatures/")!.hash;
@@ -235,5 +235,30 @@ describe("post-batch attempt persistence", () => {
       status: "holds",
     });
     expect(reopened.premises.get("listing|creatures/")!.hash).not.toBe(pinned);
+  });
+
+  it("JE1: a summary-only pool stores a holds judgment without a heads-up or judgment event", () => {
+    const { sql, trunk, observer, call, events } = fixture(true);
+    call(observer.id, "list", { path: "creatures/" });
+    trunk.openAttempt("writer", { intent: "Add a creature" });
+    call("writer", "write", { path: "creatures/new.js", content: "export const energy = 2;\n" });
+    expect(call("writer", "submit", { summary: "Add creature" }).result).toMatchObject({ status: "validated" });
+    trunk.tick();
+    expect(trunk.out.accepted).toEqual(["writer"]);
+    expect(sql.exec("SELECT rule, result FROM judgments WHERE attempt_id = ?", observer.id).toArray()).toEqual([
+      { rule: "L3", result: "holds" },
+    ]);
+    expect(observer.heads).toEqual([]);
+    expect(
+      events().filter(
+        (event) =>
+          event.attempt_id === observer.id && (event.type === "premise.judged" || event.type === "headsup.sent"),
+      ),
+    ).toEqual([]);
+    expect(Trunk.open(sql).pool.attempts.get(observer.id)!.premises.get("listing|creatures/")).toMatchObject({
+      members: ["new.js", "seed.js"],
+      seq: 1,
+      status: "holds",
+    });
   });
 });

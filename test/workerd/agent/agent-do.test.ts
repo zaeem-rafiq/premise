@@ -6,6 +6,7 @@
 //   TA2  a repeated call_id returns the stored response
 //   SW4  a scripted agent runs the add-plain script through the same tools
 //   TA9  an owner stop ends the attempt with the reason cancelled
+//   RS5  a resumed scripted agent syncs before answering a waiting heads-up
 //   HU6a an out-of-order push is answered by a sync before it is shown
 //   3.6.6 a call answered attempt_unknown is followed by register
 //
@@ -48,6 +49,7 @@ class FakeTrunk {
   served: RecordedRequest[] = [];
   executed: string[] = [];
   headsUps: HeadsUp[] = [];
+  headsUpsByAttempt = new Map<string, HeadsUp[]>();
   #stored = new Map<string, ToolResponse>();
   #inflight = new Map<string, Promise<ToolResponse>>();
   // The latest call number per attempt: a call_id belongs to its attempt,
@@ -174,8 +176,11 @@ class FakeTrunk {
       return { status: 200, json };
     }
     if (path === "/sync") {
-      const heads_ups = this.headsUps;
-      this.headsUps = [];
+      const attempt_id = String(body.attempt_id);
+      const targeted = this.headsUpsByAttempt.get(attempt_id);
+      const heads_ups = targeted ?? this.headsUps;
+      if (targeted === undefined) this.headsUps = [];
+      else this.headsUpsByAttempt.delete(attempt_id);
       return { status: 200, json: { heads_ups, heads_ups_more: false, head_seq: 0, attempt: attemptBlock() } };
     }
     if (path === "/stop") {
@@ -479,6 +484,56 @@ describe("the Agent Durable Object in workerd", () => {
     expect(stops.map((r) => r.body.reason)).toEqual(["cancelled"]);
     const s = await inspect("a_stop");
     expect(s.meta.stop_reason).toBe("cancelled");
+  });
+
+  it("RS5: a resumed scripted agent syncs first and answers a waiting heads-up by its pattern", async () => {
+    const id = "a_resume_pattern";
+    // Use the Swarm's actual pattern driver, with the same launch fields as its route.
+    expect(
+      await openAttempt(
+        id,
+        {},
+        {
+          driver: "scripted",
+          pattern: "add-plain",
+          seed: 1,
+          agent_n: 0,
+          hold: false,
+          think_ms: [0, 0],
+        },
+      ),
+    ).toMatchObject({ ok: true });
+    await waitFor(async () => (await inspect(id)).meta.state === "validated");
+    expect(await (await worker.fetchDurableObject("AGENT", id, "/stop")).json()).toMatchObject({ ok: true });
+    await waitFor(async () => (await inspect(id)).meta.state === "stopped");
+    const before = await inspect(id);
+
+    // Parked attempts receive non-waking heads-ups. Resume must still show and answer them.
+    fake.headsUpsByAttempt.set(id, [{ ...headsUp(1, "confirm", false), attempt_id: id }]);
+    const firstRequest = fake.requests.length;
+    const q = encodeURIComponent(JSON.stringify({ attempt_id: id, resume_n: 1, revision: 2 }));
+    expect(await (await worker.fetchDurableObject("AGENT", id, `/resume?q=${q}`)).json()).toEqual({
+      ok: true,
+      resume_n: 1,
+    });
+    await waitFor(async () => (await inspect(id)).meta.state === "validated");
+
+    const resumed = fake.requests.slice(firstRequest).filter((r) => r.body.attempt_id === id);
+    expect(resumed.map((r) => r.path)).toEqual(["/sync", "/tool"]);
+    expect(resumed[0]?.body).toMatchObject({ attempt_id: id, ack: 0 });
+    expect(resumed[1]?.body).toMatchObject({
+      attempt_id: id,
+      tool: "submit",
+      ack: 1,
+      args: { statement: "not affected" },
+    });
+    const after = await inspect(id);
+    expect(after.meta).toMatchObject({ resumed_n: "1", revision: "2", shown_hn: "1" });
+    expect(after.transcript.slice(0, before.transcript.length)).toEqual(before.transcript);
+    const shown = after.transcript.slice(before.transcript.length).filter((row) => row.role === "user");
+    expect(shown).toHaveLength(1);
+    expect(JSON.parse(shown[0]!.content)).toMatchObject({ heads_ups: [{ hn: 1, action: "confirm" }] });
+    expect(after.transcript.at(-1)?.tool).toBe("submit");
   });
 
   it("AG8: a stopped attempt keeps no timer and never calls Trunk again", async () => {

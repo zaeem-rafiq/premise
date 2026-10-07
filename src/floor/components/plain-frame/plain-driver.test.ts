@@ -82,7 +82,7 @@ describe("the plain live frame address and plain.updated flow (3.6, SE16a, AC23)
     expect(h.loads).toEqual([`/pool/tidepool/plain/?seed=${HOST_SEED}`]);
   });
 
-  it("a plain.updated arms a debounced probe — the src never moves (AC23)", () => {
+  it("a plain.updated arms a debounced probe — the src never moves (AC23, PM6)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ plainCommit: P1 });
     h.fire("probe"); // the first commit's own probe

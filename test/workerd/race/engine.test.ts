@@ -9,7 +9,7 @@ const databases: DatabaseSync[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
 
 describe("race timing on the injected engine clock (RC2, RC3)", () => {
-  it("CK8/T12: pending triage waits in submitted, then holds the race instead of landing automatically", () => {
+  it("CK8/T12/TR2: pending triage waits in submitted, then holds the race instead of landing automatically", () => {
     const db = new DatabaseSync(":memory:");
     databases.push(db);
     let now = 1_000;

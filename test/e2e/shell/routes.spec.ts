@@ -45,7 +45,7 @@ test.describe("pool.missing (FR30)", () => {
 });
 
 test.describe("/replay/{id} of an unknown recording", () => {
-  test("shows replay.error and replay.to_live", async ({ page }) => {
+  test("FR25: shows replay.error and replay.to_live", async ({ page }) => {
     await page.goto("/replay/no-such-recording");
     await expect(page.locator(".banner[data-tone='replay']")).toBeVisible();
     await expect(page.locator(".missing-pool")).toContainText("could not be downloaded");

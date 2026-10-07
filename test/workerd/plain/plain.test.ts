@@ -97,7 +97,7 @@ describe("the plain-merge pool (11.7) in local workerd", () => {
     await worker?.dispose();
   });
 
-  it("hero, landing order 1: the plain remote holds the pre-repair files; PM4 marks C and H (7.8, plan 2.7 items 2-4)", async () => {
+  it("hero, landing order 1: the plain remote holds the pre-repair files; PM4 marks C and H (PM6, 7.8, plan 2.7 items 2-4)", async () => {
     await createPool(worker, "hero-p", { seed: "tidepool" });
 
     // 7.11's rows 1-2: the creatures first, their submits held; then the shared rule.
@@ -321,7 +321,7 @@ describe("the plain-merge pool (11.7) in local workerd", () => {
     expect(names).toEqual(["creatures/p5.js"]);
   }, 240_000);
 
-  it("PM7: a refused plain push retries on the push backoff and never pauses the pool (plan 2.7 item 6)", async () => {
+  it("PM6/PM7: a refused plain push retries on the push backoff and never pauses the pool (plan 2.7 item 6)", async () => {
     // Reuse clean-p (one landing already replayed). Refuse every push to clean-p-plain until
     // the counter lets one through — the receive-pack POST is the push itself.
     const repo = plainRepo("clean-p");

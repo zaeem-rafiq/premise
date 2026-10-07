@@ -237,7 +237,7 @@ describe("load failure and stalls (FR20, FR28)", () => {
     expect(h.driver.phase).toBe("error");
   });
 
-  it("a first stall with a green commit reloads on source green (FR28)", () => {
+  it("a first stall with a green commit reloads on source green (FR28, AC29)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1, greenCommit: "g1", greenSeq: 3 });
     h.driver.onStats(stats(`c-${C1}`));
@@ -250,7 +250,7 @@ describe("load failure and stalls (FR20, FR28)", () => {
     });
   });
 
-  it("a first stall without green reloads main once; a second shows frame.stalled", () => {
+  it("a first stall without green reloads main once; a second shows frame.stalled (AC29)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1 });
     h.driver.onStats(stats(`c-${C1}`));

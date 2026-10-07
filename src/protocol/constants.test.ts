@@ -6,9 +6,10 @@
 //
 // Expected values come only from the specification text, never from the implementation.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { REPO_ROOT } from "../../test/support/source.ts";
+import { parseSource, REPO_ROOT } from "../../test/support/source.ts";
 import * as constants from "./constants.ts";
 import { AGENT_SPEC, GUIDE_PATH } from "./agent-prompt.ts";
 
@@ -141,6 +142,53 @@ describe("constants.ts against the constants tables of the specification", () =>
       .filter((name) => /^[A-Z]/.test(name))
       .sort();
     expect(moduleNames).toEqual(specNames);
+  });
+
+  it("BP8: a calibrated constant retains its starting value or cites an existing measurement beside its value", () => {
+    const starting = parseTable("01-core.md", "Appendix C");
+    const calibrated = section("01-core.md", "Appendix C")
+      .split("\n")
+      .filter((line) => {
+        const notes = line.split("|")[3]?.trim() ?? "";
+        // A row may mention calibrated thresholds without marking the constant itself.
+        // The Clef switch row is one such row; the calibrated notes begin a clause.
+        return /(?:^|;\s*)\*?calibrated\b/i.test(notes);
+      })
+      .flatMap((line) => [...(line.split("|")[1] ?? "").matchAll(/`([A-Z][A-Z_0-9]*)`/g)].map((m) => m[1]!));
+    expect(calibrated.length).toBeGreaterThan(0);
+    const source = readFileSync(join(REPO_ROOT, "src/protocol/constants.ts"), "utf8");
+    const { comments } = parseSource("src/protocol/constants.ts", source);
+    const measurementRoot = resolve(REPO_ROOT, "docs/measurements");
+    for (const name of calibrated) {
+      expect(starting.has(name), `${name}: the calibrated row must have a starting value`).toBe(true);
+      expect(name in MODULE, `${name}: the calibrated constant must exist`).toBe(true);
+      if (MODULE[name] === starting.get(name)) continue;
+      const declaration = new RegExp(`^export const ${name}\\b[^;]*;`, "m").exec(source);
+      expect(declaration, `${name}: the value must have a declaration`).not.toBeNull();
+      if (declaration === null) continue;
+      const start = declaration.index;
+      const end = start + declaration[0].length;
+      const adjacent = comments.filter(
+        (comment) =>
+          (comment.end <= start && /^\s*$/.test(source.slice(comment.end, start))) ||
+          (comment.start >= end && /^[ \t]*$/.test(source.slice(end, comment.start))),
+      );
+      const references = adjacent.flatMap((comment) =>
+        [...comment.value.matchAll(/\bdocs\/measurements\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+/g)].map((match) => match[0]),
+      );
+      expect(
+        references.length,
+        `${name}: a changed value must cite a measurement in an adjacent comment`,
+      ).toBeGreaterThan(0);
+      for (const reference of references) {
+        const path = resolve(REPO_ROOT, reference);
+        expect(
+          relative(measurementRoot, path).startsWith(".."),
+          `${name}: measurement must stay under docs/measurements`,
+        ).toBe(false);
+        expect(statSync(path).isFile(), `${name}: ${reference} must be an existing measurement file`).toBe(true);
+      }
+    }
   });
 
   it.each([...tables.entries()].filter(([name]) => !CHECKED_ELSEWHERE.has(name)))(

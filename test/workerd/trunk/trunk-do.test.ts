@@ -39,7 +39,7 @@ describe("the Trunk Durable Object in workerd", () => {
 
   const committed: { marker: string; committed: boolean }[] = [];
 
-  it("SY2: a tool call commits its transaction before any request leaves the object", async () => {
+  it("SY2/AL4: a tool call commits its transaction before any request leaves the object", async () => {
     // `_probe` is the slice's fake engine entry: it writes `probe:<marker>` inside the tool call's
     // transaction and leaves a `_remote_probe` effect, which POSTs to the fake remote.
     const res = await worker.trunk("t1").fetch("/tool", {

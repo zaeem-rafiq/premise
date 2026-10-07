@@ -76,7 +76,7 @@ for (const seed of ["tidepool", "tidepool-auto"] as const) {
 
   describe(`hero conflict, landing order 2 (7.6, 7.11) on ${seed}`, () => {
     it(
-      "A4/A7/A11: creatures land while S waits; QR1 sends S around; stale card; same tree",
+      "A4/A7/A11/B1a: creatures land while S waits; QR1 sends S around; stale card; same tree",
       { timeout: 30_000 },
       () => {
         const s = sim(seed);

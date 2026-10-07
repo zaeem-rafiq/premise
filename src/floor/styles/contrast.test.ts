@@ -57,7 +57,7 @@ const FILLS = ["accent", "holds", "changed", "confirm", "checking", "synthetic"]
 describe.each([
   ["dark", /:root,\s*:root\[data-theme="dark"\]\s*\{([^}]*)\}/],
   ["light", /:root\[data-theme="light"\]\s*\{([^}]*)\}/],
-])("VD9 token contrast - %s theme", (_name, blockRe) => {
+])("VD9/AC9 token contrast - %s theme", (_name, blockRe) => {
   const tokens = themeTokens(blockRe);
 
   it("text is at least 7 against every background", () => {

@@ -7,6 +7,7 @@
 
 import type { Env } from "./env.ts";
 import { forbidden, notBuilt, notConfigured, notFound, unauthorized, unsupportedMediaType } from "./not-built.ts";
+import { serveFloorAsset } from "./security/floor-page.ts";
 import { credentialKind, originOkFor } from "./security/session.ts";
 import { APP_ROUTES, ROUTES, type Route } from "../protocol/routes.ts";
 import { wire as wireTrunk } from "./routes/wiring.ts";
@@ -149,7 +150,7 @@ function dispatch(
 ): Response | Promise<Response> {
   switch (route.answeredBy) {
     case "assets":
-      return env.ASSETS.fetch(request);
+      return serveFloorAsset(request, env);
     case "floor":
       return env.FLOOR.get(env.FLOOR.idFromName(params.pool ?? "")).fetch(request);
     case "trunk":
@@ -190,7 +191,7 @@ function routeRequest(request: Request, env: Env): Response | Promise<Response> 
     return dispatch(route, request, env, params);
   }
   if (isWorkerPath(pathname)) return notFound();
-  return env.ASSETS.fetch(request);
+  return serveFloorAsset(request, env);
 }
 
 export default {

@@ -338,6 +338,7 @@ export class Trunk extends DurableObject<Env> {
         { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES },
         (trunk) => entry(input, trunk),
       );
+      this.#deliverEvents();
       return { result };
     } catch {
       recordTrunkError(this.ctx, `entry:${name}`, "engine_error");
@@ -345,10 +346,21 @@ export class Trunk extends DurableObject<Env> {
     }
   }
 
+  /** Hand committed rows to the Floor immediately (EV3), without making the push await
+   * confirmation (9.4 step 6). Every delivery retains EV2's epoch and gap checks. Independent
+   * sends are intentional: a held confirmation must not hold a newer entry's events. */
+  #deliverEvents(): void {
+    const delivery = deliverEvents(this.env, this.ctx)
+      .catch(() => recordTrunkError(this.ctx, "events", "transport"))
+      // An asynchronous delivery can install a retry after its request/alarm already ended.
+      .then(() => this.#arm())
+      .catch(() => recordTrunkError(this.ctx, "events", "alarm_failed"));
+    this.ctx.waitUntil(delivery);
+  }
+
   /**
-   * 9.4 step 6: after every commit, in this order and none awaited by the next — the events to
-   * the Floor (EV2), the push (9.6), the heads-up delivery (HU5b). Each step's failure is a
-   * `trunk.error`, not a lost transaction: the timers they arm retry them.
+   * Dispatch events independently before the push (EV2, EV3, 9.4 step 6). The existing
+   * push/heads-up pipeline continues here; its failures leave `trunk.error` and retry timers.
    *
    * A push whose answer was applied (`push_ok`, `push_result`) leaves new work: its events, and
    * perhaps the next batch. The pipeline therefore runs again after it — as a loop with a bound,
@@ -357,17 +369,13 @@ export class Trunk extends DurableObject<Env> {
    */
   async #postCommit(): Promise<void> {
     for (let pass = 0; pass < POST_COMMIT_PASSES; pass += 1) {
-      // Before the events flush: the resume cycle's `cause` is read off the still-pending
-      // `attempt.reopened` row (RS1), and a T20r this pass applies lands in the same flush.
+      this.#deliverEvents();
+      // Resume cause is durable in meta; confirmation may already have removed the event.
+      // Each resume failure dispatches its own committed events before the next Agent call.
       try {
-        await deliverResumes(this.env, this.ctx);
+        await deliverResumes(this.env, this.ctx, undefined, () => this.#deliverEvents());
       } catch {
         recordTrunkError(this.ctx, "resume", "transport");
-      }
-      try {
-        await deliverEvents(this.env, this.ctx);
-      } catch {
-        recordTrunkError(this.ctx, "events", "transport");
       }
       const applied = await this.#pushOnce();
       try {
@@ -375,6 +383,7 @@ export class Trunk extends DurableObject<Env> {
       } catch {
         recordTrunkError(this.ctx, "heads_up", "transport");
       }
+      this.#deliverEvents();
       if (!applied) return;
     }
     // The bound was reached with work still to do: the `push` timer continues it (AL1).
@@ -384,6 +393,9 @@ export class Trunk extends DurableObject<Env> {
   /** One `pushOutbox`. True when the push's answer was applied to the engine, which is when the
    * pipeline has new work. */
   async #pushOnce(now?: number): Promise<boolean> {
+    // A push timer may precede the events retry after a Floor outage. Dispatch the durable
+    // rows on this path too, before the first network await of the push.
+    this.#deliverEvents();
     let applied = false;
     try {
       await pushOutbox(
@@ -401,6 +413,7 @@ export class Trunk extends DurableObject<Env> {
     } catch {
       recordTrunkError(this.ctx, "push", "transport");
     }
+    this.#deliverEvents(); // Includes shell-generated push.retry and transport errors.
     return applied;
   }
 
@@ -441,6 +454,7 @@ export class Trunk extends DurableObject<Env> {
       const detail = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
       return json({ error: { code: "internal_error", detail } }, 500);
     }
+    this.#deliverEvents();
     const { response, status, effects } = normalizeResult(result);
     await runEffects(this.env, this.ctx, effects);
     await this.#postCommit();
@@ -617,7 +631,7 @@ export class Trunk extends DurableObject<Env> {
       },
       // A throw means the store itself failed: the alarm's own catch re-arms the row at a
       // backoff (AL2). The transport answers are handled inside `deliverResumes`.
-      resume: (now) => deliverResumes(this.env, this.ctx, now),
+      resume: (now) => deliverResumes(this.env, this.ctx, now, () => this.#deliverEvents()),
       rebuild: async (now) => {
         // IR3: the import job shares the `rebuild` timer and the `rebuild_cursor` row — the
         // cursor's `job` field decides which runner takes this due row (the claim rule already
@@ -668,11 +682,13 @@ export class Trunk extends DurableObject<Env> {
             syncTriage: ScriptedTriage,
             features: FEATURES,
           });
-          return name === "preview" ? trunk.preview() : trunk.previewDone(input);
+          const result = name === "preview" ? trunk.preview() : trunk.previewDone(input);
+          this.#deliverEvents();
+          return result;
         });
         await this.#postCommit();
       },
-    });
+    }).finally(() => this.#deliverEvents());
   }
 
   #arm(): Promise<void> {

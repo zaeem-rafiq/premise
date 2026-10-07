@@ -117,9 +117,15 @@ export async function deliverEvents(env: Env, ctx: DurableObjectState): Promise<
       sql.transaction(() => {
         confirmEvents(sql, last);
         metaDelete(sql, "events_tries");
-        timerDelete(sql, "events", "");
+        // Another committed entry may have appended rows while the Floor answered. Its
+        // delivery must survive this older confirmation (EV2), even if no request follows.
+        if (pendingEvents(sql).length > 0) timerPut(sql, "events", "", Date.now());
+        else timerDelete(sql, "events", "");
       });
-      return;
+      // Drain a concurrent tail now, within the existing two-send bound. At the bound,
+      // leave its immediate timer intact: a successful confirmation needs no backoff.
+      if (pendingEvents(sql).length === 0 || round === 1) return;
+      continue;
     }
     const expected = body?.error?.expected;
     if (

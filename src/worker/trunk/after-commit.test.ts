@@ -79,6 +79,50 @@ function fixture(reply: Reply) {
 }
 
 describe("Trunk event delivery (EV2)", () => {
+  it.each(["confirmed", "gap", "transport", "body"])(
+    "an old epoch's %s response cannot delete the rebuilt epoch's first event (RB5)",
+    async (kind) => {
+      const rebuilt = { ts: 2_000, pool: "pool", src: "trunk", type: "pool.state", epoch: 4 };
+      const rebuild = () => {
+        f.sql.transaction(() => {
+          f.sql.exec("DELETE FROM events_out");
+          metaSet(f.sql, "epoch", 4);
+          metaSet(f.sql, "next_event_n", 1);
+          appendEvent(f.sql, 2_000, rebuilt);
+        });
+      };
+      const f = fixture((_delivery, attempt) => {
+        if (attempt > 1) {
+          expect(pendingEvents(f.sql).map((row) => JSON.parse(row.body))).toEqual([rebuilt]);
+          return Response.json({ appended: 1 });
+        }
+        if (kind === "body") {
+          const response = Response.json({ appended: 2 });
+          const json = response.json.bind(response);
+          response.json = async <T>() => {
+            rebuild();
+            return json<T>();
+          };
+          return response;
+        }
+        rebuild();
+        if (kind === "transport") throw new Error("old request failed");
+        if (kind === "gap") return Response.json({ error: { code: "gap", expected: 3 } }, { status: 409 });
+        return Response.json({ appended: 2 });
+      });
+
+      await deliverEvents(f.env, f.ctx);
+
+      expect(f.deliveries.map(({ epoch, events }) => ({ epoch, ns: events.map((e) => e.source_n) }))).toEqual([
+        { epoch: 3, ns: [1, 2] },
+        { epoch: 4, ns: [1] },
+      ]);
+      expect(f.deliveries[1]?.events[0]?.event).toEqual(rebuilt);
+      expect(pendingEvents(f.sql)).toEqual([]);
+      expect(metaGet(f.sql, "events_tries")).toBeNull();
+    },
+  );
+
   it.each([
     ["new", { appended: 2 }],
     ["duplicate", { duplicate: true }],

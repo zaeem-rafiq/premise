@@ -328,8 +328,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
       headsByAttempt.get(a.id) ?? [],
     );
     for (const j of judgmentsByAttempt.get(a.id) ?? []) {
+      hydrateAttemptJudgment(a, j);
       if (j.result === null) {
-        a.pending.push(j);
         const p = a.premises.get(`${j.kind}|${j.key}`);
         if (p !== undefined) pool.pendingTriage.push({ a, p, judgment: j, it: null, cause: j.cause, stamp: a.opCount });
       }
@@ -808,10 +808,15 @@ export function releaseWorkingState(pool: Pool): void {
         pool.sql.exec("SELECT * FROM ops WHERE attempt_id = ? ORDER BY op_seq", attempt.id).toArray(),
         pool.sql.exec("SELECT * FROM heads_ups WHERE attempt_id = ? ORDER BY hn", attempt.id).toArray(),
       );
-      for (const pending of pool.sql
-        .exec("SELECT * FROM judgments WHERE attempt_id = ? AND result IS NULL ORDER BY judgment_id", attempt.id)
+      for (const judgment of pool.sql
+        .exec(
+          `SELECT * FROM judgments WHERE attempt_id = ?
+           AND (result IS NULL OR (kind = 'entity' AND rule = 'E1' AND result = 'repair'))
+           ORDER BY judgment_id`,
+          attempt.id,
+        )
         .toArray()) {
-        restored.pending.push(pool.judgments.get(num(pending.judgment_id)) ?? judgmentFromRow(pending));
+        hydrateAttemptJudgment(restored, pool.judgments.get(num(judgment.judgment_id)) ?? judgmentFromRow(judgment));
       }
       Object.assign(attempt, restored);
     }
@@ -828,6 +833,14 @@ export function releaseWorkingState(pool: Pool): void {
 
 // ---------------------------------------------------------------------------
 // Row (de)serialisation.
+
+/** GL3 remembers every earlier E1 repair, including those acknowledged before T21. */
+function hydrateAttemptJudgment(attempt: Attempt, judgment: Judgment): void {
+  if (judgment.kind === "entity" && judgment.rule === "E1" && judgment.result === "repair") {
+    attempt.e1.add(judgment.key);
+  }
+  if (judgment.result === null) attempt.pending.push(judgment);
+}
 
 /** Populate a freshly deserialized attempt from its child rows in database key order. */
 function hydrateAttemptChildren(

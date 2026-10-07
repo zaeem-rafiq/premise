@@ -8,6 +8,7 @@
 
 import { fill, type CopyVars } from "./fill.ts";
 import { DASH } from "./format.ts";
+import type { Features } from "../protocol/floor-json.ts";
 
 export type CopyEntry = {
   readonly text: string;
@@ -704,18 +705,26 @@ export const SHORTCUT_ROWS: ReadonlyArray<{ key: string; does: string }> = [
 ];
 
 /**
- * The labels of the seven boxes of the `about.how` diagram (03 5.12). The diagram is fixed and
- * carries no other text.
+ * The labels of the seven boxes of the `about.how` diagram (03 5.12) for this build's features. The
+ * diagram carries no other text.
  */
-export const ABOUT_HOW_BOXES: readonly string[] = [
-  "Worker: this page, the API, and the app server that serves a pool's files by commit",
-  "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
-  "Agent (one Durable Object per attempt): the model's tool loop and its whole conversation",
-  "Floor (one Durable Object per pool): the event stream this page draws",
-  "Workflows: the green line and the Swarm",
-  "Workers AI: the coding models, and Clef for judgments",
-  "Artifacts: main, the green line, and the notes; one repository per attempt for its conversation",
-];
+export function aboutHowBoxes(features: Pick<Features, "green" | "clef" | "attempt_repos">): readonly string[] {
+  // 5.12: a box names a part only when the build has it.
+  const green = features.green !== "none";
+  return [
+    "Worker: this page, the API, and the app server that serves a pool's files by commit",
+    "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
+    "Agent (one Durable Object per attempt): the model's tool loop and its whole conversation",
+    "Floor (one Durable Object per pool): the event stream this page draws",
+    green ? "Workflows: the green line and the Swarm" : "Workflows: the Swarm",
+    features.clef ? "Workers AI: the coding models, and Clef for judgments" : "Workers AI: the coding models",
+    (green ? "Artifacts: main, the green line, and the notes" : "Artifacts: main and the notes") +
+      (features.attempt_repos ? "; one repository per attempt for its conversation" : ""),
+  ];
+}
+
+/** The seven boxes of 5.12 for a build that has every part (the table's text). */
+export const ABOUT_HOW_BOXES: readonly string[] = aboutHowBoxes({ green: "full", clef: true, attempt_repos: true });
 
 /**
  * The copy 06-repos.md names (IR12). These ids are amendments: they are not in the tables of

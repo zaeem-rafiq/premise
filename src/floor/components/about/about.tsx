@@ -1,11 +1,11 @@
-// The About sheet (3.19, 5.12): `about.how` (the fixed seven-box diagram), `about.run`
+// The About sheet (3.19, 5.12): `about.how` (the seven-box diagram, its boxes following `features`), `about.run`
 // (counts from the stream), `about.limits` (the limits list of `/floor.json`, the same
 // source the README shows) and `about.related`. A `dialog` named by its title (AX6).
 
 import { useContext, useEffect, useRef } from "react";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
-import { ABOUT_HOW_BOXES, SHORTCUT_ROWS } from "../../../copy/strings.ts";
+import { aboutHowBoxes, SHORTCUT_ROWS } from "../../../copy/strings.ts";
 import { money } from "../../../copy/format.ts";
 
 export function AboutSheet({
@@ -51,7 +51,7 @@ export function AboutSheet({
           <section>
             <h3>{t("about.how")}</h3>
             <ol className="about-how">
-              {ABOUT_HOW_BOXES.map((box) => (
+              {aboutHowBoxes(shell.settings.features).map((box) => (
                 <li key={box}>{box}</li>
               ))}
             </ol>

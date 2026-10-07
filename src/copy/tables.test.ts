@@ -41,7 +41,7 @@ import { changeName, keyLabel, keyShort, modelName } from "./names.ts";
 import { replayError, REPLAY_ERRORS } from "./replay.ts";
 import { headsupOneLine, judgmentSentence, SCRIPTED_SENTENCES, tickSkipped } from "./sentences.ts";
 import { STOP_FALLBACK, STOP_KEPT_SUFFIX, STOP_NO_KEPT_SUFFIX, STOP_SENTENCES, stopSentence } from "./stops.ts";
-import { ABOUT_HOW_BOXES, SHORTCUT_ROWS, STRINGS, text } from "./strings.ts";
+import { ABOUT_HOW_BOXES, SHORTCUT_ROWS, STRINGS, aboutHowBoxes, text } from "./strings.ts";
 import { ABSENT } from "../protocol/premise.ts";
 
 const SPEC = readFileSync("docs/spec/03-floor.md", "utf8");
@@ -557,6 +557,30 @@ describe("5.12 About", () => {
       expect(ABOUT_HOW_BOXES[i], `box ${i + 1}`).toBe(uncode(rows[i]![1]!));
     }
     expect(ABOUT_HOW_BOXES.length).toBe(7);
+  });
+
+  // 5.12 (amended 2026-10-07): a box names a part only when the build has it.
+  it("5.12: with the green line, Clef and attempt repositories off, boxes 5 to 7 name none of them", () => {
+    const boxes = aboutHowBoxes({ green: "none", clef: false, attempt_repos: false });
+    expect(boxes.slice(0, 4)).toEqual(ABOUT_HOW_BOXES.slice(0, 4));
+    expect(boxes.slice(4)).toEqual([
+      "Workflows: the Swarm",
+      "Workers AI: the coding models",
+      "Artifacts: main and the notes",
+    ]);
+  });
+
+  it("5.12: each part is named exactly when its feature is on", () => {
+    expect(aboutHowBoxes({ green: "static", clef: false, attempt_repos: true }).slice(4)).toEqual([
+      "Workflows: the green line and the Swarm",
+      "Workers AI: the coding models",
+      "Artifacts: main, the green line, and the notes; one repository per attempt for its conversation",
+    ]);
+    expect(aboutHowBoxes({ green: "none", clef: true, attempt_repos: true }).slice(4)).toEqual([
+      "Workflows: the Swarm",
+      "Workers AI: the coding models, and Clef for judgments",
+      "Artifacts: main and the notes; one repository per attempt for its conversation",
+    ]);
   });
 });
 

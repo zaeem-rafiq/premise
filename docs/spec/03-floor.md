@@ -2020,6 +2020,8 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 | 6 | Workers AI: the coding models, and Clef for judgments |
 | 7 | Artifacts: main, the green line, and the notes; one repository per attempt for its conversation |
 
+A box names a part only when the build has it: box 5 reads "Workflows: the Swarm" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off).
+
 The limits list is one file in the repository, shown here and in the README from the same source. A line whose condition is false for the build is left out. Content:
 
 1. Premise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.

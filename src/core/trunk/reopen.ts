@@ -9,6 +9,7 @@ import { clearRightOfWay, openCard, setIntentState, setState, unvalidate } from 
 import { event } from "./events.ts";
 import { applyClassification, hItem } from "./landing.ts";
 import { classify } from "../classify/table.ts";
+import type { CauseSeq } from "./cause-seq.ts";
 
 export type Reopened = {
   a: Attempt;
@@ -49,7 +50,14 @@ export function reopen(pool: Pool, a: Attempt, landing: Landing, head: FileMap, 
   pool.dirtyAttempts.add(a.id);
 }
 
-export function repairReopened(pool: Pool, r: Reopened, head: FileMap, seq: number, batch: Landing[]): void {
+export function repairReopened(
+  pool: Pool,
+  r: Reopened,
+  head: FileMap,
+  seq: number,
+  batch: Landing[],
+  causeSeq: CauseSeq,
+): void {
   const items: ReturnType<typeof hItem>[] = [];
   for (const p of r.a.premises.values()) {
     const cur = keyHash(head, p.kind, p.key, pool.languages);
@@ -74,7 +82,7 @@ export function repairReopened(pool: Pool, r: Reopened, head: FileMap, seq: numb
         reason: "reopened_dep_changed",
       };
       p.status = "pending_repair";
-      items.push(hItem(pool, r.a, it, "repair", r.undoSeq));
+      items.push(hItem(pool, r.a, it, "repair", causeSeq(p.kind, p.key)));
     }
     // UN8 pins at the undo's head. Non-dependent facts may change again later in
     // this batch and still need ordinary classification before reaching its head.
@@ -110,6 +118,7 @@ export function repairReopened(pool: Pool, r: Reopened, head: FileMap, seq: numb
     },
     null,
     items,
+    causeSeq,
   );
   for (const p of r.a.premises.values()) {
     p.seq = seq;

@@ -45,6 +45,7 @@ import { syncTriageOf, triageInputOf, triageOutcome } from "../classify/triage.t
 import { classify, rowFor } from "../classify/table.ts";
 import type { Classification, Row } from "../classify/table.ts";
 import { unified } from "../diff/unified.ts";
+import type { CauseSeq } from "./cause-seq.ts";
 
 // ---------------------------------------------------------------------------
 // Heads-up construction (8.1/8.2). Each trace item keeps the vector-facing shape
@@ -381,6 +382,7 @@ export function applyClassification(
   cause: HeadsUpCause,
   causeAttempt: Attempt | null,
   reopenedItems?: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }>,
+  causeSeq?: CauseSeq,
 ): void {
   const hItems: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [...(reopenedItems ?? [])];
   let strongest: "info" | "confirm" | "repair" | null = reopenedItems === undefined ? null : "repair";
@@ -438,7 +440,7 @@ export function applyClassification(
       old_hash: it.old_hash,
       new_hash: it.new_hash,
       cause: cause.type,
-      cause_seq: firstCauseSeq(cause),
+      cause_seq: causeSeq?.(p.kind, p.key) ?? null,
       rule: it.rule ?? "",
       klass: rowResult === "triage" ? "triage" : "rule",
       result:
@@ -507,10 +509,6 @@ export function applyClassification(
     h.body.go_around = a.go_arounds;
     emitSent(pool, a, h, hItems);
   } else sendHeadsUp(pool, a, strongest, hItems, dropped, cause, e1keys, causeAttempt);
-}
-
-function firstCauseSeq(cause: HeadsUpCause): number | null {
-  return cause.seqs.length === 0 ? null : (cause.seqs[0] ?? null);
 }
 
 /** V7: a pending triage is evaluated again after every operation, on the frozen maps. */

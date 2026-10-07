@@ -19,7 +19,7 @@ import { utf8 } from "../sync/bytes.ts";
 import { isModulePath, parentKey, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import type { LanguageSet } from "../keys/paths.ts";
 import { membersHash, listingMembers } from "../keys/members.ts";
-import { textMembers as textMembersOf, matchContainers, occurrences } from "../keys/search.ts";
+import { occurrences } from "../keys/search.ts";
 import { parseModule, entitySource, outlineLines, moduleHash, type ModuleInfo } from "../entities/entities.ts";
 import { analyse, referrersOf, refsMembers, type Analysis } from "../refs/refs.ts";
 import { replay } from "../replay/replay.ts";
@@ -488,8 +488,12 @@ export function textCounts(
   const out = new Map<string, number>();
   for (const [path, content] of files) {
     if (!(scope === "/" || path === scope || (scope.endsWith("/") && path.startsWith(scope)))) continue;
-    for (const [container, count] of matchContainers(path, content, needle, languages)) {
-      out.set(container, (out.get(container) ?? 0) + count);
+    // Reuse the same parsed regions as entity/refs/outline hashes on this tree.
+    // Batch attribution can evaluate several text keys on each prefix.
+    for (const offset of occurrences(content, needle)) {
+      for (const container of targetsOf(files, path, offset, offset + needle.length, languages)) {
+        out.set(container, (out.get(container) ?? 0) + 1);
+      }
     }
   }
   return out;
@@ -538,7 +542,9 @@ export function keyHash(
   if (key.startsWith("text:")) {
     const rest = key.slice(5);
     const i = rest.indexOf(":");
-    members = textMembersOf(files, rest.slice(0, i), rest.slice(i + 1), languages);
+    members = [...textCounts(files, rest.slice(0, i), rest.slice(i + 1), languages)]
+      .map(([container, count]) => `${container}*${count}`)
+      .sort();
   } else if (key.startsWith("refs:")) {
     members = refsMembersOf(files, key.slice(5), languages);
   } else {

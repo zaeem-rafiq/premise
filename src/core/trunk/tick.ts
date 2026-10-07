@@ -52,6 +52,7 @@ import { metaGet } from "./schema.ts";
 import { planUndo } from "../undo/plan.ts";
 import { confirmUndo, undoPlan } from "./undo-apply.ts";
 import { reopen, repairReopened, type Reopened } from "./reopen.ts";
+import { batchCauseSeq } from "./cause-seq.ts";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const utf8len = (s: string): number => utf8(s).length;
@@ -494,6 +495,7 @@ export function tick(pool: Pool): void {
   let running = new Map(pre);
   let seq = pool.headSeq();
   const batch: Landing[] = [];
+  const causeSeq = batchCauseSeq(pre, batch, pool.languages);
   const reopened: Reopened[] = [];
   pool.eventBuffer = [];
 
@@ -677,7 +679,7 @@ export function tick(pool: Pool): void {
         old_hash: it.old_hash,
         new_hash: it.new_hash,
         cause: "landing",
-        cause_seq: seq + 1,
+        cause_seq: causeSeq(it.kind, it.key),
         rule: it.rule ?? "",
         klass: "rule",
         result: "holds",
@@ -823,7 +825,7 @@ export function tick(pool: Pool): void {
   // the budget) ticks again at the cadence.
   schedulePendingTick(pool);
 
-  for (const r of reopened) repairReopened(pool, r, running, seq, batch);
+  for (const r of reopened) repairReopened(pool, r, running, seq, batch, causeSeq);
 
   // Every other in-flight or parked attempt is classified against the batch (9.4 step 6).
   for (const a of [...inflight(pool), ...parked(pool)]) {
@@ -853,6 +855,8 @@ export function tick(pool: Pool): void {
             : "landing",
       ),
       causeAttempt,
+      undefined,
+      causeSeq,
     );
   }
   pool.out.waiting = inflight(pool).filter(

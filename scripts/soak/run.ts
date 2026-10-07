@@ -270,8 +270,10 @@ function observe(col: Collected, event: PoolEvent): void {
   // `no_stall` (VE6, amended 2026-10-05): the interval from the newest of {last
   // landing.accepted, last batch.pushed, the ts the `validated` set last became nonempty} to this
   // event — while the set is nonempty and no accepted batch waits for its push (LP1: the tick
-  // accepts nothing then, by design; that time is `push_ms`).
-  noteGap(col, event.ts);
+  // accepts nothing then, by design; that time is `push_ms`). The clock runs on Trunk's own
+  // events and times: the stall is Trunk's state, and arrival order across sources says nothing
+  // about causality (01-core EV4) — a Floor `metrics` event can arrive before an older accept.
+  if (event.src === "trunk") noteGap(col, event.ts);
 
   reduce(col.state, event);
   col.events += 1;

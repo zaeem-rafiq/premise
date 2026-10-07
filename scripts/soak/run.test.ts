@@ -114,6 +114,9 @@ function agentLadder(
     acceptDelay?: number;
     /** Extra ms this landing's push takes (its batch.pushed comes that much later). */
     pushDelay?: number;
+    /** Extra ms the events from this landing's accept onward take to reach the Floor (their
+     * `t`, the arrival), with `ts` (Trunk's own time) unchanged. */
+    arrivalLag?: number;
     stopAfterWorking?: boolean;
   },
 ): PoolEvent[] {
@@ -229,6 +232,10 @@ function agentLadder(
       }),
     );
   }
+  if (o.arrivalLag !== undefined) {
+    const from = out.findIndex((e) => e.type === "landing.accepted");
+    for (const e of from < 0 ? [] : out.slice(from)) (e as { t: number }).t = e.ts + (o.arrivalLag ?? 0);
+  }
   return out;
 }
 
@@ -236,8 +243,9 @@ function agentLadder(
 function metricsEv(
   ts: number,
   o: { waiting_behind: number; push_backlog: number; tick: { p50: number | null; p99: number | null } },
+  src: PoolEvent["src"] = "trunk",
 ): PoolEvent {
-  return ev(ts, "trunk", {
+  return ev(ts, src, {
     type: "metrics",
     window_ms: 60_000,
     landings_per_second: 0,
@@ -345,6 +353,10 @@ type RunPlan = {
   acceptDelay: Record<number, number>;
   /** Agent index -> extra ms its landing's push takes (LP1: the next accept waits for it). */
   pushDelay: Record<number, number>;
+  /** Agent index -> extra ms its events from the accept onward take to reach the Floor. */
+  arrivalLag: Record<number, number>;
+  /** The `ts` of Floor-sourced `metrics` events (EM5: the Floor sends them on its own clock). */
+  floorMetricsAt: number[];
   /** Agent indices whose ladder stops after `working` (in flight at end). */
   stopAfterWorking: number[];
   /** Agent indices whose post-`working` events are held out of `pre` — `lateEvents(base)` mints
@@ -376,6 +388,8 @@ const DEFAULT_PLAN: RunPlan = {
   goAroundOn: [1],
   acceptDelay: {},
   pushDelay: {},
+  arrivalLag: {},
+  floorMetricsAt: [],
   stopAfterWorking: [],
   lateFinish: [],
   extraTail: () => [],
@@ -454,6 +468,7 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
         goAround,
         acceptDelay: plan.acceptDelay[index],
         pushDelay: plan.pushDelay[index],
+        arrivalLag: plan.arrivalLag[index],
         stopAfterWorking,
         timeToLand: [400, 900, 500, 400][index] ?? 400,
       }),
@@ -481,12 +496,15 @@ function buildRun(over: Partial<RunPlan> = {}): BuiltRun {
   // `n` the fixture minted — which is what lets a live `push` carry them to the reader.
   const lateEvents = (base: number): PoolEvent[] =>
     lateSpecs.flatMap(({ spec, seq }) => agentLadder(spec, seq, { base }).slice(3));
-  // A stream is in arrival order: a delayed push or accept lands among the later agents' events
-  // (the sort is stable, so ladders that do not overlap keep their order).
-  pre.sort((x, y) => x.ts - y.ts);
+  for (const at of plan.floorMetricsAt) {
+    pre.push(metricsEv(at, { waiting_behind: 0, push_backlog: 0, tick: { p50: null, p99: null } }, "floor"));
+  }
+  // A stream is in arrival order (`t`): a delayed push or accept lands among the later agents'
+  // events (the sort is stable, so ladders that do not overlap keep their order).
+  pre.sort((x, y) => x.t - y.t);
   pre.push(...plan.extraTail(landed));
 
-  let tail = Math.max(...pre.map((e) => e.ts)) + 100;
+  let tail = Math.max(...pre.map((e) => e.t)) + 100;
   const lastSeq = landed.length === 0 ? 0 : (landed[landed.length - 1] as { seq: number }).seq;
   pre.push(metricsEv(tail, { waiting_behind: plan.waitingBehind, push_backlog: plan.pushBacklog, tick: plan.tick }));
   tail += 100;
@@ -755,6 +773,18 @@ describe("the soak runner of VE6", () => {
     expect(failed(result)).toEqual([]);
     // The push time is published as measured: 50 + 12000 ms for agent 2's batch.
     expect(result.metrics.push_ms.p99).toBe(12_050);
+  });
+
+  it("no_stall runs on Trunk's own timeline: Floor events that arrive before a late accept are no stall (EV4)", async () => {
+    // Agent 3 is validated at 4110 and accepted at 4500 by Trunk's clock. Its accept, landing
+    // and push reach the Floor 11 s late, after the Floor's own metrics at 5000 to 15000. Order
+    // across sources says nothing about causality (01-core EV4): by Trunk's events the wait from
+    // validated to accepted was 390 ms.
+    const floorMetricsAt = Array.from({ length: 11 }, (_, i) => 5000 + 1000 * i);
+    const run = buildRun({ floorMetricsAt, arrivalLag: { 3: 11_000 } });
+    const result = await runDial(input, makeFake(run).deps);
+    expect(result.metrics.longest_gap_ms).toBeLessThan(10_000);
+    expect(failed(result)).toEqual([]);
   });
 
   it("never_paused fails on one pool.paused", async () => {

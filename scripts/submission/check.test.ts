@@ -168,6 +168,20 @@ describe("checkSubmission", () => {
     ]);
   });
 
+  it("BP11: a hyphenated replaced word in run.txt fails", () => {
+    const f = files();
+    f.run = f.run.replace("npm ci", "npm ci, no merge-queue entry, no pull-request");
+    f.readme = f.readme.replace("npm ci", "npm ci, no merge-queue entry, no pull-request");
+    const failed = check(f).filter((x) => x.rule === "BP11");
+    expect(failed.map((x) => x.detail)).toEqual([
+      expect.stringContaining("pull request"),
+      expect.stringContaining("pull request"),
+      expect.stringContaining("merge queue"),
+      expect.stringContaining("merge queue"),
+    ]);
+    expect(new Set(failed.map((x) => x.file))).toEqual(new Set(["README.md", "docs/submission/run.txt"]));
+  });
+
   it("SC3: a Run it section that differs from run.txt fails", () => {
     const f = files();
     f.readme = f.readme.replace("npm ci", "npm install");

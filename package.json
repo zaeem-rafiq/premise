@@ -27,7 +27,7 @@
     "check:licenses": "node scripts/build/check-licenses.ts",
     "check:secrets": "node scripts/ops/check-secrets.ts",
     "check:lane": "node scripts/ops/check-lane.ts",
-    "check:submission": "node scripts/ops/not-built.ts check:submission 'Slice 10'",
+    "check:submission": "node scripts/submission/check.ts",
     "agents-md": "node scripts/build/agents-md.ts",
     "dev:floor": "node scripts/build/floor-json.ts && vite",
     "dev": "npm run build && wrangler dev --port 8787",

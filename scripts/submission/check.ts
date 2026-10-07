@@ -55,8 +55,9 @@ function phrasePattern(phrase: string): RegExp {
 // "## The idea" only; anywhere else in the README or the other two texts is a failure.
 const REPLACED_PATTERNS: ReadonlyArray<{ word: string; pattern: RegExp }> = [
   { word: "branch", pattern: /\bbranches?\b/gi },
-  { word: "pull request", pattern: new RegExp(`\\bpull(?:${BREAK})requests?\\b`, "gi") },
-  { word: "merge queue", pattern: new RegExp(`\\bmerge(?:${BREAK})queues?\\b`, "gi") },
+  // A hyphen joins the two words as well ("merge-queue entry"): the lint is not evaded by it.
+  { word: "pull request", pattern: new RegExp(`\\bpull(?:${BREAK}|-)requests?\\b`, "gi") },
+  { word: "merge queue", pattern: new RegExp(`\\bmerge(?:${BREAK}|-)queues?\\b`, "gi") },
 ];
 
 // RY24 / 8.7 way 3: an https:// address ending in /replay/hero, optionally followed by punctuation.

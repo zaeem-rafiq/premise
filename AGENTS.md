@@ -41,7 +41,7 @@ build step.
 | Early model measurement           | `npm run measure:models -- --early`                                                                | not built        |
 | Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | not built        |
 | Recordings                        | `npm run record:export -- --pool <pool> --id <id>`                                                 | not built        |
-| Submission checks                 | `npm run check:submission`                                                                         | not built        |
+| Submission checks                 | `npm run check:submission`                                                                         | works            |
 | Cleanup of the `test` environment | `npm run cleanup:test`                                                                             | not built        |
 | Spend                             | `npm run spend`                                                                                    | not built        |
 

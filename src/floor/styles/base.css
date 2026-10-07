@@ -1141,6 +1141,11 @@ a {
     padding: 6px 10px;
     min-height: 44px;
   }
+  /* Two rows of three cells down to 320 wide: the counters follow the window's width, so the
+   * run clock keeps its last digit. */
+  .strip-value:not(.strip-value--text) {
+    font-size: min(var(--size-counter), 6.5vw);
+  }
   .floor-body {
     display: flex;
     flex-direction: column;

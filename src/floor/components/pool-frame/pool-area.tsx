@@ -46,7 +46,13 @@ export function PoolArea(props: PoolAreaProps) {
     if (el === null || typeof ResizeObserver !== "function") return;
     const measure = () => {
       // IR12: a no-app area holds no frame body — the LY1 shrink math has nothing to move.
-      if (el.querySelector(".pf-body") === null) {
+      // 2.9: below 1100 the tiles sit behind the `tiles.files` disclosure and the column grows
+      // with its content, so there is no row to keep and the frame keeps the full width. A
+      // shrink there would feed on itself: the smaller frame shortens the area, which reads
+      // as tight again, down to nothing.
+      const toggle = el.querySelector<HTMLElement>(".tiles-toggle");
+      const disclosure = toggle !== null && getComputedStyle(toggle).display !== "none";
+      if (el.querySelector(".pf-body") === null || disclosure) {
         delete el.dataset.tight;
         el.style.removeProperty("--pf-body-h");
         return;

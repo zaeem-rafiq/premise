@@ -193,6 +193,59 @@ for (const size of SIZES) {
   });
 }
 
+// 2.9: below 1100 the page is one column: the pool frame keeps the pool area's full width at
+// 16:9 whatever the window's height, and the attempt cards follow it with a height of their own.
+for (const size of [
+  { w: 320, h: 568 },
+  { w: 375, h: 667 },
+  { w: 800, h: 600 },
+  { w: 1024, h: 600 },
+] as const) {
+  test(`the pool frame keeps the full width at 16:9 in the narrow layout at ${size.w}x${size.h} (2.9)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.w, height: size.h });
+    await servePoolHost(page);
+    await serveStream(page, [
+      poolState(1),
+      ev(2, {
+        type: "pool.files",
+        files: [
+          { path: "world/energy.js", tier: "auto" },
+          { path: "creatures/crab.js", tier: "auto" },
+        ],
+      }),
+      intentCreated(3),
+      attemptOpened(4),
+      attemptState(5, "a_1", "opened", "working"),
+    ]);
+    await serveSession(page, false);
+    await page.goto("/");
+    await expect(page.locator(".rail")).toBeVisible();
+    await dismissStart(page);
+    await expect(page.locator(".pf-body iframe")).toBeVisible();
+    const area = await box(page.locator(".pool-area"));
+    const body = await box(page.locator(".pf-body"));
+    expect(Math.abs(body.width - area.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(body.height - (area.width * 9) / 16)).toBeLessThanOrEqual(1);
+    const list = await box(page.locator(".rail-list"));
+    expect(list.y).toBeGreaterThanOrEqual(body.y + body.height);
+    expect(list.height).toBeGreaterThan(0);
+    // The strip wraps to two rows and every counter shows whole: no value runs past its cell.
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll(".strip-cell")].flatMap((cell) => {
+        const value = cell.querySelector(".strip-value");
+        if (value === null) return [];
+        const right = value.getBoundingClientRect().right;
+        return right > cell.getBoundingClientRect().right
+          ? [`${cell.getAttribute("data-cell")} ${value.textContent}`]
+          : [];
+      }),
+    );
+    expect(clipped).toEqual([]);
+  });
+}
+
 // LY3/AC13 on the Floor view: no sideways and no vertical page scroll at every width
 // 1100-1920 and every height 720-1080. Run on Replay - the busier DOM (banner + bar).
 for (const w of [1100, 1280, 1440, 1600, 1920]) {

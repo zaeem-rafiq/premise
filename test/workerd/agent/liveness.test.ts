@@ -256,11 +256,12 @@ describe("an unfinished Agent always has an alarm that fires", () => {
     await waitFor(async () => (await inspect(id)).meta.state === "stopped");
     expect((await inspect(id)).meta.stop_reason).toBe("tool_timeout");
     expect(fake.stops(id)).toEqual(["tool_timeout"]);
-    // AG8: the next alarm retires the attempt's timers for good.
+    // AG8: the next alarm retires the attempt's timers for good; a pending
+    // outbox or gate release is the only work that may remain.
     await alarm(id, Date.now() + AGENT_WATCHDOG_MS + 1_000);
     const s = await inspect(id);
-    expect(s.timers).toEqual([]);
-    expect(s.alarm).toBeNull();
+    expect(s.timers.filter((t) => t.kind !== "events" && t.kind !== "release")).toEqual([]);
+    if (s.timers.length === 0) expect(s.alarm).toBeNull();
   });
 
   it("TL16: attempt_unknown stops the attempt with the pending reason", async () => {

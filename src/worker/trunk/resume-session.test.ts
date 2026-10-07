@@ -89,7 +89,21 @@ describe("resume delivery with a retained Trunk", () => {
       trunk.sync({ attempt_id: "probe", ack: 0 });
       return card.card_id;
     });
-    await deliverResumes(refusedAgent, ctx, 1_000);
+    let dispatched = 0;
+    await deliverResumes(refusedAgent, ctx, 1_000, () => {
+      // Starting another transaction proves dispatch happens after the engine committed.
+      raw.transaction(() => {
+        expect(raw.exec("SELECT state FROM attempts WHERE attempt_id = 'probe'").toArray()[0]?.state).toBe("stopped");
+        expect(
+          raw
+            .exec("SELECT body FROM events_out")
+            .toArray()
+            .some((row) => String(row.body).includes('"T20r"')),
+        ).toBe(true);
+      });
+      dispatched += 1;
+    });
+    expect(dispatched).toBe(1);
     session.run("sync", opts, (trunk) => {
       expect(trunk).toBe(retained);
       const attempt = trunk.pool.attempts.get("probe")!;
@@ -142,7 +156,16 @@ describe("resume delivery with a retained Trunk", () => {
     const { session, ctx, opts, retained, queries } = fixture();
     metaSet(session, "resume_done:probe", 1);
     metaSet(session, "new_agent_open:probe", JSON.stringify({ attempt_id: "probe", pool: "resume-session" }));
-    await deliverResumes(refusedAgent, ctx, 1_000);
+    let dispatched = 0;
+    await deliverResumes(refusedAgent, ctx, 1_000, () => {
+      session.transaction(() => {
+        expect(session.exec("SELECT state FROM attempts WHERE attempt_id = 'probe'").toArray()[0]?.state).toBe(
+          "stopped",
+        );
+      });
+      dispatched += 1;
+    });
+    expect(dispatched).toBe(1);
     session.run("sync", opts, (trunk) => {
       expect(trunk).toBe(retained);
       expect(trunk.pool.attempts.get("probe")).toMatchObject({ state: "stopped", stop_reason: "lost" });

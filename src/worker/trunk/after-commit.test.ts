@@ -79,6 +79,36 @@ function fixture(reply: Reply) {
 }
 
 describe("Trunk event delivery (EV2)", () => {
+  it("delivers events committed while the Floor confirms the previous rows", async () => {
+    const f = fixture((_delivery, attempt) => {
+      if (attempt === 1) {
+        f.sql.transaction(() => appendEvent(f.sql, 2_000, { type: "landing.accepted", ts: 2_000 }));
+      }
+      return Response.json({ appended: attempt === 1 ? 2 : 1 });
+    });
+
+    await deliverEvents(f.env, f.ctx);
+
+    expect(f.deliveries.map((delivery) => delivery.events.map((event) => event.source_n))).toEqual([[1, 2], [3]]);
+    expect(pendingEvents(f.sql)).toEqual([]);
+    expect(timerGetDue(f.sql, "events", "")).toBeNull();
+  });
+
+  it("keeps an immediate timer for a concurrent tail after the bounded successful sends", async () => {
+    const f = fixture(() => {
+      f.sql.transaction(() => appendEvent(f.sql, 2_000, { type: "landing.accepted", ts: 2_000 }));
+      return Response.json({ appended: 1 });
+    });
+
+    await deliverEvents(f.env, f.ctx);
+
+    expect(f.deliveries).toHaveLength(2);
+    expect(pendingEvents(f.sql).map((row) => row.n)).toEqual([4]);
+    expect(timerGetDue(f.sql, "events", "")).not.toBeNull();
+    expect(timerGetDue(f.sql, "events", "")!).toBeLessThanOrEqual(Date.now());
+    expect(metaGet(f.sql, "events_tries")).toBeNull();
+  });
+
   it.each(["confirmed", "gap", "transport", "body"])(
     "an old epoch's %s response cannot delete the rebuilt epoch's first event (RB5)",
     async (kind) => {

@@ -129,22 +129,30 @@ function causeOf(sql: Sql, attempt_id: string): ResumeCycle["cause"] {
  * operations deleted (it is not parked), and the choice card of UN6 opened with the options
  * `new_attempt` and `stop`.
  */
-function applyReopenFailed(ctx: DurableObjectState, a: AttemptRow, cycle: ResumeCycle, now: number): void {
+function applyReopenFailed(
+  ctx: DurableObjectState,
+  a: AttemptRow,
+  cycle: ResumeCycle,
+  now: number,
+  onCommit: () => void,
+): void {
   sqlOf(ctx).run("resume_failed", { now: () => now, syncTriage: ScriptedTriage, features: FEATURES }, (trunk) =>
     trunk.resumeFailed({ attempt_id: a.attempt_id, resume_n: cycle.resume_n, since_call: cycle.since_call }),
   );
+  onCommit();
 }
 
-function stopLost(ctx: DurableObjectState, attempt_id: string, at: number): void {
+function stopLost(ctx: DurableObjectState, attempt_id: string, at: number, onCommit: () => void): void {
   sqlOf(ctx).run("stop", { now: () => at, syncTriage: ScriptedTriage, features: FEATURES }, (trunk) =>
     trunk.stop({ attempt_id, reason: "lost" }),
   );
+  onCommit();
 }
 
 /** UN6a: an explicit new-attempt choice starts a fresh model driver, not a resume.
  * The engine writes its open request and timer with the new attempt. Retrying that request
  * is safe because Agent /open is idempotent by attempt id. */
-async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): Promise<void> {
+async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number, onCommit: () => void): Promise<void> {
   const sql = sqlOf(ctx);
   const finish = (attempt_id: string): void => {
     sql.transaction(() => {
@@ -175,7 +183,7 @@ async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): 
     if (at >= cycle.deadline) {
       // This Agent has never resumed: T20r only follows T19/T21. A fresh Agent
       // that cannot start is lost (T20), rather than an orphan in `opened`.
-      stopLost(ctx, id, at);
+      stopLost(ctx, id, at, onCommit);
       finish(id);
       continue;
     }
@@ -213,7 +221,7 @@ async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): 
         !["stopped", "accepted", "landed"].includes(current.state) &&
         current.last_call_id === cycle.since_call
       )
-        stopLost(ctx, id, at);
+        stopLost(ctx, id, at, onCommit);
       finish(id);
     }
   }
@@ -228,10 +236,16 @@ async function deliverNewAgents(env: Env, ctx: DurableObjectState, at: number): 
  * `now` is the due-check's clock — the alarm's `?now=` test path hands it through so the
  * deadline and the repush cadence are drivable without sleeping for the real times.
  */
-export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: number): Promise<void> {
+export async function deliverResumes(
+  env: Env,
+  ctx: DurableObjectState,
+  now?: number,
+  // The shell dispatches events here, after the engine transaction and before any next send.
+  onCommit: () => void = () => {},
+): Promise<void> {
   const sql = sqlOf(ctx);
   const at = now ?? Date.now();
-  await deliverNewAgents(env, ctx, at);
+  await deliverNewAgents(env, ctx, at, onCommit);
   const rows = attempts(sql);
 
   // Detection: a reopened attempt (`resumes` beyond what a cycle already served) that is back
@@ -281,7 +295,7 @@ export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: nu
       continue;
     }
     if (at >= cycle.deadline) {
-      applyReopenFailed(ctx, a, cycle, at);
+      applyReopenFailed(ctx, a, cycle, at, onCommit);
       continue;
     }
     if (cycle.next_send > at) continue;
@@ -321,7 +335,7 @@ export async function deliverResumes(env: Env, ctx: DurableObjectState, now?: nu
         REOPEN_STATES.has(current.state) &&
         current.last_call_id === cycle.since_call
       ) {
-        applyReopenFailed(ctx, current, cycle, at);
+        applyReopenFailed(ctx, current, cycle, at, onCommit);
       } else {
         endCycle(sql, a.attempt_id, a.resumes);
       }

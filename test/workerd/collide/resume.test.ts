@@ -6,12 +6,10 @@
 // the choice card of UN6 with `new_attempt` and `stop`. The waits are driven through the
 // alarm's `?now=` test path — nothing sleeps for the real cadence or deadline.
 //
-// The choice card is the plan's own: `go_around_limit` (GL1, T15). Reaching it takes three
-// repair-victims, not one — RW1 grants right of way at sent_back 2 in `pool.attempts` order
-// and RW3 blocks every later landing that would repair an earlier-marked holder, so a lone
-// victim starves at 2 (the `it.fails` below). Two victims with earlier marks land past the
-// last one's right of way — RW3's `c.right_of_way_at < P.right_of_way_at` skip — and give it
-// the third and fourth sent-backs the limit's `sentBack >= GO_AROUND_LIMIT` check needs.
+// The choice card is the plan's own: `go_around_limit` (GL1, T9). Three attempts
+// reference ENERGY_MAX through new crab files, so repeated changes give E2 repairs.
+// Repeated E1 repairs from other intents would instead stop them at contradiction (GL3).
+// Two earlier right-of-way holders land changes that give the last holder repairs 3 and 4.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HEADS_UP_REPUSH_MS, RESUME_ACK_TIMEOUT_MS, RIGHT_OF_WAY_MS } from "../../../src/protocol/constants.ts";
@@ -78,29 +76,23 @@ async function headsupCount(worker: LandingWorker, pool: string, attempt: string
   return (await eventsOf(worker, pool, "headsup.sent")).filter((e) => e.attempt_id === attempt).length;
 }
 
-/** T15's `go_around_limit` card on `a` (GL1): three repair-victims `b`, `c`, `a` (opened in
- * that order — RW1's `right_of_way_at = ++pool.order` follows `pool.attempts` order) each hold
- * an edit premise on `ENERGY_MAX`. Two breaker landings send all three back twice; `b` then
- * `c` land past `a`'s later right of way (RW3's earlier-mark skip), giving `a` sent-backs 3
- * and 4 — the `sentBack >= GO_AROUND_LIMIT` check fires on the fourth. Each victim re-applies
- * its edit after every landing (OP1 drops it) and acknowledges each heads-up (GA1 joins a
- * go-around only once every earlier repair is delivered). */
+/** GL1's choice card through four E2 repairs. The first two landings grant right of
+ * way to b, c, a in that order. Then b and c each add their first energy edit and land
+ * past a's later mark (RW3). The other attempts keep referencing, not editing, ENERGY_MAX,
+ * so GL3 does not apply. Deliver every earlier repair before the next one (GA1). */
 async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: string): Promise<string> {
   // Right-of-way grants follow `pool.attempts` order — `SELECT ... ORDER BY attempt_id`
   // on every open — so the victim's id must sort after the two landers' for theirs to be
   // the earlier marks (RW3's `c.right_of_way_at < P.right_of_way_at` skip).
   const b = `row-b-${a}`;
   const c = `row-c-${a}`;
-  const victims: Array<[string, number]> = [
-    [b, 91],
-    [c, 92],
-    [a, 93],
-  ];
-  for (const [id, target] of victims) {
-    await openAttempt(worker, pool, id, { intent: `${id} lowers the energy cap`, truth: TRUTH });
-    await replaceEnergy(worker, pool, id, 100, target, 1, 0);
+  const victims = [b, c, a];
+  for (const id of victims) {
+    await openAttempt(worker, pool, id, { intent: `${id} adds a crab`, truth: TRUTH });
+    await tool(worker, pool, id, { tool: "read", args: { path: "world/energy.js", entity: "ENERGY_MAX" } }, 1);
+    await tool(worker, pool, id, { tool: "write", args: { path: `creatures/${id}-crab.js`, content: CRAB(id) } }, 2);
   }
-  // Landing 1 (d-90): repair 1 for all three — delivered, then the edit re-applied on 90.
+  // Landing 1 (d-90): E2 repair 1 for all three. The new files still apply.
   await landEnergy(worker, pool, `${a}-d-90`, 100, 90, 1);
   await waitFor(
     async () =>
@@ -109,10 +101,7 @@ async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: 
       (await headsupCount(worker, pool, c)) >= 1,
     60_000,
   );
-  for (const [id, target] of victims) {
-    await deliver(worker, pool, id);
-    await replaceEnergy(worker, pool, id, 90, target, 2, 1);
-  }
+  for (const id of victims) await deliver(worker, pool, id);
   // Landing 2 (d-80): repair 2 for all three — sent_back 2, right of way in order b, c, a.
   await landEnergy(worker, pool, `${a}-d-80`, 90, 80, 2);
   await waitFor(
@@ -122,10 +111,8 @@ async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: 
       (await headsupCount(worker, pool, c)) >= 2,
     60_000,
   );
-  for (const [id, target] of victims) {
-    await deliver(worker, pool, id);
-    await replaceEnergy(worker, pool, id, 80, target, 3, 2);
-  }
+  for (const id of victims) await deliver(worker, pool, id);
+  await replaceEnergy(worker, pool, b, 80, 91, 3, 2);
   // b lands (the earliest mark — RW3 skips every other holder): repair 3 for c and a.
   // CK8 refuses a submit while heads-ups are unresolved — the acknowledge on the submit
   // answers them (CK1), the way a repaired agent would.
@@ -139,14 +126,9 @@ async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: 
   );
   await waitFor(async () => (await eventsOf(worker, pool, "landing.landed")).length >= 3, 60_000);
   await waitFor(async () => (await headsupCount(worker, pool, a)) >= 3, 60_000);
-  for (const [id, target] of [
-    [c, 92],
-    [a, 93],
-  ] as Array<[string, number]>) {
-    await deliver(worker, pool, id);
-    await replaceEnergy(worker, pool, id, 91, target, 4, 3);
-  }
-  // c lands (its mark precedes a's — RW3 skips a): repair 4 for a — T15.
+  for (const id of [c, a]) await deliver(worker, pool, id);
+  await replaceEnergy(worker, pool, c, 91, 92, 4, 3);
+  // c lands (its mark precedes a's — RW3 skips a): E2 repair 4 for a — T9.
   await tool(
     worker,
     pool,
@@ -162,6 +144,14 @@ async function produceGoAroundLimitCard(worker: LandingWorker, pool: string, a: 
       ),
     60_000,
   );
+  const repairs = (await eventsOf(worker, pool, "headsup.sent")).filter((e) => e.attempt_id === a);
+  expect(repairs).toHaveLength(4);
+  for (const repair of repairs) {
+    expect(repair).toMatchObject({
+      result: "repair",
+      keys: [{ kind: "entity", key: "world/energy.js#ENERGY_MAX", rule: "E2" }],
+    });
+  }
   const opened = (await eventsOf(worker, pool, "card.opened")).find(
     (e) => (e.card as { reason?: string })?.reason === "go_around_limit",
   ) as { card: { card_id: string; options: Array<{ id: string }> } };

@@ -16,7 +16,7 @@ import { appendEvent, metaGet, sqlOf, timerPut } from "./sql.ts";
 import { recordTrunkError } from "./after-commit.ts";
 import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
-import { runPush, type PushBatch } from "./push-runner.ts";
+import { runPush, writeTargetWithTimeout, type PushBatch } from "./push-runner.ts";
 import { ZERO_OID } from "../../core/git/objects.ts";
 import { blobBytes } from "../../core/sync/bytes.ts";
 
@@ -233,7 +233,7 @@ async function pushOutboxInner(
 
   let target;
   try {
-    target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
+    target = await writeTargetWithTimeout(deps.tokenSource, ctx.id.name ?? "");
   } catch (cause) {
     if (!current()) return;
     // BP7: an operator's line — the error's name and message, never the request or the target
@@ -370,7 +370,7 @@ export async function reconcileOnStart(
   const epoch = metaGet(sqlOf(ctx), "epoch");
   const current = () => currentBatch(ctx, outbox, epoch);
   try {
-    const target = await deps.tokenSource.writeTarget(ctx.id.name ?? "");
+    const target = await writeTargetWithTimeout(deps.tokenSource, ctx.id.name ?? "");
     if (!current()) return;
     const refs = await deps.pusher.readRefs({
       remote: target.remote,

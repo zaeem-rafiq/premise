@@ -4,9 +4,12 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../env.ts";
 import type { ToolRequest, ToolResponse } from "../../protocol/tools.ts";
+import type { Script } from "./scripted-driver.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
 import type { JournalRow } from "../../core/agent/store.ts";
+import type { AttemptState } from "../../protocol/attempt.ts";
 import {
+  AGENT_WATCHDOG_MS,
   ATTEMPT_TIMEOUT_MS,
   HEADS_UP_REPUSH_MS,
   TOOL_RETRIES,
@@ -59,9 +62,14 @@ function successfulTool(request: ToolRequest): Response {
     premises: [],
     heads_ups: [],
     heads_ups_more: false,
-    attempt: { state: "validated", go_arounds: 0, pull_backs: 0 },
+    // A real answer mirrors Trunk's own attempt state: only a passing submit moves it.
+    attempt: { state: request.tool === "submit" ? "validated" : "working", go_arounds: 0, pull_backs: 0 },
   } satisfies ToolResponse);
 }
+
+/** The scripted answers `/stop` can give, in send order; anything Trunk answers that does not
+ * resolve the stop must leave it pending (TL16). A function hangs the send in flight. */
+type StopOutcome = "ok" | "invalid_args" | "attempt_unknown" | "attempt_closed" | number | (() => Promise<Response>);
 
 function transientTool(request: ToolRequest, code: "pool_not_ready" | "timeout"): Response {
   return Response.json({
@@ -76,8 +84,15 @@ function transientTool(request: ToolRequest, code: "pool_not_ready" | "timeout")
   } satisfies ToolResponse);
 }
 
-function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
+function fixture(
+  outcomes: ToolOutcome[] = [],
+  stopFailures = 0,
+  opts: { stops?: StopOutcome[]; trunkState?: AttemptState } = {},
+) {
   const db = new DatabaseSync(":memory:");
+  // What the fake Trunk's mirror reports: the answers `/stop` gives next, and
+  // the attempt state `/sync` mirrors (stopping the attempt flips it).
+  const trunk = { stops: [...(opts.stops ?? [])], state: opts.trunkState ?? ("opened" as AttemptState) };
   databases.push(db);
   const background: Promise<unknown>[] = [];
   const tools: Array<{ at: number; request: ToolRequest }> = [];
@@ -109,6 +124,9 @@ function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
     },
     async deleteAlarm() {
       alarmAt = null;
+    },
+    async getAlarm() {
+      return alarmAt;
     },
   };
   const context = {
@@ -142,7 +160,14 @@ function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
       }
       if (path === "/stop") {
         stops.push(String(body.reason));
+        const answer = trunk.stops.shift();
+        if (typeof answer === "function") return answer();
+        if (typeof answer === "number") return new Response("busy", { status: answer });
+        if (answer === "invalid_args" || answer === "attempt_unknown" || answer === "attempt_closed") {
+          return Response.json({ ok: false, error: answer });
+        }
         if (stopFailures-- > 0) return new Response("busy", { status: 503 });
+        trunk.state = "stopped";
         return Response.json({
           ok: true,
           stop_reason: body.reason,
@@ -154,7 +179,7 @@ function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
           head_seq: 0,
           heads_ups: [],
           heads_ups_more: false,
-          attempt: { state: "opened", go_arounds: 0, pull_backs: 0 },
+          attempt: { state: trunk.state, go_arounds: 0, pull_backs: 0 },
         });
       }
       throw new Error(`unexpected Trunk path ${path}`);
@@ -202,11 +227,21 @@ function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
   return {
     tools,
     stops,
+    trunk,
     post,
     drain,
     inspect,
     alarmAt: () => alarmAt,
-    async open(real = false, started_at = NOW, settle = true) {
+    /** A reset rebuilt the object: the constructor runs on the same durable state. */
+    spawn() {
+      agent = new Agent(context, env);
+    },
+    async open(
+      real = false,
+      started_at = NOW,
+      settle = true,
+      steps: Script["steps"] = [{ tool: "submit", args: { summary: "test" } }],
+    ) {
       const answer = await post("/open", {
         attempt_id: "a_backoff",
         intent_id: "i_test",
@@ -217,7 +252,7 @@ function fixture(outcomes: ToolOutcome[] = [], stopFailures = 0) {
         ...(real
           ? { driver: "model", model: WORKHORSE_MODEL, imported: { guide_path: "", source: "fixture", branch: "main" } }
           : {
-              script: { pattern: "retry-test", truth: [], steps: [{ tool: "submit", args: { summary: "test" } }] },
+              script: { pattern: "retry-test", truth: [], steps },
             }),
         started_at,
       });
@@ -491,5 +526,144 @@ describe("Agent tool backoff", () => {
     expect(f.stops).toEqual(["timeout", "timeout"]);
     expect((await f.inspect()).meta.stop_reason).toBe("timeout");
     expect((await f.inspect()).journal).toBeNull();
+  });
+});
+
+describe("Agent liveness", () => {
+  // The soak's invariant: while the attempt is neither landed nor stopped the
+  // Agent holds a timer due within a watchdog interval and the platform alarm
+  // is armed no later than it.
+  const expectArmed = async (f: ReturnType<typeof fixture>, now: number) => {
+    const s = await f.inspect();
+    if (s.meta.state === "landed" || s.meta.state === "stopped") return s;
+    expect(s.timers.length).toBeGreaterThan(0);
+    const due = Math.min(...s.timers.map((t) => t.due_at));
+    expect(due).toBeLessThanOrEqual(now + AGENT_WATCHDOG_MS);
+    expect(f.alarmAt()).not.toBeNull();
+    expect(f.alarmAt() ?? Infinity).toBeLessThanOrEqual(due);
+    return s;
+  };
+  const until = async (done: () => boolean) => {
+    for (let i = 0; i < 200 && !done(); i += 1) await new Promise((r) => setTimeout(r, 0));
+    expect(done()).toBe(true);
+  };
+
+  it("TL16: a stop answer that cannot end the attempt keeps the pending stop and its retry", async () => {
+    const f = fixture([], 0, { stops: ["invalid_args", "invalid_args"] });
+    await f.open();
+    await f.post("/stop");
+    await f.drain();
+    let s = await expectArmed(f, NOW);
+    expect(s.meta.pending_stop).toBe("cancelled");
+    const retry = s.timers.find((t) => t.kind === "call" && t.key === "stop");
+    expect(retry?.due_at).toBe(NOW + HEADS_UP_REPUSH_MS);
+    await f.alarm(NOW + HEADS_UP_REPUSH_MS);
+    expect(f.stops).toEqual(["cancelled", "cancelled"]);
+    s = await expectArmed(f, NOW + HEADS_UP_REPUSH_MS);
+    expect(s.meta.pending_stop).toBe("cancelled");
+    await f.alarm(NOW + 2 * HEADS_UP_REPUSH_MS);
+    expect(f.stops).toEqual(["cancelled", "cancelled", "cancelled"]);
+    s = await f.inspect();
+    expect(s.meta.state).toBe("stopped");
+    expect(s.meta.stop_reason).toBe("cancelled");
+  });
+
+  it("AG3: a watchdog that declares stalled stays armed while the stop it started is pending", async () => {
+    const f = fixture([], 0, { stops: ["invalid_args"] });
+    await f.open(false, NOW, true, [{ tool: "list", args: { path: "creatures/" } }]);
+    let s = await f.inspect();
+    const w1 = s.timers.find((t) => t.kind === "watchdog")!.due_at;
+    await f.alarm(w1);
+    s = await f.inspect();
+    const w2 = s.timers.find((t) => t.kind === "watchdog")!.due_at;
+    await f.alarm(w2);
+    s = await expectArmed(f, w2);
+    expect(s.meta.pending_stop).toBe("stalled");
+    expect(f.stops).toEqual(["stalled"]);
+    expect(s.timers.some((t) => t.kind === "watchdog")).toBe(true);
+    const retry = s.timers.find((t) => t.kind === "call" && t.key === "stop");
+    expect(retry?.due_at).toBeLessThanOrEqual(w2 + HEADS_UP_REPUSH_MS);
+  });
+
+  it("a reset rebuild sends the pending stop again even when no call is journaled", async () => {
+    let release!: (r: Response) => void;
+    const hung = new Promise<Response>((r) => (release = r));
+    const f = fixture([], 0, { stops: [() => hung, "ok"] });
+    await f.open();
+    await f.post("/stop");
+    await until(() => f.stops.length === 1);
+    f.spawn();
+    await until(() => f.stops.length === 2);
+    release(
+      Response.json({
+        ok: true,
+        stop_reason: "cancelled",
+        attempt: { state: "stopped", go_arounds: 0, pull_backs: 0 },
+      }),
+    );
+    await f.drain();
+    expect((await f.inspect()).meta.state).toBe("stopped");
+  });
+
+  it("AL2: a throw inside the alarm handler still leaves the alarm armed", async () => {
+    const f = fixture();
+    await f.open(false, NOW - ATTEMPT_TIMEOUT_MS + 60_000, true, [{ tool: "list", args: { path: "x" } }]);
+    // `items`/`dropped_ops` are missing: showing this heads-up throws inside the pump.
+    await f.post("/push", {
+      attempt_id: "a_backoff",
+      heads_ups: [{ hn: 1, attempt_id: "a_backoff", wake: true, result: "info" }],
+    });
+    await f.drain().catch(() => {});
+    const w1 = (await f.inspect()).timers.find((t) => t.kind === "watchdog")!.due_at;
+    await expect(f.alarm(w1)).resolves.toBeUndefined();
+    const s = await expectArmed(f, w1);
+    expect(s.meta.state).not.toBe("stopped");
+    const deadline = s.timers.find((t) => t.kind === "attempt_timeout")!.due_at;
+    await f.alarm(deadline);
+    expect(f.stops).toEqual(["timeout"]);
+    expect((await f.inspect()).meta.state).toBe("stopped");
+  });
+
+  it("a stop retry armed before a resume sends nothing after it", async () => {
+    const f = fixture([], 1);
+    await f.open();
+    await f.post("/stop");
+    await f.drain();
+    const sent = f.stops.length;
+    const before = await f.inspect();
+    const retry = before.timers.find((t) => t.kind === "call" && t.key === "stop")!;
+    await f.post("/resume", { resume_n: 1, revision: 2, attempt_id: "a_backoff" });
+    await f.drain();
+    const s = await f.inspect();
+    expect(s.meta.pending_stop ?? null).toBeNull();
+    const stale = s.timers.find((t) => t.kind === "call" && t.key === "stop");
+    await f.alarm(stale?.due_at ?? retry.due_at);
+    expect(f.stops).toHaveLength(sent);
+    expect((await f.inspect()).meta.state).not.toBe("stopped");
+  });
+
+  it("TL16: recovery does not resend a tool call while a stop is pending", async () => {
+    let release!: (r: Response) => void;
+    const hung = new Promise<Response>((r) => (release = r));
+    const f = fixture([() => hung], 1);
+    await f.open(false, NOW, false);
+    await until(() => f.tools.length === 1);
+    await f.post("/stop");
+    await f.post("/internal/recover");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(f.tools).toHaveLength(1);
+    release(
+      Response.json({
+        call_id: f.tools[0]!.request.call_id,
+        ok: true,
+        head_seq: 0,
+        result: { path: "creatures/", entries: [], truncated: false },
+        premises: [],
+        heads_ups: [],
+        heads_ups_more: false,
+        attempt: { state: "working", go_arounds: 0, pull_backs: 0 },
+      }),
+    );
+    await f.drain();
   });
 });

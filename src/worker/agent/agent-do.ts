@@ -166,8 +166,13 @@ export class Agent extends DurableObject<Env> {
     applySchema(this.#sql);
     ensureEventsSchema(this.#sql);
     // A journal row at start is a call that never completed (AG2); it is
-    // served again before anything else, with the same call_id.
-    if (journaledCall(this.#sql) !== null) this.ctx.waitUntil(this.#run());
+    // served again before anything else, with the same call_id. Any other
+    // unfinished attempt continues too — a pending stop is sent again, a due
+    // sync runs — and the pump's own finally re-arms the platform alarm, so a
+    // reset that lost the alarm is repaired on the object's next construction
+    // (AL1: an unfinished Agent always has an alarm that fires).
+    const unfinished = this.#meta("attempt_id") !== null && !TERMINAL_STATES.has(this.#meta("state") as AttemptState);
+    if (journaledCall(this.#sql) !== null || unfinished) this.ctx.waitUntil(this.#run());
   }
 
   // -- plumbing --------------------------------------------------------------
@@ -380,7 +385,7 @@ export class Agent extends DurableObject<Env> {
         case "/stop":
           return await this.#ownerStop();
         case "/internal/inspect":
-          return this.#inspect();
+          return await this.#inspect();
         case "/internal/spend":
           return this.#spend(body);
         case "/internal/recover":
@@ -633,6 +638,9 @@ export class Agent extends DurableObject<Env> {
       this.#set("model_limit", this.#int("model_limit") + RESUME_MODEL_CALLS);
       this.#set("deadline_at", now + RESUME_TIMEOUT_MS);
       this.#sql.exec("DELETE FROM meta WHERE k IN ('stop_reason', 'pending_stop')");
+      // A stop retry armed while the reason stood must not outlive it — the
+      // row would send a stop into the resumed attempt.
+      timerDelete(this.#sql, "call", "stop");
       // The next step is a sync with the current ack; the waiting heads-ups
       // are then shown in order whatever their wake flag (RS2).
       this.#set("sync_needed", "1");
@@ -664,18 +672,21 @@ export class Agent extends DurableObject<Env> {
 
   async #run(): Promise<void> {
     if (this.#running) return;
-    this.#open_attempt();
-    if (this.#trunk === null || this.#driver === null) return;
     this.#running = true;
-    await this.#learnPoolFlags();
     try {
+      this.#open_attempt();
+      if (this.#trunk === null || this.#driver === null) return;
+      await this.#learnPoolFlags();
       for (;;) {
         const pending = this.#meta("pending_stop");
         if (pending !== null) {
           const retry = timerList(this.#sql).find((timer) => timer.kind === "call" && timer.key === "stop");
           if (retry !== undefined && retry.due_at > Date.now()) return;
           await this.#sendStop(pending as AgentStopReason);
-          return;
+          // A resolving answer clears pending_stop and the loop retires its
+          // timers here; a refused answer leaves a `call` retry armed — the
+          // same check above parks until it is due.
+          continue;
         }
         // A stopped attempt that Trunk reopened answers `working` on the next
         // sync (T20r): the resume's `sync_needed`/`resume_show` flags outrank
@@ -781,8 +792,13 @@ export class Agent extends DurableObject<Env> {
       }
     } finally {
       this.#running = false;
-      await this.#deliverEvents();
-      await this.#armAlarm();
+      try {
+        await this.#deliverEvents();
+      } finally {
+        // AL1: the alarm is armed on every exit — a dead Floor send cannot
+        // take the re-arm with it.
+        await this.#armAlarm();
+      }
     }
   }
 
@@ -943,6 +959,9 @@ export class Agent extends DurableObject<Env> {
   // pump is sending it for the first time or again after a timeout or a
   // restart (AG4, TL12). A `model` journal is the driver's own call.
   async #serve(journal: JournalRow, now = Date.now()): Promise<void> {
+    // TL16: while a stop is pending the Agent makes no call; the stop's own
+    // retry owns the journal row until a resolving answer abandons it.
+    if (this.#meta("pending_stop") !== null) return;
     if (journal.kind === "model") {
       await this.#serveModel(journal);
       return;
@@ -1447,7 +1466,10 @@ export class Agent extends DurableObject<Env> {
   }
 
   // stop repeats until Trunk answers (TL16): the pending reason survives
-  // restarts, and the call timer named "stop" re-sends after a failure.
+  // restarts, and the call timer named "stop" re-sends after a failure. TL16
+  // names the answers that end the repeat — ok, attempt_unknown and
+  // attempt_closed; any other answer is treated like a throw: the pending
+  // stop stands and the retry is armed again.
   async #sendStop(reason: AgentStopReason): Promise<void> {
     let res;
     try {
@@ -1457,22 +1479,27 @@ export class Agent extends DurableObject<Env> {
       await this.#armAlarm();
       return;
     }
+    const resolved = res.ok || res.error === "attempt_unknown" || res.error === "attempt_closed";
     this.#sql.transaction(() => {
       // Whatever call was still journaled is abandoned: the journal row and
-      // its timer go in the same transaction as the stop (TL16).
+      // its timer go in the same transaction as the stop's outcome (TL16).
       const j = journaledCall(this.#sql);
       if (j !== null) abandonCall(this.#sql, j.call_id);
-      this.#sql.exec("DELETE FROM meta WHERE k = 'pending_stop'");
-      if (res.ok) {
-        this.#set("state", "stopped");
-        this.#set("stop_reason", res.stop_reason);
-      } else if (res.error === "attempt_unknown") {
-        this.#set("state", "stopped");
-        this.#set("stop_reason", reason);
-      } else if (res.error === "attempt_closed") {
-        this.#set("sync_needed", "1");
+      if (resolved) {
+        this.#sql.exec("DELETE FROM meta WHERE k = 'pending_stop'");
+        timerDelete(this.#sql, "call", "stop");
+        if (res.ok) {
+          this.#set("state", "stopped");
+          this.#set("stop_reason", res.stop_reason);
+        } else if (res.error === "attempt_unknown") {
+          this.#set("state", "stopped");
+          this.#set("stop_reason", reason);
+        } else {
+          this.#set("sync_needed", "1");
+        }
+      } else {
+        timerPut(this.#sql, "call", "stop", Date.now() + HEADS_UP_REPUSH_MS);
       }
-      timerDelete(this.#sql, "call", "stop");
     });
     if (!res.ok && res.error === "attempt_closed") await this.#sync();
     // MG5: whatever Trunk answered, the stop ended the loop — the slot goes.
@@ -1486,11 +1513,21 @@ export class Agent extends DurableObject<Env> {
   }
 
   async #runAlarm(now: number): Promise<void> {
+    // AL1/AL2: the alarm that just fired is spent — a run that dies before it
+    // re-arms (a throw below, or a reset of this object mid-handler) leaves
+    // nothing behind. A watchdog heartbeat is armed before any work so the
+    // Agent is woken even then; the real due time is set again in the finally
+    // on every exit path.
+    await this.ctx.storage.setAlarm(now + AGENT_WATCHDOG_MS);
     try {
       for (const t of timerDue(this.#sql, now)) {
         try {
           if (t.kind === "call" && t.key === "stop") {
-            await this.#sendStop((this.#meta("pending_stop") as AgentStopReason | null) ?? "cancelled");
+            const pending = this.#meta("pending_stop") as AgentStopReason | null;
+            // A stale row that outlived its reason — a resume cleared it —
+            // sends nothing; it is only retired.
+            if (pending === null) timerDelete(this.#sql, "call", "stop");
+            else await this.#sendStop(pending);
           } else if (t.kind === "call") {
             const j = journaledCall(this.#sql);
             if (j === null || j.call_id !== t.key) timerDelete(this.#sql, "call", t.key);
@@ -1537,7 +1574,14 @@ export class Agent extends DurableObject<Env> {
           timerPut(this.#sql, t.kind, t.key, now + HEADS_UP_REPUSH_MS);
         }
       }
-      await this.#run();
+      try {
+        await this.#run();
+      } catch (cause) {
+        // A failed pump pass leaves its state durable — journal, pending stop,
+        // timer rows — so the alarm's job is only to fire again; the heartbeat
+        // above and the re-arm below both see to that.
+        console.error("agent pump failed inside an alarm run", cause);
+      }
     } finally {
       await this.#armAlarm();
     }
@@ -1572,8 +1616,13 @@ export class Agent extends DurableObject<Env> {
       timerPut(this.#sql, "watchdog", "main", now + AGENT_WATCHDOG_MS);
       return;
     }
-    this.#set("pending_stop", "stalled");
-    timerDelete(this.#sql, "watchdog", "main");
+    // AG3 is unconditional while the attempt is unfinished — the stop this
+    // starts is itself a pending stop, exempt: the row keeps firing until the
+    // stop lands or the attempt ends.
+    this.#sql.transaction(() => {
+      this.#set("pending_stop", "stalled");
+      timerPut(this.#sql, "watchdog", "main", now + AGENT_WATCHDOG_MS);
+    });
   }
 
   // -- restart recovery (AG2, AG4) --------------------------------------------------
@@ -1585,7 +1634,9 @@ export class Agent extends DurableObject<Env> {
     // provider request (TL15); a journaled tool call is resent regardless —
     // Trunk answers a repeated call_id from its stored response (TA2).
     const j = journaledCall(this.#sql);
-    if (j === null || (this.#running && j.kind === "model")) {
+    // TL16: while a stop is pending the Agent makes no call — the pump sends
+    // the stop again instead of re-serving the journaled one.
+    if (j === null || this.#meta("pending_stop") !== null || (this.#running && j.kind === "model")) {
       await this.#run();
       return;
     }
@@ -1595,14 +1646,18 @@ export class Agent extends DurableObject<Env> {
     }
     // The send runs in the background: the caller (or a test) gets its
     // answer back now, the way a real restart answers requests while the
-    // recovered call is still out.
-    this.ctx.waitUntil(this.#serve(j));
+    // recovered call is still out. The send arms the alarm itself — this
+    // fetch may have been answered and forgotten before the send's retry
+    // timer exists.
+    this.ctx.waitUntil(this.#serve(j).finally(() => this.#armAlarm()));
   }
 
   // -- inspection for tests -----------------------------------------------------------
 
-  #inspect(): Response {
+  async #inspect(): Promise<Response> {
     return json({
+      // The platform alarm itself: a timer row without it never fires (AL1).
+      alarm: await this.ctx.storage.getAlarm(),
       meta: metaAll(this.#sql),
       journal: journaledCall(this.#sql),
       inbox: inboxRows(this.#sql).map((r) => ({

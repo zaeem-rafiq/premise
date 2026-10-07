@@ -634,8 +634,11 @@ export class Agent extends DurableObject<Env> {
     this.#sql.transaction(() => {
       this.#set("resumed_n", body.resume_n as number);
       this.#set("revision", body.revision as number);
-      this.#set("step_limit", this.#int("step_limit") + RESUME_STEPS);
-      this.#set("model_limit", this.#int("model_limit") + RESUME_MODEL_CALLS);
+      // AG6: unused allowance does not carry over. Use the same step counter
+      // as the pump: real agents count tools, scripted agents count steps.
+      const stepsUsed = this.#int(this.#meta("agent_kind") === "real" ? "tool_steps" : "step");
+      this.#set("step_limit", stepsUsed + RESUME_STEPS);
+      this.#set("model_limit", this.#int("model_calls") + RESUME_MODEL_CALLS);
       this.#set("deadline_at", now + RESUME_TIMEOUT_MS);
       this.#sql.exec("DELETE FROM meta WHERE k IN ('stop_reason', 'pending_stop')");
       // A stop retry armed while the reason stood must not outlive it — the

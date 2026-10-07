@@ -368,14 +368,14 @@ describe("the real Agent in workerd (05-agent)", () => {
     });
   }, 30_000);
 
-  it("RS1–RS3: resume extends the budgets and appends the resume message row", async () => {
+  it("AG6/RS1–RS3: resume grants budgets from usage and appends the resume message row", async () => {
     model.script = [{ http: 500 }, { http: 500 }, { http: 500 }];
     await openReal("a_resume");
     await waitFor(async () => (await inspect("a_resume")).meta.state === "stopped", 30_000);
     const before = await inspect("a_resume");
     expect(before.meta.model_limit).toBeDefined();
 
-    // Trunk reopened the attempt (T20r): its sync answer is `working` again.
+    // Trunk reopened the attempt (T21): its sync answer is `working` again.
     trunk.state = "working";
     const resume = await worker.object("AGENT", "a_resume").fetch("/resume", {
       method: "POST",
@@ -398,7 +398,8 @@ describe("the real Agent in workerd (05-agent)", () => {
     expect(last.at(-1)).toEqual({ role: "user", content: RESUME_MESSAGE });
 
     const s = await inspect("a_resume");
-    expect(s.meta.model_limit).toBe(String(Number(before.meta.model_limit) + 12));
+    expect(s.meta.model_limit).toBe(String(Number(before.meta.model_calls) + 12));
+    expect(s.meta.step_limit).toBe(String(Number(before.meta.tool_steps) + 15));
     expect(s.meta.resumed_n).toBe("1");
     // The post-resume call is the test's first send (the log was reset).
 

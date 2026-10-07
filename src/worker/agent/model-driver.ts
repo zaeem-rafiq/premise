@@ -127,8 +127,8 @@ function rawUsageOf(result: unknown): { prompt_tokens: number; completion_tokens
   return { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens };
 }
 
-/** The resume extension (RS1): a resume raises the Agent's `*_limit` rows above
- * the spec's base budgets, but the pure loop's checks read the constants. The
+/** The resume allowance (AG6): the Agent's `*_limit` rows may be above or below
+ * the spec's initial budgets, but the pure loop's checks read the constants. The
  * driver hands the loop counters shifted by the extension — a shifted counter
  * may go negative, which only reads as more headroom to the loop's `>=` checks
  * — and `budgetExtension` gives the shift back so a persist stores the real
@@ -170,8 +170,8 @@ export function loadLoopState(sql: Sql): LoopState {
   }));
   // RS1: counters shifted down by the resume extension; persisted back +ext.
   const ext: BudgetExt = {
-    calls: Math.max(0, num("model_limit") - MAX_MODEL_CALLS),
-    steps: Math.max(0, num("step_limit") - MAX_STEPS),
+    calls: num("model_limit") - MAX_MODEL_CALLS,
+    steps: num("step_limit") - MAX_STEPS,
     tokens: Math.max(0, num("token_limit") - MAX_ATTEMPT_TOKENS),
     usd: Math.max(0, num("usd_limit") - MAX_ATTEMPT_USD),
   };
@@ -463,6 +463,17 @@ export class ModelDriver implements Driver {
       const charged = Number.isNaN(settled) ? bound : settled;
       const ms = Date.now() - journal.started_at;
       return this.#failedTry(state, journal, req, req.error ?? "model_timeout", charged, ms);
+    }
+
+    // AG6: retries re-enter here before the pump checks budgets. Count a lost
+    // in-flight call above, but never reserve another send beyond the allowance.
+    if (
+      state.meta.model_calls >= MAX_MODEL_CALLS ||
+      state.meta.tokens_in + state.meta.tokens_out >= MAX_ATTEMPT_TOKENS ||
+      state.meta.spent_usd + bound > MAX_ATTEMPT_USD
+    ) {
+      this.#sql.transaction(() => abandonCall(this.#sql, journal.call_id));
+      return { stop: "budget" };
     }
 
     req = { ...req, waiting: false };

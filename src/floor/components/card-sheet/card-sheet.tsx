@@ -302,42 +302,50 @@ export function CardSheetShell({
           <>
             {children}
 
-            {model.reasonLabel !== null && (
-              <label className="card-sheet__reason">
-                <span>{model.reasonLabel}</span>
-                <input type="text" value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
-              </label>
-            )}
+            {/* 2.4: the reason field and the option buttons share the sheet's last row. */}
+            <div className="card-sheet__footer">
+              {model.reasonLabel !== null && (
+                <label className="card-sheet__reason">
+                  <span>{model.reasonLabel}</span>
+                  <input
+                    type="text"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+              )}
 
-            {shell.visitor ? (
-              <p className="card-sheet__visitor">{t("held.visitor")}</p>
-            ) : model.race === null ? (
-              <div className="card-sheet__actions">
-                {others.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={busy}
-                    title={option.tip ?? undefined}
-                    onClick={() => send(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                {primary !== undefined && (
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={busy}
-                    title={primary.tip ?? undefined}
-                    onClick={() => send(primary.id)}
-                  >
-                    {primary.label}
-                  </button>
-                )}
-                {busy && <span className="card-sheet__busy">{t("held.landing")}</span>}
-              </div>
-            ) : null}
+              {shell.visitor ? (
+                <p className="card-sheet__visitor">{t("held.visitor")}</p>
+              ) : model.race === null ? (
+                <div className="card-sheet__actions">
+                  {others.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={busy}
+                      title={option.tip ?? undefined}
+                      onClick={() => send(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                  {primary !== undefined && (
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busy}
+                      title={primary.tip ?? undefined}
+                      onClick={() => send(primary.id)}
+                    >
+                      {primary.label}
+                    </button>
+                  )}
+                  {busy && <span className="card-sheet__busy">{t("held.landing")}</span>}
+                </div>
+              ) : null}
+            </div>
 
             {error !== null && <p className="card-sheet__error">{error}</p>}
           </>

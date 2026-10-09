@@ -391,3 +391,38 @@ test.describe("the held sheet (3.13)", () => {
     await expect(sheet.getByLabel(/Reason/)).toHaveCount(0);
   });
 });
+
+test.describe("2.4: the held sheet's last row", () => {
+  for (const viewport of [
+    { width: 1920, height: 1080 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`2.4: the reason field, Decline and Land share the last row, inside the sheet and the window at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await serve(page, HELD_STREAM(heldCard()), { owner: true });
+      await page.goto(`/p/${POOL}`);
+      await page.locator(".tray").getByRole("button", { name: "Open" }).click();
+      const sheet = page.locator(".card-sheet");
+      const land = sheet.locator(".card-sheet__actions button.primary");
+      await expect(land).toHaveText("Land");
+      // The sheet rises in (6.4, 240 ms): measure once its finite animations have ended.
+      await sheet.evaluate((element) => {
+        const rising = element.closest(".card-sheet__backdrop") ?? element;
+        const finite = rising
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity);
+        return Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
+      });
+      const landBox = (await land.boundingBox())!;
+      const sheetBox = (await sheet.boundingBox())!;
+      const reasonBox = (await sheet.locator(".card-sheet__reason input").boundingBox())!;
+      // The owner taps Land without scrolling (beat 3): the button is inside the sheet and the window.
+      expect(landBox.y + landBox.height).toBeLessThanOrEqual(sheetBox.y + sheetBox.height);
+      expect(landBox.y + landBox.height).toBeLessThanOrEqual(viewport.height);
+      // The wireframe of 2.4 draws "Reason (optional) [...] [Decline] [ Land ]" as one row.
+      expect(Math.abs(reasonBox.y + reasonBox.height / 2 - (landBox.y + landBox.height / 2))).toBeLessThanOrEqual(2);
+    });
+  }
+});

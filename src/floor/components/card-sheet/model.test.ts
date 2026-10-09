@@ -536,3 +536,31 @@ describe.each([false, true])("D36 3.13: choice sheet for visitor=%s", (visitor) 
     }
   });
 });
+
+describe("cardSheetModel: the held sheet's checks column (2.4, 3.13)", () => {
+  function heldWithChecks(checks: { name: string; ok: boolean; detail?: string }[]): CardSheetModel {
+    const state = baseState();
+    openAttempt(state, "a_1", "i_1");
+    must(state.attempts["a_1"]).submit = { submit_id: "s_1", status: "held", tier: "held", checks, ts: 1_000 };
+    reduce(state, ev("card.opened", { card: heldCard() }));
+    return modelOf(state, "k_1");
+  }
+
+  it("2.4: with every check passed the column gives the count line and lists no check", () => {
+    const model = heldWithChecks([
+      { name: "base_current", ok: true },
+      { name: "parse", ok: true },
+    ]);
+    expect(must(model.checked).summary).toBe(text("why.checked.count", { ok: 2, all: 2 }));
+    expect(must(model.checked).checks).toBeNull();
+  });
+
+  it("2.4: a failed check is listed, and only the failed one", () => {
+    const model = heldWithChecks([
+      { name: "base_current", ok: true },
+      { name: "parse", ok: false, detail: "creatures/crab.js" },
+    ]);
+    expect(must(model.checked).summary).toBe(text("why.checked.count", { ok: 1, all: 2 }));
+    expect(must(model.checked).checks?.map((row) => row.ok)).toEqual([false]);
+  });
+});

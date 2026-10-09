@@ -255,11 +255,18 @@ function checkedBlock(state: FloorState, view: CardView): CardSheetModel["checke
   const { lights, more } = visibleLights(state, attempt);
   return {
     summary: checksSummary(attempt),
-    checks: checkRows(attempt),
+    checks: failedChecks(checkRows(attempt)),
     lights,
     lightsMore: more,
     blind: blind > 0 ? text("held.blind", { n: blind }) : null,
   };
+}
+
+/** 2.4: the column gives the count line ("7 of 7 checks passed."); a check is listed only when it
+ * failed, so the reason field and the buttons stay on screen. The attempt card lists them all. */
+function failedChecks(rows: ReturnType<typeof checkRows>): ReturnType<typeof checkRows> {
+  const failed = (rows ?? []).filter((row) => !row.ok);
+  return failed.length > 0 ? failed : null;
 }
 
 /** The risk block of 5.10: the three lines and footer, `held.risk_waiting` while Clef has not

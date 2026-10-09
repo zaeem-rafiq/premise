@@ -300,3 +300,22 @@
     flex: none;
   }
 }
+
+/* 2.4: one last row, the reason field growing at the left and the buttons at the right; it wraps
+   only when the sheet is too narrow for both. */
+.card-sheet__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 16px;
+}
+.card-sheet__footer > .card-sheet__reason {
+  flex: 1 1 360px;
+  margin-top: 0;
+}
+.card-sheet__footer > .card-sheet__actions,
+.card-sheet__footer > .card-sheet__visitor {
+  margin-top: 0;
+  margin-left: auto;
+}

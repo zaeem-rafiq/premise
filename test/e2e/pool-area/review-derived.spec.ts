@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { serveSession, serveStream } from "../shell/stream.ts";
 
-test("D34 FL5: the held sheet names the derived check in plain words", async ({ page }) => {
+test("D34 FL5: the derived check reads in plain words where checks are listed, and no code word reaches the held sheet", async ({
+  page,
+}) => {
   const events = readFileSync("public/replay/hero-canned.ndjson", "utf8")
     .trim()
     .split("\n")
@@ -23,9 +25,14 @@ test("D34 FL5: the held sheet names the derived check in plain words", async ({ 
     route.fulfill({ contentType: "text/html", body: "<!doctype html><title>pool frame stub</title>" }),
   );
   await page.goto("/");
+  // The expanded attempt card lists every check (5.7): the derived one in plain words (FL5).
+  const card = page.locator(`.rail [data-attempt-id="${String(events[held]!.attempt_id)}"]`).first();
+  await card.locator(".attempt-card__intent").click(); // expand (03 3.2)
+  await expect(card.getByText("What the change uses and affects is recorded", { exact: false })).toBeVisible();
+  // The held sheet gives the count line of 2.4 and lists only a failed check; no code word either way.
   await page.getByRole("button", { name: "Open", exact: true }).first().click();
   const sheet = page.locator(".card-sheet");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByText("What the change uses and affects is recorded", { exact: false })).toBeVisible();
+  await expect(sheet.getByText(/of \d+ checks? passed\./)).toBeVisible();
   await expect(sheet.getByText("derived", { exact: true })).toHaveCount(0);
 });

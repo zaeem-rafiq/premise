@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { text } from "../../../copy/strings.ts";
+import { keyShort } from "../../../copy/names.ts";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
 import { tileCells, tileKeepsExtension, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
 import { adoptCss } from "../../styles/adopt.ts";
@@ -40,13 +41,15 @@ button.tile:hover { border-color: var(--accent, #6fd6cc); }
 .tile-name { font-size: var(--size-small, 14px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 8px; }
 .tile-label { background: transparent; border-style: dashed; border-color: var(--line, #3a5669); color: var(--muted, #a8bcc6); }
+.tile-label .tile-name { white-space: normal; }
 .tile-marks { display: flex; align-items: center; gap: 4px; min-height: 8px; }
 .tile-mark { display: inline-block; flex: none; width: 8px; height: 8px; box-sizing: border-box; }
 .tile-mark-r { border: 1px solid var(--accent, #6fd6cc); border-radius: 50%; }
 .tile-mark-w { background: var(--accent, #6fd6cc); }
 .tile-more-marks { color: var(--muted, #a8bcc6); font-size: var(--size-small, 14px); }
-.tile-tag { align-self: flex-start; padding: 0 6px; border-radius: 999px; border: var(--border, 1px) solid var(--holds, #5bd68f);
-  color: var(--holds, #5bd68f); font-size: var(--size-small, 14px); line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tile-tag { align-self: flex-start; padding: 0 6px; border-radius: 999px; border: var(--border, 1px) solid currentColor;
+  color: var(--muted, #a8bcc6); font-size: var(--size-small, 14px); line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tile-tag-held { color: var(--confirm, #ffc857); }
 .tile-removed { color: var(--muted, #a8bcc6); border-style: dashed; }
 .tile-removed .tile-name { text-decoration: line-through; }
 .tile-glow { animation: tile-in 2s var(--ease, ease); }
@@ -178,8 +181,8 @@ export function FileTiles(props: FileTilesProps) {
     if (cell.kind === "label") {
       const marks = tileMarks(cell.readers, []);
       return (
-        <div key={`label-${cell.dir}`} className="tile tile-label" aria-hidden={cell.dir === ""}>
-          <span className="tile-name">{cell.dir === "" ? "/" : cell.dir}</span>
+        <div key={`label-${cell.dir}`} className="tile tile-label">
+          <span className="tile-name">{cell.dir === "" ? keyShort("listing", "/") : cell.dir}</span>
           {marks.readers > 0 && (
             <span className="tile-marks">
               {Array.from({ length: marks.readers }, (_, k) => (
@@ -219,7 +222,7 @@ export function FileTiles(props: FileTilesProps) {
             {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
           </span>
           {file.tier === "held" && !removed && (
-            <span className="tile-tag" title={text("tile.held.tip")}>
+            <span className="tile-tag tile-tag-held" title={text("tile.held.tip")}>
               {text("tile.held")}
             </span>
           )}

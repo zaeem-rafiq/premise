@@ -107,7 +107,7 @@ test.describe("the fixed order and count (3.18, CO50)", () => {
     await expect(page.locator(".banners")).toContainText("The kill switch is on and landings are paused.");
     // The fourth (PUSH PENDING) sits behind banner.more (CO50).
     const more = page.locator(".banner-more-button");
-    await expect(more).toHaveText("1 more notices");
+    await expect(more).toHaveText("1 more notice");
     await more.click();
     await expect(page.locator(".banner-more-list")).toContainText("PUSH PENDING");
     await expect(page.locator(".banner-more-list")).toContainText("has not been confirmed yet");

@@ -48,9 +48,10 @@ export function dirReaders(state: FloorState, dir: string): readonly string[] {
 }
 
 /**
- * The grid cells of the tile area, in the order `state.files` lists them (the `pool.files`
- * order the reducer recorded — "their order, from FloorState only"). Groups keep
- * first-appearance order; each group starts with its directory label cell. `removedPaths` are
+ * The grid cells of the tile area. The demo's world/ and creatures/ groups lead as in 2.2,
+ * so the shared rules remain visible before overflow. Other groups, and every group of a
+ * repository pool, keep first-appearance order. Files keep `pool.files` order within each
+ * group, after its directory label cell. `removedPaths` are
  * files a landing just removed (the component times them out after 2 s); `glowPaths` are files
  * the newest `landing.landed` changed (the 2 s edge glow of 6.4).
  */
@@ -71,6 +72,11 @@ export function tileCells(
     }
     if (file.exists) group.files.push(file);
     else if (removedPaths.has(file.path)) group.removed.push(file);
+  }
+
+  if (!tileKeepsExtension(state)) {
+    const priority = (dir: string): number => (dir === "world/" ? 0 : dir === "creatures/" ? 1 : 2);
+    order.sort((a, b) => priority(a) - priority(b));
   }
 
   const cells: TileCell[] = [];

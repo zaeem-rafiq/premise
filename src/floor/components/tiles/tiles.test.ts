@@ -55,17 +55,52 @@ function withFiles(
 }
 
 describe("3.7 the cells (CO26)", () => {
-  it("groups the tracer's files by directory in pool.files order, label cell first", () => {
+  it.each([18, 16])("D17 2.2/3.7/CO28: world and energy stay visible with %i cells", (capacity) => {
+    const files = [
+      [".premise/policy.json", "held"],
+      ["main.js", "held"],
+      ...Array.from({ length: 12 }, (_, i) => [`creatures/fish${i}.js`, "auto"]),
+      ["selftest/run.js", "held"],
+      ...["bounds", "energy", "food", "movement", "rules", "scene", "spawning", "time"].map((name) => [
+        `world/${name}.js`,
+        "held",
+      ]),
+    ] as [string, string][];
+    const cells = tileCells(withFiles(emptyFloorState(), files), { capacity });
+    expect(cells[0]).toMatchObject({ kind: "label", dir: "world/" });
+    expect(cells[2]).toMatchObject({ kind: "file", file: { path: "world/energy.js" } });
+    expect(cells[9]).toMatchObject({ kind: "label", dir: "creatures/" });
+    expect(cells.at(-1)?.kind).toBe("more");
+    const hidden = cells.at(-1);
+    const shown = cells.filter((cell) => cell.kind === "file").length;
+    expect(hidden?.kind === "more" && hidden.hidden + shown).toBe(files.length);
+  });
+
+  it("D17 2.2/3.7: repository pools keep their own directory order", () => {
+    const state = withFiles(emptyFloorState(), [
+      ["docs/guide.md", "auto"],
+      ["world/index.ts", "auto"],
+      ["creatures/index.ts", "auto"],
+    ]);
+    state.pool.app = null;
+    expect(
+      tileCells(state)
+        .filter((c) => c.kind === "label")
+        .map((c) => c.dir),
+    ).toEqual(["docs/", "world/", "creatures/"]);
+  });
+
+  it("D17 2.2/3.7: groups the demo world and creatures first, with a label cell before each group", () => {
     const cells = tileCells(tracerState());
     expect(cells.map((c) => (c.kind === "label" ? c.dir : c.kind === "file" ? c.file.path : "+more"))).toEqual([
-      ".premise/",
-      ".premise/policy.json",
       "world/",
       "world/energy.js",
       "world/movement.js",
       "creatures/",
       "creatures/fish.js",
       "creatures/snail.js",
+      ".premise/",
+      ".premise/policy.json",
     ]);
   });
 
@@ -146,6 +181,15 @@ describe("3.7 the cells (CO26)", () => {
 });
 
 describe("3.7 the rendered table", () => {
+  it("D16 CP1/FL5/3.7: root files use the accessible name from copy 5.2", () => {
+    const html = markup(withFiles(emptyFloorState(), [["main.js", "held"]]));
+    expect(html).toContain(">top-level files<");
+    expect(html).not.toContain(">/<");
+    const label = html.match(/<div[^>]*class="tile tile-label"[^>]*>/)?.[0];
+    expect(label).toBeDefined();
+    expect(label).not.toContain('aria-hidden="true"');
+  });
+
   it("loading: no pool.files yet shows grey cells and tiles.loading", () => {
     const html = markup(emptyFloorState());
     expect(html).toContain("Loading the file list…");

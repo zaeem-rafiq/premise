@@ -147,7 +147,8 @@ describe("AC7: copy ids", () => {
         }
         if (cell.one !== undefined) {
           // "(for 1: failed · 1 check)" rewrites the fragment after the first " · " for n = 1.
-          const want = `${specText.split(" · ")[0]} · ${cell.one.split(" · ").pop()}`;
+          const want =
+            id === "selftest.fail" ? `${specText.split(" · ")[0]} · ${cell.one.split(" · ").pop()}` : cell.one;
           if (entry.one !== want)
             wrong.push(`${id} one: spec implies ${JSON.stringify(want)} vs ${JSON.stringify(entry.one)}`);
         }

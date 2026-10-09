@@ -65,8 +65,7 @@ describe("CP5 placeholders", () => {
   });
 
   it("CP5: strings with {n} that the spec gives a 1-form for carry it in `one`", () => {
-    // The spec gives a different form for n = 1 only where the table marks "(for 1: …)" — that is
-    // `selftest.fail` — and where the row text itself has a singular, `undo.also` (beat 7 of 1.2).
+    // Representative 1-forms from section 5; review-numbers.test.ts covers the other counted phrases.
     expect(text("selftest.fail", { n: 1 })).toBe("Self-test, run in this page: failed · 1 check");
     expect(text("selftest.fail", { n: 3 })).toBe("Self-test, run in this page: failed · 3 checks");
     expect(text("undo.also", { n: 1, names: '"x"' })).toBe(

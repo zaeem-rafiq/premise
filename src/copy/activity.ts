@@ -4,6 +4,7 @@
 // so `activityTarget` sends a target with `#` through `keyLabel("entity", …)` and nothing else.
 
 import { fill } from "./fill.ts";
+import { count } from "./format.ts";
 import { keyLabel } from "./names.ts";
 
 /** The activity line of a model turn (`tool: null`). */
@@ -38,7 +39,7 @@ export function activityTarget(target: string): string {
  * Returns the suffix appended to the activity line.
  */
 export function quietSuffix(seconds: number): string {
-  return ` · ${seconds} s`;
+  return ` · ${count(seconds)} s`;
 }
 
 /** The reason words of a failed step, by the `error` code of `attempt.step` (03 5.5). */

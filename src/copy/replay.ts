@@ -18,5 +18,9 @@ export const REPLAY_ERRORS: Readonly<Record<string, string>> = {
 export function replayError(check: keyof typeof REPLAY_ERRORS, vars: Record<string, string | number> = {}): string {
   const template = REPLAY_ERRORS[check];
   if (template === undefined) throw new Error(`copy: no replay error for check "${check}"`);
-  return fill(template, vars);
+  const counted =
+    check === "incomplete" && vars.a === 1
+      ? "This recording is incomplete: it has {a} event and should have {b}."
+      : template;
+  return fill(counted, vars);
 }

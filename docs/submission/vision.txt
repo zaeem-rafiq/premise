@@ -1,0 +1,11 @@
+Git records only what an agent wrote. Premise also records what it read.
+
+When many AI agents change one codebase, today's tools assume one person per change: a branch to keep it apart, a pull request to review it, a merge-queue entry to test it against the others. Each checks the text an agent wrote. None of them knows what the agent relied on, so a change can merge cleanly, pass every test and still be wrong, because a value it used changed while it worked.
+
+Premise replaces that with one rule. Agents see code only through Premise, so every read becomes a premise, pinned to the exact version it saw: a function, a constant, a folder listing, a search. A change lands while all of its premises still hold. When one stops holding, the change goes back to its agent while the agent is still running, with the exact diff and the lines of its own work that use what changed. No agent declares anything, and there is no branch to rebase.
+
+The demo shows two catches. In one, a shared rule changes from points to a fraction while three agents, each on a different model, are writing a crab that uses it. Plain git merges the same changes without a conflict, and its crab never comes out of its shell. In Premise each agent gets the diff and fixes its crab before the owner picks one to land. In the other, an agent that changed every creature matching a search is told when a new match lands, and finishes the job before the owner lands it.
+
+One record serves every step: the landing decision, the owner's review card, "who relies on this", a causal undo, and a Replay that anyone can watch without an account. It is stored as git notes on ordinary commits in Cloudflare Artifacts, so plain git can read it.
+
+The limits are stated. References are direct: code that uses a value only through another function holds no premise on it. A number typed with no reference to the shared value is not caught by rule. The Swarm's numbers come from scripted agents that make no model calls.

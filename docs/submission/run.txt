@@ -1,0 +1,27 @@
+Watch a recorded run with no account and no key: open https://PUBLIC-ADDRESS/replay/hero
+
+To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and a Cloudflare account on the Workers Paid plan with Artifacts.
+
+1. Install, from a clone of this repository:
+   npm ci
+
+2. Play a recording offline, with no Cloudflare account:
+   npm run dev:floor
+   Then open http://localhost:5173/replay/hero. The attempt cards, the lights and the numbers play. The pool picture needs a deployment.
+
+3. Sign in to Cloudflare:
+   npx wrangler login
+
+4. Deploy. This runs every offline check, then deploys the Worker "premise" and prints its address:
+   npm run deploy
+
+5. Set the owner key, a long random secret that you keep. Without it every request that changes something answers 503:
+   npx wrangler secret put OWNER_KEY
+
+6. Create the default pool from the seed. Use the address that step 4 printed and the key of step 5:
+   PREMISE_URL=https://premise.YOUR-SUBDOMAIN.workers.dev PREMISE_OWNER_KEY=YOUR-KEY npm run pool:create -- tidepool tidepool
+
+7. Unlock the Floor: open the address, press "Visitor" in the header, paste the owner key into "Owner key" and press "Unlock". The header now reads "Owner", and you can type a request.
+
+8. Run the checks at any time. They deploy nothing:
+   npm run check

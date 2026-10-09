@@ -1,0 +1,15 @@
+Premise runs entirely on Cloudflare, on one Worker.
+
+The Worker serves the Floor page from static assets, routes the API, and serves each pool's code to the page at any commit, with the Cache API in front.
+
+Four Durable Objects, each with its own SQLite storage:
+- Trunk, one per pool, is the landing engine. Every read and write of an agent goes through it. It pins premises, checks them in each landing batch in one transaction, and sends the heads-ups.
+- Agent, one per attempt, runs the agent's loop. A journal and alarms carry it across restarts. Its model calls go to Workers AI.
+- Floor, one per pool, streams every event to the open pages over WebSockets and exports the recording that Replay plays.
+- ModelGate, one per deployment, is asked before every model call. It holds the rate limits, the spend cap and the kill switch.
+
+Artifacts holds the code. Each pool is a git repository: main has one commit per landing, with Change-Id and Intent-Id trailers, and refs/notes/premise holds the record of each landing as a git note, readable with plain git. A second repository per pool holds the plain-merge pool, built from the same changes for comparison. Every write is a push that names the old and the new value of each ref, so a lost race is refused, never overwritten.
+
+Workflows launch the Swarm, the scripted agents of the load test, at a steady rate.
+
+Workers AI runs the real agents. The race in the demo uses three of its models: gpt-oss-120b, kimi-k2.7-code and glm-5.3-flash.

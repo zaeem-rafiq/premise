@@ -2,40 +2,106 @@
 
 Git records only what an agent wrote. Premise also records what it read.
 
-A change lands the instant everything it relied on is still true, and returns
-to its still-running agent with the exact diff the instant it is not.
+A change lands while everything it relied on is still true, and goes back to its still-running agent with the exact diff when something it relied on changes.
 
-Premise is built on Cloudflare Workers, Durable Objects and Artifacts.
+Watch a recorded run in the browser, with no account and no key: **https://PUBLIC-ADDRESS/replay/hero**
 
-> Status: early build. This repository holds the specification and the toolchain.
-> The product is not built yet: the Worker answers one probe, and the page is a placeholder.
-> Instructions for running a deployment will be added as the system comes together.
+## The idea
 
-## Run the checks
+Many AI agents now change one codebase at the same time. The usual tools were made for one person per change: a branch keeps the change apart, a pull request asks for review, and a merge queue tests it against the others. All three check the text that was written. None of them knows what the writer relied on, so a change can merge without a conflict, pass the tests and still be wrong, because a value it used changed while it was being written.
 
-You need Node.js 22 (22.18 or later), npm 10 and git 2.40 or later. You do not need a Cloudflare account.
+Premise replaces that with one rule. Agents see code only through Premise's tools, and every read becomes a **premise**: the exact version of a function, a constant, a folder listing or a search result that the agent saw. Trunk, one object per codebase, lands a change while all of its premises still hold. When a landing changes something an attempt in flight relied on, that attempt gets a **heads-up** with the diff and the lines of its own work that use what changed, and its agent **goes around**: it adapts while it is still running. No agent declares what it depends on, and nothing is rebased.
 
-```sh
-npm ci
-npm run check
-```
+The record of each landing is a git note on an ordinary commit in Cloudflare Artifacts: who asked and in which words, which model wrote it, what it relied on, what changed under it and what it did about that. The same record decides the landing, fills the owner's review card, answers "who relies on this", drives a causal undo, and plays back as a Replay.
 
-`npm run check` runs the format check, the typecheck, the offline tests, the build, the licence check and the
-secret scan. It deploys nothing.
+## What you see
 
-| Command             | What it does                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `npm test`          | Runs the offline tests.                                              |
-| `npm run typecheck` | Compiles the six TypeScript programs without output.                 |
-| `npm run build`     | Builds the page and the Worker bundle into `dist/`. Deploys nothing. |
-| `npm run dev:floor` | Serves the placeholder page at `http://localhost:5173`.              |
+The page is called the Floor. It shows one codebase, a small simulated rock pool whose creatures follow shared rules, running live in the page.
 
-## Where things are
+- **Requests and attempts.** The owner types what they want. Each request becomes an attempt with a real agent on Workers AI; a request can race three models, and the owner picks one result.
+- **Lights.** Every read is a light on the attempt's card. A light that turns red is a premise that stopped holding.
+- **Heads-ups and go-arounds.** When a landing breaks a premise, the attempt moves to the top with the diff, goes around and lands again.
+- **Shared rules wait for the owner.** A change to a file the pool's policy marks as shared waits on a card that shows the pool before and after, and how many attempts in flight it would send back.
+- **Who relies on this.** Any file or entity lists the landed code and the attempts in flight that depend on it.
+- **Why is this here.** Tap a creature: the card shows the record of the landing that made it, and "Show the git" gives the commit, its trailers, the note and the git commands that read them.
+- **Compare.** The same changes merged by plain git, in a second repository built for the comparison, side by side with Premise's pool.
+- **Undo.** Taking a landing back also sends back the landings that relied on it.
+- **Swarm.** Scripted agents, always labelled SYNTHETIC, that use the same tools, premises and landing path, for load.
+- **Replay.** Any recorded run plays through the same page with no credentials.
 
-- [`docs/spec/`](docs/spec/): the specification. `01-core.md` holds the rules and the protocol.
-- [`docs/measurements/`](docs/measurements/): what was measured on the real Cloudflare service.
-- [`AGENTS.md`](AGENTS.md): the rules for coding agents that work in this repository.
-- [`reference/`](reference/): working material from before the build. It is not product code.
+## How it is built
+
+One Worker serves the page, the API and each pool's code at any commit. Four Durable Objects, each with SQLite storage, do the work: **Trunk** (one per pool) serves every read, pins premises, checks them in each landing batch in one transaction and is the only writer of `main`; **Agent** (one per attempt) runs the model's tool loop and survives restarts; **Floor** (one per pool) streams events to every open page; **ModelGate** (one per deployment) holds the rate limits, the spend cap and the kill switch. Artifacts holds each pool as a git repository, with a second one for the plain-merge comparison; every write is a push that names the old and the new value of each ref. Workflows launch the Swarm. Workers AI runs the models.
+
+The specification is in [`docs/spec/`](docs/spec/): [`01-core.md`](docs/spec/01-core.md) holds the rules and the protocol, and [`premise-cases.json`](docs/spec/premise-cases.json) holds 58 cases that the engine must pass.
+
+## Run it
+
+Watch a recorded run with no account and no key: open https://PUBLIC-ADDRESS/replay/hero
+
+To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and a Cloudflare account on the Workers Paid plan with Artifacts.
+
+1. Install, from a clone of this repository:
+   npm ci
+
+2. Play a recording offline, with no Cloudflare account:
+   npm run dev:floor
+   Then open http://localhost:5173/replay/hero. The attempt cards, the lights and the numbers play. The pool picture needs a deployment.
+
+3. Sign in to Cloudflare:
+   npx wrangler login
+
+4. Deploy. This runs every offline check, then deploys the Worker "premise" and prints its address:
+   npm run deploy
+
+5. Set the owner key, a long random secret that you keep. Without it every request that changes something answers 503:
+   npx wrangler secret put OWNER_KEY
+
+6. Create the default pool from the seed. Use the address that step 4 printed and the key of step 5:
+   PREMISE_URL=https://premise.YOUR-SUBDOMAIN.workers.dev PREMISE_OWNER_KEY=YOUR-KEY npm run pool:create -- tidepool tidepool
+
+7. Unlock the Floor: open the address, press "Visitor" in the header, paste the owner key into "Owner key" and press "Unlock". The header now reads "Owner", and you can type a request.
+
+8. Run the checks at any time. They deploy nothing:
+   npm run check
+
+## Measured
+
+Every number comes from a file under [`docs/measurements/`](docs/measurements/).
+
+- 58 of 58 case vectors pass through the engine: [`docs/measurements/cases.md`](docs/measurements/cases.md).
+- The workhorse model, `gpt-oss-120b`, landed 12 of 12 additive requests and 12 of 12 shared-rule requests in one pass, with a median of 94 s from request to landing: [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
+- Three models each landed at least 11 of 12 additive requests (the race uses all three): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
+- A mark that was missed: after the shared energy rule changed, the shrimp's agent repaired its absolute number in 2 of 5 runs (the plan asked for 4 of 5): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
+- SOAK-NUMBERS-GO-HERE (256 scripted agents on one Trunk, five collision settings): [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
+- One Trunk did not carry 1,024 or 512 scripted agents, so the Swarm runs 256: [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
+- The longest Trunk engine call in a local 256-agent run with 264 attempts in flight: 802 ms: [`docs/measurements/integration/2026-10-07-trunk-load.md`](docs/measurements/integration/2026-10-07-trunk-load.md).
+
+## Limits
+
+- Premise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.
+- One Trunk serves one pool. Agents read and write files of at most 32,768 bytes. A repository with more than 5,000 entries or 24,000,000 bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.
+- Real agents are limited by the Workers AI rate limits. This build runs at most 6 at once.
+- Numbers in the Swarm view come from scripted agents. They make no model calls.
+- The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.
+- A premise across two pools is not built.
+- The green line is not in this build.
+- Clef judgments are off in this build.
+- Not built: text merge, Python and Go modules, outside agents over MCP, audience input.
+- References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
+- A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
+- Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
+- A sweep is recognised from the edits an agent makes, not from the words of the request.
+- After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
+- Switched off in this build: attempt repositories.
+
+## This deployment
+
+This deployment does not use a separate app host: the page, the API and the pools' code are served from one host, and the sandbox headers of rule SE13 are the boundary. The demo repository for imported pools is [`ai/nanoid`](https://github.com/ai/nanoid).
+
+## Related work
+
+Other work also checks what agents relied on: STORM (arXiv 2605.20563), CoAgent (arXiv 2606.15376), and the competition entry "dibs". Premise differs in these ways: reads are observed by the platform at the level of entities, listings and searches, and are never declared by the agent; premises are checked live while the agent works, not only when it submits; the record is stored as git notes in Artifacts, readable with plain git; and one record serves landing, review, why, who-relies and undo.
 
 ## License
 

@@ -8,11 +8,11 @@ review added three things:
 
 - `test/e2e/lead/design-review.spec.ts`: the capture. It runs only with `DESIGN_REVIEW=1`; without it
   every test in it is skipped.
-- `docs/reviews/screens/design/`: 164 PNG screenshots and 46 JSON files of measurements (24.6 MB), named
+- `docs/reviews/screens/design/`: 164 PNG screenshots and 46 JSON files of measurements (25,799,821 bytes: 24.6 MiB), named
   `<row>-<area>_<size>_<theme>_<state>.png`.
 - This record.
 
-Reviewed build: `2e48d5c` (the head of `main`), on branch `lead/design-review`. The build's switches
+Reviewed build: `2e48d5c`, the commit this review was given, on branch `lead/design-review`. The build's switches
 (`src/config/features.ts`): `held`, `race` and `undo` on; `green: "none"`; `clef: false`;
 `attempt_repos: false`.
 
@@ -595,7 +595,7 @@ in components. Fix: add the lint and move the strings into `copy`.
 | Command | Exit | Result |
 | --- | --- | --- |
 | `npm run build:floor` | 0 | The Floor built into `dist/client`. |
-| `DESIGN_REVIEW=1 PREMISE_E2E_PORT=4273 TMPDIR=$PWD/.tmp-test npx playwright test test/e2e/lead/design-review.spec.ts` | 0 | 87 passed; 164 PNG and 46 JSON written (24.6 MB). |
+| `DESIGN_REVIEW=1 PREMISE_E2E_PORT=4273 TMPDIR=$PWD/.tmp-test npx playwright test test/e2e/lead/design-review.spec.ts` | 0 | 87 passed; 164 PNG and 46 JSON written (24.6 MiB). |
 | `npm test -- src/copy --reporter=verbose` | 0 | 3 files, 48 passed (AC7 ×3, AC20 ×2, CP2, CP5, CP6, CP7, CP8 and the tables of 5.2 to 5.12). |
 | `npm test -- src/floor/styles/contrast.test.ts --reporter=verbose` | 0 | 8 passed (VD9/AC9, dark and light). |
 | `PREMISE_E2E_PORT=4273 npm run test:e2e` (`DESIGN_REVIEW` unset) | 0 | 240 passed, 88 skipped: the 87 tests of this spec and `test/e2e/deployed/tracer.spec.ts`, which the fixture project skips as before. Among them: `lead/keyboard.spec.ts` 3, `lead/layout.spec.ts` 27, `shell/layout.spec.ts` 15 (AC11 ×2, AC12 ×2, AC13 ×7), `shell/failures.spec.ts` 19 (AC15), `shell/banners.spec.ts` 10, `pool-area/frame.spec.ts` 18, `rail/held-sheet.spec.ts` 11, `pool-area/undo-sheet.spec.ts` 10, `shell/swarm-view.spec.ts` 9, all passed. |

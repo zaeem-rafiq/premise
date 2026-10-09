@@ -71,7 +71,13 @@ export async function expectLightsInsideColumn(column: Locator, more: number, ch
       childrenInside: children.every((child) => child.left >= bounds.left && child.right <= bounds.right),
       labelLines: range.getClientRects().length,
       lightRows: new Set([...row.querySelectorAll(".light")].map((light) => light.getBoundingClientRect().top)).size,
-      lightWidths: [...row.querySelectorAll(".light")].map((light) => light.getBoundingClientRect().width),
+      // The drawn shape (the SVG), as review-lights.spec.ts measures it for VD16 and CO15…
+      lightWidths: [...row.querySelectorAll(".light svg")].map((svg) => svg.getBoundingClientRect().width),
+      // …and the tap target around it (the light itself), at least 44x44 by LY5.
+      lightTargets: [...row.querySelectorAll(".light")].map((light) => {
+        const target = light.getBoundingClientRect();
+        return Math.min(target.width, target.height);
+      }),
     };
   });
   expect(layout.rowInside).toBe(true);
@@ -79,6 +85,7 @@ export async function expectLightsInsideColumn(column: Locator, more: number, ch
   expect(layout.labelLines).toBe(1);
   expect(layout.lightRows).toBeGreaterThan(1);
   expect(layout.lightWidths).toEqual(Array<number>(14).fill(28));
+  for (const side of layout.lightTargets) expect(side).toBeGreaterThanOrEqual(44);
 }
 
 export async function expectNoSheetOverflow(sheet: Locator): Promise<void> {

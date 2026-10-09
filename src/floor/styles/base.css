@@ -981,6 +981,15 @@ a {
 .attempt-card .light--list .light__edit {
   bottom: 14px;
 }
+/* LY5 in the card sheet too: its lights are the same focus and tap targets, so each gets the
+ * 44px box around its 28px drawn shape. The row's gap keeps wrapped boxes apart. */
+.card-sheet__lights > .light[tabindex] {
+  width: 44px;
+  height: 44px;
+}
+.card-sheet__lights .light__edit {
+  bottom: 8px;
+}
 .intent-box .intent-prewritten {
   min-width: 44px;
   min-height: 44px;

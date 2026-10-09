@@ -418,9 +418,12 @@ async function runOne(run: number, order: Order, deps: HeroDeps): Promise<HeroRu
       throw new Error("head_moved");
     result.plain_skipped = plain.skipped;
     result.plain_interrupted = plain.interrupted;
-  } catch {
+  } catch (error) {
     // Never retain an exception or an HTTP body: either may contain a reflected owner key.
     result.error = stage;
+    // REHEARSE_DEBUG=1 prints the message for diagnosis; deps.log redacts the key like every line.
+    if (process.env.REHEARSE_DEBUG === "1")
+      deps.log(`run ${run} stage ${stage}: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     stream?.close();
     try {

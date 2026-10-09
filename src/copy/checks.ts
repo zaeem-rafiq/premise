@@ -12,6 +12,7 @@ export const SUBMIT_CHECK_LABELS: Readonly<Record<string, string>> = {
   parse: "The code parses",
   imports_resolve: "Every import points at something",
   globals_allowed: "Only allowed globals are used",
+  derived: "What the change uses and affects is recorded",
   premises_hold: "Everything it relied on is still true",
 };
 

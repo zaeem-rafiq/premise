@@ -123,7 +123,7 @@ async function expectReplayPlaysOut(page: Page, deployed: boolean): Promise<void
   if (!deployed) {
     // RY11: the one `pool.weather` event of the fixture is counted and reported once (FE1).
     await expect(page.locator(".toasts")).toContainText(
-      "This recording has 1 events this page does not know. They are skipped.",
+      "This recording has 1 event this page does not know. It is skipped.",
       { timeout: 15_000 },
     );
   }

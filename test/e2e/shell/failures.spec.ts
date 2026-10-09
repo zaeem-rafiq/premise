@@ -318,7 +318,7 @@ test.describe("AC15: the shell's failure rows (section 7)", () => {
     await page.goto(`/p/${POOL}`);
     await page.getByRole("button", { name: "About" }).click();
     await expect(page.locator(".sheet")).toContainText(
-      "This page skipped 1 events of a newer kind. Reload to get the newest page.",
+      "This page skipped 1 event of a newer kind. Reload to get the newest page.",
     );
     await expect(page.locator(".strip")).toBeVisible();
     await shoot(page, "ac15-fr27");

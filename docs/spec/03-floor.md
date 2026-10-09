@@ -1405,7 +1405,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `spend.unknown` | not reported yet |
 | `spend.near` | Spend is near the cap. |
 | `spend.reached` | The spend cap is reached. |
-| `spend.model_line` | {model}: {used} of {limit} requests in the last minute. |
+| `spend.model_line` | {model}: {used} of {limit} requests in the last minute. (for 1: {model}: {used} of {limit} request in the last minute.) |
 | `strip.dash` | – |
 | `strip.stale` | As of {duration} ago. |
 | `intent.placeholder` | Ask for a change in plain words. |
@@ -1417,7 +1417,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `intent.sent_waiting` | Sent. Waiting for the pool to show it. |
 | `intent.prewritten` | Pre-written requests |
 | `intent.starter` | Send the starter set ({n}) |
-| `intent.queue` | All {max} agent slots are busy. Your request waits for a free slot. |
+| `intent.queue` | All {max} agent slots are busy. Your request waits for a free slot. (for 1: The {max} agent slot is busy. Your request waits for a free slot.) |
 | `intent.visitor` | Only the owner can send requests. You can watch, open Why cards and play the Replay. |
 | `intent.replay` | This is a recording. Requests are off. |
 | `intent.killed` | All agents are stopped. Allow agents again to send a request. |
@@ -1480,7 +1480,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `headsup.said` | The agent said: "{statement}" |
 | `headsup.waits` | The agent stopped before it answered this. |
 | `headsup.no_diff` | The exact diff was sent to the agent. This page did not receive it. |
-| `headsup.show_all` | Show all {n} lines |
+| `headsup.show_all` | Show all {n} lines (for 1: Show {n} line) |
 | `frame.main.caption` | Premise · main · {landing} |
 | `frame.main.seed` | Premise · main · the seed, before any landing |
 | `frame.main.title` | The live pool, running the code on main |
@@ -1503,7 +1503,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `plain.title` | A second pool, built from the same changes with a plain git merge |
 | `plain.differs` | What differs |
 | `plain.diff_line` | {changeName}: went around once after {keyShort} changed. The plain-merge pool has its first version. |
-| `plain.diff_line.many` | {changeName}: went around {n} times. The plain-merge pool has its first version. |
+| `plain.diff_line.many` | {changeName}: went around {n} times. The plain-merge pool has its first version. (for 1: {changeName}: went around {n} time. The plain-merge pool has its first version.) |
 | `plain.diff_line.confirm` | {changeName}: confirmed {keyShort} before landing. The plain-merge pool has its first version. |
 | `plain.interrupted` | {changeName}: its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work. |
 | `plain.no_difference` | No visible difference in this run. Both pools hold the same files. |
@@ -1511,7 +1511,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `plain.conflicts.tip` | A change that the plain merge could not apply is left out of the right pool and counted here. The count is approximated: Trunk replays each change's edits in order, which is not a full three-way merge. |
 | `plain.same` | No change has gone around yet. |
 | `plain.loading` | Building the plain-merge pool… |
-| `plain.behind` | This pool is {n} landings behind. |
+| `plain.behind` | This pool is {n} landings behind. (for 1: This pool is {n} landing behind.) |
 | `compare.back` | Back to the Floor |
 | `selftest.running` | Self-test, run in this page: running… |
 | `selftest.pass` | Self-test, run in this page: passed |
@@ -1541,14 +1541,14 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `why.under.goaround` | Go-around {n}: {rule sentence} ({landing}: "{intent text}"). |
 | `why.under.confirm` | Confirm: {rule sentence} |
 | `why.checked` | What was checked |
-| `why.checked.count` | {ok} of {all} checks passed. |
+| `why.checked.count` | {ok} of {all} checks passed. (for 1: {ok} of {all} check passed.) |
 | `why.checked.all` | Show the checks |
 | `why.landed_how` | How it landed |
 | `why.landed.auto` | By itself. Everything it relied on was still true, and no held path was touched. |
 | `why.landed.owner` | The owner tapped Land at {time of day}. It touches a held path. |
 | `why.landed.owner_now` | The owner tapped Land now at {time of day}. It did not wait for the change that had right of way. |
 | `why.landed.owner_risk` | The owner tapped Land at {time of day}. Clef had flagged this change. |
-| `why.landed.chosen` | The owner chose it from {n} attempts at {time of day}. |
+| `why.landed.chosen` | The owner chose it from {n} attempts at {time of day}. (for 1: The owner chose it from {n} attempt at {time of day}.) |
 | `why.changed` | What it changed |
 | `why.git` | Show the git |
 | `why.seed` | This was in the pool before any agent changed it. It is part of the seed. |
@@ -1583,26 +1583,26 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `undo.too_old` | This landing is too far back to undo. Undo covers the newest {UNDO_WINDOW} landings. |
 | `undo.planning` | Working out what this undo takes back… |
 | `undo.title` | Undo {landing}: "{intent text}"? |
-| `undo.also` | This also takes back {n} later changes that were built on it: {names}. Their agents reopen and adapt. |
+| `undo.also` | This also takes back {n} later changes that were built on it: {names}. Their agents reopen and adapt. (for 1: This also takes back {n} later change that was built on it: {names}. Its agent reopens and adapts.) |
 | `undo.also.none` | No later change was built on it. |
-| `undo.kept` | {n} later changes only read it. They stay: {names}. |
-| `undo.in_flight` | {n} changes in flight get a heads-up: {names}. |
+| `undo.kept` | {n} later changes only read it. They stay: {names}. (for 1: {n} later change only read it. It stays: {names}.) |
+| `undo.in_flight` | {n} changes in flight get a heads-up: {names}. (for 1: {n} change in flight gets a heads-up: {names}.) |
 | `undo.plan_changed` | The pool changed while this was open. This is what the undo takes back now. |
 | `undo.confirm` | Undo it |
 | `undo.sending` | Undoing… |
 | `undo.cancel` | Keep it |
 | `undo.refused` | Trunk refused the undo: {reason}. Nothing changed. |
 | `undo.landing` | Undo of {landing} is landing… |
-| `undo.done` | Undo of {landing} landed as {landing}. It took back {n} changes. |
+| `undo.done` | Undo of {landing} landed as {landing}. It took back {n} changes. (for 1: Undo of {landing} landed as {landing}. It took back {n} change.) |
 | `revert.landing` | The green line failed. Trunk is taking back {landings}. |
 | `held.before` | Before: the pool now |
 | `held.after` | After: the pool with this change |
 | `held.changes` | What it changes |
 | `held.affects` | Who it affects |
-| `held.relied_landed` | {n} landed changes rely on what it changes. |
-| `held.relied_inflight` | {n} changes in flight have a premise on what it changes: {names}. |
+| `held.relied_landed` | {n} landed changes rely on what it changes. (for 1: {n} landed change relies on what it changes.) |
+| `held.relied_inflight` | {n} changes in flight have a premise on what it changes: {names}. (for 1: {n} change in flight has a premise on what it changes: {names}.) |
 | `held.checked` | What was checked |
-| `held.blind` | {n} blind spots confirmed by the agent. |
+| `held.blind` | {n} blind spots confirmed by the agent. (for 1: {n} blind spot confirmed by the agent.) |
 | `held.reason` | Reason (optional) |
 | `held.landing` | Landing… |
 | `held.visitor` | Waiting for the owner. |
@@ -1617,11 +1617,11 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `held.no_preview` | No preview is available for this change. |
 | `held.preview_building` | Building the preview… |
 | `held.land_now.tip` | Lands it in the next batch. It does not wait for the change that has right of way. |
-| `race.group` | Race · {n} attempts |
+| `race.group` | Race · {n} attempts (for 1: Race · {n} attempt) |
 | `race.working` | Still working |
 | `race.took` | Took {duration} |
 | `race.cost` | Cost {money} |
-| `race.blast` | Would send back: {n} changes |
+| `race.blast` | Would send back: {n} changes (for 1: Would send back: {n} change) |
 | `race.unknown` | not recorded |
 | `race.chosen` | Chosen |
 | `race.stopped` | Stopped before it finished. |
@@ -1638,22 +1638,22 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `swarm.escape` | Escape rate {share} (target {share}) |
 | `swarm.escape.tip` | The share of landed changes that the green line later took back. |
 | `swarm.backlog` | Push backlog {n} |
-| `swarm.last_push` | Last push: 1 push, {n} changes |
+| `swarm.last_push` | Last push: 1 push, {n} changes (for 1: Last push: 1 push, {n} change) |
 | `swarm.agents` | Agents |
 | `swarm.dial` | Collisions |
 | `swarm.dial.tip` | The share of scripted changes that touch something another scripted change relies on. |
 | `swarm.start` | Start |
-| `swarm.starting` | Starting {n} scripted agents… |
+| `swarm.starting` | Starting {n} scripted agents… (for 1: Starting {n} scripted agent…) |
 | `swarm.stop` | Stop |
 | `swarm.stopping` | Stopping… |
 | `swarm.empty` | No Swarm run yet. A run uses scripted agents and makes no model calls. |
 | `swarm.final` | The run has ended. These are its last measured numbers, at {time of day}. |
 | `swarm.no_agents` | The Swarm is running and no scripted agent has started yet. Stop it and start again. |
 | `swarm.blocked` | The Swarm cannot start while agents are stopped or the pool is paused. |
-| `swarm.real_limit` | Real agents in the main pool: {max} at most. The limit is the model rate. |
-| `swarm.shape` | This run: {pools} pool, {pools} Trunk, {agents} scripted agents. |
+| `swarm.real_limit` | Real agents in the main pool: {max} at most. The limit is the model rate. (for 1: Real agent in the main pool: {max} at most. The limit is the model rate.) |
+| `swarm.shape` | This run: {pools} pool, {pools} Trunk, {agents} scripted agents. (for 1: This run: {pools} pool, {pools} Trunk, {agents} scripted agent.) |
 | `swarm.repair_note` | Scripted agents answer at once. Repair time is measured with real agents only and is shown in About. |
-| `swarm.wall.summary` | {n} scripted agents: {a} working, {b} going around, {c} landing. |
+| `swarm.wall.summary` | {n} scripted agents: {a} working, {b} going around, {c} landing. (for 1: {n} scripted agent: {a} working, {b} going around, {c} landing.) |
 | `replay.menu.title` | Recordings |
 | `replay.menu.item` | {title} · {duration} · recorded {date} |
 | `replay.none` | This deployment has no recording yet. |
@@ -1670,7 +1670,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `replay.ended` | The recording has ended. |
 | `replay.again` | Watch again |
 | `replay.to_live` | Open the live Floor |
-| `replay.unknown` | This recording has {n} events this page does not know. They are skipped. |
+| `replay.unknown` | This recording has {n} events this page does not know. They are skipped. (for 1: This recording has {n} event this page does not know. It is skipped.) |
 | `start.title` | Watch a recorded run |
 | `start.body` | This plays a real recorded run through this same page. You need no account and no key. |
 | `start.play` | Play the Replay ({duration}) |
@@ -1702,24 +1702,24 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `about.title` | About this run |
 | `about.how` | How it runs |
 | `about.run` | In this run |
-| `about.run.real` | Real agents: at most {max} at once, on {models}. |
+| `about.run.real` | Real agents: at most {max} at once, on {models}. (for 1: Real agent: at most {max} at once, on {models}.) |
 | `about.run.landed` | Landed changes: {n}. Go-arounds: {n}. |
 | `about.run.repair` | Repair time with real agents: median {duration}, p90 {duration}. |
-| `about.run.synthetic` | Scripted agents (SYNTHETIC): {n}. They make no model calls. |
+| `about.run.synthetic` | Scripted agents (SYNTHETIC): {n}. They make no model calls. (for 1: Scripted agent (SYNTHETIC): {n}. It makes no model calls.) |
 | `about.run.constructed` | Constructed: the plain-merge pool. Trunk builds it from the same changes for comparison. |
 | `about.run.spend` | Model spend: {spent} of a cap of {cap}. |
-| `about.unknown_events` | This page skipped {n} events of a newer kind. Reload to get the newest page. |
+| `about.unknown_events` | This page skipped {n} events of a newer kind. Reload to get the newest page. (for 1: This page skipped {n} event of a newer kind. Reload to get the newest page.) |
 | `about.build` | Page build {build}. Recording made by build {build}. |
 | `about.forks_unknown` | Attempt repositories: not reported by this build. |
 | `about.forks` | Attempt repositories: {rate} per second, {share} failed. No landing waits for one. |
 | `about.forks_off` | Attempt repositories are not provisioned in this build. |
-| `about.trunk_errors` | Trunk recorded {n} internal errors and tried each step again. |
+| `about.trunk_errors` | Trunk recorded {n} internal errors and tried each step again. (for 1: Trunk recorded {n} internal error and tried the step again.) |
 | `about.limits` | Limits |
 | `about.related` | Related work |
 | `about.related.body` | STORM (arXiv 2605.20563), CoAgent (arXiv 2606.15376) and the entry "dibs" also check what agents relied on. Premise observes reads at entity, listing and search level, checks them live, and stores the record in git notes. |
 | `shortcuts.title` | Keys |
 | `shortcuts.toggle` | Single-key shortcuts |
-| `banner.more` | {n} more notices |
+| `banner.more` | {n} more notices (for 1: {n} more notice) |
 | `pool.rebuild` | Rebuild from Artifacts |
 | `pool.rebuild.title` | Rebuild the pool from Artifacts? |
 | `pool.rebuild.body` | Trunk reads main and the notes again. Changes that were landing go back to their agents and land again. Open cards close. |
@@ -1966,14 +1966,14 @@ Notes on the options:
 - On the card of reason `reopen_failed`, `new_attempt` starts a new agent from the request text. It is not `retry`: `retry` resumes the same agent (`01-core.md` UN6a).
 - On the card of reason `revert_limit`, `retry` resumes the same agent on current facts, and the next revert of that change asks the owner again (`01-core.md` GL6).
 - In the minimal form of a held card (`features.held` is false, `01-core.md` HD1) the body is "It changes {paths}." alone. Trunk computes no blast radius there, so the card makes no statement about one.
-- The race title while no candidate is ready: {n} attempts at "{intent text}" are still working. With one ready: 1 of {n} attempts at "{intent text}" is ready. Choose it, or wait for the others.
+- The race title while no candidate is ready: {n} attempts at "{intent text}" are still working. (for 1: 1 attempt at "{intent text}" is still working.) With one ready: 1 of {n} attempts at "{intent text}" is ready. Choose it, or wait for the others. (for 1: 1 of 1 attempt at "{intent text}" is ready. Choose it.)
 
 | Sentence | Text |
 | --- | --- |
 | Blast, repair, n = 1 | Landing this sends 1 change back to its agent: {name}. |
 | Blast, repair, n > 1 | Landing this sends {n} changes back to their agents: {names}. |
-| Blast, confirm | {n} changes must confirm: {names}. |
-| Blast, triage | Clef will judge {n} changes that read it: {names}. |
+| Blast, confirm | {n} changes must confirm: {names}. (for 1: {n} change must confirm: {names}.) |
+| Blast, triage | Clef will judge {n} changes that read it: {names}. (for 1: Clef will judge {n} change that reads it: {names}.) |
 | Blast, right of way | Landing this sends {name} around again. It will wait until that change has landed. |
 | Blast, none | No change in flight relies on what this changes. |
 | Risk, `does_what_asked` low | Clef doubts that it does what was asked ({share}). |
@@ -2005,7 +2005,7 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 | `banner.paused.owner` | POOL PAUSED | The owner paused landings. | `kill.allow` (owner) |
 | `banner.rebuilding` | REBUILDING | Trunk is rebuilding its index ({done} of {total}). Agents wait. Everything that landed is kept. | |
 | `banner.cap` | SPEND CAP | The spend cap of {cap} is reached. No model call starts. Checked changes still land. | |
-| `banner.push` | PUSH PENDING | The push of {n} landings has not been confirmed yet. Try {tries}. Next try in {seconds} s. Nothing shows as landed until main has it. | |
+| `banner.push` | PUSH PENDING | The push of {n} landings has not been confirmed yet. Try {tries}. Next try in {seconds} s. Nothing shows as landed until main has it. (for 1: The push of {n} landing has not been confirmed yet. Try {tries}. Next try in {seconds} s. Nothing shows as landed until main has it.) | |
 | `banner.green_red` | GREEN LINE | The check failed twice at {landing}: {failed checks}. Trunk is taking back {landings} and reopening their agents. | |
 | `banner.offline` | CONNECTION | The connection to the pool is lost. Reconnecting, try {n}. The page shows the state of {duration} ago. | |
 
@@ -2061,7 +2061,7 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 | `sr.card` | A card is waiting for the owner: {title} |
 | `sr.card_closed` | Card closed: {title} |
 | `sr.landed` | {changeName} landed as {landing}. |
-| `sr.undo` | Undo of {landing} planned. It takes back {n} changes. |
+| `sr.undo` | Undo of {landing} planned. It takes back {n} changes. (for 1: Undo of {landing} planned. It takes back {n} change.) |
 | `sr.push` | A push is being retried. |
 | `sr.green_checking` | The green line check failed once at {landing}. It is being run again. |
 | `sr.green_red` | The green line check failed twice at {landing}. |
@@ -2069,8 +2069,8 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 | `sr.pool_state` | The pool is {ready or rebuilding or paused}. |
 | `sr.killed` | Agents are stopped. · Agents are allowed again. |
 | `sr.cap` | The spend cap is reached. |
-| `sr.swarm` | The Swarm started with {n} scripted agents. · The Swarm stopped. |
-| `sr.more` | {n} more updates |
+| `sr.swarm` | The Swarm started with {n} scripted agents. · The Swarm stopped. (for 1: The Swarm started with {n} scripted agent.) |
+| `sr.more` | {n} more updates (for 1: {n} more update) |
 
 ---
 

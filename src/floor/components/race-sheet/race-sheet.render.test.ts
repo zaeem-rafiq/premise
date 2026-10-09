@@ -180,7 +180,7 @@ describe("RaceSheet render (3.14)", () => {
     expect(html).toContain("Took 42 s");
     expect(html).toContain("Cost $0.12");
     expect(html).toContain("Would send back: 0 changes");
-    expect(html).toContain("Would send back: 1 changes");
+    expect(html).toContain("Would send back: 1 change<");
     // Only the choosable column's Choose renders.
     expect((html.match(/>Choose</g) ?? []).length).toBe(1);
   });

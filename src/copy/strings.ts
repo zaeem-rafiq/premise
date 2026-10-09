@@ -18,6 +18,8 @@ export type CopyEntry = {
   readonly visitor?: string;
   /** CP5: the form for `n` = 1 where the spec gives a different one. */
   readonly one?: string;
+  /** The counted placeholder for the 1-form; defaults to `n`. */
+  readonly oneCount?: string;
   /**
    * A second form of the same id: the "allowed again" / "stopped" direction of `sr.killed` and
    * `sr.swarm`; the `banner.green_red` sentence before its `undo.planned` arrives; the
@@ -96,7 +98,11 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "spend.unknown": { text: "not reported yet" },
   "spend.near": { text: "Spend is near the cap." },
   "spend.reached": { text: "The spend cap is reached." },
-  "spend.model_line": { text: "{model}: {used} of {limit} requests in the last minute." },
+  "spend.model_line": {
+    text: "{model}: {used} of {limit} requests in the last minute.",
+    one: "{model}: {used} of {limit} request in the last minute.",
+    oneCount: "limit",
+  },
   "strip.dash": { text: DASH },
   "strip.stale": { text: "As of {duration} ago." },
 
@@ -114,6 +120,8 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "intent.starter": { text: "Send the starter set ({n})" },
   "intent.queue": {
     text: "All {max} agent slots are busy. Your request waits for a free slot.",
+    one: "The {max} agent slot is busy. Your request waits for a free slot.",
+    oneCount: "max",
   },
   "intent.visitor": {
     text: "Only the owner can send requests. You can watch, open Why cards and play the Replay.",
@@ -201,7 +209,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "headsup.no_diff": {
     text: "The exact diff was sent to the agent. This page did not receive it.",
   },
-  "headsup.show_all": { text: "Show all {n} lines" },
+  "headsup.show_all": { text: "Show all {n} lines", one: "Show {n} line" },
 
   // ---- 5.4 Pool frames ----
   "frame.main.caption": { text: "Premise · main · {landing}" },
@@ -242,6 +250,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "plain.diff_line.many": {
     text: "{changeName}: went around {n} times. The plain-merge pool has its first version.",
+    one: "{changeName}: went around {n} time. The plain-merge pool has its first version.",
   },
   "plain.diff_line.confirm": {
     text: "{changeName}: confirmed {keyShort} before landing. The plain-merge pool has its first version.",
@@ -258,7 +267,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "plain.same": { text: "No change has gone around yet." },
   "plain.loading": { text: "Building the plain-merge pool…" },
-  "plain.behind": { text: "This pool is {n} landings behind." },
+  "plain.behind": { text: "This pool is {n} landings behind.", one: "This pool is {n} landing behind." },
   "compare.back": { text: "Back to the Floor" },
 
   // ---- 5.4 Self-test badge ----
@@ -301,7 +310,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "why.under.confirm": { text: "Confirm: {rule sentence}" },
   "why.checked": { text: "What was checked" },
-  "why.checked.count": { text: "{ok} of {all} checks passed." },
+  "why.checked.count": { text: "{ok} of {all} checks passed.", one: "{ok} of {all} check passed.", oneCount: "all" },
   "why.checked.all": { text: "Show the checks" },
   "why.landed_how": { text: "How it landed" },
   "why.landed.auto": {
@@ -314,7 +323,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "why.landed.owner_risk": {
     text: "The owner tapped Land at {time of day}. Clef had flagged this change.",
   },
-  "why.landed.chosen": { text: "The owner chose it from {n} attempts at {time of day}." },
+  "why.landed.chosen": {
+    text: "The owner chose it from {n} attempts at {time of day}.",
+    one: "The owner chose it from {n} attempt at {time of day}.",
+  },
   "why.changed": { text: "What it changed" },
   "why.git": { text: "Show the git" },
   "why.seed": {
@@ -373,8 +385,14 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     one: "This also takes back {n} later change that was built on it: {names}. Its agent reopens and adapts.",
   },
   "undo.also.none": { text: "No later change was built on it." },
-  "undo.kept": { text: "{n} later changes only read it. They stay: {names}." },
-  "undo.in_flight": { text: "{n} changes in flight get a heads-up: {names}." },
+  "undo.kept": {
+    text: "{n} later changes only read it. They stay: {names}.",
+    one: "{n} later change only read it. It stays: {names}.",
+  },
+  "undo.in_flight": {
+    text: "{n} changes in flight get a heads-up: {names}.",
+    one: "{n} change in flight gets a heads-up: {names}.",
+  },
   "undo.plan_changed": {
     text: "The pool changed while this was open. This is what the undo takes back now.",
   },
@@ -383,7 +401,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "undo.cancel": { text: "Keep it" },
   "undo.refused": { text: "Trunk refused the undo: {reason}. Nothing changed." },
   "undo.landing": { text: "Undo of {landing} is landing…" },
-  "undo.done": { text: "Undo of {landing} landed as {landing}. It took back {n} changes." },
+  "undo.done": {
+    text: "Undo of {landing} landed as {landing}. It took back {n} changes.",
+    one: "Undo of {landing} landed as {landing}. It took back {n} change.",
+  },
   "revert.landing": { text: "The green line failed. Trunk is taking back {landings}." },
 
   // ---- 5.4 Held card sheet and closed cards ----
@@ -391,12 +412,16 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "held.after": { text: "After: the pool with this change" },
   "held.changes": { text: "What it changes" },
   "held.affects": { text: "Who it affects" },
-  "held.relied_landed": { text: "{n} landed changes rely on what it changes." },
+  "held.relied_landed": {
+    text: "{n} landed changes rely on what it changes.",
+    one: "{n} landed change relies on what it changes.",
+  },
   "held.relied_inflight": {
     text: "{n} changes in flight have a premise on what it changes: {names}.",
+    one: "{n} change in flight has a premise on what it changes: {names}.",
   },
   "held.checked": { text: "What was checked" },
-  "held.blind": { text: "{n} blind spots confirmed by the agent." },
+  "held.blind": { text: "{n} blind spots confirmed by the agent.", one: "{n} blind spot confirmed by the agent." },
   "held.reason": { text: "Reason (optional)" },
   "held.landing": { text: "Landing…" },
   "held.visitor": { text: "Waiting for the owner." },
@@ -425,11 +450,11 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
 
   // ---- 5.4 Race ----
-  "race.group": { text: "Race · {n} attempts" },
+  "race.group": { text: "Race · {n} attempts", one: "Race · {n} attempt" },
   "race.working": { text: "Still working" },
   "race.took": { text: "Took {duration}" },
   "race.cost": { text: "Cost {money}" },
-  "race.blast": { text: "Would send back: {n} changes" },
+  "race.blast": { text: "Would send back: {n} changes", one: "Would send back: {n} change" },
   "race.unknown": { text: "not recorded" },
   "race.chosen": { text: "Chosen" },
   "race.stopped": { text: "Stopped before it finished." },
@@ -452,14 +477,14 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     text: "The share of landed changes that the green line later took back.",
   },
   "swarm.backlog": { text: "Push backlog {n}" },
-  "swarm.last_push": { text: "Last push: 1 push, {n} changes" },
+  "swarm.last_push": { text: "Last push: 1 push, {n} changes", one: "Last push: 1 push, {n} change" },
   "swarm.agents": { text: "Agents" },
   "swarm.dial": { text: "Collisions" },
   "swarm.dial.tip": {
     text: "The share of scripted changes that touch something another scripted change relies on.",
   },
   "swarm.start": { text: "Start" },
-  "swarm.starting": { text: "Starting {n} scripted agents…" },
+  "swarm.starting": { text: "Starting {n} scripted agents…", one: "Starting {n} scripted agent…" },
   "swarm.stop": { text: "Stop" },
   "swarm.stopping": { text: "Stopping…" },
   "swarm.empty": {
@@ -476,12 +501,21 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "swarm.real_limit": {
     text: "Real agents in the main pool: {max} at most. The limit is the model rate.",
+    one: "Real agent in the main pool: {max} at most. The limit is the model rate.",
+    oneCount: "max",
   },
-  "swarm.shape": { text: "This run: {pools} pool, {pools} Trunk, {agents} scripted agents." },
+  "swarm.shape": {
+    text: "This run: {pools} pool, {pools} Trunk, {agents} scripted agents.",
+    one: "This run: {pools} pool, {pools} Trunk, {agents} scripted agent.",
+    oneCount: "agents",
+  },
   "swarm.repair_note": {
     text: "Scripted agents answer at once. Repair time is measured with real agents only and is shown in About.",
   },
-  "swarm.wall.summary": { text: "{n} scripted agents: {a} working, {b} going around, {c} landing." },
+  "swarm.wall.summary": {
+    text: "{n} scripted agents: {a} working, {b} going around, {c} landing.",
+    one: "{n} scripted agent: {a} working, {b} going around, {c} landing.",
+  },
 
   // ---- 5.4 Replay ----
   "replay.menu.title": { text: "Recordings" },
@@ -503,6 +537,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "replay.to_live": { text: "Open the live Floor" },
   "replay.unknown": {
     text: "This recording has {n} events this page does not know. They are skipped.",
+    one: "This recording has {n} event this page does not know. It is skipped.",
   },
 
   // ---- 5.4 Start card, owner, kill switch ----
@@ -547,13 +582,18 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "about.title": { text: "About this run" },
   "about.how": { text: "How it runs" },
   "about.run": { text: "In this run" },
-  "about.run.real": { text: "Real agents: at most {max} at once, on {models}." },
+  "about.run.real": {
+    text: "Real agents: at most {max} at once, on {models}.",
+    one: "Real agent: at most {max} at once, on {models}.",
+    oneCount: "max",
+  },
   "about.run.landed": { text: "Landed changes: {n}. Go-arounds: {n}." },
   "about.run.repair": {
     text: "Repair time with real agents: median {duration}, p90 {duration}.",
   },
   "about.run.synthetic": {
     text: "Scripted agents (SYNTHETIC): {n}. They make no model calls.",
+    one: "Scripted agent (SYNTHETIC): {n}. It makes no model calls.",
   },
   "about.run.constructed": {
     text: "Constructed: the plain-merge pool. Trunk builds it from the same changes for comparison.",
@@ -561,6 +601,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "about.run.spend": { text: "Model spend: {spent} of a cap of {cap}." },
   "about.unknown_events": {
     text: "This page skipped {n} events of a newer kind. Reload to get the newest page.",
+    one: "This page skipped {n} event of a newer kind. Reload to get the newest page.",
   },
   "about.build": { text: "Page build {build}. Recording made by build {build}." },
   "about.forks_unknown": { text: "Attempt repositories: not reported by this build." },
@@ -568,7 +609,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     text: "Attempt repositories: {rate} per second, {share} failed. No landing waits for one.",
   },
   "about.forks_off": { text: "Attempt repositories are not provisioned in this build." },
-  "about.trunk_errors": { text: "Trunk recorded {n} internal errors and tried each step again." },
+  "about.trunk_errors": {
+    text: "Trunk recorded {n} internal errors and tried each step again.",
+    one: "Trunk recorded {n} internal error and tried the step again.",
+  },
   "about.limits": { text: "Limits" },
   "about.related": { text: "Related work" },
   "about.related.body": {
@@ -626,6 +670,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "banner.push": {
     word: "PUSH PENDING",
     text: "The push of {n} landings has not been confirmed yet. Try {tries}. Next try in {seconds} s. Nothing shows as landed until main has it.",
+    one: "The push of {n} landing has not been confirmed yet. Try {tries}. Next try in {seconds} s. Nothing shows as landed until main has it.",
   },
   "banner.green_red": {
     word: "GREEN LINE",
@@ -637,7 +682,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     word: "CONNECTION",
     text: "The connection to the pool is lost. Reconnecting, try {n}. The page shows the state of {duration} ago.",
   },
-  "banner.more": { text: "{n} more notices" },
+  "banner.more": { text: "{n} more notices", one: "{n} more notice" },
   "pool.rebuild": { text: "Rebuild from Artifacts" },
   "pool.rebuild.title": { text: "Rebuild the pool from Artifacts?" },
   "pool.rebuild.body": {
@@ -658,7 +703,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "sr.card": { text: "A card is waiting for the owner: {title}", urgent: true },
   "sr.card_closed": { text: "Card closed: {title}" },
   "sr.landed": { text: "{changeName} landed as {landing}." },
-  "sr.undo": { text: "Undo of {landing} planned. It takes back {n} changes." },
+  "sr.undo": {
+    text: "Undo of {landing} planned. It takes back {n} changes.",
+    one: "Undo of {landing} planned. It takes back {n} change.",
+  },
   "sr.push": { text: "A push is being retried." },
   "sr.green_checking": {
     text: "The green line check failed once at {landing}. It is being run again.",
@@ -671,8 +719,9 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "sr.swarm": {
     text: "The Swarm started with {n} scripted agents.",
     alt: "The Swarm stopped.",
+    one: "The Swarm started with {n} scripted agent.",
   },
-  "sr.more": { text: "{n} more updates" },
+  "sr.more": { text: "{n} more updates", one: "{n} more update" },
 };
 
 /** The words `{cause}` of `attempt.tag.reopened` and `sr.reopened` take (03 5.4, `attempt.reopened`). */
@@ -743,15 +792,15 @@ export const REPO_STRINGS: Readonly<Record<string, CopyEntry>> = {
 
 /**
  * `text(id, vars)` gives the string of a copy id, filled. `vars.visitor` picks the CP7 form a
- * visitor (and everyone in Replay) reads; `vars.n` of 1 picks the `one` form where the spec gives
- * one. Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
+ * visitor (and everyone in Replay) reads; the entry's counted value of 1 picks the `one` form.
+ * Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
  */
 export function text(id: string, vars: CopyVars = {}): string {
   const entry = STRINGS[id] ?? REPO_STRINGS[id];
   if (entry === undefined) throw new Error(`copy: unknown id "${id}"`);
   let template = entry.text;
   if (vars.visitor === true && entry.visitor !== undefined) template = entry.visitor;
-  if (vars.n === 1 && entry.one !== undefined) template = entry.one;
+  if (vars[entry.oneCount ?? "n"] === 1 && entry.one !== undefined) template = entry.one;
   return fill(template, vars);
 }
 

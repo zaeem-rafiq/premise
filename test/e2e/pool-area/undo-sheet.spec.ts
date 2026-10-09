@@ -211,10 +211,8 @@ test.describe("the undo sheet (3.12)", () => {
         'This also takes back 1 later change that was built on it: landing 2 "a faster crab". Its agent reopens and adapts.',
       ),
     ).toBeVisible();
-    await expect(
-      sheet.getByText('1 later changes only read it. They stay: landing 3 "reads the energy".'),
-    ).toBeVisible();
-    await expect(sheet.getByText('1 changes in flight get a heads-up: "still swimming".')).toBeVisible();
+    await expect(sheet.getByText('1 later change only read it. It stays: landing 3 "reads the energy".')).toBeVisible();
+    await expect(sheet.getByText('1 change in flight gets a heads-up: "still swimming".')).toBeVisible();
     await expect(sheet.getByRole("button", { name: "Undo it" })).toBeEnabled();
     await expect(sheet.getByRole("button", { name: "Keep it" })).toBeVisible();
   });

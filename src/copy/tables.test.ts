@@ -482,7 +482,7 @@ describe("5.10 card texts (CD5: Trunk fills Card.title, Card.body and Card.optio
       "2 changes must confirm: A, B.",
     );
     expect(blastSentence({ ...r, triage: ["a1"] }, { repair: [], confirm: [], triage: ["A"] })).toBe(
-      "Clef will judge 1 changes that read it: A.",
+      "Clef will judge 1 change that reads it: A.",
     );
     expect(
       blastSentence(

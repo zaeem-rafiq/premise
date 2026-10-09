@@ -164,11 +164,10 @@ test.describe("the file tiles (3.7)", () => {
     await serveHarness(page);
     await sendEvents(page, MARKS_IX);
     const cells = page.locator(`${TILES} .tile`);
-    // pool.files order of the tracer: .premise/policy.json (held), world/{energy,movement},
-    // creatures/{fish,snail} — each group led by its label cell.
-    await expect(page.locator(`${TILES} .tile-label`).nth(0)).toContainText(".premise/");
-    await expect(page.locator(`${TILES} .tile-label`).nth(1)).toContainText("world/");
-    await expect(page.locator(`${TILES} .tile-label`).nth(2)).toContainText("creatures/");
+    // D17: the 2.2 wireframe puts world/ and creatures/ first; each group keeps its file order.
+    await expect(page.locator(`${TILES} .tile-label`).nth(0)).toContainText("world/");
+    await expect(page.locator(`${TILES} .tile-label`).nth(1)).toContainText("creatures/");
+    await expect(page.locator(`${TILES} .tile-label`).nth(2)).toContainText(".premise/");
     for (const name of ["policy", "energy", "movement", "fish", "snail"]) {
       await expect(cells.filter({ hasText: name }).first()).toBeVisible();
     }

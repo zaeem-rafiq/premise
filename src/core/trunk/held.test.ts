@@ -181,7 +181,7 @@ describe("full held card (10.2, 11.6, CD2, CD4)", () => {
     const card = openHeld();
     expect(card.body.blast_radius.S).toEqual({ repair: [], confirm: [], triage: ["T"], right_of_way: ["T"] });
     expect(card.body.options.map((option) => option.id)).toEqual(["land", "decline"]);
-    expect(card.body.body).toEqual(["It changes world.js. Clef will judge 1 changes that read it: helper."]);
+    expect(card.body.body).toEqual(["It changes world.js. Clef will judge 1 change that reads it: helper."]);
   });
 
   it("uses the minimal held form when an explicit false overrides persisted full features", () => {

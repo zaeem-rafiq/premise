@@ -28,10 +28,10 @@ export function money(usd: number): string {
  * duration(640) -> "640 ms"; duration(42_000) -> "42 s"; duration(72_000) -> "1 min 12 s".
  */
 export function duration(ms: number): string {
-  if (ms < 1_000) return `${Math.round(ms)} ms`;
+  if (ms < 1_000) return `${count(Math.round(ms))} ms`;
   const seconds = Math.round(ms / 1_000);
-  if (seconds < 60) return `${seconds} s`;
-  return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+  if (seconds < 60) return `${count(seconds)} s`;
+  return `${count(Math.floor(seconds / 60))} min ${count(seconds % 60)} s`;
 }
 
 /** `hh:mm:ss` (the run clock). clock(221_000) -> "00:03:41". */
@@ -50,7 +50,7 @@ export function timeOfDay(ts: number): string {
 
 /** "landing {seq}": the plain-word name of a landing. landingLabel(9) -> "landing 9". */
 export function landingLabel(seq: number): string {
-  return `landing ${seq}`;
+  return `landing ${count(seq)}`;
 }
 
 /** The last segment of a path (the part after the last `/`). */

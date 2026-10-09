@@ -96,6 +96,14 @@ export const HELD_BODY_MINIMAL = "It changes {paths}.";
 /** The race title by how many candidates are ready (03 5.10, last note). */
 export function raceTitle(ready: number, n: number, intentText: string): string {
   const vars = { ready, n, "intent text": intentText };
+  if (n === 1) {
+    return fill(
+      ready === 0
+        ? '1 attempt at "{intent text}" is still working.'
+        : '1 of 1 attempt at "{intent text}" is ready. Choose it.',
+      vars,
+    );
+  }
   if (ready === 0) return fill('{n} attempts at "{intent text}" are still working.', vars);
   if (ready === 1)
     return fill('1 of {n} attempts at "{intent text}" is ready. Choose it, or wait for the others.', vars);
@@ -131,16 +139,24 @@ export function blastSentence(
         });
   }
   if (radius.confirm.length > 0) {
-    return fill("{n} changes must confirm: {names}.", {
-      n: radius.confirm.length,
-      names: names.confirm.join(", "),
-    });
+    return fill(
+      radius.confirm.length === 1 ? "{n} change must confirm: {names}." : "{n} changes must confirm: {names}.",
+      {
+        n: radius.confirm.length,
+        names: names.confirm.join(", "),
+      },
+    );
   }
   if (radius.triage.length > 0) {
-    return fill("Clef will judge {n} changes that read it: {names}.", {
-      n: radius.triage.length,
-      names: names.triage.join(", "),
-    });
+    return fill(
+      radius.triage.length === 1
+        ? "Clef will judge {n} change that reads it: {names}."
+        : "Clef will judge {n} changes that read it: {names}.",
+      {
+        n: radius.triage.length,
+        names: names.triage.join(", "),
+      },
+    );
   }
   return "No change in flight relies on what this changes.";
 }

@@ -182,7 +182,7 @@ test.describe("the race sheet (3.14)", () => {
     await expect(first.locator("iframe")).toHaveAttribute("src", new RegExp(`/pool/${POOL}/c_a1/\\?seed=\\d+$`));
     await expect(first.getByText("Took 42 s")).toBeVisible();
     await expect(first.getByText("Cost $0.12")).toBeVisible();
-    await expect(first.getByText("Would send back: 0 changes")).toBeVisible();
+    await expect(first.getByText("Would send back: 0 changes", { exact: true })).toBeVisible();
     await expect(first.getByRole("button", { name: "Choose" })).toBeEnabled();
     // a_2 still works (3.14 loading row): the state line, no frame, no button.
     const second = columns.nth(1);
@@ -191,7 +191,7 @@ test.describe("the race sheet (3.14)", () => {
     // CO39: null seconds and cost read race.unknown — "not recorded", never zero.
     await expect(second.getByText("Took not recorded")).toBeVisible();
     await expect(second.getByText("Cost not recorded")).toBeVisible();
-    await expect(second.getByText("Would send back: 1 changes")).toBeVisible();
+    await expect(second.getByText("Would send back: 1 change", { exact: true })).toBeVisible();
     await expect(second.getByRole("button", { name: "Choose" })).toHaveCount(0);
   });
 

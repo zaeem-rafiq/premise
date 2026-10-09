@@ -1,0 +1,71 @@
+/* Chapter names and their caption reserve their own space above the fixed transport row. */
+.replay-controls {
+  flex: none;
+  min-width: 0;
+  background: var(--surface);
+}
+.replay-chapters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 4px 16px;
+  border-top: var(--border) solid var(--line);
+}
+.replay-chapters button {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: var(--size-small);
+  white-space: nowrap;
+}
+.replay-chapters button[aria-current="step"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.replay-detail {
+  display: flex;
+  gap: 16px;
+  padding: 0 16px;
+}
+.replay-detail .replay-caption {
+  white-space: normal;
+  flex: 1;
+}
+.replay-controls .replay-track-wrap {
+  min-width: 60px;
+}
+.replay-controls .replay-track {
+  height: 44px;
+  margin: 0;
+  display: block;
+}
+.replay-controls .replay-marks {
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  pointer-events: none;
+}
+.replay-controls .replay-mark {
+  min-width: 2px;
+  width: 2px;
+  min-height: 8px;
+  height: 8px;
+  padding: 0;
+  background: var(--muted);
+}
+.replay-controls .replay-bar[data-ended] .replay-track-wrap {
+  min-width: calc(50% + 16px);
+}
+@media (max-width: 1099px) {
+  .replay-controls .replay-track-wrap {
+    flex-basis: 100%;
+  }
+  .replay-controls .replay-ended {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+  .replay-detail {
+    flex-wrap: wrap;
+  }
+}

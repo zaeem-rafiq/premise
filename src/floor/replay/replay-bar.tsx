@@ -7,24 +7,23 @@
 // is restart, and `replay.to_live` is close. The position and the track keep their places:
 // the track keeps at least half the bar's width, and on a narrower laptop it wraps to a row
 // of its own rather than squeeze. The chapter marks are thinned to the ones that fit without
-// overlapping - a dropped mark's chapter still answers its key of 6.6.
+// overlapping. Every chapter also has a named button and answers its key of 6.6.
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { ShellContext } from "../app/context.ts";
 import { clock as clockText } from "../../copy/format.ts";
 import { REPLAY_SPEEDS } from "../../protocol/constants.ts";
 import type { ReplayChapter, ReplayPlayer } from "./player.ts";
+import "./replay-bar.css";
 
-/** The least space two chapter-mark centres may stand without their buttons touching:
- * a mark is centred on its position and about 22 px wide. */
+/** Minimum spacing for the decorative marks on the track. Named chapter buttons sit above it. */
 const MARK_MIN_GAP_PX = 26;
 
 export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: () => void }) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const snap = player.snapshot();
-  const chapterAt = player.chapters.findIndex((c) => c.start > snap.position) - 1;
-  const currentChapter = chapterAt >= 0 ? player.chapters[chapterAt] : player.chapters[player.chapters.length - 1];
+  const currentChapter = player.chapters.find((chapter) => chapter.key === snap.chapter);
 
   // The track's pixel width decides how many chapter marks stand without overlapping:
   // each sits at its recorded-time position, and two closer than MARK_MIN_GAP_PX would
@@ -70,71 +69,91 @@ export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: 
       />
       <div className="replay-marks" aria-hidden="true">
         {marks.map((chapter) => (
-          <button
+          <span
             key={chapter.key}
-            type="button"
             className="replay-mark"
             style={{
               left: `clamp(11px, ${snap.duration === 0 ? 0 : (chapter.start / snap.duration) * 100}%, calc(100% - 11px))`,
             }}
             title={chapter.name}
-            onClick={() => player.seekChapter(chapter.key)}
-          >
-            {chapter.key}
-          </button>
+          />
         ))}
       </div>
     </div>
   );
 
   return (
-    <div className="replay-bar" role="region" aria-label={t("replay.menu.title")} data-ended={snap.ended || undefined}>
-      {snap.ended ? (
-        <>
-          <span className="replay-ended">
-            {t("replay.ended")}{" "}
-            <button type="button" className="replay-button" onClick={() => player.restart()}>
-              {t("replay.again")}
-            </button>{" "}
-            <button type="button" className="replay-button" onClick={onClose}>
-              {t("replay.to_live")}
-            </button>
-          </span>
-          {position}
-          {track}
-        </>
-      ) : (
-        <>
-          <div className="replay-buttons">
-            <button
-              type="button"
-              className="replay-button"
-              onClick={() => player.toggle()}
-              aria-label={snap.playing ? t("replay.pause") : t("replay.play")}
-            >
-              {snap.playing ? t("replay.pause") : t("replay.play")}
-            </button>
-            <button type="button" className="replay-button" onClick={() => player.restart()}>
-              {t("replay.restart")}
-            </button>
-          </div>
-          {position}
-          {track}
+    <div className="replay-controls">
+      <div className="replay-chapters">
+        {player.chapters.map((chapter) => (
+          <button
+            key={chapter.key}
+            type="button"
+            title={chapter.name}
+            aria-current={chapter.key === snap.chapter ? "step" : undefined}
+            onClick={() => player.seekChapter(chapter.key)}
+          >
+            {chapter.name}
+          </button>
+        ))}
+      </div>
+      {!snap.ended && (
+        <div className="replay-detail">
           <span className="replay-caption">{currentChapter?.caption ?? ""}</span>
           {snap.skipped && <span className="replay-skipped">{t("replay.skipped", { duration: "…" })}</span>}
-          <button
-            type="button"
-            className="replay-speed"
-            onClick={() => player.stepSpeed(1)}
-            title={t("replay.speed", { x: snap.speed })}
-          >
-            {t("replay.speed", { x: snap.speed })}
-          </button>
-          <button type="button" className="replay-close" onClick={onClose}>
-            {t("replay.close")}
-          </button>
-        </>
+        </div>
       )}
+      <div
+        className="replay-bar"
+        role="region"
+        aria-label={t("replay.menu.title")}
+        data-ended={snap.ended || undefined}
+      >
+        {snap.ended ? (
+          <>
+            <span className="replay-ended">
+              {t("replay.ended")}{" "}
+              <button type="button" className="replay-button" onClick={() => player.restart()}>
+                {t("replay.again")}
+              </button>{" "}
+              <button type="button" className="replay-button" onClick={onClose}>
+                {t("replay.to_live")}
+              </button>
+            </span>
+            {position}
+            {track}
+          </>
+        ) : (
+          <>
+            <div className="replay-buttons">
+              <button
+                type="button"
+                className="replay-button"
+                onClick={() => player.toggle()}
+                aria-label={snap.playing ? t("replay.pause") : t("replay.play")}
+              >
+                {snap.playing ? t("replay.pause") : t("replay.play")}
+              </button>
+              <button type="button" className="replay-button" onClick={() => player.restart()}>
+                {t("replay.restart")}
+              </button>
+            </div>
+            {position}
+            {track}
+            <button
+              type="button"
+              className="replay-speed"
+              onClick={() => player.stepSpeed(1)}
+              title={t("replay.speed", { x: snap.speed })}
+            >
+              {t("replay.speed", { x: snap.speed })}
+            </button>
+            <button type="button" className="replay-close" onClick={onClose}>
+              {t("replay.close")}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

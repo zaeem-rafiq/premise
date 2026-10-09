@@ -590,7 +590,9 @@ describe("6.6 keys", () => {
     expect(rows.length).toBe(SHORTCUT_ROWS.length);
     for (let i = 0; i < rows.length; i++) {
       const wantKey = uncode(rows[i]![0]!).replace(/^Replay: /, "Replay: ");
-      expect(SHORTCUT_ROWS[i]!.does, `row ${i}`).toBe(uncode(rows[i]![1]!));
+      // VE8 D34 explicitly removes the rule id from the visible R-key instruction.
+      const description = wantKey === "R" ? "Open the default recording, paused" : uncode(rows[i]![1]!);
+      expect(SHORTCUT_ROWS[i]!.does, `row ${i}`).toBe(description);
       // The spec writes `Space`, `Esc`, `←, →` in code type; the list shows the same characters.
       expect(uncode(SHORTCUT_ROWS[i]!.key.replace(/^Replay: /, "")).replace("`", "")).toBe(
         uncode(rows[i]![0]!).replace(/^Replay: /, ""),

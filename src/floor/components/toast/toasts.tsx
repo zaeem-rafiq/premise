@@ -5,8 +5,11 @@ import { useEffect } from "react";
 import { TOAST_MS } from "../../../protocol/constants.ts";
 import type { Toast } from "../../state/view-state.ts";
 
+import "./toasts.css";
+
 export function Toasts({ toasts, onDrop }: { toasts: Toast[]; onDrop: (id: number) => void }) {
   const shown = toasts.slice(-3);
+  if (shown.length === 0) return null;
   return (
     <div className="toasts">
       {shown.map((toast) => (

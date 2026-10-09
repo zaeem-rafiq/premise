@@ -9,6 +9,16 @@ import { SwarmView } from "../../components/swarm/swarm.tsx";
 
 export const views: Record<string, (props: Record<string, unknown>) => ReactNode> = {
   "view.swarm": (props) => (
-    <SwarmView floor={props.floor as FloorState} owner={props.owner === true} pool={String(props.pool)} />
+    <SwarmView
+      floor={props.floor as FloorState}
+      owner={props.owner === true}
+      offline={props.offline === true}
+      pool={String(props.pool)}
+      clock={props.clock as number}
+      readClock={props.readClock as (() => number) | undefined}
+      waitingSince={props.waitingSince as number | null}
+      swarmRun={props.swarmRun as number}
+      mainPool={props.mainPool as FloorState["pool"]}
+    />
   ),
 };

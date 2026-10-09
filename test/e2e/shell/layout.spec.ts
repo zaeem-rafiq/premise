@@ -116,9 +116,10 @@ test.describe("defect regressions", () => {
     const closeBox = await box(close);
     expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(1440);
     expect(speedBox.x + speedBox.width).toBeLessThanOrEqual(closeBox.x + closeBox.width);
-    // The caption gave way: it does not overlap the controls and its text is clipped.
+    // D42 / 2.7: the caption now reserves a separate row above the transport.
+    // Keep the original non-overlap check in the layout's vertical direction.
     const caption = await box(page.locator(".replay-caption"));
-    expect(caption.x + caption.width).toBeLessThanOrEqual(speedBox.x);
+    expect(caption.y + caption.height).toBeLessThanOrEqual(speedBox.y);
   });
 
   test("a sentence value in the strip does not stretch the strip (3.8)", async ({ page }) => {

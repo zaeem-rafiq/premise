@@ -92,7 +92,7 @@ test.describe("CO42/CO42a: the numbers of the newest metrics event", () => {
     // The two small rates and the backlog.
     // The copy table's second {share} is the target: FALSE_ABORT_TARGET 5%, ESCAPE_TARGET 0%.
     await expect(page.locator(".swarm-numbers")).toContainText("False-abort rate 50% (target 5%)");
-    await expect(page.locator(".swarm-numbers")).toContainText("Escape rate 0% (target 0%)");
+    await expect(page.locator(".swarm-numbers")).toContainText("Escape rate – (target 0%)");
     await expect(page.locator(".swarm-numbers")).toContainText("Push backlog 2");
   });
 
@@ -110,7 +110,8 @@ test.describe("CO42/CO42a: the numbers of the newest metrics event", () => {
     // Before the first metrics event every number is strip.dash.
     const cells = page.locator(".swarm-numbers .swarm-cell .strip-value");
     for (let i = 0; i < 4; i += 1) await expect(cells.nth(i)).toHaveText("–");
-    await expect(page.locator(".swarm-numbers")).not.toContainText("%");
+    await expect(page.locator(".swarm-numbers")).toContainText("False-abort rate – (target 5%)");
+    await expect(page.locator(".swarm-numbers")).toContainText("Escape rate – (target 0%)");
     // After the delayed frames the NEWEST event wins: lps 0.75 (not 1.00), gar 50%, waiting 9.
     await expect(page.locator(".swarm-numbers")).toContainText("0.75");
     await expect(page.locator(".swarm-numbers")).toContainText("50%");
@@ -143,9 +144,9 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
 
     // CO48: the control reads the newest swarm.state — dial 0.3, agents 7, not the page's.
     const dial = page.locator('.swarm-controls input[type="range"]');
-    const agentsField = page.locator('.swarm-controls input[type="number"]');
+    const agentsField = page.locator(".swarm-agent-count");
     await expect(dial).toHaveValue("0.3");
-    await expect(agentsField).toHaveValue("7");
+    await expect(agentsField).toHaveText("7");
 
     // Moving the dial during a run (step 0.05: one ArrowRight takes 0.3 to 0.35).
     await dial.focus();
@@ -239,6 +240,6 @@ test.describe("the visitor row of the state table", () => {
     await expect(page.locator(".swarm-numbers")).toContainText("0.50");
     await expect(page.locator(".banner[data-tone='synthetic']")).toContainText("7 scripted agents");
     // The wall cell of the one synthetic attempt is drawn.
-    await expect(page.locator(".swarm-tile")).toHaveCount(1);
+    await expect(page.locator("canvas.swarm-wall")).toHaveCount(1);
   });
 });

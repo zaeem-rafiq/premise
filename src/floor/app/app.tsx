@@ -12,6 +12,7 @@ import type { FloorJson } from "../../protocol/floor-json.ts";
 import type { FloorState } from "../../protocol/reducer/state.ts";
 import type { RegistryEntry, RegistryTable } from "./registry.ts";
 import { parseRoute, poolRoute, type Route } from "./route.ts";
+import { showStartCard } from "./start-card.ts";
 import { ShellContext, makeShell } from "./context.ts";
 import { pauseNextReplay, useSession } from "./session.ts";
 import { useKeys, type KeyEvent } from "../keys/keys.ts";
@@ -119,6 +120,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
 
   const replay = route.kind === "replay";
   const session = useSession(route, settings, reducedMotion);
+  const swarmRoute = useMemo<Route>(() => ({ kind: "floor", pool: settings.swarm_pool }), [settings.swarm_pool]);
+  const swarmSession = useSession(swarmRoute, settings, reducedMotion, !replay && view === "swarm");
   // RY12: while a recording is open, About names the page's own build and the build the
   // recording's header was made by.
   const aboutBuild =
@@ -127,7 +130,9 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
       : undefined;
   // FR10/CO3: while the connection is lost every owner control is off and the last
   // content keeps, dimmed. Replay never is "offline" - it plays a file, not a socket.
-  const offline = !replay && session.connection === "lost";
+  const activeSession = !replay && view === "swarm" ? swarmSession : session;
+  const connectionSession = session.connection === "lost" ? session : activeSession;
+  const offline = !replay && connectionSession.connection === "lost";
   const shell = useMemo(() => makeShell(settings, owner, replay), [settings, owner, replay]);
 
   // ---- routing (client routes of 4.5; the page never reloads) ----
@@ -170,8 +175,11 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   }, [replay, route]);
 
   // ---- toasts + screen-reader lines the session collected ----
-  const fed = useRef({ toasts: 0 });
+  const toastScope = route.kind === "replay" ? `replay:${route.id}` : `pool:${route.pool ?? settings.default_pool}`;
+  useEffect(() => setToasts([]), [toastScope]);
+  const fed = useRef({ effects: session.effects, toasts: 0 });
   useEffect(() => {
+    if (fed.current.effects !== session.effects) fed.current = { effects: session.effects, toasts: 0 };
     const fresh = session.effects.toasts.slice(fed.current.toasts);
     fed.current.toasts = session.effects.toasts.length;
     if (fresh.length > 0) {
@@ -436,13 +444,14 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
       date: session.replay.phase === "ready" ? session.replay.recording.header.recorded_at.slice(0, 10) : "",
     },
     view,
-    connection: session.connection,
-    connectionTries: session.tries,
-    staleFor: session.staleFor,
+    connection: connectionSession.connection,
+    connectionTries: connectionSession.tries,
+    staleFor: connectionSession.staleFor,
     owner,
     offline,
   };
-  const banners = bannerList(floor, clock, bannerOpts);
+  const bannerFloor = !replay && view === "swarm" ? { ...floor, swarm: swarmSession.floor.swarm } : floor;
+  const banners = bannerList(bannerFloor, clock, bannerOpts);
   const cells = stripCells(floor, clock, { greenFeature: settings.features.green });
   const sheets = (
     <>
@@ -600,8 +609,28 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         {/* FR33: a throw while a view draws fails that view alone. The boundary is keyed
             by the view so switching to another view mounts it clean. */}
         <ViewBoundary key="swarm">
-          {call(swarmEntry, { floor, owner: owner && !replay && !offline, pool: settings.swarm_pool }) ?? (
-            <SwarmView floor={floor} owner={owner && !replay && !offline} pool={settings.swarm_pool} />
+          {call(swarmEntry, {
+            floor: replay ? floor : swarmSession.floor,
+            owner: owner && !replay,
+            offline,
+            pool: settings.swarm_pool,
+            clock: replay ? clock : swarmSession.clock.time(),
+            waitingSince: activeSession.swarmWaitingSince,
+            swarmRun: activeSession.swarmRun,
+            readClock: () => activeSession.clock.time(),
+            mainPool: floor.pool,
+          }) ?? (
+            <SwarmView
+              floor={replay ? floor : swarmSession.floor}
+              owner={owner && !replay}
+              offline={offline}
+              pool={settings.swarm_pool}
+              clock={replay ? clock : swarmSession.clock.time()}
+              waitingSince={activeSession.swarmWaitingSince}
+              swarmRun={activeSession.swarmRun}
+              readClock={() => activeSession.clock.time()}
+              mainPool={floor.pool}
+            />
           )}
         </ViewBoundary>
       </main>
@@ -661,7 +690,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                 }
                 onTileWhy={table.entries.has("sheet.why") ? (_path, seq) => openSheet({ kind: "why", seq }) : undefined}
               />
-              {!replay && quietPool(floor, clock) && !startDismissed && (
+              {showStartCard(owner, replay, quietPool(floor, clock), startDismissed) && (
                 <div className="start-overlay">
                   <div className="start-card" role="group" aria-label={shell.t("start.title")}>
                     <h3>{shell.t("start.title")}</h3>
@@ -706,7 +735,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         className="floor"
         data-mode={replay ? "replay" : "live"}
         data-view={view}
-        data-state={session.connection === "lost" ? "offline" : undefined}
+        data-state={offline ? "offline" : undefined}
       >
         <Header
           pool={headerPool}
@@ -742,9 +771,9 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
         <div className="floor-main">
           {body}
           {sheets}
-          <Toasts toasts={toasts} onDrop={dropToast} />
           <Announcer lines={session.effects.announces} toasts={toasts} />
         </div>
+        <Toasts toasts={toasts} onDrop={dropToast} />
         {replay && session.player !== null && (
           <ReplayBar
             player={session.player}

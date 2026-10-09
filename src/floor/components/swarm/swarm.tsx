@@ -5,63 +5,79 @@
 // and `metrics`, never of its own request. Slice 1 draws the numbers and the wall; the
 // start/stop controls are the owner's and send `SwarmRequest` (SWR1).
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
-import { duration } from "../../../copy/format.ts";
+import { count } from "../../../copy/format.ts";
 import { errorSentence } from "../../../copy/errors.ts";
-import { ESCAPE_TARGET, FALSE_ABORT_TARGET } from "../../../protocol/constants.ts";
-import { inFlight } from "../../state/derive.ts";
+import { SwarmNumbers, share } from "./metrics.tsx";
+import { SwarmWall } from "./wall.tsx";
 
-function share(x: number): string {
-  return `${Math.round(x * 100)}%`;
-}
+import { swarmDidNotStart, swarmRequestAcknowledged } from "./startup.ts";
 
-export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: boolean; pool: string }) {
+export function SwarmView({
+  floor,
+  owner,
+  offline = false,
+  pool,
+  clock = floor.ts,
+  waitingSince = null,
+  swarmRun = 0,
+  readClock,
+  mainPool = floor.pool,
+}: {
+  floor: FloorState;
+  owner: boolean;
+  offline?: boolean;
+  pool: string;
+  clock?: number;
+  waitingSince?: number | null;
+  swarmRun?: number;
+  readClock?: () => number;
+  mainPool?: FloorState["pool"];
+}) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   // FL10: the request in flight, so its button says what is being waited for.
   const [pending, setPending] = useState<"start" | "stop" | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [requestedRun, setRequestedRun] = useState(0);
   const busy = pending !== null;
   const [error, setError] = useState<string | null>(null);
-  const [agents, setAgents] = useState(12);
+  const [agents, setAgents] = useState(64);
   const [dial, setDial] = useState(0);
 
   const swarm = floor.swarm;
-  const metrics = floor.metrics;
 
-  // CO48: the controls show the newest swarm.state, not the page's own requests. The local
-  // values are drafts while no state has arrived; a new state adopts its numbers (a value the
-  // owner already set does not drag the control back).
-  const seen = useRef<{ agents?: number; dial?: number }>({});
   useEffect(() => {
-    if (swarm !== null && swarm.agents !== seen.current.agents) setAgents(swarm.agents);
-    if (swarm !== null && swarm.collision_dial !== seen.current.dial) setDial(swarm.collision_dial);
-    seen.current = { agents: swarm?.agents, dial: swarm?.collision_dial };
+    if (swarmRequestAcknowledged(pending, answered, requestedRun, swarmRun, swarm?.running)) setPending(null);
+  }, [answered, pending, requestedRun, swarmRun, swarm?.running]);
+
+  // CO48: every new swarm.state wins over local drafts, including a rejected dial move.
+  useEffect(() => {
+    if (swarm === null) return;
+    setAgents(swarm.agents);
+    setDial(swarm.collision_dial);
   }, [swarm]);
   const wall = Object.values(floor.attempts).filter((a) => a.agent === "synthetic");
-  const working = wall.filter((a) => inFlight(a) && a.state !== "going_around").length;
-  const goingAround = wall.filter((a) => a.state === "going_around").length;
-  const landing = wall.filter((a) => a.state === "landed").length;
 
   const send = async (running: boolean) => {
+    setAnswered(false);
+    setRequestedRun(swarmRun);
     setPending(running ? "start" : "stop");
     setError(null);
-    try {
-      const body = running
-        ? {
-            pool,
-            running: true,
-            agents,
-            collision_dial: dial,
-            ...shell.settings.swarm_defaults,
-            request_id: crypto.randomUUID(),
-          }
-        : { pool, running: false, request_id: crypto.randomUUID() };
-      await post(body);
-    } finally {
-      setPending(null);
-    }
+    const body = running
+      ? {
+          pool,
+          running: true,
+          agents,
+          collision_dial: dial,
+          ...shell.settings.swarm_defaults,
+          request_id: crypto.randomUUID(),
+        }
+      : { pool, running: false, request_id: crypto.randomUUID() };
+    if (await post(body)) setAnswered(true);
+    else setPending(null);
   };
 
   const post = async (body: object) => {
@@ -72,19 +88,20 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
         body: JSON.stringify(body),
       });
       if (!response.ok) setError(errorSentence(response.status));
+      return response.ok;
     } catch {
       setError(errorSentence(null));
+      return false;
     }
   };
 
   // CO44a: moving the dial during a run sends { pool, running: true, collision_dial } at once —
   // while idle it is the config the next Start sends.
   const moveDial = (value: number) => {
-    setDial(value);
     if (swarm?.running === true) {
       setError(null);
       void post({ pool, running: true, collision_dial: value, request_id: crypto.randomUUID() });
-    }
+    } else setDial(value);
   };
 
   const blocked = floor.limits?.killed === true || floor.pool.state === "paused";
@@ -95,87 +112,45 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
         <p className="swarm-empty">{t("swarm.empty")}</p>
       ) : (
         <>
-          {!swarm.running && swarm.ever_ran && <p className="swarm-final">{t("swarm.final")}</p>}
-          {swarm.running && wall.length === 0 && (
-            <p className="swarm-final">{t("swarm.starting", { n: swarm.agents })}</p>
+          {!swarm.running && swarm.ever_ran && (
+            <p className="swarm-final">
+              {t("swarm.final", { "time of day": new Date(floor.ts).toISOString().slice(11, 19) })}
+            </p>
           )}
-          <p className="swarm-shape">{t("swarm.shape", { pools: swarm.pools.length, agents: swarm.agents })}</p>
-          <div className="swarm-numbers">
-            <div className="swarm-cell">
-              <div className="strip-label">{t("swarm.lps")}</div>
-              <div className="strip-value">
-                {metrics === null ? t("strip.dash") : metrics.landings_per_second.toFixed(2)}
-              </div>
-              <div className="strip-sub">
-                {t("swarm.window", { seconds: Math.round((metrics?.window_ms ?? 0) / 1000) })}
-              </div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label">{t("swarm.ttl")}</div>
-              <div className="strip-value">
-                {metrics?.time_to_land_ms.p50 == null ? t("strip.dash") : duration(metrics.time_to_land_ms.p50)}
-              </div>
-              <div className="strip-sub">
-                {t("swarm.ttl.sub", {
-                  duration:
-                    metrics?.time_to_land_ms.p99 == null ? t("strip.dash") : duration(metrics.time_to_land_ms.p99),
-                })}
-              </div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label">{t("swarm.gar")}</div>
-              <div className="strip-value">
-                {metrics?.go_around_rate == null ? t("strip.dash") : share(metrics.go_around_rate)}
-              </div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label">{t("swarm.waiting")}</div>
-              <div className="strip-value">{metrics === null ? t("strip.dash") : metrics.waiting_behind}</div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label" title={t("swarm.false_abort.tip")}>
-                {metrics?.false_abort_rate == null
-                  ? t("strip.dash")
-                  : t("swarm.false_abort", { share: [share(metrics.false_abort_rate), share(FALSE_ABORT_TARGET)] })}
-              </div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label" title={t("swarm.escape.tip")}>
-                {metrics?.escape_rate == null
-                  ? t("strip.dash")
-                  : t("swarm.escape", { share: [share(metrics.escape_rate), share(ESCAPE_TARGET)] })}
-              </div>
-            </div>
-            <div className="swarm-cell">
-              <div className="strip-label">{t("swarm.backlog", { n: metrics?.push_backlog ?? 0 })}</div>
-            </div>
-          </div>
-          {wall.length > 0 && (
-            <>
-              <p className="swarm-wall-summary">
-                {t("swarm.wall.summary", { n: wall.length, a: working, b: goingAround, c: landing })}
-              </p>
-              <div className="swarm-wall" role="list">
-                {wall.map((a) => (
-                  <div className="swarm-tile" role="listitem" key={a.id} data-state={a.state}>
-                    {a.state}
-                  </div>
-                ))}
-              </div>
-            </>
+          {swarm.running && waitingSince !== null && (
+            <p className="swarm-final">
+              {swarmDidNotStart(waitingSince, clock)
+                ? t("swarm.no_agents")
+                : t("swarm.starting", { n: count(swarm.agents) })}
+            </p>
           )}
-          <p className="swarm-repair">{t("swarm.repair_note")}</p>
+          <SwarmNumbers floor={floor} />
+          {wall.length > 0 && <SwarmWall floor={floor} clock={clock} readClock={readClock} />}
         </>
       )}
       {owner && (
         <div className="swarm-controls">
-          <label className="field">
-            <span>{t("swarm.agents")}</span>
-            <input type="number" min={1} value={agents} onChange={(e) => setAgents(Number(e.target.value))} />
-          </label>
+          <fieldset className="swarm-agents" disabled={busy || blocked || offline || swarm?.running === true}>
+            <legend>{t("swarm.agents")}</legend>
+            {[64, 256, 1024, 2048].map((value) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name="swarm-agents"
+                  value={value}
+                  checked={agents === value}
+                  onChange={() => setAgents(value)}
+                />
+                <span>{count(value)}</span>
+              </label>
+            ))}
+            {![64, 256, 1024, 2048].includes(agents) && <output className="swarm-agent-count">{count(agents)}</output>}
+          </fieldset>
           <label className="field">
             <span>{t("swarm.dial")}</span>
+            <output>{share(dial)}</output>
             <input
+              disabled={busy || blocked || offline}
               type="range"
               min={0}
               max={1}
@@ -186,17 +161,17 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
             />
           </label>
           {swarm?.running ? (
-            <button type="button" disabled={busy || blocked} onClick={() => void send(false)}>
+            <button type="button" disabled={busy || blocked || offline} onClick={() => void send(false)}>
               {pending === "start"
-                ? t("swarm.starting", { n: agents })
+                ? t("swarm.starting", { n: count(agents) })
                 : pending === "stop"
                   ? t("swarm.stopping")
                   : t("swarm.stop")}
             </button>
           ) : (
-            <button type="button" disabled={busy || blocked} onClick={() => void send(true)}>
+            <button type="button" disabled={busy || blocked || offline} onClick={() => void send(true)}>
               {pending === "start"
-                ? t("swarm.starting", { n: agents })
+                ? t("swarm.starting", { n: count(agents) })
                 : pending === "stop"
                   ? t("swarm.stopping")
                   : t("swarm.start")}
@@ -206,7 +181,13 @@ export function SwarmView({ floor, owner, pool }: { floor: FloorState; owner: bo
           {error !== null && <p className="field-error">{error}</p>}
         </div>
       )}
-      {!owner && swarm === null && null}
+      <p className="swarm-real-limit">{t("swarm.real_limit", { max: count(mainPool.max_real_agents) })}</p>
+      {swarm !== null && (
+        <p className="swarm-shape">
+          {t("swarm.shape", { pools: count(swarm.pools.length), agents: count(swarm.agents) })}
+        </p>
+      )}
+      <p className="swarm-repair">{t("swarm.repair_note")}</p>
     </div>
   );
 }

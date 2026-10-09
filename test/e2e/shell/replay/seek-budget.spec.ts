@@ -102,14 +102,14 @@ test("AC18: 50,000 events load and the last chapter draws within the Replay seek
   await expect(page.locator(".replay-bar")).toBeVisible();
   await expect(page.locator(".replay-track")).toHaveValue("0");
   await expect(page.locator(".replay-track")).toHaveAttribute("max", String(fixture.duration));
-  await expect(page.locator('.replay-mark[title="Swarm"]')).toBeVisible();
+  await expect(page.locator('.replay-chapters button[title="Swarm"]')).toBeVisible();
   await expect(page.locator(".strip-cell", { hasText: "Landed" }).locator(".strip-value")).toHaveText("0");
 
   const measured = await page.evaluate(
     ({ position }) =>
       new Promise<{ elapsed: number; position: string; landed: string; goArounds: string; tabs: string }>(
         (resolve, reject) => {
-          const lastChapter = document.querySelector<HTMLButtonElement>('.replay-mark[title="Swarm"]');
+          const lastChapter = document.querySelector<HTMLButtonElement>('.replay-chapters button[title="Swarm"]');
           if (lastChapter === null) throw new Error("the final Swarm chapter is missing");
           const value = (label: string): string => {
             const cell = [...document.querySelectorAll(".strip-cell")].find(

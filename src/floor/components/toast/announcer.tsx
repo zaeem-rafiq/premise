@@ -13,9 +13,19 @@ export function Announcer({ lines, toasts = [] }: { lines: AnnouncedLine[]; toas
   const [assertive, setAssertive] = useState("");
   const queue = useRef<string[]>([]);
   const fed = useRef(0);
+  const source = useRef(lines);
   const heard = useRef(new Set<number>());
 
   useEffect(() => {
+    // A new session owns a new lines array. Discard the old session's backlog and
+    // start reading at zero, including when its first batch has already arrived.
+    if (source.current !== lines) {
+      source.current = lines;
+      fed.current = 0;
+      queue.current = [];
+      setPolite("");
+      setAssertive("");
+    }
     const fresh = lines.slice(fed.current);
     fed.current = lines.length;
     for (const line of fresh) {

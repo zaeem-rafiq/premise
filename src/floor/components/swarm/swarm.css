@@ -1,0 +1,114 @@
+.floor-body.floor-swarm {
+  padding: var(--body-pad, 24px);
+  overflow: hidden;
+}
+.floor-swarm .swarm-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.swarm-view > p {
+  margin: 0;
+}
+.swarm-view > canvas.swarm-wall {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  flex: 1 1 0;
+  margin: 0;
+}
+.swarm-view .swarm-numbers {
+  display: block;
+  flex: none;
+  margin: 0;
+}
+.swarm-primary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: var(--border) solid var(--line);
+}
+.swarm-primary .swarm-cell {
+  min-width: 0;
+  padding: 8px 16px;
+  border-right: var(--border) solid var(--line);
+}
+.swarm-primary .swarm-cell:last-child {
+  border-right: 0;
+}
+.swarm-primary .strip-value {
+  white-space: nowrap;
+}
+.swarm-chart {
+  width: 100%;
+  height: 36px;
+  display: block;
+}
+.swarm-chart polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.swarm-chart-axis {
+  stroke: var(--line);
+  fill: none;
+}
+.swarm-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 8px 0;
+}
+.swarm-view .swarm-controls {
+  margin-top: 0;
+  flex: none;
+  align-items: center;
+}
+.swarm-agents {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.swarm-agents label {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 8px;
+}
+.swarm-agents label:has(:checked) {
+  border-color: var(--accent);
+}
+.swarm-controls .field {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0 12px;
+}
+.swarm-controls input[type="range"] {
+  grid-column: 1 / -1;
+  min-height: 44px;
+}
+@media (max-width: 1599px) {
+  .floor-body.floor-swarm {
+    padding: 16px;
+  }
+}
+@media (max-width: 1099px) {
+  .swarm-primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .swarm-primary .strip-value {
+    font-size: var(--size-counter);
+  }
+  .swarm-agents {
+    flex-wrap: wrap;
+  }
+}

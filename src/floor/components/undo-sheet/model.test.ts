@@ -141,7 +141,7 @@ describe("undoPlanModel (3.12, 5.10)", () => {
       modelLabel,
     );
     // The one-form of undo.also (03 5.10): singular "change", "Its agent", not "Their agents".
-    expect(model.also).toBe(text("undo.also", { n: 1, names: 'landing 2 "text of i_a_2"' }));
+    expect(model.also).toBe(text("undo.also", { n: 1, names: "landing 2 movement" }));
   });
 
   it("undo.also plural form for two later landings", () => {
@@ -154,7 +154,7 @@ describe("undoPlanModel (3.12, 5.10)", () => {
       { target_seq: 1, reverted: [1, 2, 3], reopened: [], kept_readers: [], repairs: [] },
       modelLabel,
     );
-    expect(model.also).toBe(text("undo.also", { n: 2, names: 'landing 2 "text of i_a_2", landing 3 "text of i_a_3"' }));
+    expect(model.also).toBe(text("undo.also", { n: 2, names: "landing 2 movement, landing 3 fish" }));
   });
 
   it("undo.kept names the kept readers; undo.in_flight names the repairs", () => {
@@ -187,7 +187,7 @@ describe("undoPlanModel (3.12, 5.10)", () => {
       { target_seq: 1, reverted: [1], reopened: [], kept_readers: [4], repairs: ["a_9"] },
       modelLabel,
     );
-    expect(model.kept).toBe(text("undo.kept", { n: 1, names: 'landing 4 "text of i_a_4"' }));
+    expect(model.kept).toBe(text("undo.kept", { n: 1, names: "landing 4 snail" }));
     expect(model.inFlight).toBe(text("undo.in_flight", { n: 1, names: '"text of i_9"' }));
   });
 });

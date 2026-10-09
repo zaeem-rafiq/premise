@@ -348,7 +348,7 @@ function attemptName(attempt: AttemptView, floor: FloorState): string {
     intentText: intent?.text ?? "",
     race: attempt.race,
     model: attempt.model,
-    premises: Object.values(attempt.premises).map((p) => ({ kind: p.kind, key: p.key, edit: p.edit })),
+    premises: Object.values(attempt.premises).map((p) => ({ kind: p.kind, key: p.key, edit: p.edit, hash: p.hash })),
   });
 }
 

@@ -369,6 +369,7 @@ function premiseFromRef(ref: PremiseRef): PremiseView {
   return {
     kind: ref.kind,
     key: ref.key,
+    hash: ref.hash,
     read: ref.read,
     edit: ref.edit,
     derived: ref.derived,
@@ -387,6 +388,7 @@ function onPremiseRecorded(state: FloorState, event: Extract<PoolEvent, { type: 
   if (existing === undefined) {
     attempt.premises[id] = premiseFromRef(event.premise);
   } else {
+    existing.hash = event.premise.hash;
     existing.read = event.premise.read;
     existing.edit = event.premise.edit;
     existing.derived = event.premise.derived;
@@ -425,6 +427,7 @@ function onPremiseJudged(state: FloorState, event: Extract<PoolEvent, { type: "p
   const premise = (attempt.premises[id] ??= {
     kind: event.kind,
     key: event.key,
+    hash: null,
     read: false,
     edit: false,
     derived: false,
@@ -521,6 +524,7 @@ function onHeadsUpSent(state: FloorState, event: Extract<PoolEvent, { type: "hea
       const premise = (attempt.premises[id] ??= {
         kind: item.premise.kind,
         key: item.premise.key,
+        hash: null,
         read: false,
         edit: false,
         derived: false,

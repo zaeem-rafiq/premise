@@ -22,6 +22,9 @@ export type MetricsEvent = Extract<PoolEvent, { type: "metrics" }>;
 export type PremiseView = {
   kind: PremiseKind;
   key: string;
+  /** The pin as the newest `premise.recorded` gave it (`ABSENT` for a file the attempt created, 03-floor 5.2
+   * `changeName`); null until one arrives. */
+  hash: string | null;
   read: boolean;
   edit: boolean;
   derived: boolean;

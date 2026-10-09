@@ -182,6 +182,7 @@ function behindName(state: FloorState, attempt: AttemptView): string | undefined
       kind: premise.kind,
       key: premise.key,
       edit: premise.edit,
+      hash: premise.hash,
     })),
   });
 }

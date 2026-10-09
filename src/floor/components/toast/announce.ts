@@ -33,7 +33,7 @@ function nameOf(state: FloorState, attemptId: string | null | undefined): string
     intentText: intent.text,
     race: attempt.race,
     model: attempt.model,
-    premises: Object.values(attempt.premises).map((p) => ({ kind: p.kind, key: p.key, edit: p.edit })),
+    premises: Object.values(attempt.premises).map((p) => ({ kind: p.kind, key: p.key, edit: p.edit, hash: p.hash })),
   });
 }
 

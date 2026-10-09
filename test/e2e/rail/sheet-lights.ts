@@ -58,6 +58,15 @@ export async function expectLightsInsideColumn(column: Locator, more: number, ch
     await expect(light).toBeFocused();
     await expect(light).toHaveAttribute("title", `the file facts/${30 + index}.js: Changed. the agent read it.`);
   }
+  // The sheet rises in (6.4, 240 ms). Measure once its finite animations have ended: a
+  // transform still in flight moves every box by a fraction of a pixel.
+  await column.evaluate((element) => {
+    const sheet = element.closest(".card-sheet__backdrop") ?? element;
+    const finite = sheet
+      .getAnimations({ subtree: true })
+      .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity);
+    return Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
+  });
   const layout = await column.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const row = element.querySelector<HTMLElement>(".card-sheet__lights")!;

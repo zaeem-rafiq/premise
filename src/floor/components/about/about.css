@@ -1,0 +1,22 @@
+.sheet.about-sheet {
+  width: min(1400px, 100%);
+}
+.about-sheet .about-how {
+  display: grid;
+  gap: 12px;
+}
+.about-how .about-box {
+  border: var(--border) solid var(--control);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--raised);
+  position: relative;
+}
+.about-box + .about-box::before {
+  content: "";
+  position: absolute;
+  height: 12px;
+  left: 50%;
+  top: -13px;
+  border-left: var(--border) solid var(--control);
+}

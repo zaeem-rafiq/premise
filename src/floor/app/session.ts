@@ -20,9 +20,10 @@ import {
 } from "../replay/player.ts";
 import { linesForEvent, type AnnouncedLine, type BeforeBits } from "../components/toast/announce.ts";
 import { changeName } from "../../copy/names.ts";
-import { stopSentence } from "../../copy/stops.ts";
+import { stoppedToast } from "../components/toast/stopped.ts";
 import { text } from "../../copy/strings.ts";
 import type { Route } from "./route.ts";
+import { SwarmStartup } from "../components/swarm/startup.ts";
 
 export type ReplayStatus =
   | { phase: "loading"; progress: number }
@@ -47,6 +48,8 @@ export type Session = {
   player: ReplayPlayer | null;
   snap: PlayerSnapshot | null;
   effects: SessionEffects;
+  swarmWaitingSince: number | null;
+  swarmRun: number;
 };
 
 /** A one-shot flag key `R` sets: the default recording opens paused (RY26). The session
@@ -91,6 +94,8 @@ function newSession(): Session {
     player: null,
     snap: null,
     effects: { announces: [], toasts: [] },
+    swarmWaitingSince: null,
+    swarmRun: 0,
   };
 }
 
@@ -98,15 +103,21 @@ function newSession(): Session {
  * Runs the session for `route`. Live mode opens the stream of `pool` (the route's, or the
  * default pool of `/floor.json`); Replay mode loads and plays the recording of `route.id`.
  */
-export function useSession(route: Route, settings: FloorJson, reducedMotion: boolean): Session {
+export function useSession(route: Route, settings: FloorJson, reducedMotion: boolean, enabled = true): Session {
   const [session, setSession] = useState<Session>(newSession);
   const [, bump] = useState(0);
   const floorRef = useRef<FloorState>(emptyFloorState());
+  const startupRef = useRef(new SwarmStartup());
+  const startupApplied = useRef(0);
   const effectsRef = useRef<SessionEffects>({ announces: [], toasts: [] });
 
   const key = route.kind === "replay" ? `replay:${route.id}` : `pool:${route.pool ?? settings.default_pool}`;
 
   useEffect(() => {
+    startupRef.current = new SwarmStartup();
+    startupApplied.current = 0;
+    effectsRef.current = { announces: [], toasts: [] };
+    if (!enabled) return;
     let disposed = false;
     const tick = () => {
       if (!disposed) bump((n) => n + 1);
@@ -183,6 +194,8 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
             // A snapshot replaces the whole state (FE3): same shape, JSON values only.
             (floor as Record<string, unknown>)[key] = (state as Record<string, unknown>)[key];
           }
+          startupRef.current.snapshot(floor);
+          clock.note(floor.ts);
           tick();
         },
         onEvents(events) {
@@ -191,13 +204,13 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
             if (event.n > floor.n) {
               const before = beforeBits(floor, event);
               reduce(floor, event);
+              startupRef.current.apply(event);
               clock.note(event.ts);
               effectsRef.current.announces.push(...linesForEvent(event, floor, before));
               // FR4: an attempt that stops shows the 5.8 sentence on its card and as a toast.
               if (event.type === "attempt.state" && event.to === "stopped") {
-                effectsRef.current.toasts.push(
-                  event.reason === null ? text("status.stopped") : stopSentence(event.reason),
-                );
+                const line = stoppedToast(event.reason);
+                if (line !== null) effectsRef.current.toasts.push(line);
               }
               if (event.type === "landing.landed" && floor.landings[event.seq]?.kind === "change") {
                 const attemptId = floor.landings[event.seq]?.attempt_id;
@@ -241,15 +254,34 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
       window.clearInterval(ticker);
       handle.close();
     };
-  }, [key, settings, reducedMotion, route]);
+  }, [key, settings, reducedMotion, route, enabled]);
 
   // Keep the snapshot view fresh: the player's subscribe bumps, but the fields below must
   // always read the newest values.
   const player = session.player;
   const snap = player === null ? null : player.snapshot();
+  if (snap !== null && session.replay.phase === "ready") {
+    if (snap.applied < startupApplied.current) {
+      startupRef.current = new SwarmStartup();
+      startupApplied.current = 0;
+    }
+    const events = session.replay.recording.events;
+    while (startupApplied.current < snap.applied) {
+      startupRef.current.apply(events[startupApplied.current]!);
+      startupApplied.current += 1;
+    }
+  }
   const floor = snap === null ? floorRef.current : snap.floor;
   const staleFor = floor.ts === 0 ? null : Math.max(0, session.clock.time() - floor.ts);
-  return { ...session, floor, snap, staleFor, effects: effectsRef.current };
+  return {
+    ...session,
+    floor,
+    snap,
+    staleFor,
+    effects: effectsRef.current,
+    swarmWaitingSince: startupRef.current.waitingSince,
+    swarmRun: startupRef.current.run,
+  };
 }
 
 function beforeBits(floor: FloorState, event: PoolEvent): BeforeBits {

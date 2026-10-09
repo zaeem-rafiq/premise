@@ -1,6 +1,6 @@
 // The single-key map of 03-floor 6.6 (keys on while `ViewState.shortcuts`; `nav.shortcuts`
-// in About turns them off, AX13). Keys do nothing while a field, a button or a sheet has
-// focus, except Escape, which closes the topmost thing. Replay adds its own keys (RY26).
+// in About turns them off, AX13). Keys do nothing while a field has focus, except
+// Escape, which closes the topmost thing. Replay adds its own keys (RY26).
 
 import { useLayoutEffect } from "react";
 
@@ -69,19 +69,15 @@ export function mapKey(event: { key: string; replay: boolean }): KeyEvent | null
   return action === undefined ? null : { action };
 }
 
-/** True while focus is in a field, a button, a link or a sheet - where keys do not bind. */
+/** AX13: text entry holds shortcuts; buttons, links and sheets do not. */
 export function keysHeld(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.closest("input, textarea, select, [contenteditable], .sheet") !== null ||
-    target.tagName === "BUTTON" ||
-    target.tagName === "A"
-  );
+  return target.isContentEditable || target.closest("input, textarea, select") !== null;
 }
 
 /**
  * Installs the page keymap. `Escape` always reaches `onKey`; the rest fire only when no
- * control or sheet holds focus and `shortcuts` is on (AX13).
+ * field holds focus and `shortcuts` is on (AX13).
  *
  * A layout effect, so the handler is swapped during the commit: a key pressed as soon as
  * the page shows a new state (the owner's header) reaches the `onKey` of that state, never
@@ -97,6 +93,8 @@ export function useKeys(opts: { replay: boolean; shortcuts: boolean; onKey: (eve
       }
       if (!shortcuts || event.metaKey || event.ctrlKey || event.altKey) return;
       if (keysHeld(event.target)) return;
+      // Space remains the native activation key of a focused button or link.
+      if (event.key === " " && event.target instanceof HTMLElement && event.target.closest("button, a")) return;
       const mapped = mapKey({ key: event.key, replay });
       if (mapped === null) return;
       event.preventDefault();

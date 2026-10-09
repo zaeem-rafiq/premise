@@ -59,7 +59,7 @@ import {
   tickSkipped,
 } from "./sentences.ts";
 import { STOP_FALLBACK, STOP_KEPT_SUFFIX, STOP_NO_KEPT_SUFFIX, STOP_SENTENCES, stopSentence } from "./stops.ts";
-import { ABOUT_HOW_BOXES, SHORTCUT_ROWS, STRINGS, template, text } from "./strings.ts";
+import { ABOUT_HOW_BOXES, SHORTCUT_ROWS, STRINGS, SHELL_REVIEW_STRINGS, template, text } from "./strings.ts";
 
 const SPEC = readFileSync("docs/spec/03-floor.md", "utf8");
 const CORE = readFileSync("docs/spec/01-core.md", "utf8");
@@ -134,7 +134,12 @@ describe("AC7: copy ids", () => {
         }
         if (id === "replay.error") continue; // the cell describes, the sentence is 8.3's (REPLAY_ERRORS)
         const cell = specCell(cells[0] ?? "");
-        let specText = cell.text;
+        // VE8 D9 explicitly corrects the old claim that every recording is real.
+        // Keep an exact expectation from the brief while docs/spec remains read-only.
+        let specText =
+          id === "start.body"
+            ? "This plays a recorded run through this same page. You need no account and no key."
+            : cell.text;
         let specAlt: string | undefined;
         if ((id === "sr.killed" || id === "sr.swarm") && specText.includes(" · ")) {
           [specText, specAlt] = specText.split(" · ", 2) as [string, string];
@@ -194,6 +199,7 @@ describe("AC20: phrase lint", () => {
     };
     for (const mod of [
       STRINGS,
+      SHELL_REVIEW_STRINGS,
       CARD_TEMPLATES,
       JUDGMENT_SENTENCES,
       SCRIPTED_SENTENCES,

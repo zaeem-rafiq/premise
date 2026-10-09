@@ -6,7 +6,9 @@ import { useContext, useEffect, useRef } from "react";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
 import { aboutHowBoxes, SHORTCUT_ROWS } from "../../../copy/strings.ts";
-import { money } from "../../../copy/format.ts";
+import { money, duration } from "../../../copy/format.ts";
+
+import "./about.css";
 
 export function AboutSheet({
   floor,
@@ -35,6 +37,13 @@ export function AboutSheet({
         .filter((m): m is string => m !== null),
     ),
   ].map((id) => shell.model(id));
+  const repair = [...floor.repair_ms].sort((a, b) => a - b);
+  const percentile = (share: number) => {
+    const value = repair[Math.ceil(repair.length * share) - 1];
+    return value === undefined ? t("strip.dash") : duration(value);
+  };
+  const repos = floor.repos;
+  const repoWindow = repos.first_ts === null || repos.last_ts === null ? 0 : repos.last_ts - repos.first_ts;
   const synthetic = Object.values(floor.attempts).filter((a) => a.agent === "synthetic").length;
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -50,16 +59,31 @@ export function AboutSheet({
         <div className="about-columns">
           <section>
             <h3>{t("about.how")}</h3>
-            <ol className="about-how">
+            <div className="about-how" role="list">
               {aboutHowBoxes(shell.settings.features).map((box) => (
-                <li key={box}>{box}</li>
+                <div className="about-box" role="listitem" key={box}>
+                  {box}
+                </div>
               ))}
-            </ol>
+            </div>
           </section>
           <section>
             <h3>{t("about.run")}</h3>
-            <p>{t("about.run.real", { max: floor.pool.max_real_agents, models: models.join(", ") || "—" })}</p>
+            <p>
+              {t("about.run.real", { max: floor.pool.max_real_agents, models: models.join(", ") || t("strip.dash") })}
+            </p>
             <p>{t("about.run.landed", { n: [floor.counters.landed_changes, floor.counters.go_arounds] })}</p>
+            <p>{t("about.run.repair", { duration: [percentile(0.5), percentile(0.9)] })}</p>
+            <p>
+              {!shell.settings.features.attempt_repos
+                ? t("about.forks_off")
+                : repos.first_ts === null
+                  ? t("about.forks_unknown")
+                  : t("about.forks", {
+                      rate: repoWindow > 0 ? ((repos.ok * 1000) / repoWindow).toFixed(2) : t("strip.dash"),
+                      share: `${Math.round((repos.failed / Math.max(1, repos.ok + repos.failed)) * 100)}%`,
+                    })}
+            </p>
             {synthetic > 0 && <p>{t("about.run.synthetic", { n: synthetic })}</p>}
             {floor.plain !== null && <p>{t("about.run.constructed")}</p>}
             {floor.limits !== null && (
@@ -99,7 +123,7 @@ export function AboutSheet({
         </section>
         <div className="sheet-actions">
           <button type="button" onClick={onClose}>
-            {t("owner.cancel")}
+            {t("card.close")}
           </button>
         </div>
       </div>

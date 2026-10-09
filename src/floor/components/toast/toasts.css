@@ -1,0 +1,12 @@
+/* LY2: notifications reserve height below the body and every open sheet. */
+.floor > .toasts {
+  position: static;
+  z-index: auto;
+  flex: none;
+  max-width: 100%;
+  padding: 8px 16px;
+  align-items: flex-start;
+}
+.floor > .toasts .toast {
+  max-width: min(720px, 100%);
+}

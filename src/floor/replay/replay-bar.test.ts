@@ -82,3 +82,26 @@ describe("ReplayBar render", () => {
     expect(html).toContain("clamp(11px");
   });
 });
+
+it("D28 8.5 3.16: no future chapter caption appears before the first chapter", () => {
+  const parsed = parseRecording(readFileSync(join(STREAMS, "tracer.ndjson"), "utf8"));
+  if (!parsed.ok) throw new Error("invalid fixture");
+  const recording = {
+    ...parsed.recording,
+    events: parsed.recording.events.map((event, i) => (i === 0 ? event : { ...event, ts: event.ts + 10_000 })),
+  };
+  const p = new ReplayPlayer(recording, TIMERS, { playing: false });
+  expect(p.chapters[0]!.start).toBeGreaterThan(0);
+  for (const chapter of p.chapters) expect(bar(p)).not.toContain(chapter.caption);
+  for (const chapter of p.chapters) {
+    p.seek(chapter.start);
+    expect(bar(p)).toContain(chapter.caption);
+  }
+});
+
+it("D42 2.7 3.16: every chapter has a visible named seek button", () => {
+  const p = player(false);
+  const html = bar(p);
+  expect(html).toContain('class="replay-chapters"');
+  for (const chapter of p.chapters) expect(html).toContain(`>${chapter.name}</button>`);
+});

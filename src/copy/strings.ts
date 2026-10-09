@@ -508,7 +508,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   // ---- 5.4 Start card, owner, kill switch ----
   "start.title": { text: "Watch a recorded run" },
   "start.body": {
-    text: "This plays a real recorded run through this same page. You need no account and no key.",
+    text: "This plays a recorded run through this same page. You need no account and no key.",
   },
   "start.play": { text: "Play the Replay ({duration})" },
   "start.look": { text: "Look around the live pool" },
@@ -695,7 +695,7 @@ export const SHORTCUT_ROWS: ReadonlyArray<{ key: string; does: string }> = [
   { key: "G", does: "Open or close the git drawer of the open Why card" },
   { key: "P", does: "Pause or play the pool frames" },
   { key: "K", does: "Open the kill switch dialog (owner)" },
-  { key: "R", does: "Open the default recording (RY26), paused" },
+  { key: "R", does: "Open the default recording, paused" },
   { key: "T", does: "Switch theme" },
   { key: "Z", does: "Switch between stage size and laptop size type" },
   { key: "?", does: "Show this list" },
@@ -741,13 +741,18 @@ export const REPO_STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
 };
 
+/** Copy additions authorized by the VE8 shell brief; the specification is read-only. */
+export const SHELL_REVIEW_STRINGS: Readonly<Record<string, CopyEntry>> = {
+  "swarm.last_push.unknown": { text: "Last push: –" },
+};
+
 /**
  * `text(id, vars)` gives the string of a copy id, filled. `vars.visitor` picks the CP7 form a
  * visitor (and everyone in Replay) reads; `vars.n` of 1 picks the `one` form where the spec gives
  * one. Constant placeholders resolve to their values (CP5). Throws when the id is unknown.
  */
 export function text(id: string, vars: CopyVars = {}): string {
-  const entry = STRINGS[id] ?? REPO_STRINGS[id];
+  const entry = STRINGS[id] ?? REPO_STRINGS[id] ?? SHELL_REVIEW_STRINGS[id];
   if (entry === undefined) throw new Error(`copy: unknown id "${id}"`);
   let template = entry.text;
   if (vars.visitor === true && entry.visitor !== undefined) template = entry.visitor;
@@ -757,5 +762,5 @@ export function text(id: string, vars: CopyVars = {}): string {
 
 /** The unfilled template of a copy id, or undefined when the id does not exist. */
 export function template(id: string): string | undefined {
-  return (STRINGS[id] ?? REPO_STRINGS[id])?.text;
+  return (STRINGS[id] ?? REPO_STRINGS[id] ?? SHELL_REVIEW_STRINGS[id])?.text;
 }

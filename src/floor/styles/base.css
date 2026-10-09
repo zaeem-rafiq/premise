@@ -531,6 +531,16 @@ a {
 .strip-cell:focus .strip-tip {
   display: block;
 }
+/* D33 / 2.8: labels can wrap, but each value stays together. Reserve its
+ * intrinsic width so a flex shrink cannot clip a one-line value. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .strip-cell {
+    min-width: min-content;
+  }
+  .strip-value--text {
+    white-space: nowrap;
+  }
+}
 /* 2.2: at stage width every cell reads label over value - the label on one line, the
  * value and its sub-line on the next. Every cell starts at the same height, so the labels
  * line up, and the value line's strut is the counter's, so a sentence sits on the
@@ -940,6 +950,42 @@ a {
   margin-top: 16px;
 }
 
+/* D40 / LY5: the light's drawn CO15 size stays on its SVG. Its focus and
+ * tap box is larger, with separate boxes so neighboring targets never overlap. */
+.attempt-card .light[tabindex] {
+  width: 44px;
+  height: 44px;
+}
+.attempt-card .attempt-card__lights {
+  max-width: 100%;
+  flex-wrap: wrap;
+  row-gap: 20px;
+}
+/* Keep the original 28/20px row strut. The 44px hit box extends into the
+ * card spacing; extra row gaps keep wrapped targets separate too. */
+.attempt-card__lights > .light[tabindex] {
+  margin-block: -8px;
+}
+.attempt-card--compact .attempt-card__lights {
+  row-gap: 28px;
+}
+.attempt-card--compact .attempt-card__lights > .light[tabindex] {
+  margin-block: -12px;
+}
+.attempt-card .light__edit {
+  bottom: 8px;
+}
+.attempt-card--compact .light__edit {
+  bottom: 12px;
+}
+.attempt-card .light--list .light__edit {
+  bottom: 14px;
+}
+.intent-box .intent-prewritten {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 /* ---- The Replay bar (2.7, 3.16): fixed height; the caption wraps or is cut with an
  * ellipsis so the right-hand controls are always fully visible. ---- */
 .replay-bar {
@@ -1161,6 +1207,15 @@ a {
   .floor-body .intent-box {
     order: 1;
   }
+  /* D25 / LY3: the owner's action row must fit the 320px layout too. */
+  .intent-row {
+    flex-wrap: wrap;
+  }
+  .intent-actions {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
   .floor-body .tray {
     order: 2;
   }

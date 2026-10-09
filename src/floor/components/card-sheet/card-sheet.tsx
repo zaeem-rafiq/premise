@@ -110,7 +110,7 @@ export function useCardSheet(floor: FloorState, cardId: string, onClose: () => v
 }
 
 /** The "What it changes / Who it affects / What was checked" grid of 3.13 — the held sheet's lower
- * half and the whole content of the no-frames forms (`choice`, the minimal held form). */
+ * half and the no-frames minimal held form. */
 export function CardSheetFacts({ model }: { model: CardSheetModel }) {
   const t = useContext(ShellContext)!.t;
   return (
@@ -251,7 +251,7 @@ export function RaceColumnView({
 /** The shared chrome of the three card sheets (2.4): backdrop, the dialog with the header, the
  * closing sentence of a closed card (which replaces the body), the reason field, the option row
  * (or the visitor line) and the request error. `children` is the kind's own middle — the held
- * sheet's frames and facts grid, the race sheet's columns, the choice card's grid. */
+ * sheet's frames and facts grid or the race sheet's columns. */
 export function CardSheetShell({
   st,
   onClose,
@@ -372,9 +372,9 @@ export function CardSheet({ floor, cardId, onClose }: CardSheetProps) {
             />
           ))}
         </div>
-      ) : (
+      ) : model.kind === "held" ? (
         <CardSheetFacts model={model} />
-      )}
+      ) : null}
     </CardSheetShell>
   );
 }

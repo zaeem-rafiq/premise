@@ -4,7 +4,7 @@
 // text 4.5; `control`, `focus` and the signal colours used for a shape 3; `on-fill` 4.5
 // on every filled signal colour it sits on.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -81,4 +81,89 @@ describe.each([
       expect(contrast(onFill, on), `on-fill on ${fill}`).toBeGreaterThanOrEqual(4.5);
     }
   });
+});
+
+/** Read every stylesheet, including component CSS imported before the page tokens. */
+function stylesheets(directory: string, extension = ".css"): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? stylesheets(path, extension) : entry.name.endsWith(extension) ? [path] : [];
+  });
+}
+
+// Common :root tokens (type, spacing, motion) are available in both themes too.
+const definedTokens = new Set(
+  [...CSS.matchAll(/:root[^{}]*\{([^}]*)\}/g)].flatMap((block) =>
+    [...block[1]!.matchAll(/--([\w-]+)\s*:/g)].map((token) => token[1]!),
+  ),
+);
+
+function undefinedTokens(css: string, localVariables: ReadonlySet<string> = new Set()): string[] {
+  const missing: string[] = [];
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const match of source.matchAll(/var\(\s*--([\w-]+)/g)) {
+    let end = match.index + match[0].length;
+    let depth = 1;
+    for (; end < source.length && depth > 0; end++) {
+      if (source[end] === "(") depth++;
+      if (source[end] === ")") depth--;
+    }
+    const rest = source.slice(match.index + match[0].length, end - 1).trim();
+    const fallback = rest.startsWith(",") ? rest.slice(1).trim() : "";
+    const themeFallback = /^var\(\s*--([\w-]+)\s*\)$/.exec(fallback);
+    if (
+      !definedTokens.has(match[1]!) &&
+      !localVariables.has(match[1]!) &&
+      !(themeFallback && definedTokens.has(themeFallback[1]!))
+    ) {
+      missing.push(match[1]!);
+    }
+  }
+  return [...new Set(missing)];
+}
+
+it("D1/D38 AC9: every Floor CSS variable exists in a theme or falls back to a theme token", () => {
+  const floor = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const missing = stylesheets(floor).flatMap((path) =>
+    undefinedTokens(readFileSync(path, "utf8")).map((token) => `${path.slice(floor.length + 1)}: --${token}`),
+  );
+  expect(missing).toEqual([]);
+});
+
+it("D1/D38 AC9: literal fallbacks do not conceal missing tokens", () => {
+  expect(undefinedTokens("color: var(--missing, #ffffff); font: var(--absent, inherit)")).toEqual([
+    "missing",
+    "absent",
+  ]);
+  expect(undefinedTokens("color: var(--optional, var(--text)); color: var(--text)")).toEqual([]);
+  expect(undefinedTokens("color: var(--optional, var(--unknown))")).toEqual(["optional", "unknown"]);
+});
+
+// Some Floor components adopt static template strings as constructed stylesheets.
+// Their local geometry variables (tile sizes and the measured frame height) have
+// explicit CSS declarations or setProperty producers; they are not theme tokens.
+function constructedStyles(source: string): string[] {
+  return [...source.matchAll(/(?:const|let)\s+\w*CSS\s*=\s*`([^`]*)`/g)].map((match) => match[1]!);
+}
+
+it("D1/D38 AC9: constructed Floor stylesheets also reject undefined theme tokens", () => {
+  const floor = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const missing: string[] = [];
+  for (const path of [...stylesheets(floor, ".tsx"), ...stylesheets(floor, ".ts")]) {
+    if (/\.test\.tsx?$/.test(path)) continue;
+    const source = readFileSync(path, "utf8");
+    for (const css of constructedStyles(source)) {
+      const localVariables = new Set([
+        ...[...css.matchAll(/--([\w-]+)\s*:/g)].map((match) => match[1]!),
+        ...[...source.matchAll(/\.setProperty\(["']--([\w-]+)["']/g)].map((match) => match[1]!),
+      ]);
+      missing.push(
+        ...undefinedTokens(css, localVariables).map((token) => `${path.slice(floor.length + 1)}: --${token}`),
+      );
+    }
+  }
+  expect(missing).toEqual([]);
+  const injected = constructedStyles("const EXAMPLE_CSS = `.label { color: var(--not-defined, #ffffff) }`;");
+  expect(injected).toHaveLength(1);
+  expect(undefinedTokens(injected[0]!)).toEqual(["not-defined"]);
 });

@@ -5,7 +5,7 @@
   /* `.sheet-backdrop` (base.css) positions it; no extra rule needed. */
 }
 
-.undo-sheet {
+.sheet.undo-sheet {
   width: min(96vw, 560px);
 }
 
@@ -23,4 +23,10 @@
 
 .undo-refused {
   color: var(--confirm, #ffc857);
+}
+
+@media (max-width: 1099px) {
+  .sheet.undo-sheet {
+    width: 100%;
+  }
 }

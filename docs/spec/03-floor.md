@@ -204,9 +204,9 @@ Two reference sizes. **Stage size** is 1920×1080 with large type. **Laptop size
 | Strip | 1920×72 | 1440×60 | Run clock and six counters (3.8). |
 | Banners | 1920×40 each | 1440×36 each | Zero or more, stacked, in the fixed order of 3.18. |
 | Body | the rest | the rest | The view. Padding 24 (laptop 16). |
-| Pool area (Floor view) | 1152 wide | 832 wide | Caption bar 40, pool frame 16:9 at full width (1152×648; laptop 832×468), file tiles in the rest. |
+| Pool area (Floor view) | 1152 wide | 832 wide | Caption bar 40, pool frame 16:9 at full width (1152×648; laptop 832×468), file tiles in the rest. In Replay at stage size the REPLAY banner (40) and the Replay bar (108) leave the pool area 748 high, so LY1 shrinks the frame to 1145×644; each further banner takes its 40 from the frame's height. At laptop size the frame keeps 832×468 (the lead's decision of 2026-10-09). |
 | Rail (Floor view) | 696 wide | 560 wide | Intent box, tray, tabs, attempt cards. Only the list of attempt cards scrolls. |
-| Replay bar (Replay only) | 1920×56, at the bottom | 1440×48 | Replay controls (3.16). |
+| Replay bar (Replay only) | 1920×108, at the bottom: the transport row (56) above the chapter row (52) | 1440×96 (48 and 48) | Replay controls (3.16) and the chapter caption (8.5). Two rows by the lead's decision of 2026-10-09 (RR11): one row could not hold the named chapter buttons of 3.16 at the 44×44 of LY5 beside the caption of 8.5. |
 
 - **LY1.** The pool frame keeps 16:9. It uses the full width of the pool area unless the file tiles would get less than one row (64 high); then the frame shrinks and is centred.
 - **LY2.** Banners and the Replay bar take height from the body. They never overlap the frame, the attempt cards or a sheet.
@@ -369,6 +369,8 @@ The Who relies panel uses the same slot and width as the Why sheet.
 
 Replay uses the same views. It adds the REPLAY banner and the Replay bar. A visitor on a quiet pool sees the start card over the pool area.
 
+The Replay bar has two rows, 108 high in all (the lead's decision of 2026-10-09 under RR11). The transport row (56) is on top. The chapter row (52) below it holds the named chapter buttons and, beside them, the caption of the current chapter (8.5).
+
 ```
 +----------------------------------------------------------------------------------------------------+
 | header 64 (no kill switch, owner lock shows "Visitor")                                             |
@@ -379,7 +381,9 @@ Replay uses the same views. It adds the REPLAY banner and the Replay bar. A visi
 | the Replay position                                         | recording. Requests are off.         |
 +-------------------------------------------------------------+--------------------------------------+
 | [Play/Pause] [Restart]  01:42 of 06:10  |--o--------|--------|-----|------|   Speed [1x]  [Close]  |  56
-|                          chapters:  Requests  Conflict  Second catch  Why  Undo  Race              |
++----------------------------------------------------------------------------------------------------+
+| [Requests] [Held change] [Conflict] [Second catch] [Undo] [Race]   A change landed. Agents that    |  52
+|                                                                    relied on the old version get…  |
 +----------------------------------------------------------------------------------------------------+
 
 START CARD (visitor, quiet pool), 640 wide, centred over the pool area

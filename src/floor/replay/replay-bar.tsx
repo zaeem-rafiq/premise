@@ -9,7 +9,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { ShellContext } from "../app/context.ts";
-import { clock as clockText } from "../../copy/format.ts";
+import { clock as clockText, duration } from "../../copy/format.ts";
 import { REPLAY_SPEEDS } from "../../protocol/constants.ts";
 import type { ReplayChapter, ReplayPlayer } from "./player.ts";
 import "./replay-bar.css";
@@ -141,7 +141,9 @@ export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: 
           </button>
         ))}
         <span className="replay-caption">{currentChapter?.caption ?? ""}</span>
-        {snap.skipped && <span className="replay-skipped">{t("replay.skipped", { duration: "…" })}</span>}
+        {snap.skipped !== null && (
+          <span className="replay-skipped">{t("replay.skipped", { duration: duration(snap.skipped) })}</span>
+        )}
       </div>
     </div>
   );

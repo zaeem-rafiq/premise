@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 import { makeShell, ShellContext } from "../app/context.ts";
 import { ReplayBar } from "./replay-bar.tsx";
 import { ReplayPlayer, parseRecording, type PlayerTimers } from "./player.ts";
+import type { PoolEvent } from "../../protocol/events.ts";
+import type { ReplayHeader } from "../../protocol/replay.ts";
 
 const STREAMS = join(dirname(fileURLToPath(import.meta.url)), "../../../test/fixtures/streams");
 
@@ -106,4 +108,49 @@ it("D42 2.7 3.16: every chapter has a visible named seek button", () => {
   const html = bar(p);
   expect(html).toContain('class="replay-chapters"');
   for (const chapter of p.chapters) expect(html).toContain(`>${chapter.name}</button>`);
+});
+
+it("D27 RY14 5.4: after a gap jump the bar says how much recorded time it skipped", () => {
+  // A fake clock: timers fire in order as `advance` moves the time.
+  let now = 0;
+  let nextId = 1;
+  const queue: Array<{ at: number; id: number; fn: () => void }> = [];
+  const timers: PlayerTimers = {
+    now: () => now,
+    setTimeout: (fn, ms) => {
+      const id = nextId++;
+      queue.push({ at: now + ms, id, fn });
+      return id;
+    },
+    clearTimeout: (id) => {
+      const at = queue.findIndex((entry) => entry.id === id);
+      if (at >= 0) queue.splice(at, 1);
+    },
+  };
+  const advance = (ms: number) => {
+    const end = now + ms;
+    for (;;) {
+      queue.sort((a, b) => a.at - b.at || a.id - b.id);
+      const next = queue[0];
+      if (next === undefined || next.at > end) break;
+      now = next.at;
+      queue.shift();
+      next.fn();
+    }
+    now = end;
+  };
+  const event = (n: number, ts: number, type = "metrics") =>
+    ({ n, t: ts + 50, ts, pool: "tidepool", src: "trunk", type }) as unknown as PoolEvent;
+  // 61 s of nothing between event 1 and event 2: RY14 lands the clock 2 s before event 2,
+  // so the jump skips 59 s less the fraction of a second the clock had played.
+  const p = new ReplayPlayer(
+    { header: {} as ReplayHeader, events: [event(1, 0, "pool.state"), event(2, 61_000), event(3, 61_100)] },
+    timers,
+    { speed: 1 },
+  );
+  expect(bar(p)).not.toContain("replay-skipped");
+  advance(500);
+  expect(bar(p)).toContain("Skipped 59 s with no events.");
+  advance(10_000); // the note leaves after its 3 s (RY14)
+  expect(bar(p)).not.toContain("replay-skipped");
 });

@@ -32,3 +32,39 @@ test("D42 2.7 3.16 LY5: named chapters and a usable track at 1440", async ({ pag
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: ".tmp-test/review-replay-1440.png" });
 });
+
+for (const size of [
+  { width: 1920, height: 1080 },
+  { width: 1440, height: 900 },
+]) {
+  test(`D40 LY5: every Replay bar control is a 44x44 target at ${size.width}; the chapter marks are drawn ticks`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/pool/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>pool</title>" }),
+    );
+    await page.goto("/replay/hero-c04");
+    const bar = page.locator(".replay-bar");
+    await expect(bar.getByRole("button", { name: "Conflict", exact: true })).toBeVisible();
+    // LY5: Play, Restart, the track, Speed, Close and both chapter buttons.
+    const targets = await bar.locator("button, input").evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { name: el.textContent || el.getAttribute("aria-label"), width: r.width, height: r.height };
+      }),
+    );
+    expect(targets).toHaveLength(7);
+    for (const target of targets) {
+      expect(target.width, `${target.name}: width`).toBeGreaterThanOrEqual(44);
+      expect(target.height, `${target.name}: height`).toBeGreaterThanOrEqual(44);
+    }
+    // 3.16's chapter marks stay drawn on the track and take no pointer: the named chapter
+    // buttons are the chapters' targets (D40's "the drawn size can stay").
+    const marks = bar.locator(".replay-marks");
+    await expect(marks).toHaveAttribute("aria-hidden", "true");
+    await expect(marks).toHaveCSS("pointer-events", "none");
+    expect(await marks.locator(".replay-mark").count()).toBeGreaterThan(0);
+  });
+}

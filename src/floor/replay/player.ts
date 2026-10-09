@@ -309,7 +309,7 @@ export type PlayerSnapshot = {
   speed: number; // one of REPLAY_SPEEDS
   ended: boolean; // the last event is applied (RY19)
   chapter: number; // the current chapter's key, or 0 before the first
-  skipped: boolean; // a gap jump happened within the last SKIP_NOTICE_MS
+  skipped: number | null; // recorded ms the newest gap jump skipped, while its notice shows (RY14); else null
 };
 
 /** The wall time the `replay.skipped` note stays on the bar (RY14: "for 3 s"). */
@@ -341,6 +341,7 @@ export class ReplayPlayer {
   private lastNow: number;
   private timer: unknown = null;
   private skippedUntil = 0;
+  private skippedMs = 0;
   private listeners = new Set<() => void>();
   playing: boolean;
   speed = 1;
@@ -390,6 +391,7 @@ export class ReplayPlayer {
       // RY14: a recorded gap longer than REPLAY_MAX_GAP_MS is jumped, at every speed.
       const next = this.times[this.applied];
       if (next !== undefined && next - clock > REPLAY_MAX_GAP_MS) {
+        this.skippedMs = next - REPLAY_MAX_GAP_MS - clock;
         clock = next - REPLAY_MAX_GAP_MS;
         this.skippedUntil = now + SKIP_NOTICE_MS;
       }
@@ -542,7 +544,7 @@ export class ReplayPlayer {
       speed: this.speed,
       ended: this.ended(),
       chapter: chapterIndex < 0 ? 0 : this.chapters[chapterIndex]!.key,
-      skipped: this.timers.now() < this.skippedUntil,
+      skipped: this.timers.now() < this.skippedUntil ? this.skippedMs : null,
     };
   }
 }

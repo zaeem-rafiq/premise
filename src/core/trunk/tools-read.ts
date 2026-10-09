@@ -27,7 +27,7 @@ import {
 } from "./sets.ts";
 import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
-import { parseModule } from "../entities/entities.ts";
+import { entitySignature, parseModule } from "../entities/entities.ts";
 import { matchContainers } from "../keys/search.ts";
 import { pin, ref } from "./premises.ts";
 import { MAX_FILE_BYTES, MAX_LIST_ENTRIES, MAX_QUERY_LEN, MAX_SEARCH_LINES } from "../../protocol/constants.ts";
@@ -82,7 +82,7 @@ export function toolOutline(pool: Pool, a: Attempt, args: { path: string }): Too
       name: e.name,
       kind: e.kind,
       exports: [...e.exports],
-      signature: e.canonical.split("\n")[0] ?? e.name,
+      signature: entitySignature(content, mod, e.name) ?? e.name,
       lines: linesRange(content, mod.regions, e.name, lines.length),
     })),
   };

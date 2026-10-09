@@ -39,7 +39,7 @@ build step.
 | Deploy                            | `npm run deploy:test`, `npm run deploy`                                                            | lead only        |
 | Pools                             | `npm run pool:create -- <pool> <seed>`                                                             | works            |
 | Early model measurement           | `npm run measure:models -- --early`                                                                | not built        |
-| Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | not built        |
+| Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | hero: offline OK |
 | Recordings                        | `npm run record:export -- --pool <pool> --id <id>`                                                 | not built        |
 | Submission checks                 | `npm run check:submission`                                                                         | works            |
 | Cleanup of the `test` environment | `npm run cleanup:test`                                                                             | not built        |

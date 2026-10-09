@@ -74,7 +74,7 @@ export function SwarmNumbers({ floor }: { floor: FloorState }) {
         <span>
           {floor.last_push === null
             ? t("swarm.last_push.unknown")
-            : t("swarm.last_push", { n: count(floor.last_push.landings) })}
+            : t("swarm.last_push", { n: floor.last_push.landings })}
         </span>
       </div>
     </div>

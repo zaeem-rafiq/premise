@@ -186,8 +186,9 @@ async function chromiumTransport(origin: string): Promise<HeroFrameTransport> {
         );
         await page.goto(parent, { waitUntil: "domcontentloaded" });
         // This code executes in the browser, while this script belongs to the Node program.
-        await page.evaluate(
-          `(urls) => {
+        // A function given as a string is only evaluated, never called: send one expression that
+        // calls it, with its arguments as JSON (the browser code stays out of the Node program).
+        const mountFrames = `(urls) => {
           const frames = new Map();
           window.addEventListener("message", (event) => {
             for (const [name, iframe] of frames) {
@@ -207,18 +208,15 @@ async function chromiumTransport(origin: string): Promise<HeroFrameTransport> {
             frames.set(name, iframe);
             document.body.append(iframe);
           }
-        }`,
-          urls,
-        );
+        }`;
+        await page.evaluate(`(${mountFrames})(${JSON.stringify(urls)})`);
       },
       async post(frame, message) {
-        await page.evaluate(
-          `({ frame, message }) => {
+        const postToFrame = `({ frame, message }) => {
           const iframe = document.getElementById(frame);
           iframe.contentWindow.postMessage(message, "*");
-        }`,
-          { frame, message },
-        );
+        }`;
+        await page.evaluate(`(${postToFrame})(${JSON.stringify({ frame, message })})`);
       },
       close: () => browser.close(),
     };

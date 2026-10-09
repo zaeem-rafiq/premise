@@ -207,7 +207,9 @@ describe("hero Compare frame adapter", () => {
       mainFrame: () => parentFrame,
       route: vi.fn(async () => undefined),
       goto: vi.fn(async () => undefined),
-      evaluate: vi.fn(async (code: string, arg: unknown) => runInNewContext(code, { window, document })(arg)),
+      // As Playwright does: a string is evaluated as one expression, and a function it yields is never
+      // called (the fake once called it, so the live helper mounted no frames while this test passed).
+      evaluate: vi.fn(async (code: string) => runInNewContext(code, { window, document })),
     };
     const browser = { newPage: vi.fn(async () => page), close: vi.fn(async () => undefined) };
     launch.mockResolvedValue(browser);

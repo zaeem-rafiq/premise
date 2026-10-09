@@ -1,0 +1,61 @@
+{
+  "openHeadsUps": 3,
+  "voiceover": {
+    "intentText": [
+      20,
+      20,
+      20
+    ],
+    "statusWords": [
+      16,
+      16,
+      16
+    ],
+    "counters": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "bannerWords": [],
+    "cardSheetTitle": [],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [
+      16,
+      16,
+      16,
+      16
+    ],
+    "swarmNumbers": [],
+    "frameCaption": [
+      22
+    ],
+    "thesis": []
+  },
+  "codeOverflow": [
+    {
+      "scrollWidth": 671,
+      "clientWidth": 600
+    },
+    {
+      "scrollWidth": 604,
+      "clientWidth": 600
+    },
+    {
+      "scrollWidth": 671,
+      "clientWidth": 600
+    },
+    {
+      "scrollWidth": 604,
+      "clientWidth": 600
+    },
+    {
+      "scrollWidth": 671,
+      "clientWidth": 600
+    },
+    {
+      "scrollWidth": 604,
+      "clientWidth": 600
+    }
+  ]
+}

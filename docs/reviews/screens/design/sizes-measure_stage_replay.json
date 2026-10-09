@@ -1,0 +1,131 @@
+{
+  "regions": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "dataSize": "stage",
+    "scroll": {
+      "width": 1920,
+      "height": 1080
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 64
+    },
+    "strip": {
+      "x": 0,
+      "y": 64,
+      "width": 1920,
+      "height": 72
+    },
+    "banners": [
+      {
+        "tone": "synthetic",
+        "x": 0,
+        "y": 136,
+        "width": 1920,
+        "height": 40
+      },
+      {
+        "tone": "replay",
+        "x": 0,
+        "y": 176,
+        "width": 1920,
+        "height": 40
+      }
+    ],
+    "body": {
+      "x": 0,
+      "y": 216,
+      "width": 1920,
+      "height": 808
+    },
+    "bodyPadding": "24px",
+    "bodyGap": "24px",
+    "poolColumn": {
+      "x": 24,
+      "y": 240,
+      "width": 1152,
+      "height": 760
+    },
+    "caption": {
+      "x": 24,
+      "y": 240,
+      "width": 1152,
+      "height": 46.6
+    },
+    "frame": {
+      "x": 58.3,
+      "y": 286.6,
+      "width": 1083.4,
+      "height": 609.4
+    },
+    "tiles": {
+      "x": 24,
+      "y": 904,
+      "width": 1152,
+      "height": 64
+    },
+    "tileCells": 9,
+    "rail": {
+      "x": 1200,
+      "y": 240,
+      "width": 696,
+      "height": 760
+    },
+    "replayBar": {
+      "x": 0,
+      "y": 1024,
+      "width": 1920,
+      "height": 56
+    },
+    "sheet": null,
+    "sheetFrames": [],
+    "gitDrawer": null
+  },
+  "audit": {
+    "smallTargets": [
+      {
+        "what": "input.replay-track \"00:00:05 of 00:00:22\"",
+        "width": 480,
+        "height": 16
+      },
+      {
+        "what": "button.replay-mark \"1\"",
+        "width": 22,
+        "height": 23
+      },
+      {
+        "what": "button.replay-mark \"2\"",
+        "width": 22,
+        "height": 23
+      }
+    ],
+    "smallText": []
+  },
+  "voiceover": {
+    "intentText": [],
+    "statusWords": [],
+    "counters": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "bannerWords": [
+      24,
+      24
+    ],
+    "cardSheetTitle": [],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [],
+    "swarmNumbers": [],
+    "frameCaption": [
+      22
+    ],
+    "thesis": []
+  }
+}

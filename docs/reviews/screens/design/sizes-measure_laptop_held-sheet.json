@@ -1,0 +1,126 @@
+{
+  "regions": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "dataSize": "laptop",
+    "scroll": {
+      "width": 1440,
+      "height": 900
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 56
+    },
+    "strip": {
+      "x": 0,
+      "y": 56,
+      "width": 1440,
+      "height": 60
+    },
+    "banners": [],
+    "body": {
+      "x": 0,
+      "y": 116,
+      "width": 1440,
+      "height": 784
+    },
+    "bodyPadding": "16px",
+    "bodyGap": "16px",
+    "poolColumn": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 752
+    },
+    "caption": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 44
+    },
+    "frame": {
+      "x": 16,
+      "y": 176,
+      "width": 832,
+      "height": 468
+    },
+    "tiles": {
+      "x": 16,
+      "y": 652,
+      "width": 832,
+      "height": 200
+    },
+    "tileCells": 16,
+    "rail": {
+      "x": 864,
+      "y": 132,
+      "width": 560,
+      "height": 752
+    },
+    "replayBar": null,
+    "sheet": {
+      "x": 230,
+      "y": 54,
+      "width": 980,
+      "height": 792
+    },
+    "sheetFrames": [
+      {
+        "x": 255,
+        "y": 208.4,
+        "width": 457,
+        "height": 257.1
+      },
+      {
+        "x": 728,
+        "y": 208.4,
+        "width": 457,
+        "height": 257.1
+      }
+    ],
+    "gitDrawer": null
+  },
+  "voiceover": {
+    "intentText": [
+      19,
+      16,
+      16,
+      16
+    ],
+    "statusWords": [
+      18,
+      14,
+      14,
+      14
+    ],
+    "counters": [
+      32,
+      32,
+      32,
+      32
+    ],
+    "bannerWords": [],
+    "cardSheetTitle": [
+      18
+    ],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [],
+    "swarmNumbers": [],
+    "frameCaption": [
+      16
+    ],
+    "thesis": []
+  },
+  "onTop": {
+    "killSwitch": "div.card-sheet__backdrop",
+    "stripLanded": "h2.card-sheet__title"
+  },
+  "reasonField": {
+    "color": "rgb(168, 188, 198)",
+    "background": "rgb(255, 255, 255)"
+  }
+}

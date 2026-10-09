@@ -1,0 +1,24 @@
+{
+  "timeline": [
+    {
+      "at": "request in flight",
+      "button": "Starting 64 scripted agents…",
+      "notes": "This run: 1 pool, 1 Trunk, 64 scripted agents. |  | LANDINGS PER SECOND"
+    },
+    {
+      "at": "request answered, no swarm.state yet",
+      "button": "Start",
+      "notes": "This run: 1 pool, 1 Trunk, 64 scripted agents. |  | LANDINGS PER SECOND"
+    },
+    {
+      "at": "swarm.state running, no scripted attempt on this stream",
+      "button": "Stop",
+      "notes": "Starting 64 scripted agents… |  | This run: 1 pool, 1 Trunk, 64 scripted agents."
+    },
+    {
+      "at": "11 s later (FR24 says swarm.no_agents after 10 s)",
+      "button": "Stop",
+      "notes": "Starting 64 scripted agents… |  | This run: 1 pool, 1 Trunk, 64 scripted agents."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "intentCreatedSentMsAfterReply": 300,
+  "after1s": {
+    "draft": "make energy a fraction from 0 to 1",
+    "readOnly": true,
+    "note": "Sending…",
+    "buttons": [
+      "Sending…:off",
+      "Race 3:off"
+    ]
+  },
+  "after6s": {
+    "draft": "make energy a fraction from 0 to 1",
+    "readOnly": false,
+    "note": "Sent. Waiting for the pool to show it.",
+    "buttons": [
+      "Send:off",
+      "Race 3:off"
+    ]
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "regions": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "dataSize": "stage",
+    "scroll": {
+      "width": 1920,
+      "height": 1080
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 64
+    },
+    "strip": {
+      "x": 0,
+      "y": 64,
+      "width": 1920,
+      "height": 72
+    },
+    "banners": [],
+    "body": {
+      "x": 0,
+      "y": 136,
+      "width": 1920,
+      "height": 944
+    },
+    "bodyPadding": "24px",
+    "bodyGap": "24px",
+    "poolColumn": {
+      "x": 24,
+      "y": 160,
+      "width": 1152,
+      "height": 896
+    },
+    "caption": {
+      "x": 24,
+      "y": 160,
+      "width": 1152,
+      "height": 46.6
+    },
+    "frame": {
+      "x": 24,
+      "y": 206.6,
+      "width": 1152,
+      "height": 648
+    },
+    "tiles": {
+      "x": 24,
+      "y": 862.6,
+      "width": 1152,
+      "height": 161.4
+    },
+    "tileCells": 18,
+    "rail": {
+      "x": 1200,
+      "y": 160,
+      "width": 696,
+      "height": 896
+    },
+    "replayBar": null,
+    "sheet": {
+      "x": 470,
+      "y": 112,
+      "width": 980,
+      "height": 856
+    },
+    "sheetFrames": [
+      {
+        "x": 495,
+        "y": 282,
+        "width": 457,
+        "height": 257.1
+      },
+      {
+        "x": 968,
+        "y": 282,
+        "width": 457,
+        "height": 257.1
+      }
+    ],
+    "gitDrawer": null
+  },
+  "voiceover": {
+    "intentText": [
+      24,
+      20,
+      20,
+      20
+    ],
+    "statusWords": [
+      22,
+      16,
+      16,
+      16
+    ],
+    "counters": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "bannerWords": [],
+    "cardSheetTitle": [
+      18
+    ],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [],
+    "swarmNumbers": [],
+    "frameCaption": [
+      22
+    ],
+    "thesis": []
+  },
+  "onTop": {
+    "killSwitch": "div.card-sheet__backdrop",
+    "stripLanded": "div.card-sheet__backdrop"
+  },
+  "reasonField": {
+    "color": "rgb(168, 188, 198)",
+    "background": "rgb(255, 255, 255)"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "running": [
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    },
+    {
+      "name": "attempt-card-pulse",
+      "target": "circle.[object",
+      "duration": 2400,
+      "iterations": null
+    }
+  ]
+}

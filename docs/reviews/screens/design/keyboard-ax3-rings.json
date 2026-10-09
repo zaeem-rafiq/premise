@@ -1,0 +1,18 @@
+{
+  "strip-cell": {
+    "outline": "3px solid rgb(255, 224, 138)",
+    "offset": "2px"
+  },
+  "tile": {
+    "outline": "3px solid rgb(255, 224, 138)",
+    "offset": "2px"
+  },
+  "light": {
+    "outline": "3px solid rgb(255, 224, 138)",
+    "offset": "2px"
+  },
+  "attempt-card": {
+    "outline": "3px solid rgb(255, 224, 138)",
+    "offset": "2px"
+  }
+}

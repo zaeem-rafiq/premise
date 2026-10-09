@@ -1,0 +1,10 @@
+{
+  "race": {
+    "synthetic": true,
+    "replay": false
+  },
+  "undo": {
+    "synthetic": true,
+    "replay": false
+  }
+}

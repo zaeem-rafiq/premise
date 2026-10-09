@@ -1,0 +1,21 @@
+{
+  "live": {
+    "scrollWidth": 379,
+    "innerWidth": 320,
+    "scrollHeight": 2467,
+    "innerHeight": 640,
+    "dataSize": "laptop",
+    "wider": [
+      "button.nav-item",
+      "button.nav-item",
+      "button.nav-item",
+      "button.nav-item",
+      "span.intent-actions",
+      "button."
+    ]
+  },
+  "replay": {
+    "scrollWidth": 320,
+    "innerWidth": 320
+  }
+}

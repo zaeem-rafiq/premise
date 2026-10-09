@@ -1,0 +1,74 @@
+{
+  "regions": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "dataSize": "laptop",
+    "scroll": {
+      "width": 1440,
+      "height": 900
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 56
+    },
+    "strip": {
+      "x": 0,
+      "y": 56,
+      "width": 1440,
+      "height": 60
+    },
+    "banners": [],
+    "body": {
+      "x": 0,
+      "y": 116,
+      "width": 1440,
+      "height": 784
+    },
+    "bodyPadding": "16px",
+    "bodyGap": "16px",
+    "poolColumn": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 752
+    },
+    "caption": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 44
+    },
+    "frame": {
+      "x": 16,
+      "y": 176,
+      "width": 832,
+      "height": 468
+    },
+    "tiles": {
+      "x": 16,
+      "y": 652,
+      "width": 832,
+      "height": 200
+    },
+    "tileCells": 33,
+    "rail": {
+      "x": 864,
+      "y": 132,
+      "width": 560,
+      "height": 752
+    },
+    "replayBar": null,
+    "sheet": {
+      "x": 360,
+      "y": 166.4,
+      "width": 720,
+      "height": 683.1
+    },
+    "sheetFrames": [],
+    "gitDrawer": null
+  }
+}

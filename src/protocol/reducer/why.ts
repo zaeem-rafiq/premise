@@ -436,6 +436,7 @@ function fillFromNote(card: WhyCard, note: Note): void {
   card.premises = (note.premises ?? []).map((premise) => ({
     kind: premise.kind,
     key: premise.key,
+    hash: premise.hash,
     read: premise.read,
     edit: premise.edit,
     derived: premise.derived,

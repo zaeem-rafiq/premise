@@ -90,6 +90,7 @@ function premise(over: Partial<PremiseView> = {}): PremiseView {
   return {
     kind: "entity",
     key: "creatures/fish.js#spawn",
+    hash: null,
     read: true,
     edit: false,
     derived: false,

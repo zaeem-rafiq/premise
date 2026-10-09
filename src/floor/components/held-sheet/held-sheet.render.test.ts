@@ -105,6 +105,7 @@ describe("HeldSheet render (3.13)", () => {
       state.attempts["a_1"]!.premises[`file ${key}`] = {
         kind: "file",
         key,
+        hash: null,
         read: true,
         edit: false,
         derived: false,

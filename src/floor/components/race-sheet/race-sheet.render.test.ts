@@ -134,6 +134,7 @@ describe("RaceSheet render (3.14)", () => {
         state.attempts[id]!.premises[`file ${key}`] = {
           kind: "file",
           key,
+          hash: null,
           read: true,
           edit: false,
           derived: false,

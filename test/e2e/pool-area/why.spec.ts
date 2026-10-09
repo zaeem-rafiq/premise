@@ -505,7 +505,9 @@ test.describe("2.8 item 4 — Who relies (3.11, 11.6, CO23b)", () => {
     const sheet = page.getByRole("dialog", { name: "Who relies on ENERGY_MAX in world/energy.js" });
     await expect(sheet).toBeVisible();
     await expect(sheet.locator('[data-list="in_flight"]')).toContainText("In flight (1)");
-    await expect(sheet.locator('[data-list="in_flight"]')).toContainText('"a crab that hides when its…"');
+    // 5.2 changeName: the attempt created creatures/crab.js, so it is named "crab", not by its request (D19).
+    await expect(sheet.locator('[data-list="in_flight"]')).toContainText("crab");
+    await expect(sheet.locator('[data-list="in_flight"]')).not.toContainText('"a crab that hides');
     await expect(sheet.locator('[data-list="in_flight"]')).toContainText("Going around");
     await expect(sheet.locator('[data-list="landed"]')).toContainText("Landed (1)");
     await expect(sheet.locator('[data-list="landed"]')).toContainText("landing 1");

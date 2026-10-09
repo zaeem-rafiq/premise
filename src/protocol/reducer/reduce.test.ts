@@ -2427,3 +2427,53 @@ describe("AC2: every event type of 03-floor 4.3 has a spec-derived reducer test"
     row.check(state);
   });
 });
+
+describe("D19: a premise keeps its pin (03-floor 4.1 PremiseView, 5.2 changeName)", () => {
+  it("keeps the pin of premise.recorded, follows a later record, and is null for a premise known only from a judgment", () => {
+    const state = baseState();
+    openAttempt(state, "a1", "i1");
+    const created = {
+      kind: "file" as const,
+      key: "creatures/crab.js",
+      hash: "absent",
+      seq: 0,
+      read: false,
+      edit: true,
+      derived: false,
+    };
+    reduce(state, ev("premise.recorded", { attempt_id: "a1", tool: "write", premise: created }, 1_100));
+    const fileId = premiseId("file", "creatures/crab.js");
+    expect(must(must(state.attempts.a1).premises[fileId]).hash).toBe("absent");
+    reduce(
+      state,
+      ev(
+        "premise.recorded",
+        { attempt_id: "a1", tool: "read", premise: { ...created, hash: "b1", read: true } },
+        1_200,
+      ),
+    );
+    expect(must(must(state.attempts.a1).premises[fileId]).hash).toBe("b1");
+    reduce(
+      state,
+      ev(
+        "premise.judged",
+        {
+          attempt_id: "a1",
+          kind: "entity",
+          key: ENERGY,
+          old_hash: "h0",
+          new_hash: "h1",
+          cause: "landing",
+          cause_seq: 1,
+          rule: "E2",
+          class: "rule",
+          result: "repair",
+          reason: "r",
+          clef: null,
+        },
+        1_300,
+      ),
+    );
+    expect(must(must(state.attempts.a1).premises[premiseId("entity", ENERGY)]).hash).toBeNull();
+  });
+});

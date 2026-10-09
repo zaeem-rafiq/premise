@@ -1067,6 +1067,7 @@ type AttemptView = {
 
 type PremiseView = {
   kind: PremiseKind; key: string;
+  hash: string | null;                        // the pin as the newest premise.recorded gave it (`absent` for a file the attempt created, 5.2 changeName); null until one arrives
   read: boolean; edit: boolean; derived: boolean;
   light: "holds" | "changed" | "confirm" | "blind_spot" | "checking";
   judgment: { rule: string; reason: string; result: "holds" | "confirm" | "repair" | null;

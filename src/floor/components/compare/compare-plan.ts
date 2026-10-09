@@ -25,7 +25,7 @@ function landingName(landing: LandingEntry, state: FloorState): string {
       ? // A digest keeps only the premise keys — `edit` is unknown, so the created-file
         // naming of `changeName` (PremiseRef.hash) cannot apply here.
         landing.premise_keys.map((p) => ({ kind: p.kind, key: p.key, edit: false }))
-      : landing.premises.map((p) => ({ kind: p.kind, key: p.key, edit: p.edit }));
+      : landing.premises.map((p) => ({ kind: p.kind, key: p.key, edit: p.edit, hash: p.hash }));
   if (attempt !== undefined || intentText !== "") {
     return changeName({ intentText, race: attempt?.race, model: attempt?.model, premises });
   }

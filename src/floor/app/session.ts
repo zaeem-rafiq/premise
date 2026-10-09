@@ -227,6 +227,7 @@ export function useSession(route: Route, settings: FloorJson, reducedMotion: boo
                           kind: pr.kind,
                           key: pr.key,
                           edit: pr.edit,
+                          hash: pr.hash,
                         })),
                       }),
                     }),

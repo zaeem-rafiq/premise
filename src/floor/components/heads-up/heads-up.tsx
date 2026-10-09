@@ -42,7 +42,7 @@ function UseLines({ uses }: { uses: UseLine[] }) {
         {uses.map((use, index) => (
           <li key={index}>
             <span className="headsup-uses__ref" dir="auto">
-              {use.path} line {use.line}
+              {text("headsup.use_line", { path: use.path, line: String(use.line) })}
             </span>
             <code className="headsup-uses__text" dir="auto">
               {use.text}

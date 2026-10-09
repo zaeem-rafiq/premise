@@ -1380,11 +1380,13 @@ The first version of this file listed 25 things the stream or the interfaces did
 | --- | --- |
 | `app.name` | Premise |
 | `app.thesis` | Git records only what an agent wrote. Premise also records what it read. |
+| `app.settings_failed` | Premise could not load its settings. Reload the page. |
 | `nav.floor` | Floor |
 | `nav.swarm` | Swarm |
 | `nav.replay` | Replay |
 | `nav.about` | About |
 | `nav.skip` | Skip to the attempt cards |
+| `nav.label` | Views |
 | `needs.badge` | Needs you {n} (visitor and Replay: Needs the owner {n}) |
 | `needs.title` | Needs you ({n}) (visitor and Replay: Needs the owner ({n})) |
 | `card.open` | Open |
@@ -1474,6 +1476,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `headsup.after` | After |
 | `headsup.now` | Now |
 | `headsup.uses` | Its own lines that use it |
+| `headsup.use_line` | {path} line {line} |
 | `headsup.added` | New: {list} |
 | `headsup.removed` | Gone: {list} |
 | `headsup.context` | Also new or changed in those files |
@@ -1569,6 +1572,9 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `why.revert.title` | The green line took back {landings} |
 | `git.title` | Show the git |
 | `git.commit_is` | This is an ordinary git commit on main, in Artifacts. |
+| `git.commit` | Commit |
+| `git.parent` | Parent |
+| `git.tree` | Tree |
 | `git.note_is` | The record above is this git note. |
 | `git.read_yourself` | Read it yourself with plain git: |
 | `git.copy` | Copy |

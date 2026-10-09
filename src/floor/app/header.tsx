@@ -60,12 +60,16 @@ export function Header(props: HeaderProps) {
         <span className="app-name">{t("app.name")}</span>
         <span className="pool-name">{props.pool}</span>
       </div>
-      <nav className="view-switch" aria-label="views">
+      <nav className="view-switch" aria-label={t("nav.label")}>
         {items}
       </nav>
       <details className="nav-menu" ref={menu}>
         <summary className="nav-menu-summary">{props.view === "swarm" ? t("nav.swarm") : t("nav.floor")}</summary>
-        <nav className="nav-menu-list" aria-label="views" onClick={() => menu.current?.removeAttribute("open")}>
+        <nav
+          className="nav-menu-list"
+          aria-label={t("nav.label")}
+          onClick={() => menu.current?.removeAttribute("open")}
+        >
           {items}
         </nav>
       </details>

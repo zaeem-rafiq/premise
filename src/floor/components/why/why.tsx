@@ -149,7 +149,7 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
             <dl className="why-commit-lines">
               {card.commit !== null && (
                 <>
-                  <dt>commit</dt>
+                  <dt>{t("git.commit")}</dt>
                   <dd dir="auto">
                     <code>{card.commit}</code>
                   </dd>
@@ -157,7 +157,7 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
               )}
               {card.parentCommit !== null && (
                 <>
-                  <dt>parent</dt>
+                  <dt>{t("git.parent")}</dt>
                   <dd dir="auto">
                     <code>{card.parentCommit}</code>
                   </dd>
@@ -165,7 +165,7 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
               )}
               {card.tree !== null && (
                 <>
-                  <dt>tree</dt>
+                  <dt>{t("git.tree")}</dt>
                   <dd dir="auto">
                     <code>{card.tree}</code>
                   </dd>

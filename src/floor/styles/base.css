@@ -625,14 +625,6 @@ a {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  gap: 8px;
-}
-.frame-under {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  min-height: 24px;
-  flex: none;
 }
 /* The start card overlays the pool area (RY23); `.pool-stage` is its positioned box. */
 .pool-stage {
@@ -651,32 +643,6 @@ a {
   position: absolute;
   inset: auto;
   pointer-events: auto;
-}
-.green-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--size-small);
-  color: var(--muted);
-}
-.green-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--holds);
-  background: var(--holds);
-}
-.green-line[data-tone="checking"] .green-dot {
-  border-color: var(--checking);
-  background: transparent;
-}
-.green-line[data-tone="changed"] .green-dot {
-  border-color: var(--changed);
-  background: var(--changed);
-}
-.green-line[data-tone="neutral"] .green-dot {
-  border-color: var(--control);
-  background: transparent;
 }
 
 /* VD15: the frame's caption text is read at stage size 22 (the pool frame's own styles
@@ -1236,9 +1202,6 @@ a {
   }
   .floor-body .pool-stage {
     order: 3;
-  }
-  .floor-body .frame-under {
-    order: 4;
   }
   .floor-body .tabs {
     order: 5;

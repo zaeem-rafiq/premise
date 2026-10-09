@@ -3,12 +3,17 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { attemptOpened, ev, intentCreated, poolState, serveSession, serveStream } from "../shell/stream.ts";
 
-// Use the actual seed tree from the recorded demo, not a reduced file list that hides overflow.
-const seedFiles = readFileSync("public/replay/hero-canned.ndjson", "utf8")
-  .trim()
-  .split("\n")
-  .map((line) => JSON.parse(line) as Record<string, unknown>)
-  .find((event) => event.type === "pool.files")!.files;
+// Use the actual seed tree from the recorded demo, not a reduced file list that hides overflow,
+// plus the creatures the demo lands (1.2, beats 1 to 5). The seed tree alone is 26 cells, which
+// the stage grid's three rows of nine now hold whole (2.1: the tiles get the pool area's rest).
+const seedFiles = [
+  ...(readFileSync("public/replay/hero-canned.ndjson", "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .find((event) => event.type === "pool.files")!.files as Array<Record<string, unknown>>),
+  ...["crab", "jellyfish", "shrimp", "squid"].map((name) => ({ path: `creatures/${name}.js`, tier: "auto" })),
+];
 
 const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool frame stub</title><script>
   var part = location.pathname.split("/")[3];

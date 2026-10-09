@@ -29,7 +29,6 @@ import { AboutSheet } from "../components/about/about.tsx";
 import { OwnerDialog } from "../components/owner-key/owner-key.tsx";
 import { KillDialog, allowAgents } from "../components/kill-switch/kill-switch.tsx";
 import { SwarmView } from "../components/swarm/swarm.tsx";
-import { GreenLine } from "../components/green/green.tsx";
 import { PoolArea } from "../components/pool-frame/pool-area.tsx";
 import { Rail } from "../components/rail/rail.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
@@ -706,9 +705,6 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                   </div>
                 </div>
               )}
-            </div>
-            <div className="frame-under">
-              <GreenLine floor={floor} />
             </div>
           </div>
           <Rail

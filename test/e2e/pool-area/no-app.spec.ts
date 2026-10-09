@@ -152,9 +152,11 @@ test.describe("IR12: a pool with no live picture", () => {
       const tb = await box(tiles);
       const sb = await box(stage);
       const gb = await box(page.locator(".tiles-grid"));
-      // The tiles sit where the frame stood: directly under the caption bar (8 gap), and
-      // their region reaches the stage's floor — the frame's former height is theirs.
-      expect(Math.abs(tb.y - (cb.y + cb.height + 8))).toBeLessThanOrEqual(2);
+      // The tiles sit where the frame stood: their region starts at the caption bar, its grid
+      // 8 below it (the region's own top padding), and the region reaches the stage's floor —
+      // the frame's former height is theirs.
+      expect(Math.abs(tb.y - (cb.y + cb.height))).toBeLessThanOrEqual(2);
+      expect(Math.abs(gb.y - (cb.y + cb.height + 8))).toBeLessThanOrEqual(2);
       expect(Math.abs(tb.y + tb.height - (sb.y + sb.height))).toBeLessThanOrEqual(2);
       // Rows beyond a seed pool's cap draw — the grid fills the region, not the capped rows.
       expect(gb.height).toBeGreaterThan(cap);

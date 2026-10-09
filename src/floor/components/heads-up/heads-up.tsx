@@ -13,15 +13,16 @@ import type { HeadsUpModel, ItemBlock, UseLine } from "./model.ts";
 const CODE_LINES_MAX = 12;
 
 /** A before/after code block: the label, the source capped at 12 lines, then the toggle. */
-function CodeBlock({ label, source }: { label: string; source: string }) {
+function CodeBlock({ label, source, added = false }: { label: string; source: string; added?: boolean }) {
   const [all, setAll] = useState(false);
   const lines = source.split("\n");
   const over = lines.length > CODE_LINES_MAX;
+  const shown = (all ? lines : lines.slice(0, CODE_LINES_MAX)).join("\n");
   return (
     <div className="headsup-code">
       <span className="headsup-code__label">{label}</span>
       <pre className="headsup-code__text">
-        <code>{(all ? lines : lines.slice(0, CODE_LINES_MAX)).join("\n")}</code>
+        <code>{added ? <mark className="headsup-code__added">{shown}</mark> : shown}</code>
       </pre>
       {over && !all && (
         <button type="button" className="headsup-code__more" onClick={() => setAll(true)}>
@@ -92,7 +93,17 @@ function ItemView({ item }: { item: ItemBlock }) {
           )}
         </div>
       )}
-      {item.added.length > 0 && (
+      {item.kind === "query" &&
+        item.addedSources.map((entry, index) =>
+          entry.source === null ? (
+            <p className="headsup-note" key={index}>
+              {text("headsup.added", { list: entry.label })}
+            </p>
+          ) : (
+            <CodeBlock key={index} label={text("headsup.added", { list: entry.label })} source={entry.source} added />
+          ),
+        )}
+      {item.kind !== "query" && item.added.length > 0 && (
         <p className="headsup-note">{text("headsup.added", { list: item.added.join(", ") })}</p>
       )}
       {item.removed.length > 0 && (
@@ -104,7 +115,7 @@ function ItemView({ item }: { item: ItemBlock }) {
           <ul>
             {item.context.map((entry, index) => (
               <li key={index} dir="auto">
-                {entry}
+                <CodeBlock label={entry.label} source={entry.source} />
               </li>
             ))}
           </ul>

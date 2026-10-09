@@ -81,9 +81,9 @@
   border: var(--border, 1px) solid var(--line, #3a5669);
   border-radius: calc(var(--radius, 8px) / 2);
   font-family: var(--font-mono, monospace);
-  font-size: var(--size-small, 14px);
-  overflow-x: auto;
-  white-space: pre;
+  font-size: var(--size-status, 18px);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   max-width: 100%;
 }
 
@@ -145,4 +145,13 @@
 .headsup :focus-visible {
   outline: 3px solid var(--focus, #ffe08a);
   outline-offset: 2px;
+}
+
+/* CO19: an added query member has no before; all its source is new. */
+.headsup-code__added {
+  color: inherit;
+  background: var(--surface, #13242f);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }

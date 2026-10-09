@@ -186,7 +186,7 @@ function behindName(state: FloorState, attempt: AttemptView): string | undefined
   });
 }
 
-type Candidate = { text: string; ts: number; warning: boolean };
+type Candidate = { text: string; ts: number; warning: boolean; activity?: boolean };
 
 /**
  * The sentences of line 4 that events have put there (03 4.3): the step's activity or error line
@@ -206,6 +206,7 @@ function line4Candidates(state: FloorState, attempt: AttemptView, visitor: boole
       text: step.ok ? activityLine(step) : activityError(activityLine(step), step.error ?? ""),
       ts: step.ts,
       warning: !step.ok,
+      activity: active && step.ok,
     });
   }
   if (active) {
@@ -262,7 +263,10 @@ export function line4Of(state: FloorState, attempt: AttemptView, clock: number, 
     for (const candidate of line4Candidates(state, attempt, visitor)) {
       if (best === null || candidate.ts >= best.ts) best = candidate;
     }
-    if (best !== null) return { text: best.text, warning: best.warning, opensCard: false };
+    if (best !== null) {
+      const suffix = best.activity && quiet >= QUIET_NOTICE_MS ? quietSuffix(Math.floor(quiet / 1_000)) : "";
+      return { text: `${best.text}${suffix}`, warning: best.warning, opensCard: false };
+    }
     if (QUIET_STATES.has(attempt.state)) {
       const line = attempt.step === null ? activityLine({ tool: null, target: null }) : activityLine(attempt.step);
       const suffix = quiet >= QUIET_NOTICE_MS ? quietSuffix(Math.floor(quiet / 1_000)) : "";

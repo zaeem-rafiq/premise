@@ -163,11 +163,11 @@
 .attempt-card--compact .attempt-card__intent {
   -webkit-line-clamp: 1;
   line-clamp: 1;
-  font-size: var(--size-body, 16px);
+  font-size: var(--size-intent, 19px);
 }
 
 .attempt-card--compact .attempt-card__status {
-  font-size: var(--size-small, 14px);
+  font-size: var(--size-status, 18px);
 }
 
 .attempt-card--compact .attempt-card__glyph {

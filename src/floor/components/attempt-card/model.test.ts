@@ -407,6 +407,23 @@ describe("03-floor 7, rows FR1–FR3: the error overlay of line 4", () => {
     expect(line4).toEqual({ text: "Thinking · 14 s", warning: false, opensCard: false });
   });
 
+  it("D32 / FR1, 5.5: a recorded model step counts quiet seconds at the threshold", () => {
+    const attempt = attemptView({
+      state: "working",
+      last_event_ts: 2_000,
+      step: { n: 1, tool: null, target: null, ok: true, error: null, ts: 2_000 },
+    });
+    const floor = stateWith(attempt);
+    expect(line4Of(floor, attempt, 11_999, false).text).toBe("Thinking");
+    expect(line4Of(floor, attempt, 12_000, false).text).toBe("Thinking · 10 s");
+    expect(line4Of(floor, attempt, 31_999, false).text).toBe("Thinking · 29 s");
+    expect(line4Of(floor, attempt, 32_000, false)).toEqual({
+      text: "The model has not answered for 30 s. It is tried again by itself. If that fails, the attempt stops.",
+      warning: true,
+      opensCard: false,
+    });
+  });
+
   it("FR1: at SLOW_NOTICE_MS the line reads attempt.slow in the warning colour", () => {
     const attempt = attemptView({ state: "working", last_event_ts: 2_000 });
     const line4 = line4Of(stateWith(attempt), attempt, 32_000, false);

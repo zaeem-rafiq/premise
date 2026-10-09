@@ -158,6 +158,8 @@ test.describe("the attempt card over a live stream", () => {
       ],
       [
         ev(9, {
+          // FL9: this event is produced three seconds later, matching its delivery below.
+          ts: 4_009,
           type: "landing.landed",
           seq: 1,
           batch_id: 1,
@@ -168,6 +170,7 @@ test.describe("the attempt card over a live stream", () => {
           time_to_land_ms: 100,
         }),
         ev(10, {
+          ts: 4_010,
           type: "batch.pushed",
           batch_id: 1,
           first_seq: 1,
@@ -177,7 +180,7 @@ test.describe("the attempt card over a live stream", () => {
           tries: 1,
           ms: 100,
         }),
-        state(11, "accepted", "landed"),
+        state(11, "accepted", "landed", { ts: 4_011 }),
       ],
     );
     await page.goto(`/p/${POOL}`);

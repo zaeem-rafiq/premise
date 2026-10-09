@@ -13,11 +13,12 @@
 // read off `working_order` alone. A `landed` attempt whose landing is confirmed dwells in
 // place for the beat of 3.2 (1.2 s; 2 s with reduced motion) before it moves to Landed.
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FloorState, AttemptView, LandingEntry } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
 import { inFlight, whyOffered } from "../../state/derive.ts";
 import { landingConfirmed } from "../attempt-card/model.ts";
+import { autoExpandedPanels } from "../attempt-card/auto-expand.ts";
 import { AttemptCard } from "../attempt-card/attempt-card.tsx";
 import { changeName } from "../../../copy/names.ts";
 import { landingLabel, timeOfDay } from "../../../copy/format.ts";
@@ -76,11 +77,11 @@ export function workingOrder(floor: FloorState): AttemptView[] {
 type WorkingItem =
   { kind: "attempt"; attempt: AttemptView } | { kind: "race"; intentId: string; members: AttemptView[] };
 
-function workingItems(floor: FloorState, ordered: AttemptView[]): WorkingItem[] {
+export function workingItems(floor: FloorState, ordered: AttemptView[]): WorkingItem[] {
   const items: WorkingItem[] = [];
   const grouped = new Set<string>();
   for (const attempt of ordered) {
-    if (!attempt.race) {
+    if (!attempt.race || attempt.reopened_by !== null) {
       items.push({ kind: "attempt", attempt });
       continue;
     }
@@ -110,46 +111,96 @@ export function Rail(props: RailProps) {
   const [tab, setTab] = useState<"working" | "landed" | "stopped">("working");
   // The card sheet is the shell's: `onOpenCard` sets `SheetTarget.card`, which `app.tsx`
   // draws through the registered `sheet.card` entry — the one place it renders.
+  const autoPanels = useMemo(() => {
+    const panels = new Map<string, number[]>();
+    for (const { attemptId, hn } of autoExpandedPanels(floor)) {
+      panels.set(attemptId, [...(panels.get(attemptId) ?? []), hn]);
+    }
+    return panels;
+  }, [floor, floor.n]);
   const working = useMemo(() => workingOrder(floor), [floor, floor.n]);
   const landed = floor.landed_order.map((seq) => floor.landings[seq]).filter((l): l is LandingEntry => l !== undefined);
   const stopped = Object.values(floor.attempts).filter((a) => a.state === "stopped" && !inRaceGroup(floor, a));
 
-  // The 3.2 dwell: a card whose `landing.landed` arrived keeps its place for `dwellMs`
-  // before it moves to the Landed tab, so the "Landed" state reads in place.
-  const landedAt = useRef(new Map<string, number>());
-  const [now, setNow] = useState(() => Date.now());
-  const dwelling = useMemo(() => {
-    const out: AttemptView[] = [];
-    for (const attempt of Object.values(floor.attempts)) {
-      if (attempt.state !== "landed" || !landingConfirmed(floor, attempt)) {
-        landedAt.current.delete(attempt.id);
-        continue;
-      }
-      const seen = landedAt.current.get(attempt.id);
-      if (seen === undefined) {
-        landedAt.current.set(attempt.id, Date.now());
-        out.push(attempt);
-      } else if (now - seen < props.dwellMs) {
-        out.push(attempt);
-      }
+  // CO12 / FL9: dwell belongs to the landing event, so remounting or seeking never
+  // starts it again. Between live stream ticks, a local deadline advances the same clock.
+  const clockAnchor = useRef({ stream: props.clock, local: Date.now() });
+  if (clockAnchor.current.stream !== props.clock) {
+    clockAnchor.current = { stream: props.clock, local: Date.now() };
+  }
+  const [, tickDwell] = useState(0);
+  const dwellClock =
+    props.mode === "replay" ? props.clock : props.clock + Math.max(0, Date.now() - clockAnchor.current.local);
+  const dwelling: AttemptView[] = [];
+  let dwellDelay = Infinity;
+  for (const attempt of Object.values(floor.attempts)) {
+    if (attempt.state !== "landed" || attempt.landed_seq === null) continue;
+    const landing = floor.landings[attempt.landed_seq];
+    const at = landing?.digest === true ? landing.landed_ts : landing?.landed?.ts;
+    if (at == null) continue;
+    const remaining = at + props.dwellMs - dwellClock;
+    if (remaining > 0) {
+      dwelling.push(attempt);
+      dwellDelay = Math.min(dwellDelay, remaining);
     }
-    return out;
-    // `floor.n` ticks on every applied event; `now` re-reads the dwell map at deadlines.
-  }, [floor, floor.n, now, props.dwellMs]);
-
+  }
   useEffect(() => {
-    const timers: number[] = [];
-    for (const seen of landedAt.current.values()) {
-      const wait = props.dwellMs - (Date.now() - seen);
-      if (wait > 0) timers.push(window.setTimeout(() => setNow(Date.now()), wait));
-    }
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [floor.n, now, props.dwellMs]);
+    if (props.mode === "replay" || !Number.isFinite(dwellDelay)) return;
+    const timer = window.setTimeout(() => tickDwell((n) => n + 1), Math.ceil(dwellDelay));
+    return () => window.clearTimeout(timer);
+  }, [props.mode, dwellDelay]);
 
   const workingTab = [...working, ...dwelling];
   const items = workingItems(floor, workingTab);
   // CO10: the compact card form when more than five cards are on the rail.
   const compact = workingTab.length > 5;
+
+  // VD14: measure the actual focused card before and after an insertion. The browser may
+  // already have anchored it; compensate only the remaining delta. CO9 moves stay allowed.
+  const listRef = useRef<HTMLDivElement>(null);
+  const focusAnchor = useRef<{ element: HTMLElement; top: number } | null>(null);
+  const anchorSpace = useRef<HTMLDivElement>(null);
+  const anchorStart = useRef<HTMLDivElement>(null);
+  const previousTop = useRef(new Map<string, number | null>());
+  const rememberFocus = (): void => {
+    const element = document.activeElement?.closest<HTMLElement>(".attempt-card");
+    focusAnchor.current =
+      element && listRef.current?.contains(element) ? { element, top: element.getBoundingClientRect().top } : null;
+  };
+  useLayoutEffect(() => {
+    const next = new Map(Object.values(floor.attempts).map((a) => [a.id, a.top_ts]));
+    const inserted = [...next.keys()].some((id) => !previousTop.current.has(id));
+    const topMoved = [...previousTop.current].some(([id, ts]) => next.has(id) && next.get(id) !== ts);
+    const anchor = focusAnchor.current;
+    if (
+      inserted &&
+      !topMoved &&
+      anchor &&
+      listRef.current?.contains(anchor.element) &&
+      anchor.element.contains(document.activeElement)
+    ) {
+      const list = listRef.current;
+      let wanted = list.scrollTop + anchor.element.getBoundingClientRect().top - anchor.top;
+      // Crossing the compact threshold can shrink preceding cards and move focus upward.
+      // Supply leading space when scrolling back to zero alone cannot absorb that change.
+      if (wanted < 0 && anchorStart.current) {
+        const start = anchorStart.current;
+        start.hidden = false;
+        wanted = list.scrollTop + anchor.element.getBoundingClientRect().top - anchor.top;
+        start.style.height = `${(parseFloat(start.style.height) || 0) + Math.max(0, -wanted)}px`;
+        wanted = list.scrollTop + anchor.element.getBoundingClientRect().top - anchor.top;
+      }
+      // A short list has no scroll range. Reserve trailing space while focus stays in the
+      // list, so a newly prepended card can sit above the viewport without moving focus.
+      if (wanted > list.scrollHeight - list.clientHeight && anchorSpace.current) {
+        anchorSpace.current.hidden = false;
+        anchorSpace.current.style.height = `${list.clientHeight}px`;
+      }
+      list.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top;
+    }
+    previousTop.current = next;
+    rememberFocus();
+  }, [floor, floor.n, tab, compact]);
 
   return (
     <aside className="rail" id="rail" aria-label={t("rail.label")}>
@@ -161,7 +212,7 @@ export function Rail(props: RailProps) {
         {(
           [
             ["working", "rail.tab.working", workingTab.length],
-            ["landed", "rail.tab.landed", landed.length],
+            ["landed", "rail.tab.landed", floor.counters.landed_changes],
             ["stopped", "rail.tab.stopped", stopped.length],
           ] as const
         ).map(([key, id, n]) => (
@@ -178,7 +229,24 @@ export function Rail(props: RailProps) {
         ))}
       </div>
 
-      <div className="rail-list" role="tabpanel">
+      <div
+        className="rail-list"
+        role="tabpanel"
+        ref={listRef}
+        onFocusCapture={rememberFocus}
+        onScroll={rememberFocus}
+        onBlurCapture={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget)) return;
+          focusAnchor.current = null;
+          for (const space of [anchorStart.current, anchorSpace.current]) {
+            if (space) {
+              space.hidden = true;
+              space.style.height = "0px";
+            }
+          }
+        }}
+      >
+        <div ref={anchorStart} hidden aria-hidden="true" />
         {tab === "working" &&
           (workingTab.length === 0 ? (
             <p className="rail-empty">{t("rail.empty.working", { visitor: !props.owner })}</p>
@@ -189,6 +257,7 @@ export function Rail(props: RailProps) {
                   <AttemptCard
                     key={item.attempt.id}
                     attempt={item.attempt}
+                    autoHns={autoPanels.get(item.attempt.id)}
                     state={floor}
                     clock={props.clock}
                     visitor={props.visitor}
@@ -205,6 +274,7 @@ export function Rail(props: RailProps) {
                       <AttemptCard
                         key={attempt.id}
                         attempt={attempt}
+                        autoHns={autoPanels.get(attempt.id)}
                         state={floor}
                         clock={props.clock}
                         visitor={props.visitor}
@@ -239,6 +309,7 @@ export function Rail(props: RailProps) {
                     <AttemptCard
                       key={attempt.id}
                       attempt={attempt}
+                      autoHns={autoPanels.get(attempt.id)}
                       state={floor}
                       clock={props.clock}
                       visitor={props.visitor}
@@ -256,6 +327,7 @@ export function Rail(props: RailProps) {
               <AttemptCard
                 key={attempt.id}
                 attempt={attempt}
+                autoHns={autoPanels.get(attempt.id)}
                 state={floor}
                 clock={props.clock}
                 visitor={props.visitor}
@@ -264,6 +336,7 @@ export function Rail(props: RailProps) {
               />
             ))
           ))}
+        <div ref={anchorSpace} hidden aria-hidden="true" />
       </div>
     </aside>
   );

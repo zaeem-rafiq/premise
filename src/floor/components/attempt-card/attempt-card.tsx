@@ -6,9 +6,8 @@
 
 import "./attempt-card.css";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AttemptView, FloorState } from "../../../protocol/reducer/state.ts";
-import { AUTO_EXPAND_MAX } from "../../../protocol/constants.ts";
 import { errorSentence } from "../../../copy/errors.ts";
 import { text } from "../../../copy/strings.ts";
 import { inFlight } from "../../state/derive.ts";
@@ -31,6 +30,8 @@ export type AttemptCardProps = {
   visitor: boolean;
   /** CO10: the compact form the list uses with more than 5 attempt cards. */
   compact?: boolean;
+  /** CO11: the rail allocates its global automatic panel window once per event. */
+  autoHns?: readonly number[];
   /** Opens the attempt's card sheet (`attempt.open_card`, 03 3.2 `held` row). */
   onOpenCard?: (cardId: string) => void;
   /** Opens the Who-relies sheet of a premise row (`who.open`, 03 3.11). */
@@ -148,40 +149,25 @@ export function AttemptCard({
   clock,
   visitor,
   compact = false,
+  autoHns = [],
   onOpenCard,
   onOpenWho,
   onStop,
 }: AttemptCardProps) {
   const model = cardModel(state, attempt, clock, visitor);
   const [expanded, setExpanded] = useState(false);
-  const [autoOpen, setAutoOpen] = useState<number[]>([]);
-  const [manual, setManual] = useState<ReadonlySet<number>>(new Set());
-  const seenHns = useRef(new Set<number>());
-
-  // CO11: a heads-up of result `repair` or `confirm` opens the newest panel by itself; the oldest
-  // auto-opened closes first past AUTO_EXPAND_MAX. A panel the owner touched is left alone.
+  // A touched panel stays in the owner's chosen state, even when the global automatic
+  // window advances. Manual opens do not count against the CO11 cap.
+  const [manual, setManual] = useState<ReadonlyMap<number, boolean>>(new Map());
+  const newestAutoHn = autoHns.length === 0 ? null : Math.max(...autoHns);
   useEffect(() => {
-    const fresh = Object.values(attempt.heads_ups).filter(
-      (headsup) => (headsup.result === "repair" || headsup.result === "confirm") && !seenHns.current.has(headsup.hn),
-    );
-    for (const hn of Object.keys(attempt.heads_ups)) seenHns.current.add(Number(hn));
-    if (fresh.length === 0) return;
-    setExpanded(true);
-    setAutoOpen((list) => [...list, ...fresh.map((headsup) => headsup.hn)].slice(-AUTO_EXPAND_MAX));
-  }, [attempt.heads_ups]);
+    if (newestAutoHn !== null) setExpanded(true);
+  }, [newestAutoHn]);
 
-  const panelOpen = (hn: number): boolean => autoOpen.includes(hn) || manual.has(hn);
+  const panelOpen = (hn: number): boolean => manual.get(hn) ?? autoHns.includes(hn);
   const togglePanel = (hn: number): void => {
-    if (panelOpen(hn)) {
-      setManual((set) => {
-        const next = new Set(set);
-        next.delete(hn);
-        return next;
-      });
-      setAutoOpen((list) => list.filter((open) => open !== hn));
-    } else {
-      setManual((set) => new Set(set).add(hn));
-    }
+    const nextOpen = !panelOpen(hn);
+    setManual((panels) => new Map(panels).set(hn, nextOpen));
   };
 
   const className = compact ? "attempt-card attempt-card--compact" : "attempt-card";
@@ -250,6 +236,12 @@ export function AttemptCard({
             )}
           </span>
         )}
+        {compact &&
+          model.tags.map((tag) => (
+            <span className="attempt-card__tag" key={tag}>
+              {tag}
+            </span>
+          ))}
         {compact && (
           <span className="attempt-card__meta">
             {model.model !== null && <span className="attempt-card__model">{model.model}</span>}
@@ -273,7 +265,7 @@ export function AttemptCard({
           model.line4.text
         )}
       </p>
-      {!compact && model.note !== null && <p className="attempt-card__note">{model.note}</p>}
+      {model.note !== null && <p className="attempt-card__note">{model.note}</p>}
 
       {expanded && (
         <div className="attempt-card__detail">

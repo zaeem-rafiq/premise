@@ -21,16 +21,16 @@ export function PremiseLight({ light, size = "card" }: { light: LightView; size?
       tabIndex={0}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        {light.light === "holds" && <circle cx="12" cy="12" r="7" fill="currentColor" />}
-        {light.light === "changed" && <path d="M12 4 20 12 12 20 4 12Z" fill="currentColor" />}
-        {light.light === "confirm" && <path d="M12 5 20 19 4 19Z" fill="currentColor" />}
+        {light.light === "holds" && <circle cx="12" cy="12" r="10.5" fill="currentColor" />}
+        {light.light === "changed" && <path d="M12 1 23 12 12 23 1 12Z" fill="currentColor" />}
+        {light.light === "confirm" && <path d="M12 1 23 22 1 22Z" fill="currentColor" />}
         {light.light === "blind_spot" && (
-          <circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+          <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" strokeWidth="2.5" />
         )}
         {light.light === "checking" && (
           <>
-            <circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
-            <path d="M12 5.5 A6.5 6.5 0 0 1 12 18.5 Z" fill="currentColor" />
+            <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" strokeWidth="2.5" />
+            <path d="M12 2.75 A9.25 9.25 0 0 1 12 21.25 Z" fill="currentColor" />
           </>
         )}
       </svg>

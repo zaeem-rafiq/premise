@@ -965,6 +965,14 @@ a {
 .card-sheet__lights .light__edit {
   bottom: 8px;
 }
+/* And in the Why card's "What it relied on" rows: the 44px box around the 16px list light. */
+.why-relied__row > .light[tabindex] {
+  width: 44px;
+  height: 44px;
+}
+.why-relied__row .light__edit {
+  bottom: 14px;
+}
 .intent-box .intent-prewritten {
   min-width: 44px;
   min-height: 44px;

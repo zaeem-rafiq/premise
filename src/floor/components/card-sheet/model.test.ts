@@ -503,3 +503,36 @@ describe("cardSheetModel: the race sheet's columns (3.14)", () => {
     expect(must(model.race?.[0]).frameAddress).toEqual({ repo: "main", commit: "c_a1" });
   });
 });
+
+describe.each([false, true])("D36 3.13: choice sheet for visitor=%s", (visitor) => {
+  it("contains only title, at most two sentences and the card options", () => {
+    const state = baseState();
+    openAttempt(state, "a_1", "i_1");
+    const card = heldCard({
+      kind: "choice",
+      title: "This change was sent back 3 times. Try again?",
+      body: ["It was sent back 3 times.", "Try once more or stop?", "An extra sentence."],
+      options: [
+        { id: "retry", label: "Try again" },
+        { id: "stop", label: "Stop" },
+      ],
+      reason: "go_around_limit",
+    });
+    reduce(state, ev("card.opened", { card }));
+    const model = modelOf(state, "k_1", { visitor });
+    expect(model.title).toBe("This change was sent back 3 times. Try again?");
+    expect(model.body).toEqual(["It was sent back 3 times.", "Try once more or stop?"]);
+    expect(model.options.map(({ id, label }) => ({ id, label }))).toEqual(card.options);
+    for (const value of [
+      model.intentLine,
+      model.frames,
+      model.changes,
+      model.affects,
+      model.checked,
+      model.risk,
+      model.reasonLabel,
+    ]) {
+      expect(value).toBeNull();
+    }
+  });
+});

@@ -1,14 +1,15 @@
 /* The Why sheet (2.5): 760 wide on the right edge, over the rail, inside .floor-main.
  * The pool stays visible behind the (unpadded-left) backdrop; the git drawer docks to its left. */
 
-.why-backdrop {
+.sheet-backdrop.why-backdrop {
   justify-content: flex-end;
   align-items: stretch;
   padding: 0;
+  background: transparent;
 }
 
-.why-sheet {
-  width: min(760px, 100%);
+.sheet.why-sheet {
+  width: min(560px, 100%);
   margin: 0;
   border-radius: 0;
   border-top: none;
@@ -28,7 +29,7 @@
 
 .why-head {
   margin: -8px 0 16px;
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .why-section {
@@ -37,10 +38,10 @@
 
 .why-section > h3 {
   margin: 0 0 6px;
-  font-size: var(--size-label, 0.85em);
+  font-size: var(--size-small);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .why-relied,
@@ -61,7 +62,7 @@
 
 .why-relied__flags,
 .why-note {
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .why-undone {
@@ -82,7 +83,7 @@
 }
 
 .why-commit-lines dt {
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .why-commit-lines dd {
@@ -91,13 +92,19 @@
 }
 
 .why-risk__footer {
-  color: var(--text-dim, inherit);
-  font-size: 0.85em;
+  color: var(--muted);
+  font-size: var(--size-small);
 }
 
 /* 2.9: on the narrow layout the sheet is full-screen. */
-@media (max-width: 979px) {
-  .why-sheet {
+@media (max-width: 1099px) {
+  .sheet.why-sheet {
     width: 100%;
+  }
+}
+
+@media (min-width: 1600px) {
+  .sheet.why-sheet {
+    width: 760px;
   }
 }

@@ -22,6 +22,11 @@ const AREA_CSS = `
 /* IR12: with no frame the tiles fill the region — lift the grid's row cap so the cells use
  * the frame's height rather than folding behind the more-cell. */
 .pool-area[data-app="none"] .tiles { --tile-rows: 99; }
+/* 2.1: the caption is 40px. LY5's 44px controls extend 2px past each edge. */
+@media (min-width: 1100px) {
+  .pool-area .pf-caption { height: 40px; flex: none; flex-wrap: nowrap; }
+  .pool-area .pf-caption .pf-btn { height: 44px; padding-block: 0; position: relative; z-index: 1; }
+}
 `;
 
 export type PoolAreaProps = PoolFrameProps & {
@@ -91,7 +96,7 @@ export function PoolArea(props: PoolAreaProps) {
           </div>
         </div>
       ) : (
-        <PoolFrame {...frameProps} />
+        <PoolFrame {...frameProps} selftest={false} />
       )}
       <FileTiles state={props.state} onTileWho={onTileWho} onTileWhy={onTileWhy} />
     </div>

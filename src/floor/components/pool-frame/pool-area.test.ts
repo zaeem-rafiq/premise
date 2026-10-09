@@ -143,3 +143,10 @@ describe("IR12: a pool with app null", () => {
     expect(html).not.toContain('<div class="pool-area" data-app="none"');
   });
 });
+
+it("D39 CO25a/FL10: Floor never shows the Compare self-test badge", () => {
+  const html = markup(seedPoolState(), { selftest: true });
+  expect(html).toContain("Premise · main · the seed, before any landing");
+  expect(html).not.toContain('class="pf-selftest"');
+  expect(html).not.toContain("Self-test, run in this page");
+});

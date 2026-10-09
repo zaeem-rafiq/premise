@@ -73,7 +73,7 @@ const COMPARE_CSS = `
   background: transparent; color: var(--text, #eaf2f4); font: inherit; font-weight: 600;
   cursor: pointer; }
 .cmp-back:focus-visible { outline: 3px solid var(--focus, #ffe08a); outline-offset: 2px; }
-.cmp-thesis { color: var(--muted, #a8bcc6); }
+.cmp-thesis { color: var(--muted); font-size: var(--size-intent); }
 @media (max-width: 1099px) { .cmp { grid-template-columns: minmax(0, 1fr); } }
 /* The shell mounts view.compare as the only child of <main class="floor-body floor-compare">;
  * that body's normal grid is pool-area + rail, so under this class it is a single column and

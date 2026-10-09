@@ -31,7 +31,7 @@
 
 .git-lead {
   margin: 18px 0 8px;
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .git-row {
@@ -44,15 +44,15 @@
 
 .git-row__label {
   min-width: 64px;
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 .git-row__value {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-family: var(--mono, monospace);
-  font-size: var(--size-code, 0.9em);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
 }
 
 .git-copy {
@@ -69,8 +69,8 @@
   overflow-x: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: var(--mono, monospace);
-  font-size: var(--size-code, 0.9em);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
 }
 
 .git-note {
@@ -80,15 +80,22 @@
 
 .git-note-state,
 .git-token {
-  color: var(--text-dim, inherit);
+  color: var(--muted);
 }
 
 /* 2.9: on the narrow layout the drawer covers the sheet slot full-screen. */
-@media (max-width: 979px) {
+@media (max-width: 1099px) {
   .git-drawer {
-    position: fixed;
+    position: absolute;
     inset: 0;
     width: 100%;
     z-index: 30;
+  }
+}
+
+/* 2.8: at laptop widths the drawer occupies the area left of Why. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .git-drawer {
+    width: calc(100% - 560px);
   }
 }

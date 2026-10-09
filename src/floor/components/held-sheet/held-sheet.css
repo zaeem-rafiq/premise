@@ -3,7 +3,14 @@
 
 .held-sheet__frames {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 16px;
-  margin-top: 16px;
+  margin: 16px auto 0;
+  max-width: 1312px;
+}
+
+@media (min-width: 1600px) {
+  .held-sheet__frames {
+    max-width: none;
+  }
 }

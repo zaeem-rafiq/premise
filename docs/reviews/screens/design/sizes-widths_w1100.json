@@ -1,0 +1,14 @@
+{
+  "live": {
+    "scrollWidth": 1100,
+    "innerWidth": 1100,
+    "scrollHeight": 800,
+    "innerHeight": 800,
+    "dataSize": "laptop",
+    "wider": []
+  },
+  "replay": {
+    "scrollWidth": 1100,
+    "innerWidth": 1100
+  }
+}

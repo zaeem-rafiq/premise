@@ -1,0 +1,40 @@
+{
+  "floor": {
+    "synthetic": true,
+    "replay": true
+  },
+  "held-sheet": {
+    "synthetic": true,
+    "replay": true
+  },
+  "compare": {
+    "synthetic": true,
+    "replay": true,
+    "constructed": "Recorded code at landing 4, running now.\nPause\nLoading the pool…\nSelf-test, run in this page: running…\nSame changes, merged by plain git\nConstructed for comparison · through landing 4\nBuilding the plain-merge pool…\nSelf-test, run in this page: running…\nWhat differs\n\"a crab that hides in its…\": its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work.\n\"a shrimp that darts every…\": its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work.\n\nText conflicts in the plain merge: 0 (approximated)\n\nBack to the Floor\n\nGit records only what an agent wrote. Premise also records what it read."
+  },
+  "why": {
+    "synthetic": true,
+    "replay": true
+  },
+  "git": {
+    "synthetic": true,
+    "replay": true
+  },
+  "who": {
+    "synthetic": true,
+    "replay": true
+  },
+  "about": {
+    "synthetic": true,
+    "replay": true,
+    "text": "About this run\nHow it runs\nWorker: this page, the API, and the app server that serves a pool's files by commit\nTrunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main\nAgent (one Durable Object per attempt): the model's tool loop and its whole conversation\nFloor (one Durable Object per pool): the event stream this page draws\nWorkflows: the Swarm\nWorkers AI: the coding models\nArtifacts: main and the notes\nIn this run\n\nReal agents: at most 6 at once, on —.\n\nLanded changes: 4. Go-arounds: 2.\n\nScripted agents (SYNTHETIC): 4. They make no model calls.\n\nConstructed: the plain-merge pool. Trunk builds it from the same changes for comparison.\n\nModel spend: $0.11 of a cap of $0.25.\n\nPage build DVg0E3Gw. Recording made by build c5770c23b752c374470b460ec31f7fabdf06114f.\n\nLimits\nPremise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.\nOne Trunk serves one pool. Agents read and write files of at most 32,768 bytes. A repository with more than 5,000 entries or 24,000,000 bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.\nReal agents are limited by the Workers AI rate limits. This build runs at most 6 at once.\nNumbers in the Swarm view come from scripted agents. They make no model calls.\nThe plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.\nA premise across two pools is not built.\nThe green line is not in this build.\nClef judgments are off in this build.\nNot built: text merge, Python and Go modules, outside agents over MCP, audience input.\nReferences are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.\nA number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.\nPremise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.\nA sweep is recognised from the edits an agent makes, not from the words of the request.\nAfter a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.\nSwitched off in this build: attempt repositories.\nRelated work\n\nSTORM (arXiv 2605.20563), CoAgent (arXiv 2606.15376) and the entry \"dibs\" also check what agents relied on. Premise observes reads at entity, listing and search level, checks them live, and stores the record in git notes.\n\nKeys\nSingle-key shortcuts\n/\tFocus the intent box\nF, S, A\tFloor view, Swarm view, About\nC\tCompare view on and off\nN\tOpen the oldest card that needs the owner\nL\tGo to the Landed tab\nG\tOpen or close the git drawer of the open Why card\nP\tPause or play the pool frames\nK\tOpen the kill switch dialog (owner)\nR\tOpen the default recording (RY26), paused\nT\tSwitch theme\nZ\tSwitch between stage size and laptop size type\n?\tShow this list\nEsc\tClose the sheet, the drawer, or Compare view\nReplay: Space\tPlay or pause\nReplay: 1 to 9\tJump to that chapter\nReplay: ←, →\tPrevious chapter, next chapter\nReplay: ,, .\tSlower, faster\nReplay: 0\tRestart\nCancel"
+  },
+  "swarm": {
+    "synthetic": true,
+    "replay": true
+  },
+  "replay-menu": {
+    "synthetic": true,
+    "replay": true
+  }
+}

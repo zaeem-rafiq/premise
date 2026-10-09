@@ -1,0 +1,34 @@
+{
+  "sizes": [
+    {
+      "state": "light light--changed",
+      "box": 28,
+      "svg": 28,
+      "label": "ENERGY_MAX in world/energy.js: Changed. the agent read it."
+    },
+    {
+      "state": "light light--blind_spot",
+      "box": 28,
+      "svg": 28,
+      "label": "The new code uses FLOOR_Y in world/bounds.js, and the agent never read it."
+    },
+    {
+      "state": "light light--confirm",
+      "box": 28,
+      "svg": 28,
+      "label": "step in world/movement.js: Needs a confirm. the agent read it."
+    },
+    {
+      "state": "light light--checking",
+      "box": 28,
+      "svg": 28,
+      "label": "seconds in world/time.js: Being checked. the agent read it."
+    },
+    {
+      "state": "light light--holds",
+      "box": 28,
+      "svg": 28,
+      "label": "PELLET in world/food.js: Holds. the agent read it."
+    }
+  ]
+}

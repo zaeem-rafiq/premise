@@ -1,0 +1,14 @@
+{
+  "live": {
+    "scrollWidth": 1920,
+    "innerWidth": 1920,
+    "scrollHeight": 1080,
+    "innerHeight": 1080,
+    "dataSize": "stage",
+    "wider": []
+  },
+  "replay": {
+    "scrollWidth": 1920,
+    "innerWidth": 1920
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "live": {
+    "running": [
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash"
+    ],
+    "framePaused": true
+  },
+  "replay": {
+    "running": [
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash",
+      "counter-flash"
+    ],
+    "playButton": "Play"
+  }
+}

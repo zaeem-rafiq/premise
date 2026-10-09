@@ -1,0 +1,227 @@
+{
+  "steps": {
+    "skip-link-first": {
+      "found": true,
+      "presses": 1,
+      "text": "Skip to the attempt cards",
+      "label": "",
+      "cls": "skip-link",
+      "context": ""
+    },
+    "start-card": true,
+    "prewritten-menu": {
+      "found": true,
+      "presses": 34,
+      "text": "Pre-written requestsA01 · a jellyfish that drifts up and downA02 · a seahorse th",
+      "label": "Pre-written requests",
+      "cls": "intent-prewritten",
+      "context": ""
+    },
+    "starter-button": {
+      "found": true,
+      "presses": 1,
+      "text": "Send the starter set (6)",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "starter-posts": 6,
+    "focus-after-starter": "BODY",
+    "box-1s-after-intents": {
+      "note": "Sending…",
+      "readOnly": true
+    },
+    "box-6s-after-intents": {
+      "note": "Sent. Waiting for the pool to show it.",
+      "readOnly": false,
+      "buttons": [
+        "Send:off",
+        "Race 3:off"
+      ]
+    },
+    "race-button": {
+      "found": true,
+      "presses": 3,
+      "text": "Race 3",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "posts-after-race": [
+      {
+        "text": "a jellyfish that drifts up and down",
+        "race": false,
+        "prewritten": true,
+        "request_id": "329e275c-1ee6-49d2-8ed3-6c953aa2cc1a"
+      },
+      {
+        "text": "a starfish that sits on the sand and slowly turns",
+        "race": false,
+        "prewritten": true,
+        "request_id": "76b93e70-510b-43ee-9e20-11a2b913e5d4"
+      },
+      {
+        "text": "a sea urchin on the sand that waves its spines",
+        "race": false,
+        "prewritten": true,
+        "request_id": "430d023b-81e0-48d5-a7a9-866129f9b664"
+      },
+      {
+        "text": "an octopus that is dark at night and bright in the day",
+        "race": false,
+        "prewritten": true,
+        "request_id": "a209fe9a-33a8-4786-9b0d-587a7b016748"
+      },
+      {
+        "text": "a lobster that walks along the sand and turns around at the walls",
+        "race": false,
+        "prewritten": true,
+        "request_id": "22e288f3-0f57-4f7c-99ee-a96cdf9e43a4"
+      },
+      {
+        "text": "a shrimp that darts every two seconds and spends 5 energy on each dart",
+        "race": false,
+        "prewritten": true,
+        "request_id": "5626240d-556d-4fc0-9512-4a0bc62043ad"
+      },
+      {
+        "text": "a crab that hides in its shell when its energy drops below 30",
+        "race": true,
+        "prewritten": true,
+        "request_id": "976e089b-169d-4cce-b1b4-c499e75a471e"
+      }
+    ],
+    "tiles-more": {
+      "found": true,
+      "presses": 32,
+      "text": "+13 more",
+      "label": "",
+      "cls": "tile tile-more",
+      "context": ""
+    },
+    "tile-energy-forward": {
+      "found": false,
+      "presses": 6,
+      "text": "",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "tile-energy": {
+      "found": true,
+      "presses": 13,
+      "text": "energyHeld",
+      "label": "world/energy.js. 4 reading, 1 writing.",
+      "cls": "tile",
+      "context": ""
+    },
+    "tile-menu-focus": "Who relies on this",
+    "who-open": true,
+    "who-energy": {
+      "found": true,
+      "presses": 2,
+      "text": "ENERGY_MAX",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "held-open": {
+      "found": true,
+      "presses": 49,
+      "text": "Open",
+      "label": "",
+      "cls": "",
+      "context": "This change touches shared rules. Land it?Open"
+    },
+    "held-sheet-focus": "card-sheet",
+    "land-button": {
+      "found": false,
+      "presses": 30,
+      "text": "",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "posts-after-land": 9,
+    "choose-button": {
+      "found": true,
+      "presses": 34,
+      "text": "Choose this one",
+      "label": "",
+      "cls": "primary",
+      "context": "gpt-oss-120bRelies on7 of 7 checks passed.Took 48 s · Cost $0.01Would send back: 0 changesChoose this one"
+    },
+    "posts-after-choose": 10,
+    "compare": true,
+    "beat5-card-open": 0,
+    "beat5-sheet": false,
+    "landed-row": {
+      "found": true,
+      "presses": 39,
+      "text": "landing 8\"a crab that hides in its…\" (glm-5.3-flash)12:03:16",
+      "label": "",
+      "cls": "landed-row",
+      "context": "landing 8\"a crab that hides in its…\" (glm-5.3-flash)12:03:16"
+    },
+    "why-open": true,
+    "git-open": true,
+    "focus-after-esc": "landed-row",
+    "landed-row-shared": {
+      "found": true,
+      "presses": 37,
+      "text": "landing 7\"make energy a fraction from…\"12:02:41",
+      "label": "",
+      "cls": "landed-row",
+      "context": "landing 7\"make energy a fraction from…\"12:02:41"
+    },
+    "undo-button": {
+      "found": true,
+      "presses": 9,
+      "text": "Undo",
+      "label": "",
+      "cls": "why-undo",
+      "context": ""
+    },
+    "undo-sheet": true,
+    "undo-confirm": {
+      "found": true,
+      "presses": 3,
+      "text": "Undo it",
+      "label": "",
+      "cls": "primary",
+      "context": ""
+    },
+    "posts-after-undo": 11,
+    "owner-button": {
+      "found": true,
+      "presses": 6,
+      "text": "Owner",
+      "label": "",
+      "cls": "owner-button",
+      "context": ""
+    },
+    "lock-button": {
+      "found": true,
+      "presses": 2,
+      "text": "Lock",
+      "label": "",
+      "cls": "",
+      "context": ""
+    },
+    "visitor": "Visitor",
+    "replay-opened-paused": "Play"
+  },
+  "posts": [
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/intents",
+    "http://localhost:4273/api/pools/tidepool/cards/k_R01",
+    "http://localhost:4273/api/pools/tidepool/cards/k_race",
+    "http://localhost:4273/api/pools/tidepool/undo"
+  ]
+}

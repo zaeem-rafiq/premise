@@ -1,0 +1,41 @@
+{
+  "frames": [
+    {
+      "tag": "div",
+      "width": 696,
+      "height": 392
+    },
+    {
+      "tag": "iframe",
+      "width": 694,
+      "height": 390
+    },
+    {
+      "tag": "iframe",
+      "width": 694,
+      "height": 390
+    }
+  ],
+  "voiceover": {
+    "intentText": [],
+    "statusWords": [],
+    "counters": [
+      32,
+      32,
+      32,
+      32
+    ],
+    "bannerWords": [],
+    "cardSheetTitle": [],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [],
+    "swarmNumbers": [],
+    "frameCaption": [
+      16
+    ],
+    "thesis": [
+      16
+    ]
+  },
+  "toastsOverThesis": "toast"
+}

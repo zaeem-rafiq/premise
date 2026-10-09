@@ -1,0 +1,21 @@
+{
+  "owner": "Owner",
+  "startCard": true,
+  "intentRow": [
+    {
+      "text": "Send the starter set (6)",
+      "width": 230,
+      "height": 54
+    },
+    {
+      "text": "Send",
+      "width": 77,
+      "height": 54
+    },
+    {
+      "text": "Race 3",
+      "width": 81,
+      "height": 54
+    }
+  ]
+}

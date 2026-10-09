@@ -1,0 +1,152 @@
+{
+  "regions": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "dataSize": "laptop",
+    "scroll": {
+      "width": 1440,
+      "height": 900
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 56
+    },
+    "strip": {
+      "x": 0,
+      "y": 56,
+      "width": 1440,
+      "height": 60
+    },
+    "banners": [],
+    "body": {
+      "x": 0,
+      "y": 116,
+      "width": 1440,
+      "height": 784
+    },
+    "bodyPadding": "16px",
+    "bodyGap": "16px",
+    "poolColumn": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 752
+    },
+    "caption": {
+      "x": 16,
+      "y": 132,
+      "width": 832,
+      "height": 44
+    },
+    "frame": {
+      "x": 16,
+      "y": 176,
+      "width": 832,
+      "height": 468
+    },
+    "tiles": {
+      "x": 16,
+      "y": 652,
+      "width": 832,
+      "height": 200
+    },
+    "tileCells": 16,
+    "rail": {
+      "x": 864,
+      "y": 132,
+      "width": 560,
+      "height": 752
+    },
+    "replayBar": null,
+    "sheet": {
+      "x": 720,
+      "y": 132,
+      "width": 720,
+      "height": 752
+    },
+    "sheetFrames": [],
+    "gitDrawer": {
+      "x": 0,
+      "y": 132,
+      "width": 720,
+      "height": 752
+    }
+  },
+  "audit": {
+    "smallTargets": [
+      {
+        "what": "select.intent-prewritten \"Pre-written requestsA01 · a jellyfish th\"",
+        "width": 168,
+        "height": 33
+      },
+      {
+        "what": "span.light \"the list of files in creatures/: Holds. the agent read it.\"",
+        "width": 20,
+        "height": 20
+      },
+      {
+        "what": "span.light \"ENERGY_MAX in world/energy.js: Holds. the agent read it, the new code uses it.\"",
+        "width": 20,
+        "height": 20
+      },
+      {
+        "what": "span.light \"FLOOR_Y in world/bounds.js: Holds. the agent read it.\"",
+        "width": 20,
+        "height": 20
+      },
+      {
+        "what": "span.light \"step in world/movement.js: Holds. the agent read it.\"",
+        "width": 20,
+        "height": 20
+      },
+      {
+        "what": "span.light \"the file creatures/crab.js: Holds. this change edits it.\"",
+        "width": 20,
+        "height": 20
+      },
+      {
+        "what": "span.light \"the list of files in creatures/\"",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "what": "span.light \"ENERGY_MAX in world/energy.js\"",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "what": "span.light \"FLOOR_Y in world/bounds.js\"",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "what": "span.light \"step in world/movement.js\"",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "what": "span.light \"the file creatures/crab.js\"",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "what": "summary. \"Show the checks\"",
+        "width": 670,
+        "height": 21
+      }
+    ],
+    "smallText": [
+      "13.6px h3. \"Who asked\"",
+      "13.6px h3. \"Who wrote it\"",
+      "13.6px h3. \"What it relied on\"",
+      "13.6px h3. \"What changed under it\"",
+      "13.6px h3. \"What was checked\"",
+      "13.6px h3. \"How it landed\"",
+      "13.6px h3. \"What it changed\""
+    ]
+  }
+}

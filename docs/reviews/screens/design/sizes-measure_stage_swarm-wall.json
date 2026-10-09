@@ -1,0 +1,11 @@
+{
+  "wall": {
+    "height": 906.34375,
+    "tiles": 256,
+    "firstTile": 117.328125
+  },
+  "view": {
+    "scrollHeight": 1368,
+    "clientHeight": 904
+  }
+}

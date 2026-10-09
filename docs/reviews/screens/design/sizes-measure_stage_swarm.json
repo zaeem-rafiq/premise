@@ -1,0 +1,79 @@
+{
+  "sockets": [
+    "ws://localhost:4273/api/pools/tidepool/stream"
+  ],
+  "regions": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "dataSize": "stage",
+    "scroll": {
+      "width": 1920,
+      "height": 1080
+    },
+    "header": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 64
+    },
+    "strip": {
+      "x": 0,
+      "y": 64,
+      "width": 1920,
+      "height": 72
+    },
+    "banners": [
+      {
+        "tone": "synthetic",
+        "x": 0,
+        "y": 136,
+        "width": 1920,
+        "height": 40
+      }
+    ],
+    "body": {
+      "x": 0,
+      "y": 176,
+      "width": 1920,
+      "height": 904
+    },
+    "bodyPadding": "24px",
+    "bodyGap": "24px",
+    "poolColumn": null,
+    "caption": null,
+    "frame": null,
+    "tiles": null,
+    "tileCells": 0,
+    "rail": null,
+    "replayBar": null,
+    "sheet": null,
+    "sheetFrames": [],
+    "gitDrawer": null
+  },
+  "voiceover": {
+    "intentText": [],
+    "statusWords": [],
+    "counters": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "bannerWords": [
+      24
+    ],
+    "cardSheetTitle": [],
+    "sheetTitle": [],
+    "headsupBeforeAfter": [],
+    "swarmNumbers": [
+      112,
+      112,
+      112,
+      112
+    ],
+    "frameCaption": [],
+    "thesis": []
+  }
+}

@@ -43,7 +43,13 @@ for (const theme of ["dark", "light"]) {
     const masks: number[][] = [];
     for (const state of states) {
       const light = page.locator(`.attempt-card__lights .light--${state}`);
-      await expect(light).toHaveCSS("width", "28px");
+      // VD16 and CO15: the drawn shape, the light's SVG, is 28 across on a full attempt card.
+      // LY5: the light itself is the tap target, at least 44x44 around that shape (D40).
+      await expect(light.locator("svg")).toHaveCSS("width", "28px");
+      await expect(light.locator("svg")).toHaveCSS("height", "28px");
+      const target = await light.boundingBox();
+      expect(target!.width).toBeGreaterThanOrEqual(44);
+      expect(target!.height).toBeGreaterThanOrEqual(44);
       const pixels = await light.locator("svg").evaluate(async (svg) => {
         const copy = svg.cloneNode(true) as SVGElement;
         copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");

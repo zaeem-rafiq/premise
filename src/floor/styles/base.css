@@ -5,7 +5,8 @@
  *
  * The layout picks its sizes from the window width: stage from 1600, the laptop layout
  * from 1100 to 1599, the narrow single column below 1100 (2.8, 2.9). Region heights are
- * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 56/48. */
+ * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 108/96 (its
+ * transport row 56/48 and its chapter row 52/48). */
 
 :root {
   --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -19,6 +20,7 @@
   --banner-h: 36px;
   --strip-h: 60px;
   --replay-h: 48px;
+  --replay-chapters-h: 48px;
   --body-gap: 16px;
   --body-pad: 16px;
 }
@@ -89,6 +91,7 @@
     --banner-h: 40px;
     --strip-h: 72px;
     --replay-h: 56px;
+    --replay-chapters-h: 52px;
     --body-gap: 24px;
     --body-pad: 24px;
   }
@@ -540,6 +543,12 @@ a {
   .strip-value--text {
     white-space: nowrap;
   }
+  /* 6.2: a counter's line height is 1.0. At 0.8 the agents value, which shares the first
+   * line with its label and puts the limit sentence on the second, stood above the 60 px
+   * cell and was clipped at its top. */
+  .strip-value:not(.strip-value--text) {
+    line-height: 1;
+  }
 }
 /* 2.2: at stage width every cell reads label over value - the label on one line, the
  * value and its sub-line on the next. Every cell starts at the same height, so the labels
@@ -619,14 +628,6 @@ a {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  gap: 8px;
-}
-.frame-under {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  min-height: 24px;
-  flex: none;
 }
 /* The start card overlays the pool area (RY23); `.pool-stage` is its positioned box. */
 .pool-stage {
@@ -645,32 +646,6 @@ a {
   position: absolute;
   inset: auto;
   pointer-events: auto;
-}
-.green-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--size-small);
-  color: var(--muted);
-}
-.green-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--holds);
-  background: var(--holds);
-}
-.green-line[data-tone="checking"] .green-dot {
-  border-color: var(--checking);
-  background: transparent;
-}
-.green-line[data-tone="changed"] .green-dot {
-  border-color: var(--changed);
-  background: var(--changed);
-}
-.green-line[data-tone="neutral"] .green-dot {
-  border-color: var(--control);
-  background: transparent;
 }
 
 /* VD15: the frame's caption text is read at stage size 22 (the pool frame's own styles
@@ -981,99 +956,26 @@ a {
 .attempt-card .light--list .light__edit {
   bottom: 14px;
 }
+/* LY5 in the card sheet too: its lights are the same focus and tap targets, so each gets the
+ * 44px box around its 28px drawn shape. The row's gap keeps wrapped boxes apart. */
+.card-sheet__lights > .light[tabindex] {
+  width: 44px;
+  height: 44px;
+}
+.card-sheet__lights .light__edit {
+  bottom: 8px;
+}
+/* And in the Why card's "What it relied on" rows: the 44px box around the 16px list light. */
+.why-relied__row > .light[tabindex] {
+  width: 44px;
+  height: 44px;
+}
+.why-relied__row .light__edit {
+  bottom: 14px;
+}
 .intent-box .intent-prewritten {
   min-width: 44px;
   min-height: 44px;
-}
-
-/* ---- The Replay bar (2.7, 3.16): fixed height; the caption wraps or is cut with an
- * ellipsis so the right-hand controls are always fully visible. ---- */
-.replay-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 14px;
-  height: var(--replay-h);
-  padding: 0 16px;
-  background: var(--surface);
-  border-top: 3px dotted var(--control);
-  overflow: hidden;
-  flex: none;
-}
-.replay-buttons {
-  display: flex;
-  gap: 8px;
-  flex: none;
-}
-.replay-position {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--size-status);
-  font-weight: 600;
-  white-space: nowrap;
-  flex: none;
-}
-.replay-track-wrap {
-  flex: 1 1 auto;
-  position: relative;
-  min-width: 60px;
-}
-.replay-track {
-  width: 100%;
-}
-.replay-marks {
-  position: relative;
-  height: 22px;
-}
-.replay-mark {
-  position: absolute;
-  transform: translateX(-50%);
-  min-height: 22px;
-  min-width: 22px;
-  padding: 0 4px;
-  font-size: var(--size-small);
-  font-family: var(--font-mono);
-}
-.replay-caption {
-  color: var(--muted);
-  font-size: var(--size-small);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.replay-skipped {
-  color: var(--confirm);
-  font-size: var(--size-small);
-  flex: none;
-}
-.replay-ended {
-  font-size: var(--size-small);
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-.replay-speed,
-.replay-close {
-  white-space: nowrap;
-  flex: none;
-}
-
-/* RY19: at the recording's end the bar holds the ended controls, the position and the
- * track. The track never takes less than half the bar - on a width where that would not
- * fit beside the controls, it wraps to a row of its own and the bar grows the row. */
-.replay-bar[data-ended] {
-  flex-wrap: wrap;
-  height: auto;
-  min-height: var(--replay-h);
-  row-gap: 8px;
-}
-.replay-bar[data-ended] .replay-track-wrap {
-  /* The bar's padding is 16 px a side: 50% of the content width + 16 px is half of the
-   * whole bar. Where less than that is left beside the controls the track wraps. */
-  min-width: calc(50% + 16px);
 }
 
 /* ---- Toasts (3.19): bottom left, at most three ---- */
@@ -1222,9 +1124,6 @@ a {
   .floor-body .pool-stage {
     order: 3;
   }
-  .floor-body .frame-under {
-    order: 4;
-  }
   .floor-body .tabs {
     order: 5;
     border-top: var(--border) solid var(--line);
@@ -1239,13 +1138,6 @@ a {
     background: var(--surface);
     border: var(--border) solid var(--line);
     border-radius: var(--radius);
-  }
-  .replay-bar {
-    height: auto;
-    min-height: var(--replay-h);
-    flex-wrap: wrap;
-    padding: 8px 12px;
-    row-gap: 8px;
   }
   /* 2.9: sheets are full-screen. */
   .sheet-backdrop {

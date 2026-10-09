@@ -9,7 +9,7 @@
 // host gives no `onBack`, the Back button dispatches the same key the shell binds to
 // view-compare (`c` of 6.6) — the view closes by the spec's own route.
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
 import type { CopyVars } from "../../../copy/fill.ts";
 import { text } from "../../../copy/strings.ts";
@@ -98,6 +98,25 @@ export function Compare(props: CompareProps) {
   const sameAsLanded = useMemo(() => plainSameAsLanded(state), [state]);
   const conflicts = conflictCount(state);
 
+  // CO25a: the self-test probe goes out "when both frames have reported stats, and after
+  // every swap while Compare view is open". Until both have spoken, each badge reads
+  // `selftest.running`; from then on each frame is asked once per version it reports.
+  const [reported, setReported] = useState({ main: false, plain: false });
+  const frameStats = useCallback(
+    (frame: string, stats: FrameStats, atMs: number) => {
+      onFrameStats?.(frame, stats, atMs);
+      setReported((seen) =>
+        frame === "main" && !seen.main
+          ? { ...seen, main: true }
+          : frame === "plain" && !seen.plain
+            ? { ...seen, plain: true }
+            : seen,
+      );
+    },
+    [onFrameStats],
+  );
+  const bothReported = reported.main && reported.plain;
+
   adoptCss(COMPARE_CSS);
   return (
     <div className="cmp">
@@ -108,8 +127,9 @@ export function Compare(props: CompareProps) {
           mode={mode}
           paused={paused}
           onPausedChange={onPausedChange}
-          onFrameStats={onFrameStats}
+          onFrameStats={frameStats}
           selftest
+          selftestReady={bothReported}
           seed={seed}
           name="main"
         />
@@ -120,8 +140,9 @@ export function Compare(props: CompareProps) {
           state={state}
           mode={mode}
           paused={paused}
-          onFrameStats={onFrameStats}
+          onFrameStats={frameStats}
           selftest
+          selftestReady={bothReported}
           seed={seed}
           name="plain"
         />

@@ -119,9 +119,7 @@ export function SwarmView({
           )}
           {swarm.running && waitingSince !== null && (
             <p className="swarm-final">
-              {swarmDidNotStart(waitingSince, clock)
-                ? t("swarm.no_agents")
-                : t("swarm.starting", { n: count(swarm.agents) })}
+              {swarmDidNotStart(waitingSince, clock) ? t("swarm.no_agents") : t("swarm.starting", { n: swarm.agents })}
             </p>
           )}
           <SwarmNumbers floor={floor} />
@@ -163,7 +161,7 @@ export function SwarmView({
           {swarm?.running ? (
             <button type="button" disabled={busy || blocked || offline} onClick={() => void send(false)}>
               {pending === "start"
-                ? t("swarm.starting", { n: count(agents) })
+                ? t("swarm.starting", { n: agents })
                 : pending === "stop"
                   ? t("swarm.stopping")
                   : t("swarm.stop")}
@@ -171,7 +169,7 @@ export function SwarmView({
           ) : (
             <button type="button" disabled={busy || blocked || offline} onClick={() => void send(true)}>
               {pending === "start"
-                ? t("swarm.starting", { n: count(agents) })
+                ? t("swarm.starting", { n: agents })
                 : pending === "stop"
                   ? t("swarm.stopping")
                   : t("swarm.start")}
@@ -181,11 +179,9 @@ export function SwarmView({
           {error !== null && <p className="field-error">{error}</p>}
         </div>
       )}
-      <p className="swarm-real-limit">{t("swarm.real_limit", { max: count(mainPool.max_real_agents) })}</p>
+      <p className="swarm-real-limit">{t("swarm.real_limit", { max: mainPool.max_real_agents })}</p>
       {swarm !== null && (
-        <p className="swarm-shape">
-          {t("swarm.shape", { pools: count(swarm.pools.length), agents: count(swarm.agents) })}
-        </p>
+        <p className="swarm-shape">{t("swarm.shape", { pools: swarm.pools.length, agents: swarm.agents })}</p>
       )}
       <p className="swarm-repair">{t("swarm.repair_note")}</p>
     </div>

@@ -212,6 +212,10 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
     });
     await page.goto(`/p/${POOL}`);
     await openSwarm(page);
+    // Swarm view reads the Swarm pool's own stream (D7), which answers after the view opens.
+    // CO44a: once its swarm.state is in, the controls show that state's agent count and dial.
+    await expect(page.locator(".swarm-controls .swarm-agent-count")).toHaveText("7");
+    await expect(page.locator('.swarm-controls input[type="range"]')).toHaveValue("0.3");
 
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect.poll(() => posts.length).toBe(1);

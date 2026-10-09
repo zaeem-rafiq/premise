@@ -14,6 +14,7 @@ import { whoKinds, whoPickList, whoRelies } from "../../../protocol/reducer/who-
 import { ShellContext } from "../../app/context.ts";
 import { FLOOR_KEEP_LANDINGS } from "../../../protocol/constants.ts";
 import { changeName, keyLabel, keyShort } from "../../../copy/names.ts";
+import { landingLabel } from "../../../copy/format.ts";
 import { statusOf } from "../attempt-card/model.ts";
 import type { AttemptView } from "../../../protocol/reducer/state.ts";
 import { lightFlagWords } from "./model.ts";
@@ -159,7 +160,7 @@ export function WhoSheet({ floor, kind_, whoKey, onClose, onOpenWhy, onOpenAttem
                   <li key={row.seq}>
                     <button type="button" className="who-row" onClick={() => onOpenWhy?.(row.seq)}>
                       <span className="who-row__name" dir="auto">
-                        {`landing ${row.seq} ${landingName(floor, row.seq)}`}
+                        {`${landingLabel(row.seq)} ${landingName(floor, row.seq)}`}
                       </span>
                     </button>
                   </li>

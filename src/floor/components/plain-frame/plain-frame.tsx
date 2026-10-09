@@ -37,6 +37,9 @@ export type PlainFrameProps = {
   /** CO25a: run the pool's self-test in this frame and show its badge under it. In the Compare
    * view it is always on — the badge is how the constructed pool shows a verdict. */
   selftest?: boolean;
+  /** CO25a: the self-test probe waits until this is true - Compare view sets it once both of
+   * its frames have reported `stats`. The badge reads `selftest.running` meanwhile. Default true. */
+  selftestReady?: boolean;
   /** The world seed of the pool page (Compare gives both frames one seed, CO24a). */
   seed?: number;
   /** The `ViewState.frames` key this frame reports under (default "plain"). */
@@ -185,9 +188,9 @@ export function PlainFrame(props: PlainFrameProps) {
   // slice — pause goes first so a `paused` page parameter lands on the first load (AC11).
   useEffect(() => {
     driver.setUserPaused(paused);
-    driver.setSelftest(props.selftest === true);
+    driver.setSelftest(props.selftest === true && props.selftestReady !== false);
     driver.setTarget({ plainCommit: state.plain?.commit ?? null });
-  }, [driver, paused, props.selftest, state.plain]);
+  }, [driver, paused, props.selftest, props.selftestReady, state.plain]);
 
   useEffect(() => {
     const onBlur = () => setFrameFocus(document.activeElement === iframeRef.current);

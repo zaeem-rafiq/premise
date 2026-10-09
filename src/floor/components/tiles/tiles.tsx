@@ -141,9 +141,10 @@ export function FileTiles(props: FileTilesProps) {
       const cap = parseFloat(gs.getPropertyValue("--tile-rows")) || 2;
       const toggle = section.querySelector<HTMLElement>(".tiles-toggle");
       const toggleH = toggle !== null && toggle.offsetParent !== null ? toggle.offsetHeight + 6 : 0;
+      // The region's top padding (the pool area's spacing under the frame) holds no row.
+      const room = section.clientHeight - (parseFloat(getComputedStyle(section).paddingTop) || 0);
       const cols = Math.max(1, Math.floor((el.clientWidth + gap) / (tw + gap)));
-      const rowsFit =
-        section.clientHeight <= 0 ? cap : Math.max(1, Math.floor((section.clientHeight - toggleH + gap) / (th + gap)));
+      const rowsFit = section.clientHeight <= 0 ? cap : Math.max(1, Math.floor((room - toggleH + gap) / (th + gap)));
       const rows = Math.min(cap, rowsFit);
       setCapacity(cols * rows);
     };

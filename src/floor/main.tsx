@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import type { FloorJson } from "../protocol/floor-json.ts";
 import { registry } from "./app/registry.ts";
 import { FloorApp } from "./app/app.tsx";
+import { text } from "../copy/strings.ts";
 import "./styles/base.css";
 
 async function loadSettings(): Promise<FloorJson | null> {
@@ -30,7 +31,7 @@ void loadSettings().then((settings) => {
     <StrictMode>
       {settings === null ? (
         <main className="floor-body floor-loading">
-          <p className="floor-loading-line">Premise could not load its settings. Reload the page.</p>
+          <p className="floor-loading-line">{text("app.settings_failed")}</p>
         </main>
       ) : (
         <FloorApp settings={settings} table={registry()} />

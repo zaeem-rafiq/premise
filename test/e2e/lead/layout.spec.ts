@@ -57,23 +57,48 @@ async function box(locator: Locator): Promise<{ x: number; y: number; width: num
 }
 
 const SIZES = [
-  { name: "stage", w: 1920, h: 1080, poolW: 1152, frameH: 648, railW: 696 },
-  { name: "laptop", w: 1440, h: 900, poolW: 832, frameH: 468, railW: 560 },
+  { name: "stage", w: 1920, h: 1080, poolW: 1152, frameH: 648, railW: 696, header: 64, strip: 72, banner: 40, pad: 24 },
+  { name: "laptop", w: 1440, h: 900, poolW: 832, frameH: 468, railW: 560, header: 56, strip: 60, banner: 36, pad: 16 },
 ] as const;
 
-// 2.1/LY1: at both sizes the pool frame is 16:9 at the pool column's full width, in the
-// recording and over a live stream. The pool column uses the body's full height.
+/** 2.1 as amended on 2026-10-09: the Replay bar is two rows, the transport row (56, laptop 48)
+ * above the chapter row (52, laptop 48). */
+const REPLAY_BAR = { stage: { transport: 56, chapters: 52 }, laptop: { transport: 48, chapters: 48 } } as const;
+
+/** The frame LY1 leaves in Replay, by 2.1's own sums: the REPLAY banner and the Replay bar take
+ * height from the body (LY2); the pool area is the body less its padding, and holds the caption
+ * bar (40), the frame and at least one row of tiles (64). The frame keeps 16:9 and shrinks only
+ * when its full width would leave the tiles less than that row. */
+function replayFrame(size: (typeof SIZES)[number]): { width: number; height: number } {
+  const bar = REPLAY_BAR[size.name].transport + REPLAY_BAR[size.name].chapters;
+  const area = size.h - size.header - size.strip - size.banner - bar - 2 * size.pad;
+  const height = Math.min(size.frameH, area - 40 - 64);
+  return { width: (height * 16) / 9, height };
+}
+
+// 2.1/LY1: the pool frame is 16:9; over a live stream it has the pool column's full width, and
+// in the recording it is what LY1 leaves under the REPLAY banner and the two-row Replay bar
+// (stage 1145x644, laptop 832x468). The pool column uses the body's full height.
 for (const size of SIZES) {
-  test(`the pool frame is ${size.poolW}x${size.frameH} at ${size.name} in Replay (2.1/LY1)`, async ({ page }) => {
+  const frame = replayFrame(size);
+  test(`the pool frame is ${Math.round(frame.width)}x${frame.height} at ${size.name} in Replay (2.1/LY1)`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: size.w, height: size.h });
     await servePoolHost(page);
     await page.goto("/replay/hero-c04");
     await expect(page.locator(".rail")).toBeVisible();
     await expect(page.locator(".tiles-grid .tile").first()).toBeVisible();
 
+    const bar = await box(page.locator(".replay-bar"));
+    const rows = REPLAY_BAR[size.name];
+    expect(Math.abs(bar.height - (rows.transport + rows.chapters))).toBeLessThanOrEqual(1);
     const body = await box(page.locator(".pf-body"));
-    expect(Math.abs(body.width - size.poolW)).toBeLessThanOrEqual(1);
-    expect(Math.abs(body.height - size.frameH)).toBeLessThanOrEqual(1);
+    expect(Math.abs(body.width - frame.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(body.height - frame.height)).toBeLessThanOrEqual(1);
+    // LY1: a frame narrower than the pool area is centred in it.
+    const area = await box(page.locator(".pool-area"));
+    expect(Math.abs(body.x + body.width / 2 - (area.x + area.width / 2))).toBeLessThanOrEqual(1);
 
     // The rail takes its 2.1 width and the strip its height.
     const rail = await box(page.locator(".rail"));

@@ -319,10 +319,15 @@ describe("ReplayPlayer (RY13 to RY19)", () => {
     const p = new ReplayPlayer({ header: {} as ReplayHeader, events }, timers, { speed: 1 });
     timers.advance(2_500); // the 60 s gap is jumped: the clock lands 2 s before event 2
     expect(p.snapshot().applied).toBe(3);
-    expect(p.snapshot().skipped).toBe(true);
     expect(p.snapshot().clock).toBe(60_100);
+    // D27: the snapshot says how much recorded time the jump skipped - the 60 s gap less the
+    // 2 s RY14 keeps, less what the clock had played before it (under the 2.5 s advanced).
+    const skipped = p.snapshot().skipped;
+    expect(skipped).not.toBeNull();
+    expect(skipped!).toBeGreaterThan(60_000 - 2_000 - 2_500);
+    expect(skipped!).toBeLessThanOrEqual(60_000 - 2_000);
     timers.advance(10_000); // the `replay.skipped` note leaves after its 3 s (RY14)
-    expect(p.snapshot().skipped).toBe(false);
+    expect(p.snapshot().skipped).toBeNull();
   });
 
   it("speed 4 applies the same events in a quarter of the real time (RY15)", () => {

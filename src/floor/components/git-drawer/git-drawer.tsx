@@ -67,9 +67,9 @@ export function GitDrawer({ floor, card, noteState, note, onClose }: GitDrawerPr
       </header>
 
       <p className="git-lead">{t("git.commit_is")}</p>
-      {card.commit !== null && <IdRow label="commit" value={card.commit} />}
-      {card.parentCommit !== null && <IdRow label="parent" value={card.parentCommit} />}
-      {card.tree !== null && <IdRow label="tree" value={card.tree} />}
+      {card.commit !== null && <IdRow label={t("git.commit")} value={card.commit} />}
+      {card.parentCommit !== null && <IdRow label={t("git.parent")} value={card.parentCommit} />}
+      {card.tree !== null && <IdRow label={t("git.tree")} value={card.tree} />}
 
       <pre className="git-message" dir="auto">
         {commitMessage(floor, card)}

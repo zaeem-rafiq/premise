@@ -13,6 +13,7 @@ import type { FloorState } from "../../protocol/reducer/state.ts";
 import type { RegistryEntry, RegistryTable } from "./registry.ts";
 import { parseRoute, poolRoute, type Route } from "./route.ts";
 import { showStartCard } from "./start-card.ts";
+import { needsCards } from "./needs.ts";
 import { ShellContext, makeShell } from "./context.ts";
 import { pauseNextReplay, useSession } from "./session.ts";
 import { useKeys, type KeyEvent } from "../keys/keys.ts";
@@ -308,8 +309,10 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
     [allow, openSheet],
   );
 
+  // 3.19/CO38: the badge and key N open the oldest card that can be answered - not a race
+  // card whose candidates are all still working.
   const openNeeds = useCallback(() => {
-    const cardId = session.floor.open_cards[0];
+    const cardId = needsCards(session.floor)[0];
     if (cardId !== undefined) openSheet({ kind: "card", card_id: cardId });
   }, [session.floor, openSheet]);
 
@@ -424,10 +427,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   // fallback while the kind is undecided.
   const headerPool = floor.pool.app === null && floor.pool.source !== null ? floor.pool.source : pool;
   const clock = session.clock.time();
-  const needs = floor.open_cards.filter((id) => {
-    const card = floor.cards[id]?.card;
-    return card !== undefined && card.options.length > 0;
-  }).length;
+  const needs = needsCards(floor).length;
 
   const bannerOpts = {
     replay: {

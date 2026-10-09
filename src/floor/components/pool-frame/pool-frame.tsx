@@ -53,6 +53,9 @@ export type PoolFrameProps = {
   /** CO25a: run the pool's self-test in this frame and show its badge under it (Compare turns
    * it on; the Floor view's frame leaves it off). */
   selftest?: boolean;
+  /** CO25a: the self-test probe waits until this is true - Compare view sets it once both of
+   * its frames have reported `stats`. The badge reads `selftest.running` meanwhile. Default true. */
+  selftestReady?: boolean;
   /** The world seed of the pool page (default HOST_SEED; Compare shares one seed, CO24a). */
   seed?: number;
   /** The `ViewState.frames` key this frame reports under (default "main"). */
@@ -215,7 +218,7 @@ export function PoolFrame(props: PoolFrameProps) {
   useEffect(() => {
     driver.setUserPaused(paused);
     driver.setHighlight(highlightKinds(props.highlight ?? []), props.highlight !== undefined);
-    driver.setSelftest(props.selftest === true);
+    driver.setSelftest(props.selftest === true && props.selftestReady !== false);
     // IR12: the first live load waits for the stream's first `pool.state` — a pool made from
     // a repository has no live picture, so no speculative `/pool/{pool}/main/` request may go
     // out while the kind is undecided. The driver lapses the wait at the page's lost-connection
@@ -232,6 +235,7 @@ export function PoolFrame(props: PoolFrameProps) {
     paused,
     props.highlight,
     props.selftest,
+    props.selftestReady,
     state.pool.landed_commit,
     state.pool.state,
     state.green.commit,

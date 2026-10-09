@@ -503,6 +503,48 @@ test.describe("the Compare view", () => {
     expect(badgeTexts.join(" ")).not.toContain("running");
   });
 
+  test("CO25a: no self-test probe until both frames have reported stats; then each frame gets one", async ({
+    page,
+  }) => {
+    await serveCompare(page);
+    // The plain pool's page stays silent until the test lets it speak (registered last, so it
+    // wins over the harness's route for every /pool/ page).
+    await page.route("**/pool/tidepool/plain/**", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: POOL_PAGE.replace("window.__silent = false;", "window.__silent = true;"),
+      });
+    });
+    await send(page, baseStream());
+    await openCompare(page);
+    // The main frame reports stats beat after beat; the plain frame has not reported yet.
+    await expect
+      .poll(
+        async () =>
+          (await poolFrame(page, "main")?.evaluate(() => (window as never as { __tick: number }).__tick)) ?? 0,
+      )
+      .toBeGreaterThan(3);
+    await expect.poll(async () => poolFrame(page, "plain") !== undefined).toBe(true);
+    expect(await poolFrame(page, "plain")!.evaluate(() => (window as never as { __tick: number }).__tick)).toBe(0);
+    // CO25a: "When both frames have reported stats ... the Floor posts { type: probe, selftest:
+    // true } to each frame" - not before. Until then each badge reads selftest.running.
+    expect((await liveLog(page, "main"))!.filter((m) => m.selftest === true)).toEqual([]);
+    await expect(page.locator(".pf-selftest")).toHaveText("Self-test, run in this page: running…");
+    await expect(page.locator(".plf-selftest")).toHaveText("Self-test, run in this page: running…");
+
+    // The plain frame speaks: now each frame is asked once and each badge gets its verdict.
+    await poolFrame(page, "plain")!.evaluate(() => {
+      (window as never as { __silent: boolean }).__silent = false;
+    });
+    for (const source of ["main", "plain"] as const) {
+      await expect
+        .poll(async () => (await logOf(page, source))?.filter((m) => m.type === "probe" && m.selftest === true).length)
+        .toBe(1);
+    }
+    await expect(page.locator(".pf-selftest")).toContainText("passed");
+    await expect(page.locator(".plf-selftest")).toContainText("passed");
+  });
+
   test("CO23a: the shared pause posts pause and resume to both frames", async ({ page }) => {
     await serveCompare(page);
     await send(page, baseStream());

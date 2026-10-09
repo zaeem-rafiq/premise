@@ -1,6 +1,6 @@
 // Slice 6 item 5 / M4. Effects are injected; the CLI only wires them to the deployment.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "acorn";
@@ -529,8 +529,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     (origin, key) => ({
       service: httpService({ origin, ownerKey: key }),
       preflight: async () => {
+        // Launch and close the browser the frames use: Playwright may install only its headless
+        // shell, so the full Chromium's executablePath() is no test of what can run.
         const { chromium } = await import("@playwright/test");
-        if (!existsSync(chromium.executablePath())) throw new Error("chromium_missing");
+        const browser = await chromium.launch();
+        await browser.close();
       },
       frames: (pool) => openHeroFrames(origin, pool),
       now: () => Date.now(),

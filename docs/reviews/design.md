@@ -40,6 +40,58 @@ Reviewed build: `2e48d5c`, the commit this review was given, on branch `lead/des
   - D10: compact attempt cards drop the "Pre-written" tag (beat 1) and the reopened crab keeps no
     "Reopened by undo" tag and no "Same agent, same conversation." (beat 7); it stays in its race group.
 
+## Status after the fixes (the lead, 2026-10-09)
+
+The review above is unchanged; this section records what became of each finding on `main`. The fixes
+came in five batches (parts P, S, R and H, then the merged browser suite) and four lead commits. On
+`334c9bc`, `npm run check` exits 0 (2,608 passed, 1 expected failure) and the browser suite passes
+(354 passed, 88 gated or deployed tests skipped). The capture spec of this review re-ran on the
+fixes: 85 of its 87 captures pass; the two Swarm-wall captures still script the old DOM tiles on
+the main pool's stream, which D7 and D8 replaced.
+
+| Finding | Severity | Status | Commits |
+| --- | --- | --- | --- |
+| D1 | high | fixed | 7e6c2f0 |
+| D2 | high | fixed | 7e6c2f0 |
+| D3 | high | fixed | 7e6c2f0 |
+| D4 | high | fixed | 7e6c2f0 (sheet title, Compare), 13ca9c9 (compact card, heads-up) |
+| D5 | high | fixed | c235dfc, 117f398 |
+| D6 | high | fixed | 13ca9c9 |
+| D7 | high | fixed | c235dfc, 117f398 |
+| D8 | high | fixed | c235dfc |
+| D9 | high | **open until Day 8**: the start card no longer calls a scripted run real (c235dfc); the default recording is replaced by a recording of the current build on Day 8 | c235dfc |
+| D10 | high | fixed | 13ca9c9 |
+| D11 | medium | fixed; the held sheet keeps its last row on screen at both sizes | 7e6c2f0, 334c9bc |
+| D12, D13 | medium | fixed | 13ca9c9 |
+| D14 | medium | fixed | f06bf1a |
+| D15 | medium | fixed | 13ca9c9 |
+| D16, D17 | medium | fixed | 2696075, 8a5bafb |
+| D18 | medium | fixed | c235dfc |
+| D19 | medium | fixed | ab2399a |
+| D20 | medium | fixed: failure-only toasts and Replay clearing (c235dfc); an overlay under every sheet and off Compare view, so the frame never resizes (6eff732) | c235dfc, 6eff732 |
+| D21 | medium | fixed | 2696075 |
+| D22 | medium | fixed | 13ca9c9, 021a02c |
+| D23, D25 | medium | fixed | 7e6c2f0 |
+| D24, D26 | medium | fixed | 13ca9c9 |
+| D27 | medium | fixed | 2696075, 9565e2b, 2bef602 |
+| D28 | medium | fixed | c235dfc, 46cff94 |
+| D29, D30, D31 | medium | fixed | c235dfc |
+| D32, D35, D37 | low | fixed | 13ca9c9 |
+| D33 | low | fixed at 1440 and 1920 | 7e6c2f0, 66a6ed6 |
+| D34 | low | fixed | 2696075, 13ca9c9, c235dfc |
+| D36, D38, D41 | low | fixed | 7e6c2f0 |
+| D39 | low | fixed | 7e6c2f0, 76d3f5f |
+| D40 | low | fixed | 7e6c2f0, 021a02c, 2bef602, 76622a2 |
+| D42 | low | fixed: the Replay bar is two rows (2.1 and 2.7 amended by the lead under RR11, 6975c23) | c235dfc, 46cff94 |
+| D43 | low | fixed: the AC7 lint is `test/arch/component-text.test.ts` | 508d6f2 |
+
+Specification amendments made with the fixes: 03-floor 2.1 and 2.7 (the Replay bar, 6975c23);
+4.1 `PremiseView.hash` (ab2399a); section 5's 1-forms (2696075) and five new ids (508d6f2).
+
+Still open, none high: the strip at 1100 to 1280 px (some cells need three lines and clip by 2 to
+8 px; labels such as GO-AROUNDS also wrap at 1440); the pool caption bar at 1440 with reduced
+motion (the caption and the paused chip wrap); the git drawer's id column alignment.
+
 ## How the evidence was made
 
 - `npm run build:floor`, then the `fixture` Playwright project on port 4273 (`PREMISE_E2E_PORT=4273`,

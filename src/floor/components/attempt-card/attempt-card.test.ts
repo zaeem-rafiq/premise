@@ -113,6 +113,17 @@ describe("03-floor 3.2: the collapsed attempt card on the tracer fixture", () =>
     expect(html).toContain('dir="auto"');
   });
 
+  it("D10 / CO7, CO10, CO13: compact cards keep pre-written and reopened tags and the same-agent note", () => {
+    const state = stateAt(events, 15);
+    const attempt = must(state.attempts.a_T);
+    must(state.intents[attempt.intent_id]).prewritten = true;
+    attempt.reopened_by = "undo";
+    const html = cardHtml(state, attempt, true, true);
+    expect(html).toContain("Pre-written");
+    expect(html).toContain("Reopened by undo");
+    expect(html).toContain("Same agent, same conversation.");
+  });
+
   it("CO10: the compact card carries intent, status, lights and model on two lines", () => {
     const state = stateAt(events, 15);
     const html = cardHtml(state, must(state.attempts.a_T), true, true);

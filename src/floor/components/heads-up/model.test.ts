@@ -2,6 +2,9 @@
 // and the closing lines. Expected strings are the spec's own sentences of 5.6 (BP1), read off the
 // copy tables — never this module's output.
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { HeadsUpPanel } from "./heads-up.tsx";
 import { describe, expect, it } from "vitest";
 import type { HeadsUp, HeadsUpItem } from "../../../protocol/headsup.ts";
 import type { AttemptView, HeadsUpView } from "../../../protocol/reducer/state.ts";
@@ -141,6 +144,33 @@ describe("headsUpModel (03 3.4)", () => {
     const block = headsUpModel(headsupView({ items: [blind] }), attemptView()).items![0]!;
     expect(block.before).toBeNull();
     expect(block.after).toBe("use ENERGY_MAX");
+  });
+
+  it("D35 / 3.4, CO19: query additions and context are capped code blocks, with new source marked", () => {
+    const query = entityItem({
+      premise: { kind: "query", key: "text:creatures/:drain(" },
+      rule: "QT1",
+      reason: "query_new_match",
+      diff: {
+        kind: "query",
+        added: [
+          {
+            key: "creatures/squid.js#update",
+            source: Array.from({ length: 13 }, (_, i) => `line${i + 1}();`).join("\n"),
+          },
+        ],
+        removed: [],
+        context: [{ key: "world/energy.js#drain", source: "return energy / 100;" }],
+      },
+    });
+    const model = headsUpModel(headsupView({ items: [query] }), attemptView());
+    const html = renderToStaticMarkup(createElement(HeadsUpPanel, { model, open: true, onToggle: () => {} }));
+    expect(html).toContain("New: update in creatures/squid.js");
+    expect(html).toContain('<code><mark class="headsup-code__added">line1();');
+    expect(html).toContain("line12();");
+    expect(html).not.toContain("line13();");
+    expect(html).toContain("Show all 13 lines");
+    expect(html).toContain("<code>return energy / 100;</code>");
   });
 
   it("a listing diff fills headsup.added and headsup.removed lists", () => {

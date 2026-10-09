@@ -39,3 +39,35 @@
   outline: 3px solid var(--focus, #ffe08a);
   outline-offset: 2px;
 }
+
+/* D26 / 3.1: each group has room for its whole label at both reference sizes. */
+.intent-box .intent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "count actions" "prewritten starter";
+}
+.intent-count {
+  grid-area: count;
+  white-space: nowrap;
+}
+.intent-actions {
+  grid-area: actions;
+}
+.intent-prewritten {
+  grid-area: prewritten;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 44px;
+}
+.intent-starter {
+  grid-area: starter;
+}
+.intent-box .intent-row button {
+  white-space: nowrap;
+}
+@media (max-width: 479px) {
+  .intent-box .intent-row {
+    grid-template-areas: "count actions" "prewritten prewritten" "starter starter";
+  }
+}

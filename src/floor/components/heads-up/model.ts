@@ -34,7 +34,8 @@ export type ItemBlock = {
   /** listing/query diffs: member lists as `keyLabel`s, each query entry with its source. */
   added: string[];
   removed: string[];
-  context: string[];
+  addedSources: { label: string; source: string | null }[];
+  context: { label: string; source: string }[];
   /** check diff: the check's label (5.7). */
   checkLabel: string | null;
   uses: UseLine[];
@@ -102,7 +103,6 @@ function itemSentence(item: HeadsUpItem, scripted: boolean): string {
 /** One item as a block (3.4), by the kind of its `diff`. */
 function itemBlock(item: HeadsUpItem, scripted: boolean): ItemBlock {
   const diff = item.diff;
-  const source = (s: string | null): string => (s === null ? "" : ` (${s})`);
   return {
     label: keyLabel(item.premise.kind, item.premise.key),
     sentence: itemSentence(item, scripted),
@@ -115,7 +115,7 @@ function itemBlock(item: HeadsUpItem, scripted: boolean): ItemBlock {
       diff.kind === "listing"
         ? diff.added
         : diff.kind === "query"
-          ? diff.added.map((entry) => `${keyLabel("entity", entry.key)}${source(entry.source)}`)
+          ? diff.added.map((entry) => keyLabel("entity", entry.key))
           : [],
     removed:
       diff.kind === "listing"
@@ -123,9 +123,13 @@ function itemBlock(item: HeadsUpItem, scripted: boolean): ItemBlock {
         : diff.kind === "query"
           ? diff.removed.map((key) => keyLabel("entity", key))
           : [],
+    addedSources:
+      diff.kind === "query"
+        ? diff.added.map((entry) => ({ label: keyLabel("entity", entry.key), source: entry.source }))
+        : [],
     context:
       diff.kind === "query"
-        ? diff.context.map((entry) => `${keyLabel("entity", entry.key)}${source(entry.source)}`)
+        ? diff.context.map((entry) => ({ label: keyLabel("entity", entry.key), source: entry.source }))
         : [],
     checkLabel: diff.kind === "check" ? greenCheckLabel(diff.check, diff.code) : null,
     uses: item.uses.map((use) => ({ path: use.path, line: use.line, text: use.text })),

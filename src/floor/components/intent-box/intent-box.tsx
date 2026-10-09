@@ -76,7 +76,7 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
     }
     if (awaiting.current.size === 0 && phase === "sent") setPhase("idle");
     if (cleared) bumpAwaiting((n) => n + 1);
-  }, [floor.intents, draft, phase]);
+  }, [floor, floor.n, draft, phase]);
 
   // 3.1: after the request answered, `intent.sent_waiting` appears once SENT_WAIT_MS has passed
   // without the event (the field is usable again then; the buttons stay off).
@@ -191,13 +191,18 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
               </option>
               {shell.settings.prewritten.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.id} · {item.text}
+                  {item.text}
                 </option>
               ))}
             </select>
           )}
           {starters.length > 0 && !starterSeen && (
-            <button type="button" disabled={!interactive} onClick={() => void sendStarterSet()}>
+            <button
+              type="button"
+              className="intent-starter"
+              disabled={!interactive}
+              onClick={() => void sendStarterSet()}
+            >
               {t("intent.starter", { n: starters.length })}
             </button>
           )}

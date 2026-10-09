@@ -540,6 +540,12 @@ a {
   .strip-value--text {
     white-space: nowrap;
   }
+  /* 6.2: a counter's line height is 1.0. At 0.8 the agents value, which shares the first
+   * line with its label and puts the limit sentence on the second, stood above the 60 px
+   * cell and was clipped at its top. */
+  .strip-value:not(.strip-value--text) {
+    line-height: 1;
+  }
 }
 /* 2.2: at stage width every cell reads label over value - the label on one line, the
  * value and its sub-line on the next. Every cell starts at the same height, so the labels

@@ -1,19 +1,94 @@
-/* Chapter names and their caption reserve their own space above the fixed transport row. */
-.replay-controls {
+/* The Replay bar (03-floor 2.1, 2.7, 3.16): one region at the foot of the page in two rows,
+ * the transport row (56, laptop 48) above the chapter row (52, laptop 48), by the lead's
+ * decision of 2026-10-09. The dotted top edge is REPLAY's own (VD4). Every control is a
+ * 44x44 target (LY5). */
+.replay-bar {
+  display: flex;
+  flex-direction: column;
   flex: none;
-  min-width: 0;
+  height: calc(var(--replay-h) + var(--replay-chapters-h));
   background: var(--surface);
+  border-top: 3px dotted var(--control);
+  overflow: hidden;
 }
+.replay-transport {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 16px;
+}
+.replay-buttons {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.replay-position {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-status);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+/* The track takes the width its row leaves. The range input is the 44 px tap target; the
+ * line it draws stays thin. */
+.replay-track-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 60px;
+}
+.replay-track {
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+}
+/* The chapter marks of 3.16 are ticks drawn on the track; the named buttons below are the
+ * targets. */
+.replay-marks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 8px;
+  pointer-events: none;
+}
+.replay-mark {
+  position: absolute;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 8px;
+  background: var(--muted);
+}
+.replay-ended {
+  font-size: var(--size-small);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.replay-speed,
+.replay-close {
+  white-space: nowrap;
+  flex: none;
+}
+/* The chapter row: one named button per chapter (D42), then the caption of the current
+ * chapter (8.5) and, for 3 s after a gap jump, `replay.skipped` (RY14). */
 .replay-chapters {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 4px 16px;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: var(--replay-chapters-h);
+  padding: 0 16px;
   border-top: var(--border) solid var(--line);
 }
 .replay-chapters button {
-  min-height: 44px;
+  flex: none;
   min-width: 44px;
+  min-height: 44px;
   font-size: var(--size-small);
   white-space: nowrap;
 }
@@ -21,51 +96,48 @@
   border-color: var(--accent);
   color: var(--accent);
 }
-.replay-detail {
-  display: flex;
-  gap: 16px;
-  padding: 0 16px;
+.replay-caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-inline-start: 8px;
+  color: var(--muted);
+  font-size: var(--size-small);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
-.replay-detail .replay-caption {
-  white-space: normal;
-  flex: 1;
+.replay-skipped {
+  flex: none;
+  color: var(--confirm);
+  font-size: var(--size-small);
+  white-space: nowrap;
 }
-.replay-controls .replay-track-wrap {
-  min-width: 60px;
-}
-.replay-controls .replay-track {
-  height: 44px;
-  margin: 0;
-  display: block;
-}
-.replay-controls .replay-marks {
-  position: absolute;
-  bottom: 3px;
-  left: 0;
-  right: 0;
-  height: 8px;
-  pointer-events: none;
-}
-.replay-controls .replay-mark {
-  min-width: 2px;
-  width: 2px;
-  min-height: 8px;
-  height: 8px;
-  padding: 0;
-  background: var(--muted);
-}
-.replay-controls .replay-bar[data-ended] .replay-track-wrap {
-  min-width: calc(50% + 16px);
-}
+
+/* 2.9: below 1100 both rows wrap and the bar grows with them; the track takes a line of its
+ * own. */
 @media (max-width: 1099px) {
-  .replay-controls .replay-track-wrap {
+  .replay-bar {
+    height: auto;
+  }
+  .replay-transport,
+  .replay-chapters {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    row-gap: 8px;
+  }
+  .replay-transport .replay-track-wrap {
     flex-basis: 100%;
   }
-  .replay-controls .replay-ended {
+  .replay-ended {
     flex-wrap: wrap;
     white-space: normal;
   }
-  .replay-detail {
-    flex-wrap: wrap;
+  .replay-caption {
+    flex-basis: 100%;
+    margin-inline-start: 0;
   }
 }

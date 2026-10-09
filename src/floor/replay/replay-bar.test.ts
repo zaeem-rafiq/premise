@@ -55,7 +55,7 @@ describe("ReplayBar render", () => {
     expect(html).not.toContain("data-ended");
   });
 
-  it("ended: ended controls take the play cluster's and the caption's place (RY19)", () => {
+  it("ended: the ended controls take the play cluster's place; the chapter row keeps its caption (RY19, 8.5)", () => {
     const p = player();
     p.seek(p.duration);
     const html = bar(p);
@@ -63,13 +63,15 @@ describe("ReplayBar render", () => {
     expect(html).toContain("The recording has ended.");
     expect(html).toContain("Watch again");
     expect(html).toContain("Open the live Floor");
-    // The position and the track keep their places; the rest of the row stood down.
+    // The position and the track keep their places; the rest of the transport row stood down.
     expect(html).toContain("replay-position");
     expect(html).toContain("replay-track");
     expect(html).not.toContain("replay-buttons");
-    expect(html).not.toContain("replay-caption");
     expect(html).not.toContain("replay-speed");
     expect(html).not.toContain("replay-close");
+    // 8.5: "At any time the bar shows the caption of the current chapter" - the last one here.
+    const last = p.chapters[p.chapters.length - 1]!;
+    expect(html).toContain(`>${last.caption}</span>`);
     expect(html).toContain('data-ended="true"');
   });
 

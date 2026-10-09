@@ -1,13 +1,11 @@
-// The Replay bar of 03-floor 2.7 and 3.16: play/pause, restart, the position, a track with
-// chapter marks, the chapter keys, the speed and close; `replay.ended` and its two buttons
-// after the last event (RY19); `replay.skipped` for 3 s after a gap jump (RY14).
-//
-// RY19 (the bar at its end): the ended controls take the place of the play/restart cluster
-// and the chapter caption - Pause does nothing once the last event is applied, `replay.again`
-// is restart, and `replay.to_live` is close. The position and the track keep their places:
-// the track keeps at least half the bar's width, and on a narrower laptop it wraps to a row
-// of its own rather than squeeze. The chapter marks are thinned to the ones that fit without
-// overlapping. Every chapter also has a named button and answers its key of 6.6.
+// The Replay bar of 03-floor 2.1, 2.7 and 3.16: one region in two rows (the lead's decision of
+// 2026-10-09). The transport row holds play/pause, restart, the position, the track with its
+// chapter marks, the speed and close. After the last event `replay.ended` and its two buttons
+// take the place of play/restart, speed and close (RY19): `replay.again` is restart and
+// `replay.to_live` is close. The chapter row holds a named button per chapter (D42; each also
+// answers its key of 6.6) and, beside them, the caption of the current chapter (8.5), with
+// `replay.skipped` for 3 s after a gap jump (RY14). The track takes the width its row leaves;
+// its chapter marks are thinned to the ones that fit without overlapping.
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { ShellContext } from "../app/context.ts";
@@ -16,7 +14,7 @@ import { REPLAY_SPEEDS } from "../../protocol/constants.ts";
 import type { ReplayChapter, ReplayPlayer } from "./player.ts";
 import "./replay-bar.css";
 
-/** Minimum spacing for the decorative marks on the track. Named chapter buttons sit above it. */
+/** Minimum spacing for the chapter marks drawn on the track. The named chapter buttons are in the row below. */
 const MARK_MIN_GAP_PX = 26;
 
 export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: () => void }) {
@@ -83,32 +81,8 @@ export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: 
   );
 
   return (
-    <div className="replay-controls">
-      <div className="replay-chapters">
-        {player.chapters.map((chapter) => (
-          <button
-            key={chapter.key}
-            type="button"
-            title={chapter.name}
-            aria-current={chapter.key === snap.chapter ? "step" : undefined}
-            onClick={() => player.seekChapter(chapter.key)}
-          >
-            {chapter.name}
-          </button>
-        ))}
-      </div>
-      {!snap.ended && (
-        <div className="replay-detail">
-          <span className="replay-caption">{currentChapter?.caption ?? ""}</span>
-          {snap.skipped && <span className="replay-skipped">{t("replay.skipped", { duration: "…" })}</span>}
-        </div>
-      )}
-      <div
-        className="replay-bar"
-        role="region"
-        aria-label={t("replay.menu.title")}
-        data-ended={snap.ended || undefined}
-      >
+    <div className="replay-bar" role="region" aria-label={t("replay.menu.title")} data-ended={snap.ended || undefined}>
+      <div className="replay-transport">
         {snap.ended ? (
           <>
             <span className="replay-ended">
@@ -153,6 +127,21 @@ export function ReplayBar({ player, onClose }: { player: ReplayPlayer; onClose: 
             </button>
           </>
         )}
+      </div>
+      <div className="replay-chapters">
+        {player.chapters.map((chapter) => (
+          <button
+            key={chapter.key}
+            type="button"
+            title={chapter.name}
+            aria-current={chapter.key === snap.chapter ? "step" : undefined}
+            onClick={() => player.seekChapter(chapter.key)}
+          >
+            {chapter.name}
+          </button>
+        ))}
+        <span className="replay-caption">{currentChapter?.caption ?? ""}</span>
+        {snap.skipped && <span className="replay-skipped">{t("replay.skipped", { duration: "…" })}</span>}
       </div>
     </div>
   );

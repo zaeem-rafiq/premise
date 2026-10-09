@@ -14,8 +14,10 @@ test("D42 2.7 3.16 LY5: named chapters and a usable track at 1440", async ({ pag
   await expect(chapter).toHaveAttribute("aria-current", "step");
   const track = await page.locator(".replay-track").boundingBox();
   const bar = await page.locator(".replay-bar").boundingBox();
-  expect(bar!.height).toBe(48);
-  // With the caption in a separate row, the track gets at least half this reference width.
+  // 2.1 as amended on 2026-10-09: the laptop Replay bar is 1440x96, two rows of 48.
+  expect(bar!.height).toBe(96);
+  // With the chapter buttons and the caption in their own row, the track gets at least half
+  // this reference width.
   expect(track!.width).toBeGreaterThanOrEqual(720);
   expect(track!.height).toBeGreaterThanOrEqual(44);
   const targets = await page

@@ -27,12 +27,17 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
     const pool = await box(page.locator(".pool-column"));
     const rail = await box(page.locator(".rail"));
 
-    // 2.1: header 1920x64, strip 72, each banner 40, Replay bar 56.
+    // 2.1: header 1920x64, strip 72, each banner 40, and (as amended on 2026-10-09) the
+    // Replay bar 1920x108: the transport row (56) above the chapter row (52).
     expect(Math.abs(header.width - 1920)).toBeLessThanOrEqual(1);
     expect(Math.abs(header.height - 64)).toBeLessThanOrEqual(1);
     expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
     expect(Math.abs(banner.height - 40)).toBeLessThanOrEqual(1);
-    expect(Math.abs(replayBar.height - 56)).toBeLessThanOrEqual(1);
+    expect(Math.abs(replayBar.width - 1920)).toBeLessThanOrEqual(1);
+    expect(Math.abs(replayBar.height - 108)).toBeLessThanOrEqual(1);
+    const chapters = await box(page.locator(".replay-bar .replay-chapters"));
+    expect(Math.abs(chapters.y - replayBar.y - 56)).toBeLessThanOrEqual(1);
+    expect(Math.abs(chapters.height - 52)).toBeLessThanOrEqual(1);
     // The pool area is 1152 wide, the rail 696 (padding 24, gap 24).
     expect(Math.abs(pool.width - 1152)).toBeLessThanOrEqual(1);
     expect(Math.abs(rail.width - 696)).toBeLessThanOrEqual(1);
@@ -116,10 +121,10 @@ test.describe("defect regressions", () => {
     const closeBox = await box(close);
     expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(1440);
     expect(speedBox.x + speedBox.width).toBeLessThanOrEqual(closeBox.x + closeBox.width);
-    // D42 / 2.7: the caption now reserves a separate row above the transport.
-    // Keep the original non-overlap check in the layout's vertical direction.
+    // 2.7 as amended on 2026-10-09: the caption sits beside the chapter buttons in the
+    // chapter row, under the transport row - it can no longer reach Speed or Close.
     const caption = await box(page.locator(".replay-caption"));
-    expect(caption.y + caption.height).toBeLessThanOrEqual(speedBox.y);
+    expect(caption.y).toBeGreaterThanOrEqual(speedBox.y + speedBox.height);
   });
 
   test("a sentence value in the strip does not stretch the strip (3.8)", async ({ page }) => {

@@ -5,7 +5,8 @@
  *
  * The layout picks its sizes from the window width: stage from 1600, the laptop layout
  * from 1100 to 1599, the narrow single column below 1100 (2.8, 2.9). Region heights are
- * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 56/48. */
+ * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 108/96 (its
+ * transport row 56/48 and its chapter row 52/48). */
 
 :root {
   --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -19,6 +20,7 @@
   --banner-h: 36px;
   --strip-h: 60px;
   --replay-h: 48px;
+  --replay-chapters-h: 48px;
   --body-gap: 16px;
   --body-pad: 16px;
 }
@@ -89,6 +91,7 @@
     --banner-h: 40px;
     --strip-h: 72px;
     --replay-h: 56px;
+    --replay-chapters-h: 52px;
     --body-gap: 24px;
     --body-pad: 24px;
   }
@@ -967,96 +970,6 @@ a {
   min-height: 44px;
 }
 
-/* ---- The Replay bar (2.7, 3.16): fixed height; the caption wraps or is cut with an
- * ellipsis so the right-hand controls are always fully visible. ---- */
-.replay-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 14px;
-  height: var(--replay-h);
-  padding: 0 16px;
-  background: var(--surface);
-  border-top: 3px dotted var(--control);
-  overflow: hidden;
-  flex: none;
-}
-.replay-buttons {
-  display: flex;
-  gap: 8px;
-  flex: none;
-}
-.replay-position {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--size-status);
-  font-weight: 600;
-  white-space: nowrap;
-  flex: none;
-}
-.replay-track-wrap {
-  flex: 1 1 auto;
-  position: relative;
-  min-width: 60px;
-}
-.replay-track {
-  width: 100%;
-}
-.replay-marks {
-  position: relative;
-  height: 22px;
-}
-.replay-mark {
-  position: absolute;
-  transform: translateX(-50%);
-  min-height: 22px;
-  min-width: 22px;
-  padding: 0 4px;
-  font-size: var(--size-small);
-  font-family: var(--font-mono);
-}
-.replay-caption {
-  color: var(--muted);
-  font-size: var(--size-small);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.replay-skipped {
-  color: var(--confirm);
-  font-size: var(--size-small);
-  flex: none;
-}
-.replay-ended {
-  font-size: var(--size-small);
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-.replay-speed,
-.replay-close {
-  white-space: nowrap;
-  flex: none;
-}
-
-/* RY19: at the recording's end the bar holds the ended controls, the position and the
- * track. The track never takes less than half the bar - on a width where that would not
- * fit beside the controls, it wraps to a row of its own and the bar grows the row. */
-.replay-bar[data-ended] {
-  flex-wrap: wrap;
-  height: auto;
-  min-height: var(--replay-h);
-  row-gap: 8px;
-}
-.replay-bar[data-ended] .replay-track-wrap {
-  /* The bar's padding is 16 px a side: 50% of the content width + 16 px is half of the
-   * whole bar. Where less than that is left beside the controls the track wraps. */
-  min-width: calc(50% + 16px);
-}
-
 /* ---- Toasts (3.19): bottom left, at most three ---- */
 .toasts {
   position: absolute;
@@ -1217,13 +1130,6 @@ a {
     background: var(--surface);
     border: var(--border) solid var(--line);
     border-radius: var(--radius);
-  }
-  .replay-bar {
-    height: auto;
-    min-height: var(--replay-h);
-    flex-wrap: wrap;
-    padding: 8px 12px;
-    row-gap: 8px;
   }
   /* 2.9: sheets are full-screen. */
   .sheet-backdrop {

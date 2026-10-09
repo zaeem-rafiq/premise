@@ -7,11 +7,23 @@ import type { Toast } from "../../state/view-state.ts";
 
 import "./toasts.css";
 
-export function Toasts({ toasts, onDrop }: { toasts: Toast[]; onDrop: (id: number) => void }) {
+/**
+ * `hidden` keeps the toasts mounted, so each still leaves after TOAST_MS, but off screen: Compare view
+ * has no free corner, and every toast is also in the live region and on its attempt card (AX14).
+ */
+export function Toasts({
+  toasts,
+  onDrop,
+  hidden = false,
+}: {
+  toasts: Toast[];
+  onDrop: (id: number) => void;
+  hidden?: boolean;
+}) {
   const shown = toasts.slice(-3);
   if (shown.length === 0) return null;
   return (
-    <div className="toasts">
+    <div className="toasts" hidden={hidden}>
       {shown.map((toast) => (
         <ToastLine key={toast.id} toast={toast} onDrop={onDrop} />
       ))}

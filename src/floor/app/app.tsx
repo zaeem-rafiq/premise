@@ -768,7 +768,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           {sheets}
           <Announcer lines={session.effects.announces} toasts={toasts} />
         </div>
-        <Toasts toasts={toasts} onDrop={dropToast} />
+        <Toasts toasts={toasts} onDrop={dropToast} hidden={view === "compare"} />
         {replay && session.player !== null && (
           <ReplayBar
             player={session.player}

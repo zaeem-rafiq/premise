@@ -2,7 +2,7 @@
 //  - the card sheet renders exactly once, through the registry's `sheet.card` entry and
 //    the shell's `SheetTarget` (the rail no longer draws it);
 //  - a file tile's menu opens the Who panel and the Why card through the shell;
-//  - the self-test badge shows on the main frame;
+//  - the self-test badges are Compare view's, one under each frame, and Floor view has none;
 //  - `intent.queue` fills its `{max}` from `pool.max_real_agents` (FR26).
 
 import { readFileSync } from "node:fs";
@@ -124,11 +124,36 @@ for (const size of [
       await expect(why).toContainText("landing 2");
     });
 
-    // (a) The self-test badge on the main frame (CO25a).
-    test("the self-test badge shows on the pool frame", async ({ page }) => {
+    // (a) The self-test badges belong to Compare view: 2.2 draws Floor view with none, 2.3 says
+    // "Under each frame is its self-test badge (CO25a)". hero-c04 has a plain-merge remote, so
+    // Compare is offered, but it records no `plain.updated`: in Replay the plain frame has no
+    // commit to load and reports no stats, so its badge can only read `selftest.running`.
+    test("Floor view has no self-test badge; Compare view has one under each frame (CO25a)", async ({ page }) => {
       await page.goto("/replay/hero-c04");
-      await expect(page.locator(".pf-selftest")).toBeVisible();
-      await expect(page.locator(".pf-selftest")).toContainText(/Self-test/);
+      const badges = page.locator(".pf-selftest, .plf-selftest");
+      await expect(page.locator(".pool-area .pf-body iframe")).toBeVisible();
+      await expect(badges).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Compare", exact: true }).click();
+      const compare = page.locator(".cmp");
+      await expect(compare).toBeVisible();
+      await expect(badges).toHaveCount(2);
+      for (const [body, badge] of [
+        [".pf-body", ".pf-selftest"],
+        [".plf-body", ".plf-selftest"],
+      ] as const) {
+        await expect(compare.locator(badge)).toContainText(/^Self-test, run in this page: /);
+        const frameBox = await compare.locator(body).boundingBox();
+        const badgeBox = await compare.locator(badge).boundingBox();
+        expect(badgeBox!.y, `${badge} sits under its frame`).toBeGreaterThanOrEqual(frameBox!.y + frameBox!.height);
+      }
+      await expect(compare.locator(".plf-selftest")).toHaveText("Self-test, run in this page: running…");
+
+      // 2.3: key C closes Compare view; the Floor view's frame is back, still with no badge.
+      await page.keyboard.press("c");
+      await expect(compare).toHaveCount(0);
+      await expect(page.locator(".pool-area .pf-body iframe")).toBeVisible();
+      await expect(badges).toHaveCount(0);
     });
 
     // (c) intent.queue's {max}: with every slot busy the note reads the pool's limit.

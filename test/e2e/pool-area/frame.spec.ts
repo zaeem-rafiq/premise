@@ -58,7 +58,6 @@ function Harness() {
   const [mode, setMode] = useState<"live" | "replay">("live");
   const [paused, setPaused] = useState(false);
   const [highlight, setHighlight] = useState<string[] | undefined>(undefined);
-  const [selftest, setSelftest] = useState(false);
   window.harness = {
     event: (e: unknown) => setState((s) => ({ ...reduce(s, e as never) })),
     mode: setMode,
@@ -67,7 +66,6 @@ function Harness() {
     tappedPath: () => window.tappedPath,
     // CO23b: pass the prop only while the panel is "open" — undefined clears it entirely.
     highlight: (k?: string[]) => setHighlight(k),
-    selftest: (on: boolean) => setSelftest(on),
   };
   return (
     <PoolArea
@@ -79,7 +77,6 @@ function Harness() {
       onCompare={() => { window.compareTapped = true; }}
       onTapped={(p) => { window.tappedPath = p; }}
       highlight={highlight}
-      selftest={selftest}
       onTileWho={(p) => { window.tileWho = p; }}
       onTileWhy={(p, seq) => { window.tileWhy = { path: p, seq }; }}
     />
@@ -343,24 +340,27 @@ test.describe("the pool frame component", () => {
       .toContainEqual([]);
   });
 
-  test("CO25a: with selftest on, the frame gets probe+selftest and the badge reads passed", async ({ page }) => {
+  // 2.2 draws Floor view with no self-test badge. CO25a puts one badge under each frame of Compare
+  // view and posts `probe` with `selftest` "when both frames have reported stats, and after every
+  // swap while Compare view is open" — so the Floor view's frame neither shows a badge nor asks
+  // for the self-test, while the plain probe of CO21 still reaches it.
+  test("CO25a/2.2: the Floor view's frame shows no self-test badge and never asks for the self-test", async ({
+    page,
+  }) => {
     await serveHarness(page);
-    await sendEvents(page, 0);
-    await expect(page.locator(".pf-selftest")).toHaveCount(0);
-    await page.evaluate(() => {
-      (window as { harness?: { selftest: (b: boolean) => void } }).harness?.selftest(true);
-    });
+    await sendEvents(page, 1); // pool.state + pool.files: the live frame loads on main
     const frame = await loadedPoolFrame(page);
-    await expect
-      .poll(async () =>
-        frame?.evaluate(() =>
-          (window as never as { __log: { type: string; selftest?: boolean }[] }).__log.some(
-            (m) => m.type === "probe" && m.selftest === true,
-          ),
-        ),
-      )
-      .toBe(true);
-    await expect(page.locator(".pf-selftest")).toContainText("Self-test, run in this page: passed");
+    await expect.poll(async () => frame.evaluate(() => (window as never as { __tick: number }).__tick > 0)).toBe(true);
+    const log = () =>
+      frame.evaluate(() => (window as never as { __log: { type: string; selftest?: boolean }[] }).__log);
+    await sendEvents(page, LANDED_IX_1);
+    // The channel is live: the landing's debounced probe of CO21 arrives…
+    await expect.poll(async () => (await log()).map((m) => m.type)).toContain("probe");
+    // …and with more stats beats gone by, no message has asked for the self-test and no badge is drawn.
+    await page.waitForTimeout(600);
+    expect((await log()).filter((m) => m.selftest === true)).toEqual([]);
+    await expect(page.locator(".pf-selftest")).toHaveCount(0);
+    await expect(page.locator(".pf-caption")).toContainText("Premise · main · landing 1");
   });
 
   test("CO22: a tapped message reports its path through onTapped", async ({ page }) => {

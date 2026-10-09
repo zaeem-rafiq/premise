@@ -674,7 +674,6 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                 onCompare={
                   floor.pool.plain_remote !== null && floor.pool.app !== null ? () => setView("compare") : undefined
                 }
-                selftest={floor.pool.app !== null}
                 onTapped={
                   table.entries.has("sheet.why")
                     ? (path) => {

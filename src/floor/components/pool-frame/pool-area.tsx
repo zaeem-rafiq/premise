@@ -29,7 +29,9 @@ const AREA_CSS = `
 }
 `;
 
-export type PoolAreaProps = PoolFrameProps & {
+/** The Floor view's frame never runs the self-test: its badge belongs to Compare view only
+ * (2.2 has none, 2.3 and CO25a put one under each Compare frame), so `selftest` is not a prop. */
+export type PoolAreaProps = Omit<PoolFrameProps, "selftest"> & {
   /** 3.7/CO27 + 3.11: the tile menu's `tile.menu.who` asks the shell to open Who relies for the
    * file. Optional — without it the tile menu offers only the entries it has. */
   onTileWho?: (path: string) => void;
@@ -81,8 +83,8 @@ export function PoolArea(props: PoolAreaProps) {
   }, []);
 
   // IR12 (06-repos): `pool.app` is null only after the stream's pool.state says so —
-  // the pool then gets no frame, no frame request, no Pause, no Compare and no self-test
-  // badge. Before that event the kind is undecided; the frame holds its first load.
+  // the pool then gets no frame, no frame request, no Pause and no Compare. Before that
+  // event the kind is undecided; the frame holds its first load.
   const noApp = props.state.pool.app === null;
 
   adoptCss(AREA_CSS);
@@ -96,6 +98,8 @@ export function PoolArea(props: PoolAreaProps) {
           </div>
         </div>
       ) : (
+        // No badge and no self-test probe from Floor view, even for a caller outside the
+        // types that passes `selftest` anyway.
         <PoolFrame {...frameProps} selftest={false} />
       )}
       <FileTiles state={props.state} onTileWho={onTileWho} onTileWhy={onTileWhy} />

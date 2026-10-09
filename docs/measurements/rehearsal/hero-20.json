@@ -1,0 +1,1129 @@
+{
+  "v": 1,
+  "build": "97d71eee4f899967c56333a9751e252dcf8ccab3",
+  "deployment_host": "premise-test.rk3469.workers.dev",
+  "recorded_at": "2026-10-09T23:28:15.464Z",
+  "options": {
+    "runs": 20
+  },
+  "runs": [
+    {
+      "run": 1,
+      "pool": "hero-mv1lj69s-33693-1",
+      "order": 1,
+      "duration_ms": 37635,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 115,
+          "landed_n": 162,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 119,
+          "landed_n": 165,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "905e39259c5795730eee03b16489f4947e1531a2",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "49bdb00f58529adad4f679d23e39a4ef5df9e869",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        3,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 183,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 2,
+      "pool": "hero-mv1lj69s-33693-2",
+      "order": 2,
+      "duration_ms": 18077,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 118,
+          "landed_n": 176,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "77def0e812bc0f4714432d73f66847eb78897667",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "21335f769b572904df2299544c4f354edac4bb34",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 3,
+      "pool": "hero-mv1lj69s-33693-3",
+      "order": 1,
+      "duration_ms": 36136,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 117,
+          "landed_n": 165,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 121,
+          "landed_n": 168,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "8d129b1ac123d0b16399dfe1c4be1b876b2700d0",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "c743ee6a1d11dad709b1858a8001b7cf969061fd",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        3,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 183,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 4,
+      "pool": "hero-mv1lj69s-33693-4",
+      "order": 2,
+      "duration_ms": 19056,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 124,
+          "landed_n": 169,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "fafb86a47a6b2a75c93c4dfba00c71eb2151208c",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "4ac746567a2d785dda89bffa8ca742c902c091ec",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 177,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 5,
+      "pool": "hero-mv1lj69s-33693-5",
+      "order": 1,
+      "duration_ms": 33834,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 118,
+          "landed_n": 165,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 115,
+          "landed_n": 162,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "ec05c3116760a641b65b3c5f6eb14c7a7de967b6",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "a2477787ee13176d1bf37b233225427f576aa20e",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        3,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 6,
+      "pool": "hero-mv1lj69s-33693-6",
+      "order": 2,
+      "duration_ms": 17408,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 112,
+          "landed_n": 175,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "da515c8d12e86e1d01ec3c7fa832fb1450c8c6ef",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "69342f5b7650eb41dab025cfad1c51f937c03f39",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 7,
+      "pool": "hero-mv1lj69s-33693-7",
+      "order": 1,
+      "duration_ms": 36391,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 114,
+          "landed_n": 159,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 118,
+          "landed_n": 165,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "d9d6e59fcf2260a10089e98cc3123154abf3fc59",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "f4c168f6dd6f0151c71a927ce80f24fd59f70302",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 183,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 8,
+      "pool": "hero-mv1lj69s-33693-8",
+      "order": 2,
+      "duration_ms": 19070,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 86,
+          "landed_n": 185,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "d3569277e9c12ed2967356c5e4fda4b743e63f12",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "5135225fd5056adbb6b7761d6d82177801a22a2f",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 193,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 9,
+      "pool": "hero-mv1lj69s-33693-9",
+      "order": 1,
+      "duration_ms": 36399,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 115,
+          "landed_n": 161,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 119,
+          "landed_n": 164,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "f349c073260dfc193fb17c8a15a5a7fb77290ae7",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "9dfab0ed9727123b5d1023737001642de57421d0",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        3
+      ],
+      "j_heads_up": 0,
+      "events": 183,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 10,
+      "pool": "hero-mv1lj69s-33693-10",
+      "order": 2,
+      "duration_ms": 21652,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 123,
+          "landed_n": 169,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "c789c955ffb1ed4c6db232c6ca810e3c17efcbde",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "a26d98dd105ecd7218352a1503d63a72613fc5f6",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 179,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 11,
+      "pool": "hero-mv1lj69s-33693-11",
+      "order": 1,
+      "duration_ms": 36544,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 115,
+          "landed_n": 163,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 119,
+          "landed_n": 166,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "86386bd3703d345d6157a22996124111ab5b011a",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "ca3b002a9fce5f1e4477114ed6c69914526125fd",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        3,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 183,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 12,
+      "pool": "hero-mv1lj69s-33693-12",
+      "order": 2,
+      "duration_ms": 18485,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 123,
+          "landed_n": 168,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "331514e6db076a7be6f8f66888da13adcd3042be",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "1ac63422f69acf4a9ea3ca9887e45fa33ade0268",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 177,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 13,
+      "pool": "hero-mv1lj69s-33693-13",
+      "order": 1,
+      "duration_ms": 31356,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 118,
+          "landed_n": 162,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 115,
+          "landed_n": 156,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "6f0ad4661e97fc1d5d73e4ebe36292319e17c1ff",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "75f74bf5178b83fc81fafce79d77a0e402243fa7",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 178,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 14,
+      "pool": "hero-mv1lj69s-33693-14",
+      "order": 2,
+      "duration_ms": 23127,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 123,
+          "landed_n": 170,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "af62a0fec757345115b1ae26fbc05d1ececf6c6a",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "cc32116caf3ad6c817750b2d37e1fa21b35186e2",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 180,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 15,
+      "pool": "hero-mv1lj69s-33693-15",
+      "order": 1,
+      "duration_ms": 34361,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 119,
+          "landed_n": 163,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 116,
+          "landed_n": 157,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "76448ae511e717a95cd31cada5bd5603ed1eda1d",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "924b8a25c11868d5a7b687d814f7af0f3540d380",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 16,
+      "pool": "hero-mv1lj69s-33693-16",
+      "order": 2,
+      "duration_ms": 24073,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 124,
+          "landed_n": 171,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "a49a7a725dd1a75d979456476bf33e9fc75614c3",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "d513bbda57f1cafb67f855bcc6564af6d58428f8",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 181,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 17,
+      "pool": "hero-mv1lj69s-33693-17",
+      "order": 1,
+      "duration_ms": 35507,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 118,
+          "landed_n": 164,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 115,
+          "landed_n": 158,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "e367c06bb1953595811937f2ff6323ce73a6eb46",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "07ed5bd7d1c25d902f9a05fb93e8268e0f939ce0",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        4
+      ],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 18,
+      "pool": "hero-mv1lj69s-33693-18",
+      "order": 2,
+      "duration_ms": 19010,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 123,
+          "landed_n": 168,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "3cac2c06bf96e8f1efbd451538c5cff3f68a07c7",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "fc63b2a3b9c3a5020b37f4f1134df456a47b8371",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 178,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 19,
+      "pool": "hero-mv1lj69s-33693-19",
+      "order": 1,
+      "duration_ms": 35692,
+      "conductor_complete": true,
+      "expected_rule": "E2",
+      "heads_up": [
+        {
+          "pattern": "hero-c",
+          "sent_n": 118,
+          "landed_n": 161,
+          "before_landing": true
+        },
+        {
+          "pattern": "hero-h",
+          "sent_n": 115,
+          "landed_n": 158,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "c23243a6cb182e6cb3071be0ab18b8f9d5b2489f",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "46cc05dd57a2baf01c22b582a5be449d00b0d5c6",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [
+        2,
+        3
+      ],
+      "j_heads_up": 0,
+      "events": 182,
+      "error": null,
+      "pass": true
+    },
+    {
+      "run": 20,
+      "pool": "hero-mv1lj69s-33693-20",
+      "order": 2,
+      "duration_ms": 19005,
+      "conductor_complete": true,
+      "expected_rule": "QR1",
+      "heads_up": [
+        {
+          "pattern": "hero-s",
+          "sent_n": 122,
+          "landed_n": 169,
+          "before_landing": true
+        }
+      ],
+      "landing_order_ok": true,
+      "main": {
+        "commit": "a85d02219a7fd200c2f7a1938b2843388f0af329",
+        "tree": "2063b2fd74e210e5b9587cfb957cfaa1796cc2cb",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          0.3
+        ],
+        "shrimp_drain": [
+          0.05
+        ],
+        "ok": true
+      },
+      "plain": {
+        "commit": "5db8a34a50116796a8c4797f5f2394d657c26458",
+        "tree": "0dee612c8b18eebca06b84349634d79d1f2b2c49",
+        "energy_max": [
+          1
+        ],
+        "crab_threshold": [
+          30
+        ],
+        "shrimp_drain": [
+          5
+        ],
+        "ok": true
+      },
+      "plain_skipped": [],
+      "plain_interrupted": [],
+      "j_heads_up": 0,
+      "events": 175,
+      "error": null,
+      "pass": true
+    }
+  ],
+  "totals": {
+    "runs": 20,
+    "passed": 20,
+    "failed": 0,
+    "order_1": 10,
+    "order_2": 10,
+    "m4": "pass"
+  }
+}

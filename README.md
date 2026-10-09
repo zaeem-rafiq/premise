@@ -70,6 +70,7 @@ To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and 
 Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 
 - 58 of 58 case vectors pass through the engine: [`docs/measurements/cases.md`](docs/measurements/cases.md).
+- The hero conflict with the scripted cast, run 20 times on a deployment, 10 in each landing order: in 20 of 20 runs the heads-up reached the dependent attempt before the landing it depended on, and both the Premise pool and the plain-merge pool ended with the expected code: [`docs/measurements/rehearsal/hero-20.json`](docs/measurements/rehearsal/hero-20.json).
 - The workhorse model, `gpt-oss-120b`, landed 12 of 12 additive requests and 12 of 12 shared-rule requests in one pass, with a median of 94 s from request to landing: [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
 - Three models each landed at least 11 of 12 additive requests (the race uses all three): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
 - A mark that was missed: after the shared energy rule changed, the shrimp's agent repaired its absolute number in 2 of 5 runs (the plan asked for 4 of 5): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).

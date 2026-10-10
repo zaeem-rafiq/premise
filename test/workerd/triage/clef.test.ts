@@ -23,6 +23,7 @@ type ModelCall = {
 class FakeClef {
   calls: ModelCall[] = [];
   answer: (call: ModelCall) => Promise<number> = async () => 0.9;
+  risk: Record<string, number> = {};
   observe: (pool: string) => Promise<ModelCall["stored"]> = async () => ({ judgments: [], heads: 0 });
   pool = "";
   url = "";
@@ -37,9 +38,13 @@ class FakeClef {
           const parsed = JSON.parse(body) as { model: string; request: ModelCall["request"] };
           const call: ModelCall = { ...parsed, stored: await this.observe(this.pool) };
           this.calls.push(call);
-          const p = await this.answer(call);
+          // Triage asks `p1`; a held card's risk request asks the three ids of 10.4.
+          const answers: Record<string, { noul: number }> = {};
+          for (const id of Object.keys(call.request.questions ?? {})) {
+            answers[id] = { noul: id === "p1" ? await this.answer(call) : (this.risk[id] ?? 0.5) };
+          }
           res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ model: "clef", answers: { p1: { noul: p } }, usage: { input_tokens: 460 } }));
+          res.end(JSON.stringify({ model: "clef", answers, usage: { input_tokens: 460 } }));
         })().catch(() => {
           res.writeHead(500);
           res.end();
@@ -55,7 +60,7 @@ class FakeClef {
   }
 }
 
-const POOLS = ["clef-tr1", "clef-tr4", "clef-tr7", "clef-tr8"];
+const POOLS = ["clef-tr1", "clef-tr4", "clef-tr7", "clef-tr8", "clef-risk"];
 const READER_FILE = "creatures/clefcrab.js";
 
 describe("Slice 15 item 3: Clef triage in local workerd with a fake AI binding (7.3)", () => {
@@ -128,8 +133,8 @@ describe("Slice 15 item 3: Clef triage in local workerd with a fake AI binding (
       agentStub: true,
       inspect: true,
       modelUrl: clef.url,
-      features: { clef: true },
-      vars: { CLEF_TRIAGE: "on" },
+      features: { clef: true, held: true },
+      vars: { CLEF_TRIAGE: "on", CLEF_RISK: "on" },
     });
   }, 120_000);
 
@@ -228,5 +233,62 @@ describe("Slice 15 item 3: Clef triage in local workerd with a fake AI binding (
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(clef.calls).toEqual([]);
     expect(await rows("clef-tr8", "SELECT * FROM triage_asks")).toEqual([]);
+  }, 120_000);
+
+  it("RK1/RK5: a real attempt's held card opens at once and its risk lines fill in from Clef", async () => {
+    clef.calls = [];
+    clef.risk = { does_what_asked: 0.92, changes_shared_meaning: 0.81, unrelated_edits: 0.07 };
+    const pool = "clef-risk";
+    await createPool(worker, pool, { seed: "tidepool" });
+    const open = await worker.trunk(pool).fetch("/internal/open-attempt", {
+      method: "POST",
+      body: JSON.stringify({
+        attempt_id: "rescaler",
+        intent: "let creatures move faster",
+        agent_kind: "real",
+        requester: "owner",
+      }),
+    });
+    expect(open.status, await open.clone().text()).toBe(200);
+    await tool(worker, pool, "rescaler", { tool: "read", args: { path: "world/movement.js", entity: "MAX_SPEED" } }, 1);
+    await tool(
+      worker,
+      pool,
+      "rescaler",
+      { tool: "replace", args: { path: "world/movement.js", old: "MAX_SPEED = 3", new: "MAX_SPEED = 4" } },
+      2,
+    );
+    const submitted = await tool(
+      worker,
+      pool,
+      "rescaler",
+      { tool: "submit", args: { summary: "Raise MAX_SPEED to 4" } },
+      3,
+    );
+    expect(submitted.result).toMatchObject({ status: "held" });
+    // The card opened without the answers; they arrive as a `card.updated` (10.4).
+    const opened = (await eventsOf(worker, pool, "card.opened"))[0] as { card: { card_id: string; risk: unknown } };
+    expect(opened.card.risk).toBeNull();
+    await waitFor(
+      async () =>
+        (await eventsOf(worker, pool, "card.updated")).some((e) => (e.card as { risk?: unknown }).risk != null),
+      20_000,
+    );
+    const updated = (await eventsOf(worker, pool, "card.updated")).filter(
+      (e) => (e.card as { risk?: unknown }).risk != null,
+    );
+    expect(updated.at(-1)?.card).toMatchObject({
+      card_id: opened.card.card_id,
+      risk: { model: "clef", does_what_asked: 0.92, changes_shared_meaning: 0.81, unrelated_edits: 0.07 },
+    });
+    // One risk request, asked of Clef with 10.4's state; nothing landed by itself (RK1).
+    const riskCalls = clef.calls.filter((c) => "does_what_asked" in (c.request.questions ?? {}));
+    expect(riskCalls).toHaveLength(1);
+    expect(riskCalls[0]?.request.state).toMatchObject({
+      intent: "let creatures move faster",
+      summary: "Raise MAX_SPEED to 4",
+      files: [{ path: "world/movement.js", tier: "held" }],
+    });
+    expect(await eventsOf(worker, pool, "landing.landed")).toEqual([]);
   }, 120_000);
 });

@@ -39,6 +39,8 @@ export function enqueueRisk(pool: Pool, c: CardRec): void {
   if (!pool.riskOn || c.kind !== "held" || !pool.featuresHeld) return;
   const map = pending(pool);
   for (const [attempt_id, submit_id] of Object.entries(c.body.submit_ids)) {
+    // A synthetic attempt never calls Clef (TR8; its banner says it makes no model calls).
+    if (pool.attempts.get(attempt_id)?.agent_kind !== "real") continue;
     map[submit_id] ??= { card_id: c.card_id, attempt_id, dispatched_at: null, deadline_at: null };
   }
   save(pool, map);

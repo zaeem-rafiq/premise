@@ -159,4 +159,13 @@ describe("RK5: the held card's risk questions (10.4)", () => {
     minimal.openHeld();
     expect(minimal.trunk.riskDispatch().requests).toEqual([]);
   });
+
+  it("RK5/TR8: a synthetic attempt's held card asks Clef nothing", () => {
+    const f = fixture();
+    f.trunk.openAttempt("S", { intent: "Lower the limit", agent_kind: "synthetic", truth: [] });
+    f.call("S", "read", { path: "world.js" });
+    f.call("S", "replace", { path: "world.js", old: "100", new: "1" });
+    expect(f.call("S", "submit", { summary: "Lower LIMIT to one" }).result).toMatchObject({ status: "held" });
+    expect(f.trunk.riskDispatch().requests).toEqual([]);
+  });
 });

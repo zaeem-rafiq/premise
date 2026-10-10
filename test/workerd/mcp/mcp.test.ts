@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { REPO_ROOT } from "../../support/source.ts";
 import { startLandingWorker, type LandingWorker } from "../landing/harness.ts";
 import { bearer, createPool, eventsOf, KEY, launch, waitFor } from "../collide/helpers.ts";
-import { McpClient, mintToken } from "./client.ts";
+import { McpClient, mintToken as mint } from "./client.ts";
 
 const SPEC = readFileSync(join(REPO_ROOT, "docs/spec/07-mcp.md"), "utf8");
 const AGENT_SPEC = readFileSync(join(REPO_ROOT, "docs/spec/05-agent.md"), "utf8");
@@ -25,8 +25,14 @@ function block(spec: string, name: string): string {
   return after.slice(start, after.indexOf("```", start)).replace(/\n$/, "");
 }
 
-const TEXTS = JSON.parse(block(SPEC, "mcp-texts")) as Record<string, string> & {
-  status_next: Record<string, string>;
+const TEXTS = JSON.parse(block(SPEC, "mcp-texts")) as {
+  not_started: string;
+  already: string;
+  busy: string;
+  interrupted: string;
+  killed: string;
+  start_next: string;
+  status_next: { working: string; handed_in: string; landed: string; stopped: string };
 };
 
 /** MC6 written out by hand: `pmcp1_<base64url body>.<hmac hex>` over `premise_mcp_token.v1.<body>`. */
@@ -79,6 +85,48 @@ const CRAB = [
 
 const POOLS = ["mcp-flow", "mcp-heads", "mcp-other", "mcp-quiet", "mcp-turn", "mcp-kill"];
 
+/** Every token any test minted: MC8 looks for each of them everywhere at the end. */
+const TOKENS: string[] = [];
+
+async function mintToken(worker: LandingWorker, pool: string): Promise<string> {
+  const token = await mint(worker, pool);
+  TOKENS.push(token);
+  return token;
+}
+
+type Ev = Record<string, unknown>;
+
+async function stateEvents(worker: LandingWorker, pool: string, attempt: string): Promise<Ev[]> {
+  return (await eventsOf(worker, pool, "attempt.state")).filter((e) => e.attempt_id === attempt);
+}
+
+async function gateSlots(worker: LandingWorker): Promise<string[]> {
+  const body = (await (await worker.object("GATE", "premise").fetch("/internal/state")).json()) as {
+    state: { slots: Record<string, unknown> };
+  };
+  return Object.keys(body.state.slots);
+}
+
+async function inspect(worker: LandingWorker, attempt: string): Promise<Record<string, unknown>> {
+  return (await (await worker.object("AGENT", attempt).fetch("/internal/inspect")).json()) as Record<string, unknown>;
+}
+
+/** A client with a started attempt that has read the guide (state `working`). */
+async function started(
+  worker: LandingWorker,
+  pool: string,
+  request: string,
+  name = "test-client",
+): Promise<{ client: McpClient; attempt: string }> {
+  const client = new McpClient(worker, pool, await mintToken(worker, pool));
+  await client.initialize(name);
+  const start = await client.call("premise_start", { request });
+  expect(start.isError, JSON.stringify(start.message)).toBe(false);
+  const attempt = (start.message.result as { attempt_id: string }).attempt_id;
+  expect((await client.call("read", { path: "GUIDE.md" })).isError).toBe(false);
+  return { client, attempt };
+}
+
 describe("outside agents over MCP (07-mcp), in local workerd", () => {
   let worker: LandingWorker;
   const output: string[] = [];
@@ -96,7 +144,14 @@ describe("outside agents over MCP (07-mcp), in local workerd", () => {
         stream.write = write;
       });
     }
-    worker = await startLandingWorker({ ownerKey: KEY, repos: POOLS, swarm: true, features: { mcp: true } });
+    // `floorFaults` (left passing) turns on storage inspection: MC18's test writes a journal row.
+    worker = await startLandingWorker({
+      ownerKey: KEY,
+      repos: POOLS,
+      swarm: true,
+      floorFaults: true,
+      features: { mcp: true },
+    });
     for (const pool of POOLS) await createPool(worker, pool);
   }, 300_000);
 
@@ -325,4 +380,257 @@ describe("outside agents over MCP (07-mcp), in local workerd", () => {
     expect(late.isError).toBe(true);
     expect((late.message.error as { code: string }).code).toBe("attempt_closed");
   }, 240_000);
+
+  it("MC19: a landing that breaks the outside attempt's premise reaches it as a heads-up, first in its next result, and the repair lands", async () => {
+    const pool = "mcp-heads";
+    const { client, attempt } = await started(
+      worker,
+      pool,
+      "a crab that hides in its shell when its energy drops below 30",
+    );
+    const energy = await client.call("read", { path: "world/energy.js", entity: "ENERGY_MAX" });
+    expect((energy.message.result as { source: string }).source).toContain("ENERGY_MAX = 100");
+    await client.call("read", { path: "world/bounds.js", entity: "FLOOR_Y" });
+    const write = await client.call("write", { path: "creatures/mcp-crab.js", content: CRAB });
+    expect(write.isError, JSON.stringify(write.message)).toBe(false);
+
+    // A scripted change makes energy a fraction and lands: ENERGY_MAX 100 -> 1 (E2 for the crab).
+    await launch(worker, pool, ["rescale-energy"]);
+    await waitFor(async () => (await eventsOf(worker, pool, "landing.landed")).length >= 1, 90_000);
+    await waitFor(
+      async () => (await eventsOf(worker, pool, "headsup.sent")).some((e) => e.attempt_id === attempt),
+      60_000,
+    );
+
+    // TA3 and MR1: the submit is refused heads_up_first, and the heads-up comes first in that result.
+    const refused = await client.call("submit", { summary: "Add a crab that hides in its shell" });
+    expect(refused.isError).toBe(true);
+    expect(Object.keys(refused.message)).toEqual(["heads_ups", "error"]);
+    expect((refused.message.error as { code: string }).code).toBe("heads_up_first");
+    const heads = refused.message.heads_ups as Array<Record<string, unknown>>;
+    expect(heads).toHaveLength(1);
+    const agentTexts = JSON.parse(block(AGENT_SPEC, "agent-texts")) as {
+      because: Record<string, Record<string, string>>;
+      what: Record<string, string>;
+    };
+    expect(heads[0]).toMatchObject({ hn: 1, action: "repair", because: agentTexts.because.landing!.repair });
+    const item = (heads[0]!.items as Array<Record<string, unknown>>)[0]!;
+    expect(item.what).toBe(agentTexts.what.E2!.replace("{thing}", "`ENERGY_MAX` in world/energy.js"));
+    expect(String(item.before)).toContain("ENERGY_MAX = 100");
+    expect(String(item.after)).toContain("ENERGY_MAX = 1");
+
+    // TL9: once shown, it is not shown again; premise_status has nothing pending.
+    const status = await client.call("premise_status");
+    expect(status.message.heads_ups).toBeUndefined();
+    expect((status.message.result as { next: string }).next).toBe(TEXTS.status_next.working);
+
+    // TD6: an answer to a repair needs a statement.
+    const noStatement = await client.call("submit", { summary: "Add a crab that hides in its shell" });
+    expect((noStatement.message.error as { code: string }).code).toBe("statement_required");
+    const fix = await client.call("replace", {
+      path: "creatures/mcp-crab.js",
+      old: "crab.energy < 30",
+      new: "crab.energy < 0.3",
+    });
+    expect(fix.isError, JSON.stringify(fix.message)).toBe(false);
+    const submit = await client.call("submit", {
+      summary: "Add a crab that hides in its shell",
+      statement: "Energy is now a fraction from 0 to 1, so the crab hides below 0.3.",
+    });
+    expect(submit.isError, JSON.stringify(submit.message)).toBe(false);
+    await waitFor(
+      async () => (await eventsOf(worker, pool, "headsup.resolved")).some((e) => e.attempt_id === attempt),
+      30_000,
+    );
+    await waitFor(async () => (await stateEvents(worker, pool, attempt)).some((e) => e.to === "landed"), 90_000);
+  }, 300_000);
+
+  it("MC17: calls that arrive while an earlier call is served form one turn, and TL8 refuses the rest after a failure", async () => {
+    const pool = "mcp-turn";
+    const client = new McpClient(worker, pool, await mintToken(worker, pool));
+    await client.initialize("parallel-client");
+    const start = await client.call("premise_start", { request: "a snail that crawls along the sand" });
+    expect(start.isError).toBe(false);
+    // The first call waits MCP_WAIT_MS for news; the next two arrive while it is served.
+    const first = client.call("premise_status", { wait: true });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const second = client.call("write", { path: "creatures/mcp-snail.js", content: JELLY }); // TD5: guide_first
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const third = client.call("read", { path: "GUIDE.md" });
+    const [a, b, c] = await Promise.all([first, second, third]);
+    expect(a.isError).toBe(false);
+    expect((b.message.error as { code: string }).code).toBe("guide_first");
+    expect(c.message.error).toMatchObject({ code: "not_run", detail: { reason: "earlier_failed" } });
+    // A call after the turn ended is a new turn.
+    expect((await client.call("read", { path: "GUIDE.md" })).isError).toBe(false);
+  }, 120_000);
+
+  it("MC18, MC21, MC23, MC8: an interrupted call is answered by the next one; a silent client is stopped; a stopped attempt is never resumed", async () => {
+    const pool = "mcp-quiet";
+    const token = await mintToken(worker, pool);
+    const client = new McpClient(worker, pool, token);
+    await client.initialize("quiet-client");
+    // MC8: a token inside the request text is redacted before it becomes the intent's text.
+    const start = await client.call("premise_start", { request: `a quiet crab ${token}` });
+    const attempt = (start.message.result as { attempt_id: string }).attempt_id;
+    const created = (await eventsOf(worker, pool, "intent.created")).map((e) => String(e.text));
+    expect(created).toContain("a quiet crab [redacted]");
+    expect((await client.call("read", { path: "GUIDE.md" })).isError).toBe(false);
+
+    // MC18: a call whose request ended before its answer is left in the journal (AG1)...
+    const meta = (await inspect(worker, attempt)).meta as Record<string, string>;
+    const step = Number(meta.step) + 1;
+    const request = {
+      attempt_id: attempt,
+      call_id: `${attempt}:${step}`,
+      ack: Number(meta.shown_hn),
+      tool: "read",
+      args: { path: "world/bounds.js", entity: "FLOOR_Y" },
+      usage: { model_calls: 0, tokens_in: 0, tokens_out: 0 },
+    };
+    const now = Date.now();
+    await worker.sql(
+      "AGENT",
+      attempt,
+      "INSERT INTO journal (id, kind, call_id, request, tries, started_at, deadline_at) VALUES (1, 'tool', ?, ?, 0, ?, ?)",
+      request.call_id,
+      JSON.stringify({ call: "tool", request }),
+      now,
+      now + 10_000,
+    );
+    // ...and the next call finishes it, answers with it, and is not made.
+    const next = await client.call("list", { path: "creatures/" });
+    expect(next.isError).toBe(true);
+    expect(next.texts[0]).toBe(TEXTS.interrupted);
+    expect((next.message.result as { key: string }).key).toBe("world/bounds.js#FLOOR_Y");
+    const steps = (await eventsOf(worker, pool, "attempt.step")).filter((e) => e.attempt_id === attempt);
+    expect(steps.map((e) => e.tool)).toEqual(["read", "read"]);
+
+    // MC21: a minute of silence is not enough (MCP_SILENCE_MS is two minutes)...
+    const agent = worker.object("AGENT", attempt);
+    await agent.fetch(`/internal/alarm?now=${Date.now() + 61_000}`);
+    expect(((await inspect(worker, attempt)).meta as Record<string, string>).pending_stop).toBeUndefined();
+    // ...two and a half minutes are: the attempt stops with stalled, and its slot is freed.
+    expect(await gateSlots(worker)).toContain(attempt);
+    await agent.fetch(`/internal/alarm?now=${Date.now() + 150_000}`);
+    await waitFor(
+      async () => (await stateEvents(worker, pool, attempt)).some((e) => e.to === "stopped" && e.reason === "stalled"),
+      30_000,
+    );
+    await waitFor(async () => !(await gateSlots(worker)).includes(attempt), 30_000);
+    const status = await client.call("premise_status");
+    expect(status.message.result).toMatchObject({
+      state: "stopped",
+      stop_reason: "stalled",
+      next: TEXTS.status_next.stopped,
+    });
+    expect((await client.call("read", { path: "GUIDE.md" })).message.error).toMatchObject({ code: "attempt_closed" });
+
+    // MC23: its model is not in the plan, so a resume is refused (RS3).
+    const resume = await agent.fetch("/resume", {
+      method: "POST",
+      body: JSON.stringify({ attempt_id: attempt, resume_n: 1, revision: 2 }),
+    });
+    expect(await resume.json()).toEqual({ ok: false, error: "model_unavailable" });
+  }, 180_000);
+
+  it("MC20: every agent slot in use answers busy, opens nothing, and a stopped attempt frees its slot", async () => {
+    const pool = "mcp-other";
+    const opened: string[] = [];
+    let busy: { client: McpClient; text: string } | null = null;
+    for (let i = 0; i < 8 && busy === null; i += 1) {
+      const client = new McpClient(worker, pool, await mintToken(worker, pool));
+      await client.initialize(`client-${i}`);
+      const start = await client.call("premise_start", { request: `creature number ${i}` });
+      if (start.isError) busy = { client, text: JSON.stringify(start.message) };
+      else opened.push((start.message.result as { attempt_id: string }).attempt_id);
+    }
+    expect(busy).not.toBeNull();
+    expect(JSON.parse(busy!.text)).toEqual({ error: { code: "busy", message: TEXTS.busy } });
+    // MAX_REAL_AGENTS (6) slots are held when busy is answered, and the busy session opened nothing.
+    expect(await gateSlots(worker)).toHaveLength(6);
+    const ids = (await eventsOf(worker, pool, "attempt.opened")).map((e) => e.attempt_id);
+    expect(ids.sort()).toEqual([...opened].sort());
+    // The owner stops them (13.6): each frees its slot.
+    for (const attempt of opened) {
+      const res = await worker.fetch(
+        `/api/pools/${pool}/attempts/${attempt}/stop`,
+        bearer({ request_id: `stop-${attempt}` }),
+      );
+      expect(res.status).toBe(200);
+    }
+    await waitFor(async () => !(await gateSlots(worker)).some((id) => opened.includes(id)), 30_000);
+    const after = await busy!.client.call("premise_start", { request: "creature number 7" });
+    expect(after.isError, JSON.stringify(after.message)).toBe(false);
+  }, 180_000);
+
+  it("MC22: the kill switch refuses every MCP call, initialize included, and stops the open attempt with killed", async () => {
+    const pool = "mcp-kill";
+    const { client, attempt } = await started(worker, pool, "a seahorse that bobs in place");
+    const kill = await worker.fetch("/api/kill", bearer({ killed: true }));
+    expect(kill.status).toBe(200);
+    try {
+      const call = await client.rpc("tools/call", { name: "read", arguments: { path: "GUIDE.md" } });
+      expect(call.status).toBe(503);
+      expect(call.body?.error).toEqual({ code: -32002, message: TEXTS.killed });
+      const fresh = new McpClient(worker, pool, await mintToken(worker, pool));
+      const init = await fresh.rpc("initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "late" } });
+      expect(init.status).toBe(503);
+      await waitFor(
+        async () => (await stateEvents(worker, pool, attempt)).some((e) => e.to === "stopped" && e.reason === "killed"),
+        30_000,
+      );
+    } finally {
+      expect((await worker.fetch("/api/kill", bearer({ killed: false }))).status).toBe(200);
+    }
+    expect((await client.call("read", { path: "GUIDE.md" })).message.error).toMatchObject({ code: "attempt_closed" });
+  }, 120_000);
+
+  it("MC8: no token appears in any event, transcript or log line", async () => {
+    expect(TOKENS.length).toBeGreaterThan(10);
+    const texts: string[] = [output.join("")];
+    const attempts = new Set<string>();
+    for (const pool of POOLS) {
+      const events = await worker.events(pool);
+      texts.push(JSON.stringify(events));
+      for (const e of events) if (e.type === "attempt.opened") attempts.add(String(e.attempt_id));
+    }
+    for (const attempt of attempts) texts.push(JSON.stringify(await inspect(worker, attempt)));
+    expect(attempts.size).toBeGreaterThan(5);
+    const all = texts.join("\n");
+    for (const token of TOKENS) expect(all.includes(token)).toBe(false);
+    // The redaction family is named, and the one token placed in a request is redacted in the transcripts too.
+    expect(all).toContain("a quiet crab [redacted]");
+  });
+});
+
+describe("outside agents over MCP while features.mcp is off (07-mcp MC4)", () => {
+  let worker: LandingWorker;
+
+  beforeAll(async () => {
+    worker = await startLandingWorker({ ownerKey: KEY, repos: [], features: { mcp: false } });
+  }, 120_000);
+
+  afterAll(async () => {
+    await worker?.dispose();
+  });
+
+  it("MC4: with the switch off, every MCP route answers 404 feature_off and nothing else happens", async () => {
+    const token = handToken("tidepool", Math.floor(Date.now() / 1000) + 600);
+    const post = await worker.fetch("/mcp/tidepool", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+    });
+    expect(post.status).toBe(404);
+    expect(await post.json()).toEqual({ error: { code: "feature_off" } });
+    for (const method of ["GET", "DELETE"]) {
+      expect((await worker.fetch("/mcp/tidepool", { method })).status, method).toBe(404);
+    }
+    const mint = await worker.fetch("/api/pools/tidepool/mcp-tokens", bearer({}));
+    expect(mint.status).toBe(404);
+    expect(await mint.json()).toEqual({ error: { code: "feature_off" } });
+    // A path under /mcp that no row matches is the API's 404, never the page.
+    expect((await worker.fetch("/mcp/tidepool/extra", { method: "GET" })).status).toBe(404);
+  });
 });

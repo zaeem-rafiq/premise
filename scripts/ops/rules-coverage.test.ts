@@ -4,7 +4,15 @@
 import { describe, expect, it } from "vitest";
 import type { Features } from "../../src/protocol/floor-json.ts";
 
-const ENABLED: Features = { held: true, race: true, undo: true, green: "full", clef: true, attempt_repos: true };
+const ENABLED: Features = {
+  held: true,
+  race: true,
+  undo: true,
+  green: "full",
+  clef: true,
+  attempt_repos: true,
+  text_merge: true,
+};
 import {
   acceptanceCheckIds,
   caseCoverage,

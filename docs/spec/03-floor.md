@@ -1518,7 +1518,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `plain.conflicts` | Text conflicts in the plain merge: {n} (approximated) |
 | `plain.conflicts.tip` | A change that the plain merge could not apply is left out of the right pool and counted here. The count is approximated: Trunk replays each change's edits in order, which is not a full three-way merge. |
 | `plain.conflicts.merged` | Text conflicts in the plain merge: {n} |
-| `plain.conflicts.merged.tip` | A change that plain git could not merge is left out of the right pool and counted here. Trunk merges each file line by line from three versions, as git merge-file does: where the agent started, the plain-merge pool, and the agent's own version. (`plain.conflicts.merged` and this row added 2026-10-10 by the owner's decision to build the extensions.) |
+| `plain.conflicts.merged.tip` | A change that plain git could not merge is left out of the right pool and counted here. Trunk merges each file from three versions, line by line, as git merge-file does. The three are where the agent started, the plain-merge pool, and the agent's own version. |
 | `plain.same` | No change has gone around yet. |
 | `plain.loading` | Building the plain-merge pool… |
 | `plain.behind` | This pool is {n} landings behind. (for 1: This pool is {n} landing behind.) |

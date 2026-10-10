@@ -34,13 +34,16 @@ export function limitsList(features: Features): string[] {
     `One Trunk serves one pool. Agents read and write files of at most ${thousands(MAX_FILE_BYTES)} bytes. A repository with more than ${thousands(IMPORT_MAX_ENTRIES)} entries or ${thousands(IMPORT_MAX_TEXT_BYTES)} bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.`,
     `Real agents are limited by the Workers AI rate limits. This build runs at most ${MAX_REAL_AGENTS} at once.`,
     "Numbers in the Swarm view come from scripted agents. They make no model calls.",
-    "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
+    features.text_merge
+      ? "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product. Each change is merged as git merges a file from three versions, and the version its agent started from is taken from the pool's history."
+      : "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
     "A premise across two pools is not built.",
     features.green === "none"
       ? "The green line is not in this build."
       : `The green line checks ${GREEN_SENTENCE[features.green]}.`,
     `Clef judgments are ${features.clef ? "on" : "off"} in this build.`,
-    "Not built: text merge, Python and Go modules, outside agents over MCP, audience input.",
+    // Line 9: each name is listed only while its switch is off (README of docs/plans/extensions).
+    `Not built: ${[features.text_merge ? null : "text merge", "Python and Go modules", "outside agents over MCP", "audience input"].filter((name) => name !== null).join(", ")}.`,
     "References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.",
     "A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.",
     "Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.",

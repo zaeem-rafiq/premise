@@ -13,6 +13,7 @@ export type Features = {
   green: "none" | "static" | "full"; // 11.5: no verification | static checks only (GR5) | the isolate self-test
   clef: boolean; // triage (7.3), risk (10.4) and contradiction (GL4) questions
   attempt_repos: boolean; // 11.5a
+  text_merge: boolean; // 11.7 PM3a: the plain-merge pool merges each change three ways (added 2026-10-10)
 };
 
 export type PrewrittenIntent = {

@@ -491,3 +491,218 @@ describe("plainTreeId (PM7, 9.5)", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// PM3a (added 2026-10-10): with `features.text_merge` on, each change merges three ways. The
+// expected trees come from `git merge-file -p` on the three versions PM3a names for each path
+// (base from the pool's history at the fork point, ours from the plain-merge pool, theirs the
+// landing's operations over base), then `git write-tree` of the merged files (BP1).
+
+/** `history(seq)` over the real pool's file maps after each landing (index 0: the seed). */
+const historyOf =
+  (maps: readonly ReadonlyMap<string, string>[]) =>
+  (seq: number): ReadonlyMap<string, string> =>
+    maps[Math.min(seq, maps.length - 1)]!;
+
+const withFiles = (from: ReadonlyMap<string, string>, set: Record<string, string>): Map<string, string> => {
+  const out = new Map(from);
+  for (const [path, content] of Object.entries(set)) out.set(path, content);
+  return out;
+};
+
+/** Real git on three versions of one file: the merged text, or null for a text conflict. */
+function gitMergeFile(base: string | null, ours: string | null, theirs: string | null): string | null {
+  const repo = createScratchRepo("premise-pm3a-");
+  try {
+    writeFileSync(join(repo.directory, "base"), base ?? "");
+    writeFileSync(join(repo.directory, "ours"), ours ?? "");
+    writeFileSync(join(repo.directory, "theirs"), theirs ?? "");
+    try {
+      return execFileSync("git", ["merge-file", "-p", "ours", "base", "theirs"], {
+        cwd: repo.directory,
+        env: repo.env,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (typeof status === "number" && status > 0) return null;
+      throw error;
+    }
+  } finally {
+    repo.remove();
+  }
+}
+
+/** `git write-tree` of a file map in a scratch repository. */
+function gitTree(files: ReadonlyMap<string, string>): string {
+  ensureGitWrapper();
+  const repo = createScratchRepo("premise-pm3a-tree-");
+  try {
+    for (const [path, content] of files) {
+      const full = join(repo.directory, path);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, content);
+    }
+    repo.git("add", "-A");
+    return repo.git("write-tree");
+  } finally {
+    repo.remove();
+  }
+}
+
+const SEED_ENERGY = seedFiles().get("world/energy.js")!;
+const ENERGY_TOP = SEED_ENERGY.replace(
+  "// What one tick of ordinary living costs.",
+  "// The cost of one tick of living.",
+);
+const ENERGY_BOTTOM = SEED_ENERGY.replace("const REST_TICKS = 300;", "const REST_TICKS = 600;");
+
+describe("PM3a: the plain-merge replay with three-way text merge", () => {
+  it("PM3a: hero landing order 1 gives the tree git merge-file gives for the same three versions", () => {
+    const seed = seedFiles();
+    const sApplied = seed.get("world/energy.js")!.replace(S_REPLACE.old, S_REPLACE.new);
+    const crabFinal = CRAB_30.replace("crab.energy < 30", "crab.energy < 0.3");
+    const shrimpFinal = SHRIMP_5.replace("drain(shrimp, 5)", "drain(shrimp, 0.05)");
+    // The real pool's `main` after each landing of order 1 (7.5): S, then C, H and J as they landed.
+    const h1 = withFiles(seed, { "world/energy.js": sApplied });
+    const h2 = withFiles(h1, { "creatures/crab.js": crabFinal });
+    const h3 = withFiles(h2, { "creatures/shrimp.js": shrimpFinal });
+    const h4 = withFiles(h3, { "creatures/jellyfish.js": JELLYFISH_FILE });
+    // C and H opened on the seed (opened_seq 0) and replay their ops_first; S and J their landed ops.
+    const forked = (l: PlainLanding, forkSeq: number): PlainLanding => ({ ...l, forkSeq });
+    const result = replayPlainMerge(
+      seed,
+      [
+        change(1, [S_REPLACE]),
+        forked(change(2, [writeFile(1, "creatures/crab.js", CRAB_30)], { opsFirst: true, submitted: false }), 0),
+        forked(change(3, [writeFile(1, "creatures/shrimp.js", SHRIMP_5)], { opsFirst: true, submitted: false }), 0),
+        change(4, [writeFile(1, "creatures/jellyfish.js", JELLYFISH_FILE)]),
+      ],
+      { textMerge: { history: historyOf([seed, h1, h2, h3, h4]) } },
+    );
+
+    // Each path's three versions, as PM3a names them, merged by real git.
+    const expected = new Map(seed);
+    expected.set(
+      "world/energy.js",
+      gitMergeFile(seed.get("world/energy.js")!, seed.get("world/energy.js")!, sApplied)!,
+    );
+    expected.set("creatures/crab.js", gitMergeFile(null, null, CRAB_30)!);
+    expected.set("creatures/shrimp.js", gitMergeFile(null, null, SHRIMP_5)!);
+    expected.set("creatures/jellyfish.js", gitMergeFile(null, null, JELLYFISH_FILE)!);
+    expect(result.skipped).toEqual([]); // 7.8: the text-conflict count is 0
+    expect(result.interrupted).toEqual([2, 3]);
+    expect(plainTreeId(result.files)).toBe(gitTree(expected));
+    // 7.8's tree: ENERGY_MAX = 1, crab.energy < 30, drain(shrimp, 5).
+    expect(result.files.get("creatures/crab.js")).toContain("crab.energy < 30");
+    expect(result.files.get("creatures/shrimp.js")).toContain("drain(shrimp, 5)");
+    expect(result.files.get("world/energy.js")).toContain("export const ENERGY_MAX = 1;");
+  });
+
+  it("PM3a: pair P5 is still a text conflict: both sides add creatures/crab.js with different contents", () => {
+    const seed = seedFiles();
+    const h1 = withFiles(seed, { "creatures/crab.js": CRAB_30 });
+    const h2 = withFiles(h1, { "creatures/crab.js": CRAB_BIG_CLAW });
+    const result = replayPlainMerge(
+      seed,
+      [
+        change(1, [writeFile(1, "creatures/crab.js", CRAB_30)]),
+        { ...change(2, [writeFile(1, "creatures/crab.js", CRAB_BIG_CLAW)], { opsFirst: true }), forkSeq: 0 },
+      ],
+      { textMerge: { history: historyOf([seed, h1, h2]) } },
+    );
+    // Real git: base absent (empty), ours the first crab, theirs the second: a conflict.
+    expect(gitMergeFile(null, CRAB_30, CRAB_BIG_CLAW)).toBeNull();
+    expect(result.skipped).toEqual([2]);
+    expect(result.steps[1]?.conflict).toEqual({ path: "creatures/crab.js", kind: "add_add" });
+    expect(result.files.get("creatures/crab.js")).toBe(CRAB_30); // the plain-merge pool keeps the first crab
+    expect(plainTreeId(result.files)).toBe(gitTree(h1));
+  });
+
+  it("PM3a: pair P4 is still a text conflict: both sides change the DAY_TICKS line", () => {
+    const seed = seedFiles();
+    const time = seed.get("world/time.js")!;
+    const r02 = replace(1, "world/time.js", "DAY_TICKS = 3600", "DAY_TICKS = 7200", ["world/time.js#DAY_TICKS"]);
+    const p4b = replace(1, "world/time.js", "DAY_TICKS = 3600", "DAY_TICKS = 10800", ["world/time.js#DAY_TICKS"]);
+    const h1 = withFiles(seed, { "world/time.js": time.replace("DAY_TICKS = 3600", "DAY_TICKS = 7200") });
+    const result = replayPlainMerge(seed, [change(1, [r02]), { ...change(2, [p4b], { opsFirst: true }), forkSeq: 0 }], {
+      textMerge: { history: historyOf([seed, h1, h1]) },
+    });
+    expect(
+      gitMergeFile(time, h1.get("world/time.js")!, time.replace("DAY_TICKS = 3600", "DAY_TICKS = 10800")),
+    ).toBeNull();
+    expect(result.skipped).toEqual([2]);
+    expect(result.steps[1]?.conflict).toEqual({ path: "world/time.js", kind: "lines" });
+    expect(result.files.get("world/time.js")).toContain("export const DAY_TICKS = 7200;");
+  });
+
+  it("PM3a: two whole-file writes of one module from the same base, in different regions, both land", () => {
+    // PM3 skips the second write (OP5: its base moved). A three-way merge takes both edits.
+    const seed = seedFiles();
+    const seedOid = blobId(utf8(SEED_ENERGY));
+    const h1 = withFiles(seed, { "world/energy.js": ENERGY_TOP });
+    const landings = [
+      change(1, [writeFile(1, "world/energy.js", ENERGY_TOP, seedOid)]),
+      { ...change(2, [writeFile(1, "world/energy.js", ENERGY_BOTTOM, seedOid)], { opsFirst: true }), forkSeq: 0 },
+    ];
+    expect(replayPlainMerge(seed, landings).skipped).toEqual([2]); // PM3, switch off
+    const result = replayPlainMerge(seed, landings, { textMerge: { history: historyOf([seed, h1, h1]) } });
+    const merged = gitMergeFile(SEED_ENERGY, ENERGY_TOP, ENERGY_BOTTOM);
+    expect(merged).not.toBeNull();
+    expect(result.skipped).toEqual([]);
+    expect(result.files.get("world/energy.js")).toBe(merged);
+    expect(result.files.get("world/energy.js")).toContain("// The cost of one tick of living.");
+    expect(result.files.get("world/energy.js")).toContain("export const REST_TICKS = 600;");
+  });
+
+  it("PM3a: the fork point is the first version from opened_seq on where the operations apply", () => {
+    // The attempt opened on the seed, but its replace edits a line that landing 1 wrote: the
+    // seed does not hold `old` (OP1), so base is `main` after landing 1, where it applies.
+    const seed = seedFiles();
+    const h1 = withFiles(seed, { "world/energy.js": ENERGY_BOTTOM });
+    const op = replace(1, "world/energy.js", "REST_TICKS = 600", "REST_TICKS = 900", ["world/energy.js#REST_TICKS"]);
+    const result = replayPlainMerge(
+      seed,
+      [
+        change(1, [writeFile(1, "world/energy.js", ENERGY_BOTTOM, blobId(utf8(SEED_ENERGY)))]),
+        { ...change(2, [op], { opsFirst: true }), forkSeq: 0 },
+      ],
+      { textMerge: { history: historyOf([seed, h1, h1]) } },
+    );
+    expect(result.skipped).toEqual([]);
+    expect(result.files.get("world/energy.js")).toContain("export const REST_TICKS = 900;");
+  });
+
+  it("PM3a: operations that apply to no version from the fork point on are a text conflict (no_base)", () => {
+    const seed = seedFiles();
+    const op = replace(1, "world/energy.js", "NOT IN ANY VERSION", "x", ["world/energy.js#ENERGY_MAX"]);
+    const result = replayPlainMerge(seed, [{ ...change(1, [op], { opsFirst: true }), forkSeq: 0 }], {
+      textMerge: { history: historyOf([seed, seed]) },
+    });
+    expect(result.skipped).toEqual([1]);
+    expect(result.steps[0]?.conflict).toEqual({ path: "world/energy.js", kind: "no_base" });
+  });
+
+  it("PM3a with PM5: undoing the first of two merged changes keeps the second, merged again", () => {
+    const seed = seedFiles();
+    const seedOid = blobId(utf8(SEED_ENERGY));
+    const h1 = withFiles(seed, { "world/energy.js": ENERGY_TOP });
+    const merged = gitMergeFile(SEED_ENERGY, ENERGY_TOP, ENERGY_BOTTOM)!;
+    const h2 = withFiles(seed, { "world/energy.js": merged });
+    const result = replayPlainMerge(
+      seed,
+      [
+        change(1, [writeFile(1, "world/energy.js", ENERGY_TOP, seedOid)]),
+        { ...change(2, [writeFile(1, "world/energy.js", ENERGY_BOTTOM, seedOid)], { opsFirst: true }), forkSeq: 0 },
+        undo(3, [1]),
+      ],
+      { textMerge: { history: historyOf([seed, h1, h2, h2]) } },
+    );
+    // Back to the seed's content for the path, then landing 2's base and theirs merged into it:
+    // git merge-file of (base seed, ours seed, theirs ENERGY_BOTTOM).
+    expect(result.steps[2]?.reverted).toEqual([1]);
+    expect(result.files.get("world/energy.js")).toBe(gitMergeFile(SEED_ENERGY, SEED_ENERGY, ENERGY_BOTTOM));
+    expect(result.files.get("world/energy.js")).toBe(ENERGY_BOTTOM);
+  });
+});

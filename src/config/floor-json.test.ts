@@ -87,6 +87,18 @@ function specLimits(): string[] {
       if (off.length === 0) continue; // left out when none is off
       line = line.replace("{the names of the features that are off}", off.map((key) => names[key]).join(", "));
     }
+    // Line 5 (PM3a, added 2026-10-10): its other form while `features.text_merge` is on.
+    const textMergeForm = / \(Or, while `features\.text_merge` is on: (.*)\)$/.exec(line);
+    if (textMergeForm !== null)
+      line = FEATURES.text_merge ? (textMergeForm[1] ?? "") : line.slice(0, textMergeForm.index);
+    // Line 9: "text merge" is listed only while `features.text_merge` is off.
+    const listedNote = / \("text merge" is listed only while `features\.text_merge` is off; added 2026-10-10\.\)$/.exec(
+      line,
+    );
+    if (listedNote !== null) {
+      line = line.slice(0, listedNote.index);
+      if (FEATURES.text_merge) line = line.replace("text merge, ", "");
+    }
     // The parenthetical notes of lines 7 and 15 are the conditions, not part of the shown line.
     line = line.replace(/ \(Or:.*\)$/, "").replace(/ \(Left out.*\)$/, "");
     // 5.12: a number in a line is written with a comma every three places.
@@ -244,9 +256,10 @@ describe("floorJson() (03-floor 4.5)", () => {
     });
   });
 
-  it("features carries the six keys of Features (FJ1) and no other", () => {
+  it("features carries the keys of Features (FJ1) and no other", () => {
+    // FJ1's seven keys; `text_merge` added 2026-10-10 by the owner's decision to build the extensions.
     expect(Object.keys(json.features).sort()).toEqual(
-      ["attempt_repos", "clef", "green", "held", "race", "undo"].sort(),
+      ["attempt_repos", "clef", "green", "held", "race", "text_merge", "undo"].sort(),
     );
   });
 });

@@ -6,7 +6,7 @@
 // `git write-tree` of the same files gives the commit's tree.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
@@ -45,7 +45,10 @@ function git(repo: ScratchRepo, args: string[], input?: Uint8Array): string {
 }
 
 /** A pool on the `auto` policy: a submit lands on the next tick, no card involved. */
-function fixture() {
+function fixture(
+  files: Record<string, string> = { "world.js": "export const LIMIT = 100;\n" },
+  features: { text_merge?: boolean } = {},
+) {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
   const sql: Sql = {
@@ -67,16 +70,13 @@ function fixture() {
   };
   const trunk = Trunk.create(
     sql,
-    {
-      ".premise/policy.json": JSON.stringify({ v: 1, default: "auto" }),
-      "world.js": "export const LIMIT = 100;\n",
-    },
-    { now: () => 1000 },
+    { ".premise/policy.json": JSON.stringify({ v: 1, default: "auto" }), ...files },
+    { now: () => 1000, features },
   );
   trunk.pushOk();
   let n = 0;
-  function call(attempt_id: string, tool: ToolRequest["tool"], args: ToolRequest["args"]) {
-    const r = trunk.tool({ attempt_id, call_id: `call-${++n}`, tool, args, ack: 0 });
+  function call(attempt_id: string, tool: ToolRequest["tool"], args: ToolRequest["args"], ack = 0) {
+    const r = trunk.tool({ attempt_id, call_id: `call-${++n}`, tool, args, ack });
     expect(r.ok, JSON.stringify(r)).toBe(true);
     return r;
   }
@@ -126,5 +126,75 @@ describe("the plain-merge build (11.7) with shared blobs", () => {
     expect(done).toMatchObject({ ok: true });
     expect(trunk.pool.meta.get("plain_through_seq")).toBe("1");
     expect(trunk.pool.meta.get("plain_commit")).toBe(built.commit);
+  });
+});
+
+// PM3a (added 2026-10-10) through the engine: two attempts open on the seed and each rewrites a
+// different part of one module. The first lands; the second's write no longer applies (OP5), so
+// it goes around and lands a combined file. Its `ops_first` is the first whole-file write, whose
+// base is the seed. PM3 counts that as a text conflict; with `features.text_merge` on, Trunk
+// merges it three ways from the attempt's `opened_seq`, and the plain-merge tree is the one real
+// git gives: `git merge-file` of (seed, the first landing's file, the second's first write).
+describe("the plain-merge build (11.7) with features.text_merge", () => {
+  const SEED = ["// limits", "export const LIMIT = 100;", "", "// speeds", "export const SPEED = 2;", ""].join("\n");
+  const FIRST = SEED.replace("LIMIT = 100", "LIMIT = 50");
+  const SECOND_FIRST = SEED.replace("SPEED = 2", "SPEED = 3");
+  const SECOND_FINAL = FIRST.replace("SPEED = 2", "SPEED = 3");
+
+  function run(textMerge: boolean) {
+    const { trunk, call } = fixture({ "rules.js": SEED }, { text_merge: textMerge });
+    trunk.openAttempt("A", { intent: "halve the limit" });
+    trunk.openAttempt("B", { intent: "speed up" });
+    call("A", "read", { path: "rules.js" });
+    call("B", "read", { path: "rules.js" });
+    call("A", "write", { path: "rules.js", content: FIRST });
+    call("B", "write", { path: "rules.js", content: SECOND_FIRST });
+    call("A", "submit", { summary: "halve the limit" });
+    trunk.tick();
+    trunk.pushOk();
+    expect(trunk.pool.attempts.get("A")?.state).toBe("landed");
+    // B's write went around (OP5): read again, write the combined file, submit, land.
+    call("B", "read", { path: "rules.js" }, 1);
+    call("B", "write", { path: "rules.js", content: SECOND_FINAL }, 1);
+    call(
+      "B",
+      "submit",
+      { summary: "speed up", acknowledge: [1], statement: "Kept the new limit and raised the speed." },
+      1,
+    );
+    trunk.tick();
+    trunk.pushOk();
+    expect(trunk.pool.attempts.get("B")?.state).toBe("landed");
+    expect(trunk.pool.headSeq()).toBe(2);
+    const built = trunk.plain();
+    if (built.state !== "build") throw new Error(`expected a plain build, got ${built.state}`);
+    return built;
+  }
+
+  it("PM3: with the switch off the second landing's first write is a text conflict", () => {
+    const built = run(false);
+    expect(built.skipped).toEqual([2]);
+  });
+
+  it("PM3a: with the switch on it merges, and the tree is git merge-file's", () => {
+    const built = run(true);
+    expect(built.skipped).toEqual([]);
+    const repo = scratch();
+    writeFileSync(join(repo.directory, "base"), SEED);
+    writeFileSync(join(repo.directory, "ours"), FIRST);
+    writeFileSync(join(repo.directory, "theirs"), SECOND_FIRST);
+    const merged = git(repo, ["merge-file", "-p", "ours", "base", "theirs"]);
+    expect(merged).toContain("LIMIT = 50");
+    expect(merged).toContain("SPEED = 3");
+    // The plain commit's tree is what real git writes for the seed's files with the merged module.
+    rmSync(join(repo.directory, "base"));
+    rmSync(join(repo.directory, "ours"));
+    rmSync(join(repo.directory, "theirs"));
+    mkdirSync(join(repo.directory, ".premise"), { recursive: true });
+    writeFileSync(join(repo.directory, ".premise/policy.json"), JSON.stringify({ v: 1, default: "auto" }));
+    // `git()` drops the output's last line break; the merged module ends with one.
+    writeFileSync(join(repo.directory, "rules.js"), `${merged}\n`);
+    repo.git("add", "-A");
+    expect(git(repo, ["write-tree"])).toBe(built.tree);
   });
 });

@@ -16,4 +16,5 @@ export const FEATURES: Features = {
   green: "none",
   clef: false,
   attempt_repos: false,
+  text_merge: false,
 };

@@ -66,7 +66,8 @@ function undoesOf(pool: Pool, l: Landing): number[] {
 }
 
 /** One landing as `replayPlainMerge` needs it (PM1): `ops_first` when the attempt's revision
- * has a row, the landed operations otherwise; undo/revert carry the seqs they reverted. */
+ * has a row, the landed operations otherwise; undo/revert carry the seqs they reverted. An
+ * `ops_first` landing carries its attempt's `opened_seq`, PM3a's fork point. */
 function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
   if (l.kind === "change") {
     if (l.attempt_id !== null) {
@@ -84,6 +85,7 @@ function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
           ops: JSON.parse(String(row.ops)) as Op[],
           opsFirst: true,
           submitted: Number(row.submitted) === 1,
+          forkSeq: pool.attempts.get(l.attempt_id)?.opened_seq ?? l.seq - 1,
         };
       }
     }
@@ -92,13 +94,24 @@ function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
   return { seq: l.seq, kind: l.kind, ops: [], opsFirst: false, submitted: false, undoes: undoesOf(pool, l) };
 }
 
-/** The replay over the seed tree (PM1: "start from the seed" — the head at seq 0). */
+/** The replay over the seed tree (PM1: "start from the seed" — the head at seq 0). With
+ * `features.text_merge` on, PM3a reads the pool's own history, one file map per seq at most. */
 function replayThrough(pool: Pool, throughSeq: number) {
   const landings = pool.landings
     .filter((l) => l.pushed_at !== null && l.seq <= throughSeq)
     .sort((a, b) => a.seq - b.seq)
     .map((l) => plainLandingOf(pool, l));
-  return replayPlainMerge(pool.fileMapAt(0), landings);
+  if (!pool.featuresTextMerge) return replayPlainMerge(pool.fileMapAt(0), landings);
+  const maps = new Map<number, ReadonlyMap<string, string>>();
+  const history = (seq: number): ReadonlyMap<string, string> => {
+    let files = maps.get(seq);
+    if (files === undefined) {
+      files = new Map(pool.fileMapAt(seq));
+      maps.set(seq, files);
+    }
+    return files;
+  };
+  return replayPlainMerge(history(0), landings, { textMerge: { history } });
 }
 
 /** The deterministic objects a pending spec stands for: replayed files' tree + the commit. */

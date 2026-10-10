@@ -9,6 +9,7 @@ import { replayPlainMerge, type PlainLanding } from "../plain/plain.ts";
 import { makeCommit, type GitObject } from "../git/objects.ts";
 import { makeTreeFromFiles } from "../git/tree-files.ts";
 import { buildPack } from "../git/pack.ts";
+import { blobBytes, text as fromUtf8 } from "../sync/bytes.ts";
 import { emitPoolState, event, metaWrite } from "./events.ts";
 import { metaSet } from "./schema.ts";
 import type { Landing, Op, Pool } from "./sets.ts";
@@ -102,16 +103,38 @@ function replayThrough(pool: Pool, throughSeq: number) {
     .sort((a, b) => a.seq - b.seq)
     .map((l) => plainLandingOf(pool, l));
   if (!pool.featuresTextMerge) return replayPlainMerge(pool.fileMapAt(0), landings);
-  const maps = new Map<number, ReadonlyMap<string, string>>();
-  const history = (seq: number): ReadonlyMap<string, string> => {
-    let files = maps.get(seq);
-    if (files === undefined) {
-      files = new Map(pool.fileMapAt(seq));
-      maps.set(seq, files);
-    }
-    return files;
-  };
+  const history = poolHistory(pool);
   return replayPlainMerge(history(0), landings, { textMerge: { history } });
+}
+
+/** PM3a's `history(seq)`: `main` after landing `seq`, built forward from the seed one landing at a
+ * time and kept for the build, so a build reads each landed blob once (not once per seq). */
+function poolHistory(pool: Pool): (seq: number) => ReadonlyMap<string, string> {
+  const landed = [...pool.landings].sort((a, b) => a.seq - b.seq);
+  const maps: Map<string, string>[] = [new Map(pool.fileMapAt(0))];
+  let next = 0; // index into `landed` of the first landing not yet applied
+  return (seq) => {
+    while (next < landed.length && landed[next]!.seq <= seq) {
+      const l = landed[next++]!;
+      const files = new Map(maps[maps.length - 1]!);
+      for (const [path, fo] of l.files) {
+        if (fo.new_oid === "absent") {
+          files.delete(path);
+          continue;
+        }
+        const row = pool.sql.exec("SELECT content FROM blobs WHERE oid = ?", fo.new_oid).toArray()[0];
+        if (row !== undefined) files.set(path, fromUtf8(blobBytes(row.content)));
+      }
+      maps[l.seq] = files;
+      maps.length = Math.max(maps.length, l.seq + 1);
+    }
+    // The newest map at or before `seq` (seqs are dense; a gap holds the map before it).
+    for (let s = Math.min(seq, maps.length - 1); s >= 0; s--) {
+      const files = maps[s];
+      if (files !== undefined) return files;
+    }
+    return maps[0]!;
+  };
 }
 
 /** The deterministic objects a pending spec stands for: replayed files' tree + the commit. */

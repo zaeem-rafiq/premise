@@ -5,12 +5,12 @@
     {
       "id": "hero-canned",
       "file": "/replay/hero-canned.ndjson",
-      "title": "The conflict, scripted agents",
-      "duration_ms": 22034,
-      "events": 169,
-      "bytes": 81606,
+      "title": "The beat sheet, scripted agents",
+      "duration_ms": 160029,
+      "events": 516,
+      "bytes": 259021,
       "synthetic": true,
-      "recorded_at": "2026-10-06T01:40:03.906Z"
+      "recorded_at": "2026-10-10T13:42:11.544Z"
     }
   ]
 }

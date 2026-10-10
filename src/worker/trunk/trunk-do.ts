@@ -744,6 +744,12 @@ export class Trunk extends DurableObject<Env> {
       },
       // TR6: the `triage` timer closes every question past its deadline, then sends what waits.
       triage: async (now) => {
+        // TR6 on start-up: an instance woken by this timer re-asks what an earlier one sent
+        // before any deadline decides it.
+        if (!this.#triageStarted && hasAsks(this.#sql, "sent")) {
+          this.#triageStarted = true;
+          await this.#applyEntry("triage_restart", {}, now);
+        }
         await this.#applyEntry("triage_deadline", {}, now);
         await this.#postCommit();
       },

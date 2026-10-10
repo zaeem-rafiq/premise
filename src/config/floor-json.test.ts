@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { REPO_ROOT } from "../../test/support/source.ts";
 import { FEATURES } from "./features.ts";
 import { floorJson } from "./floor-json.ts";
+import { limitsList } from "./limits.ts";
 import { MODEL_OPTIONS, MODEL_PLAN } from "./model-plan.ts";
 import { IMPORT_MAX_ENTRIES, IMPORT_MAX_TEXT_BYTES, MAX_FILE_BYTES, MAX_REAL_AGENTS } from "../protocol/constants.ts";
 
@@ -192,6 +193,21 @@ describe("floorJson() (03-floor 4.5)", () => {
     if (FEATURES.green === "none") {
       expect(json.limits).toContain("The green line is not in this build.");
     }
+  });
+
+  it("FJ1 5.12: attempt repositories leave the limits list only when their switch is on", () => {
+    const features = Object.fromEntries(
+      Object.entries(FEATURES).map(([key, value]) => [key, typeof value === "boolean" ? true : value]),
+    ) as typeof FEATURES;
+    expect(limitsList({ ...features, attempt_repos: false })).toContain(
+      "Switched off in this build: attempt repositories.",
+    );
+    expect(limitsList({ ...features, attempt_repos: true }).some((line) => line.includes("attempt repositories"))).toBe(
+      false,
+    );
+    expect(limitsList({ ...features, held: false, attempt_repos: true })).toContain(
+      "Switched off in this build: the held card with previews.",
+    );
   });
 
   it("related is the verbatim text of `about.related.body`", () => {

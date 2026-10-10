@@ -37,6 +37,8 @@ import type {
   GateSettleRequest,
   GateState,
 } from "../../core/gate/index.ts";
+import { FEATURES } from "../../config/features.ts";
+import { AttemptRepoQueue } from "./attempt-repos.ts";
 import { MODEL_PLAN } from "../../config/model-plan.ts";
 import type { KillRequest } from "../../protocol/routes.ts";
 import type { Sql } from "../../protocol/ports.ts";
@@ -112,11 +114,17 @@ function asKill(body: unknown): KillRequest | null {
 
 export class ModelGate extends DurableObject<Env> {
   readonly #sql: Sql;
+  readonly #repos: AttemptRepoQueue | null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#sql = sqlOver(ctx.storage);
     applyGateSchema(this.#sql);
+    this.#repos = FEATURES.attempt_repos ? new AttemptRepoQueue(this.#sql, env, ctx, () => this.#arm()) : null;
+    if (this.#repos !== null) {
+      this.#repos.kick(Date.now());
+      this.ctx.waitUntil(this.#arm());
+    }
   }
 
   /** The deployment's cap: `SPEND_CAP_USD`, or 0 when it is absent, not a number or negative. */
@@ -175,6 +183,7 @@ export class ModelGate extends DurableObject<Env> {
 
   /** The alarm's work: the sweep (SE6a + the due `limits` flush of SE9), then owed deliveries. */
   async #runAlarm(now: number): Promise<void> {
+    this.#repos?.kick(now);
     const { effects } = this.#runCall({ call: "sweep", request: {} }, now);
     await this.#runEffects(now, effects);
   }
@@ -185,6 +194,8 @@ export class ModelGate extends DurableObject<Env> {
     let at = nextWakeup(this.#loadState(), now);
     const retry = nextRetryAt(this.#sql, now);
     if (retry !== null && (at === null || retry < at)) at = retry;
+    const repos = this.#repos?.next(now) ?? null;
+    if (repos !== null && (at === null || repos < at)) at = repos;
     if (at === null) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(at);
   }
@@ -230,6 +241,7 @@ export class ModelGate extends DurableObject<Env> {
           state: stored === null ? null : (JSON.parse(stored) as GateState),
           outbox: outboxAll(this.#sql).map((row) => ({ ...row, event: JSON.parse(row.event) as unknown })),
           delivery: outboxPoolAll(this.#sql),
+          ...(this.#repos === null ? {} : { attempt_repositories: this.#repos.rows() }),
         });
       }
       if (request.method === "GET" && (pathname === "/killed" || pathname === "/internal/killed")) {
@@ -246,6 +258,9 @@ export class ModelGate extends DurableObject<Env> {
         } catch {
           return json({ error: { code: "bad_json" } }, 400);
         }
+      }
+      if (pathname === "/internal/attempt-repo") {
+        return this.#repos === null ? notBuilt() : this.#repos.enqueue(body, Date.now());
       }
       if (pathname === "/internal/alarm") {
         // The test path (the task's "drive the alarm through a test path"): the same work the

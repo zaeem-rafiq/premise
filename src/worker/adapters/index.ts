@@ -31,7 +31,10 @@ import {
 export const pusher: Pusher = notBuiltPusher();
 export const notesReader: NotesReader = notBuiltNotesReader();
 export const tokenSource: TokenSource = notBuiltTokenSource();
+// The environment-free seam stays fail-closed. The gate binds ATTEMPTS to the factory
+// only when features.attempt_repos is on; option A is selected in the adapter.
 export const attemptRepoProvisioner: AttemptRepoProvisioner = notBuiltAttemptRepoProvisioner();
+export { artifactsAttemptRepoProvisioner } from "./attempt-repo/index.ts";
 export const verifier: Verifier = notBuiltVerifier();
 export const poolSource: PoolSource = notBuiltPoolSource();
 export const triage: Triage = notBuiltTriage();

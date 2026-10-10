@@ -27,7 +27,7 @@ const IDENTITY = {
  */
 export function scratchGitEnv(from: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const kept = Object.entries(from).filter(([name]) => !name.toUpperCase().startsWith("GIT_"));
-  return { ...Object.fromEntries(kept), ...NO_CONFIGURATION, ...IDENTITY };
+  return { ...(Object.fromEntries(kept) as NodeJS.ProcessEnv), ...NO_CONFIGURATION, ...IDENTITY };
 }
 
 export type ScratchRepo = {

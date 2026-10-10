@@ -24,6 +24,16 @@ import type {
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
 import { persistPremises, persistOps, persistHeadsUps } from "./attempt-rows.ts";
+import {
+  dispatch as dispatchAsks,
+  overdue as overdueAsks,
+  restartAsks,
+  thawPending,
+  type TriageRequest,
+} from "./triage.ts";
+import type { TriageAnswer } from "./tick.ts";
+import { answerRisk, dispatchRisk, overdueRisk, type RiskRequest } from "./risk.ts";
+import type { RiskAnswers } from "../../protocol/cards.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
@@ -31,6 +41,7 @@ import { canChooseRace, createIntent, raceCostDone, refreshRaceCandidates } from
 import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse } from "../../protocol/internal.ts";
 import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
+import { greenDone, greenStart, type GreenStart } from "./green.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, openCard, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
@@ -53,10 +64,10 @@ import type { UndoPlanResponse, UndoResponse } from "../../protocol/undo.ts";
 export type PoolOptions = {
   pool_id?: string;
   constants?: Partial<Pool["K"]>;
-  switches?: { CLEF_TRIAGE?: "on" | "off" };
+  switches?: { CLEF_TRIAGE?: "on" | "off"; CLEF_RISK?: "on" | "off" };
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
-  features?: { held?: boolean; text_merge?: boolean };
+  features?: { held?: boolean; green?: "none" | "static" | "full"; text_merge?: boolean };
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -249,6 +260,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   // FJ1: `features.held` comes from the build (the caller passes FEATURES.held); a pool created
   // under a direct engine call keeps that default, but an explicit false always wins.
   pool.featuresHeld = opts.features?.held ?? pool.meta.get("features_held") === "1";
+  // FJ1/GR5: the build's `features.green`; a direct engine call without it runs no green line.
+  pool.featuresGreen = opts.features?.green ?? "none";
   // LG1: an imported pool (`app` "", 06-repos IR2/IR8) works in IMPORT_LANGUAGES; the tide
   // pool and any other seeded pool keep 2.1's set.
   pool.languages = pool.meta.get("app") === "" ? IMPORT_LANGUAGES : TIDEPOOL_LANGUAGES;
@@ -337,6 +350,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     pool.attempts.set(a.id, a);
     pool.attemptCounter += 1;
   }
+  // TR10: each pending item and its stamp come back from the question store.
+  thawPending(pool);
   // landings + companions
   const filesBySeq = groupRows(sql.exec("SELECT * FROM landing_files ORDER BY seq, path").toArray(), "seq");
   const writesBySeq = groupRows(sql.exec("SELECT * FROM landing_writes ORDER BY seq, kind, key").toArray(), "seq");
@@ -445,9 +460,11 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       })(),
     K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
     clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    riskOn: opts.switches?.CLEF_RISK === "on",
     killed: opts.killed === true,
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
+    featuresGreen: opts.features?.green ?? "none",
     featuresTextMerge: opts.features?.text_merge === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     savedMeta: new Map(),
@@ -1575,6 +1592,16 @@ export class Trunk {
     return wrapCall(this.pool, () => plainDone(this.pool, input));
   }
 
+  /** 11.5's `green` timer: the next commit to verify, or `idle` (GR1, GR1a). */
+  green(): GreenStart {
+    return wrapCall(this.pool, () => greenStart(this.pool));
+  }
+
+  /** The answer of one green-line run (GR2 to GR4): `green.verified`, and on a pass `green.advanced`. */
+  greenDone(input: Parameters<typeof greenDone>[1]): Record<string, unknown> {
+    return wrapCall(this.pool, () => greenDone(this.pool, input));
+  }
+
   restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {
     return wrapCall(this.pool, () => restart(this.pool, args));
   }
@@ -1595,11 +1622,52 @@ export class Trunk {
     });
   }
 
-  triage(args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number }): void {
+  triage(args: TriageAnswer): void {
+    wrapCall(this.pool, () => this.#answer(args));
+  }
+
+  #answer(args: TriageAnswer): void {
+    triage(this.pool, args);
+    const attempt = this.pool.attempts.get(args.attempt);
+    if (attempt?.race && attempt.state === "held") attempt.validated_at = null;
+  }
+
+  /** TR10 dispatch: the requests to send now; questions over the limit close unavailable. */
+  triageDispatch(): { requests: TriageRequest[] } {
+    return wrapCall(this.pool, () => {
+      const { requests, close } = dispatchAsks(this.pool);
+      for (const c of close) this.#answer({ ...c, p: null });
+      return { requests };
+    });
+  }
+
+  /** TR6: the `triage` timer — every question past its deadline is unavailable. */
+  triageDeadline(): void {
     wrapCall(this.pool, () => {
-      triage(this.pool, args);
-      const attempt = this.pool.attempts.get(args.attempt);
-      if (attempt?.race && attempt.state === "held") attempt.validated_at = null;
+      for (const c of overdueAsks(this.pool)) this.#answer({ ...c, p: null });
+    });
+  }
+
+  /** RK1: the held cards' risk questions to send now. */
+  riskDispatch(): { requests: RiskRequest[] } {
+    return wrapCall(this.pool, () => ({ requests: dispatchRisk(this.pool) }));
+  }
+
+  /** RK1/RK3: the answers for one submit fill its card, while that card is open. */
+  riskAnswer(args: { submit_id: string; risk: RiskAnswers }): void {
+    wrapCall(this.pool, () => answerRisk(this.pool, args.submit_id, args.risk));
+  }
+
+  /** The `risk` timer: a risk question past its deadline (or sent by an earlier instance) is
+   * unavailable (RK3). */
+  riskDeadline(args: { restart?: boolean } = {}): void {
+    wrapCall(this.pool, () => overdueRisk(this.pool, args.restart === true));
+  }
+
+  /** TR6 on start-up: questions an earlier instance sent are asked again once. */
+  triageRestart(): void {
+    wrapCall(this.pool, () => {
+      for (const c of restartAsks(this.pool)) this.#answer({ ...c, p: null });
     });
   }
 

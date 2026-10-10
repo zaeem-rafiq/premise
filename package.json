@@ -11,7 +11,7 @@
   "scripts": {
     "types": "wrangler types --strict-vars false",
     "typecheck": "tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.floor.json && tsc --noEmit -p tsconfig.host.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.test-browser.json",
-    "test": "vitest run --project unit --project arch --project cases --project git --project tidepool",
+    "test": "vitest run --project unit --project arch --project cases --project git --project tidepool --project languages",
     "test:cases": "vitest run --project cases --silent=false",
     "test:workerd": "npm run build && vitest run --project workerd",
     "test:e2e": "playwright test",
@@ -46,7 +46,10 @@
     "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.18.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "tree-sitter-go": "0.25.0",
+    "tree-sitter-python": "0.25.0",
+    "web-tree-sitter": "0.27.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

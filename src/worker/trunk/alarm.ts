@@ -30,10 +30,16 @@ export type AlarmDeps = {
   rebuild?: (now: number) => Promise<void>;
   /** The `plain` timer's work (11.7): one run of the plain-merge build and push. */
   plain?: (now: number) => Promise<void>;
+  /** The `green` timer's work (11.5, GR1): one green-line verification off the landing path. */
+  green?: (now: number) => Promise<void>;
   /** The `preview` timer's work (PV1): frozen card previews, independent of landing pushes. */
   preview?: (now: number) => Promise<void>;
   /** RC3: read the settled model cost for newly held race candidates. */
   raceCost?: (now: number) => Promise<void>;
+  /** The `triage` timer's work (TR6, TR10): Clef questions past their deadline, then the dispatch. */
+  triage?: (now: number) => Promise<void>;
+  /** The `risk` timer's work (RK3): risk questions past their deadline. */
+  risk?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -95,8 +101,11 @@ export async function runAlarm({
   resume,
   rebuild,
   plain,
+  green,
   preview,
   raceCost,
+  triage,
+  risk,
   now: at,
 }: AlarmDeps): Promise<void> {
   const now = at ?? Date.now();
@@ -106,8 +115,11 @@ export async function runAlarm({
     ["resume", resume],
     ["rebuild", rebuild],
     ["plain", plain],
+    ["green", green],
     ["preview", preview],
     ["race_cost", raceCost],
+    ["triage", triage],
+    ["risk", risk],
   ]);
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {

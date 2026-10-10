@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { REPO_ROOT } from "../../support/source.ts";
 import { DURABLE_OBJECTS, type DurableObjectBinding } from "../../support/workerd.ts";
+import { workerModules } from "../../support/bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
@@ -58,7 +59,7 @@ export async function startGateWorker(options?: GateWorkerOptions): Promise<Gate
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          ...workerModules(),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: {

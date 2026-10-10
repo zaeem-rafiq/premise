@@ -20,7 +20,7 @@ import {
   created,
   sweeping,
 } from "../trunk/sets.ts";
-import { TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
+import { languageOfPath, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 
 export type Row = [string, "holds" | "info" | "confirm" | "repair" | "triage" | "delete", string];
 
@@ -48,19 +48,24 @@ export function rowFor(
     const mb = isModule(P, s.languages) ? entityKeysOf(before, P, s.languages) : null;
     const ma = isModule(P, s.languages) ? entityKeysOf(after, P, s.languages) : null;
     const writes = curOps(a).some((o) => o.path === P && (o.op === "write" || mb === null));
+    // LG10: the extra `file` premise of LG4 (`derived`, on a Python or Go module) is classified as
+    // if its path were in ModuleRefs: F3m for an entity change, F5 when the file turns opaque or is
+    // removed, F2 for a comment or whitespace change; never F7.
+    const language = languageOfPath(P, s.languages);
+    const byName = p.derived && (language === "python" || language === "go");
     if (p.edit && writes) row = ["F1", "repair", "write_base_changed"];
     else if (mb !== null && ma !== null) {
       const D = it.changed ?? [];
       if (D.length === 0) row = ["F2", "holds", "cosmetic"];
       else if (D.some((k) => s.NewRefs.has(k) || s.Edited.has(k)) || s.NewRefs.has(P)) {
         row = ["F3", "repair", s.NewRefs.has(P) ? "referenced_file_changed" : "referenced_entity_changed"];
-      } else if (D.some((k) => s.ModuleRefs.has(k)) || s.ModuleRefs.has(P))
+      } else if (D.some((k) => s.ModuleRefs.has(k)) || s.ModuleRefs.has(P) || byName)
         row = ["F3m", "confirm", "module_reference_changed"];
       else if (p.read) row = ["F4", "triage", "read_not_referenced"];
       else row = ["F7", "delete", "reference_gone"];
     } else {
       const all = [...s.NewRefs, ...s.ModuleRefs];
-      const referenced = all.includes(P) || all.some((k) => k.startsWith(`${P}#`));
+      const referenced = byName || all.includes(P) || all.some((k) => k.startsWith(`${P}#`));
       if (referenced) row = ["F5", "repair", "referenced_file_changed"];
       else if (p.read) row = ["F6", "triage", "read_not_referenced"];
       else row = ["F7", "delete", "reference_gone"];

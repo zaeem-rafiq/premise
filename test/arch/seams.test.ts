@@ -107,6 +107,10 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     expect([...engineTable().entries.keys()].sort()).toEqual(
       [
         // IR3: the import job's slices commit through `import_step` on the `rebuild` timer.
+        // 11.5: the `green` timer's entry names the next commit to verify, `green_done` applies
+        // the verification's answer (`green.verified`, `green.advanced`).
+        "green",
+        "green_done",
         "import_step",
         "open_attempt",
         "open_intent",
@@ -129,11 +133,19 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         "restart",
         // RW1: the `right_of_way` timer's entry (01-core 3.3).
         "right_of_way",
+        // RK1 (01-core 10.4): the held card's risk questions — dispatch, answer and deadline.
+        "risk_answer",
+        "risk_deadline",
+        "risk_dispatch",
         "stop",
         "sync",
         "tick",
         "tool",
         "triage",
+        // TR10 (01-core 7.3): the asynchronous Clef path's dispatch, deadline and restart re-ask.
+        "triage_deadline",
+        "triage_dispatch",
+        "triage_restart",
         // 13.6: the owner's undo routes (UN4, UN5) reach the Trunk object as these two entries.
         "undo",
         "undo_plan",

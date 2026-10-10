@@ -18,6 +18,8 @@ const RETAINED = new Set([
   // These entries mutate Pool metadata and persist through wrapCall, just like tools.
   "plain",
   "plain_done",
+  "green",
+  "green_done",
   "resume_failed",
 ]);
 type Witness = { writes: number; data: number; schema: string; occupied: string };
@@ -270,8 +272,10 @@ export class EngineSession implements Sql {
       if (opts.constants !== undefined) Object.assign(trunk.pool.K, opts.constants);
       trunk.pool.killed = opts.killed === true;
       trunk.pool.clefOn = (opts.switches?.CLEF_TRIAGE ?? "on") === "on";
+      trunk.pool.riskOn = opts.switches?.CLEF_RISK === "on";
       trunk.pool.syncTriage = opts.syncTriage ?? null;
       trunk.pool.featuresHeld = opts.features?.held ?? trunk.pool.meta.get("features_held") === "1";
+      trunk.pool.featuresGreen = opts.features?.green ?? "none";
       for (const key of this.#changedMeta) {
         const value = this.#store.exec("SELECT v FROM meta WHERE k = ?", key).toArray()[0]?.v;
         if (value === undefined) {

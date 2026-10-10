@@ -64,7 +64,7 @@ const FILES: Record<string, string> = {
   "types/globals.d.ts": "export declare const VERSION: string;\n",
   "src/lib.ts": 'import React from "react";\n\nexport const view = React.createElement;\n',
   "src/broken.ts": "export const broken: = 4;\n",
-  "lib/lib.py": "def weigh(x):\n    return x * 2\n",
+  "lib/lib.rs": "pub fn weigh(x: i32) -> i32 {\n    x * 2\n}\n",
 };
 
 const TREE = (n: number) => `${String(n).padStart(40, "0")}`;
@@ -121,14 +121,14 @@ describe("an imported pool works in IMPORT_LANGUAGES (06-repos step 2, LG1-LG3, 
   it("LG1: the pool's language set is IMPORT_LANGUAGES; an opaque extension stays file-level", () => {
     const { trunk } = setup();
     expect(trunk.pool.languages).toBe(IMPORT_LANGUAGES);
-    // The .py neighbour is file-level under either set — readable, but never a module.
+    // The .rs neighbour is file-level under either set — readable, but never a module (LG1).
     trunk.openAttempt("a", { intent: "look around" });
-    const py = call(trunk, "a", 1, "outline", { path: "lib/lib.py" });
-    expect(py.ok).toBe(false);
-    expect(py.error?.code).toBe("not_a_module");
-    const rd = call(trunk, "a", 2, "read", { path: "lib/lib.py" });
+    const rs = call(trunk, "a", 1, "outline", { path: "lib/lib.rs" });
+    expect(rs.ok).toBe(false);
+    expect(rs.error?.code).toBe("not_a_module");
+    const rd = call(trunk, "a", 2, "read", { path: "lib/lib.rs" });
     expect(rd.ok).toBe(true);
-    expect((rd.result as { content: string }).content).toContain("def weigh");
+    expect((rd.result as { content: string }).content).toContain("pub fn weigh");
   });
 
   it("LG5: outline and read with entity work on .ts, .tsx, .mts, .cts, .cjs, .jsx and .d.ts", () => {

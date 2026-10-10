@@ -44,9 +44,11 @@ import {
 import { applyClassification, blast, hItem, sendHeadsUp, worst } from "./landing.ts";
 import { classify } from "../classify/table.ts";
 import { triageOutcome } from "../classify/triage.ts";
+import { closeAsk } from "./triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 import { buildsPlain } from "./plain.ts";
+import { armGreen } from "./green.ts";
 import { metaGet } from "./schema.ts";
 
 import { planUndo } from "../undo/plan.ts";
@@ -930,6 +932,8 @@ export function pushOk(pool: Pool): void {
   if (buildsPlain(pool)) {
     pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   }
+  // GR1: the green line verifies off the landing path too — the `green` timer carries it.
+  armGreen(pool);
   pool.outbox.pushed_at = pool.now();
   pool.outbox.state = "pushed";
   pool.outbox = null;
@@ -1030,18 +1034,39 @@ export function restart(
   return reconcile(pool, args.remote_main, args.remote_notes ?? args.remote_main);
 }
 
+/** A triage answer as the Worker returns it (TR10): the probability, or null for unavailable,
+ * with the `asked_op_seq` it was asked with and what the judgment records (7.5). */
+export type TriageAnswer = {
+  attempt: string;
+  kind: string;
+  key: string;
+  p?: number | null;
+  asked_at_op?: number;
+  model?: string;
+  ms?: number;
+  error?: string;
+};
+
 /** A triage answer (7.3): resolve the pending judgment by the thresholds. */
-export function triage(
-  pool: Pool,
-  args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number },
-): void {
+export function triage(pool: Pool, args: TriageAnswer): void {
   const i = pool.pendingTriage.findIndex(
     (t) => t.a.id === args.attempt && t.p.kind === args.kind && t.p.key === args.key,
   );
-  if (i < 0) return; // already decided by rule (V7): the answer is discarded
+  if (i < 0 || (args.asked_at_op !== undefined && args.asked_at_op !== pool.pendingTriage[i]!.stamp)) {
+    // TR4: decided by rule meanwhile (V7, V7a), or asked for an older patch — the answer is
+    // discarded and recorded `stale` on the premise's latest judgment.
+    const latest = [...pool.judgments.values()]
+      .filter((x) => x.attempt_id === args.attempt && x.kind === args.kind && x.key === args.key)
+      .at(-1);
+    if (latest !== undefined && args.asked_at_op !== undefined) {
+      latest.clef_error = "stale";
+      latest.dirty = true;
+    }
+    return;
+  }
   const t = pool.pendingTriage[i]!;
-  if (args.asked_at_op !== undefined && args.asked_at_op !== t.stamp) return; // stale answer (V7)
   pool.pendingTriage.splice(i, 1);
+  closeAsk(pool, args.attempt, args.kind, args.key);
   const a = t.a;
   const p = t.p;
   const outcome = triageOutcome(pool, args.p ?? null);
@@ -1051,6 +1076,9 @@ export function triage(
   j.result = result;
   j.reason = outcome.reason;
   j.clef_p = args.p ?? null;
+  j.clef_model = args.model ?? "clef";
+  if (args.ms !== undefined) j.clef_ms = args.ms;
+  if (args.error !== undefined) j.clef_error = args.error;
   j.t_repair = pool.K.T_REPAIR;
   j.t_confirm = pool.K.T_CONFIRM;
   j.resolved_at = pool.now();
@@ -1068,7 +1096,7 @@ export function triage(
     class: "triage",
     result,
     reason: j.reason,
-    clef: { model: "clef", p: args.p ?? null, error: null },
+    clef: { model: j.clef_model, p: args.p ?? null, error: args.error ?? null },
   });
   if (result !== "holds") {
     const it =

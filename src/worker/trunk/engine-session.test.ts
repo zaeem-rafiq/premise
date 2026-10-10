@@ -338,7 +338,7 @@ describe("Trunk engine session", () => {
     expect(opens(reads)).toBe(1);
   });
 
-  it("reopens while triage is pending instead of retaining call-local frozen maps", () => {
+  it("reopens while triage is pending, and the pending item comes back from the question store (TR10)", () => {
     const { run, reads } = fixture({ "world.js": "export const LIMIT = 100;\n" });
     let n = 0;
     const call = (id: string, tool: ToolRequest["tool"], args: ToolRequest["args"]) => {
@@ -362,7 +362,8 @@ describe("Trunk engine session", () => {
     reads.length = 0;
     run("sync", (trunk) => {
       expect(trunk.pool.pendingTriage.length).toBeGreaterThan(0);
-      expect(trunk.pool.pendingTriage[0]!.it).toBeNull();
+      // TR10: the reopened engine rebuilds the item from `triage_asks`, so V7 still runs.
+      expect(trunk.pool.pendingTriage[0]!.it).toMatchObject({ kind: "entity", key: "world.js#LIMIT", rule: "E3" });
     });
     expect(opens(reads)).toBe(1);
   });

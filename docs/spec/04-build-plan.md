@@ -174,7 +174,7 @@ Pure paths: `src/protocol/**`, `src/copy/**`, `src/config/**`, `src/core/**`, `s
    | `src/swarm/**` | `src/core/sync`, `src/protocol` |
    | `src/host/**` | `src/host`; types only from `src/protocol/channel.ts`; values from `src/protocol/constants.ts` (`HEAD_POLL_MS`, `STATS_EVERY_MS`, `DEFAULT_GLOBALS`), which itself imports nothing |
    | `src/floor/**` | `src/floor`, `src/protocol`, `src/copy`, `react`, `react-dom` |
-   | `src/worker/**` | everything under `src` except `src/floor` and `src/host`; `cloudflare:workers`; `node:*` |
+   | `src/worker/**` | everything under `src` except `src/floor` and `src/host`; `cloudflare:workers`; `node:*`; `web-tree-sitter` and the `.wasm` files of `tree-sitter-python` and `tree-sitter-go` (06-repos.md LG1: the Worker loads the parsers of Python and Go and installs them in core through `src/core/entities/syntax.ts`) |
 
    A test file (`*.test.ts`) may also import `vitest`, `node:*` and `test/support`. A test file is compiled with the libraries of the code it tests, never by `tsconfig.core.json`: the Worker's unit tests by `tsconfig.worker.json`; the unit tests of the Floor and of the host, and the specs of `test/e2e/`, by `tsconfig.test-browser.json` (DOM and Node); every other test and every script by `tsconfig.test.json` (Node). No file under `src/`, `test/` or `scripts/` imports from `reference/` (BP6).
 

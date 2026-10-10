@@ -2032,18 +2032,18 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 | Box | Label |
 | --- | --- |
 | 1 | Worker: this page, the API, and the app server that serves a pool's files by commit |
-| 2 | Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main |
+| 2 | Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main and the green line |
 | 3 | Agent (one Durable Object per attempt): the model's tool loop and its whole conversation |
 | 4 | Floor (one Durable Object per pool): the event stream this page draws |
-| 5 | Workflows: the green line and the Swarm |
+| 5 | Workflows: the Swarm |
 | 6 | Workers AI: the coding models, and Clef for judgments |
 | 7 | Artifacts: main, the green line, and the notes; one repository per attempt for its conversation |
 
-A box names a part only when the build has it: box 3 adds ", or the calls of an outside agent over MCP" when `features.mcp` is true (`07-mcp.md` MC24, added 2026-10-10 by the owner's decision to build the extensions); box 5 reads "Workflows: the Swarm" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off).
+A box names a part only when the build has it: box 2 ends "is the only writer of main" when `features.green` is `"none"`; box 3 adds ", or the calls of an outside agent over MCP" when `features.mcp` is true (`07-mcp.md` MC24, added 2026-10-10 by the owner's decision to build the extensions); box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off). Box 5 names the Swarm only (amended 2026-10-10 by the owner's decision to build the extensions: the green line runs on Trunk's `green` timer, `01-core.md` 3.3 and GR1, and Trunk moves its ref, GR2; no Workflow is part of it).
 
 The limits list is one file in the repository, shown here and in the README from the same source. A line whose condition is false for the build is left out. Content:
 
-1. Premise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.
+1. Premise understands JavaScript, TypeScript, Python and Go modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts, .tsx, .py and .go in a pool imported from a repository. Other files are tracked as whole files.
 2. One Trunk serves one pool. Agents read and write files of at most {MAX_FILE_BYTES} bytes. A repository with more than {IMPORT_MAX_ENTRIES} entries or {IMPORT_MAX_TEXT_BYTES} bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.
 3. Real agents are limited by the Workers AI rate limits. This build runs at most {max} at once.
 4. Numbers in the Swarm view come from scripted agents. They make no model calls.
@@ -2051,16 +2051,17 @@ The limits list is one file in the repository, shown here and in the README from
 6. A premise across two pools is not built.
 7. The green line checks {runtime sentence}. (Or: The green line is not in this build.)
 8. Clef judgments are {on or off} in this build.
-9. Not built: Python and Go modules, audience input.
+9. Not built: audience input.
 10. References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
-11. A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
-12. Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
-13. A sweep is recognised from the edits an agent makes, not from the words of the request.
-14. After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
-15. Switched off in this build: {the names of the features that are off}. (Left out when none is off.)
-16. An outside agent over MCP counts as a real agent. Premise sees only its calls of the seven tools: not what it read elsewhere, and not what its own model cost. (Only when `features.mcp` is true.)
+11. In Python and Go, references are found by name and can be wrong both ways. Every Python or Go file an agent reads from is also watched as a whole, so any change to it asks the agent to confirm.
+12. A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
+13. Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
+14. A sweep is recognised from the edits an agent makes, not from the words of the request.
+15. After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
+16. Switched off in this build: {the names of the features that are off}. (Left out when none is off.)
+17. An outside agent over MCP counts as a real agent. Premise sees only its calls of the seven tools: not what it read elsewhere, and not what its own model cost. (Only when `features.mcp` is true.)
 
-Lines 10 to 13 are the stated limits of `01-core.md` 6.5 (HC3) and of `02-tidepool.md` 7.6. Lines 1 and 2 follow `06-repos.md` LG1 and IR4, line 9 names what is not built of LG1, and line 10 also states the blind spot of LG3 (amended 2026-10-07). A number in a line is written with a comma every three places. Line 14 is the limit of `01-core.md` RB0. In line 15 the names are: "the held card with previews" (`features.held`), "comparing attempts" (`features.race`), "Undo" (`features.undo`), "attempt repositories" (`features.attempt_repos`), "outside agents over MCP" (`features.mcp`), "text merge" (`features.text_merge`). Line 16 is the blind spot of `07-mcp.md`; outside agents over MCP left line 9 for line 15 when they were built, and so did text merge (`01-core.md` PM3a), whose own blind spot is in line 5's other form (added 2026-10-10 by the owner's decision to build the extensions). The green line and Clef have their own lines, 7 and 8.
+Lines 10 and 12 to 14 are the stated limits of `01-core.md` 6.5 (HC3) and of `02-tidepool.md` 7.6. Lines 1 and 2 follow `06-repos.md` LG1 and IR4, line 9 names what is not built, and line 10 also states the blind spot of LG3 (amended 2026-10-07). Line 11 states the blind spot of LG4, and Python and Go left line 9 for lines 1 and 11 when step 3 was built (amended 2026-10-10). A number in a line is written with a comma every three places. Line 15 is the limit of `01-core.md` RB0. In line 16 the names are: "the held card with previews" (`features.held`), "comparing attempts" (`features.race`), "Undo" (`features.undo`), "attempt repositories" (`features.attempt_repos`), "outside agents over MCP" (`features.mcp`), "text merge" (`features.text_merge`). Line 17 is the blind spot of `07-mcp.md`; outside agents over MCP left line 9 for line 16 when they were built, and so did text merge (`01-core.md` PM3a), whose own blind spot is in line 5's other form (added 2026-10-10 by the owner's decision to build the extensions). The green line and Clef have their own lines, 7 and 8.
 
 ### 5.13 Screen-reader log lines
 

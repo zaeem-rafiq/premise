@@ -36,8 +36,9 @@ export function parentKey(path: string): string {
 
 // ---- LG1: a pool's language set ----
 
-/** The module languages of LG1. `"jsx"` is JavaScript with JSX, `"tsx"` TypeScript with JSX. */
-export type Language = "javascript" | "jsx" | "typescript" | "tsx";
+/** The module languages of LG1. `"jsx"` is JavaScript with JSX, `"tsx"` TypeScript with JSX;
+ * `"python"` and `"go"` parse through tree-sitter (LG4). */
+export type Language = "javascript" | "jsx" | "typescript" | "tsx" | "python" | "go";
 
 /**
  * A pool's language set: which extensions are modules (LG1) and how a relative specifier
@@ -67,7 +68,7 @@ export const TIDEPOOL_LANGUAGES: LanguageSet = {
   externalSpecifiersBanned: true,
 };
 
-/** The imported-pool set (LG1): JavaScript and TypeScript. Python and Go join it in step 3. */
+/** The imported-pool set (LG1): JavaScript, TypeScript, Python and Go. */
 export const IMPORT_LANGUAGES: LanguageSet = {
   languages: {
     ".js": "javascript",
@@ -78,6 +79,8 @@ export const IMPORT_LANGUAGES: LanguageSet = {
     ".mts": "typescript",
     ".cts": "typescript",
     ".tsx": "tsx",
+    ".py": "python",
+    ".go": "go",
   },
   resolveAppend: [".ts", ".tsx", ".mts", ".cts", ".js", ".mjs"],
   resolveReplace: {

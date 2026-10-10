@@ -10,6 +10,8 @@
 //   IR5      a landed change's tree differs from its parent only in the changed path; the
 //            symlink, the exec bit, the space path and the gitlink survive; fsck --strict
 //   IR7      /pool/<pool>/... 404 no_app; POST /api/swarm 400 invalid_args
+//   LG4/LG5  step 3: a repository with Python and Go modules — outline, the extra file premise, and
+//            a landing whose commit differs from its parent only in the changed paths
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { writeFileSync, symlinkSync, mkdirSync, chmodSync } from "node:fs";
@@ -57,6 +59,25 @@ function fillSource(dir: string): void {
   // the remote never holds (IR5: it is kept, referenced and untouched forever).
   git(dir, ["update-index", "--add", "--cacheinfo", "160000,0123456789012345678901234567890123456789,vendor/lib"]);
   git(dir, ["commit", "--quiet", "-m", "the imported tree"]);
+}
+
+// 06-repos step 3: a repository with Python and Go modules (LG4), a root go.mod naming the module.
+const PYGO = "src-pygo";
+const PYGO_POOL = "imp-pygo";
+
+function fillPythonGo(dir: string): void {
+  mkdirSync(join(dir, "shop"), { recursive: true });
+  mkdirSync(join(dir, "store"), { recursive: true });
+  writeFileSync(join(dir, "go.mod"), "module example.com/shop\n\ngo 1.22\n");
+  writeFileSync(join(dir, "shop/consts.py"), "# Limits.\nLIMIT = 3\n\n\ndef helper(a, b):\n    return LIMIT\n");
+  writeFileSync(
+    join(dir, "shop/cart.py"),
+    "from shop.consts import LIMIT\n\n\ndef full(items):\n    return len(items) >= LIMIT\n",
+  );
+  writeFileSync(join(dir, "store/limits.go"), "package store\n\n// Max is the cap.\nconst Max = 3\n");
+  writeFileSync(join(dir, "store/cart.go"), "package store\n\nfunc Full(n int) bool { return n >= Max }\n");
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "--quiet", "-m", "python and go"]);
 }
 
 async function createImported(worker: LandingWorker, pool: string, request_id: string): Promise<Response> {
@@ -288,15 +309,15 @@ describe("06-repos step 1 in local workerd (IR1-IR8)", () => {
     // A managed executable reads whole; an opaque-language file reads whole (LG5's file level).
     const exec = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: EXEC } }, 5);
     expect(String((exec.result as { content: string }).content)).toContain("echo run");
-    const py = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: "lib/lib.py" } }, 6);
-    expect(String((py.result as { content: string }).content)).toContain("def weigh");
+    const rs = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: "src/lib.rs" } }, 6);
+    expect(String((rs.result as { content: string }).content)).toContain("pub fn add");
     const outline = await worker.trunk(POOL).fetch("/tool", {
       method: "POST",
       body: JSON.stringify({
         attempt_id: "imp-a1",
         call_id: "imp-a1:out",
         tool: "outline",
-        args: { path: "lib/lib.py" },
+        args: { path: "src/lib.rs" },
         ack: 0,
       }),
     });
@@ -419,5 +440,91 @@ describe("06-repos step 1 in local workerd (IR1-IR8)", () => {
       }),
     });
     expect(((await open.json()) as { error?: string }).error).toBe("pool_not_ready");
+  });
+});
+
+describe("06-repos step 3 in local workerd (LG4, LG5)", () => {
+  let worker: LandingWorker;
+
+  beforeAll(async () => {
+    worker = await startLandingWorker({ ownerKey: KEY, repos: [], importSources: [PYGO] });
+    fillPythonGo(worker.repoDir(PYGO));
+    const res = await worker.fetch(
+      "/api/pools",
+      bearer({
+        pool: PYGO_POOL,
+        source: { url: `https://github.com/tldrs/${PYGO}`, branch: "main" },
+        request_id: "r-pygo",
+      }),
+    );
+    expect(res.status, `create: ${await res.clone().text()}`).toBe(200);
+    await waitFor(async () => (await worker.eventTypes(PYGO_POOL)).includes("pool.files"), 30_000);
+  }, 120_000);
+  afterAll(async () => {
+    await worker?.dispose();
+  });
+
+  it("LG5: outline lists the entities of a .py and a .go module, with their signatures", async () => {
+    await openAttempt(worker, PYGO_POOL, "pg-o1", { intent: "outline python and go" });
+    const py = await tool(worker, PYGO_POOL, "pg-o1", { tool: "outline", args: { path: "shop/consts.py" } }, 1);
+    const pyEntities = (py.result as { entities: Array<{ name: string; kind: string; signature: string }> }).entities;
+    expect(pyEntities.map((e) => [e.name, e.kind, e.signature])).toEqual([
+      ["LIMIT", "var", "LIMIT = …"],
+      ["helper", "function", "def helper(a, b)"],
+    ]);
+    const go = await tool(worker, PYGO_POOL, "pg-o1", { tool: "outline", args: { path: "store/cart.go" } }, 2);
+    const goEntities = (go.result as { entities: Array<{ name: string; kind: string; signature: string }> }).entities;
+    expect(goEntities.map((e) => [e.name, e.kind, e.signature])).toEqual([
+      ["(top)", "top", "(top)"],
+      ["Full", "function", "func Full(n)"],
+    ]);
+  });
+
+  it("LG4: an entity read of a .py module also pins a derived file premise on it", async () => {
+    await openAttempt(worker, PYGO_POOL, "pg-r1", { intent: "read the limit" });
+    const rd = await tool(
+      worker,
+      PYGO_POOL,
+      "pg-r1",
+      { tool: "read", args: { path: "shop/consts.py", entity: "LIMIT" } },
+      1,
+    );
+    expect(rd.result).toMatchObject({ key: "shop/consts.py#LIMIT", kind: "var" });
+    expect(rd.premises).toEqual([
+      expect.objectContaining({ kind: "entity", key: "shop/consts.py#LIMIT", read: true }),
+      expect.objectContaining({ kind: "file", key: "shop/consts.py", derived: true }),
+    ]);
+  });
+
+  it("step 3: a scripted agent lands a Python and a Go change; the commit differs from its parent only in those paths", async () => {
+    await openAttempt(worker, PYGO_POOL, "pg-w1", { intent: "raise the limits" });
+    await tool(
+      worker,
+      PYGO_POOL,
+      "pg-w1",
+      { tool: "replace", args: { path: "shop/consts.py", old: "LIMIT = 3", new: "LIMIT = 4" } },
+      1,
+    );
+    await tool(
+      worker,
+      PYGO_POOL,
+      "pg-w1",
+      { tool: "replace", args: { path: "store/limits.go", old: "const Max = 3", new: "const Max = 4" } },
+      2,
+    );
+    await tool(worker, PYGO_POOL, "pg-w1", { tool: "submit", args: { summary: "raise the limits" } }, 3);
+    await waitFor(async () => (await eventsOf(worker, PYGO_POOL, "landing.landed")).length >= 1, 60_000);
+    const landed = (await eventsOf(worker, PYGO_POOL, "landing.landed"))[0];
+    const commit = String(landed?.commit);
+    const repo = worker.repoDir(PYGO_POOL);
+    const parent = git(repo, ["rev-parse", `${commit}^`]);
+    expect(parent).toBe(git(worker.repoDir(PYGO), ["rev-parse", "refs/heads/main"]));
+    expect(git(repo, ["diff", "--name-only", parent, commit]).split("\n")).toEqual([
+      "shop/consts.py",
+      "store/limits.go",
+    ]);
+    expect(git(repo, ["show", `${commit}:shop/consts.py`])).toContain("LIMIT = 4");
+    expect(git(repo, ["show", `${commit}:store/limits.go`])).toContain("const Max = 4");
+    git(repo, ["fsck", "--strict"]);
   });
 });

@@ -1815,6 +1815,7 @@ One sentence per rule of `01-core.md` 7.2. `{thing}` is `keyLabel`. Used in head
 | `B1` | `blind_spot` | The new code uses {thing}, and the agent never read it. Trunk showed it the current version. |
 | `X0` | `no_patch_yet` | {thing} changed before this change wrote anything. The agent was told. |
 | `Z1` | `unclassified` | {thing} changed in a way that no rule covers. The agent must confirm. |
+| `E1`, `E2`, `F1` | `reopened_dep_changed` | {thing} changed back when an earlier change was undone, and this change was built on it. |
 | `OP1` | | The text an edit replaced is gone from {path}. |
 | `OP2` | | The text an edit replaced now appears more than once in {path}. |
 | `OP3` | | The text an edit replaced moved to another part of {path}. |
@@ -1824,7 +1825,7 @@ One sentence per rule of `01-core.md` 7.2. `{thing}` is `keyLabel`. Used in head
 | any | `push_lost` | The push for this landing was lost when the pool was rebuilt. The change lands again. |
 | any other | any other | {thing} changed ({rule}, {reason}). |
 
-In the `QR4` rows `{entity}` is the `keyLabel` of the entity that the `refs:` premise is about.
+In the `QR4` rows `{entity}` is the `keyLabel` of the entity that the `refs:` premise is about. The `reopened_dep_changed` row is the heads-up of an attempt that Undo reopened (`01-core.md` UN2, UN6; added 2026-10-10: the scripted rehearsal showed the catch-all form "(E2, reopened_dep_changed)" in beat 7).
 
 Scripted answers. A synthetic attempt never calls Clef: its triage is answered from the script's own list of what the change depends on, and the judgment carries `clef.model = "scripted"` (`01-core.md` TR8). The page then uses these sentences instead of the ones that name Clef, and shows no share:
 

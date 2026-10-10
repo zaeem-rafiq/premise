@@ -189,6 +189,11 @@ export const JUDGMENT_SENTENCES: readonly SentenceRow[] = [
     reasons: ["unclassified"],
     text: "{thing} changed in a way that no rule covers. The agent must confirm.",
   },
+  {
+    rules: ["E1", "E2", "F1"],
+    reasons: ["reopened_dep_changed"],
+    text: "{thing} changed back when an earlier change was undone, and this change was built on it.",
+  },
   // OP1 to OP5 come with an `op.dropped`, which carries a rule but no reason.
   { rules: ["OP1"], reasons: "any", text: "The text an edit replaced is gone from {path}." },
   {

@@ -534,20 +534,54 @@ a {
 .strip-cell:focus .strip-tip {
   display: block;
 }
-/* D33 / 2.8: labels can wrap, but each value stays together. Reserve its
- * intrinsic width so a flex shrink cannot clip a one-line value. */
+/* 2.8: the laptop strip reads like the stage strip (2.2) — the label over the value — but a
+ * label may take two lines ("WAITING BEHIND / ANOTHER CHANGE"), and every value stays on one
+ * line (D33). Each cell starts at the same top, so the labels line up whether they took one
+ * line or two. The cell keeps the width of its longest word and its one-line value, so a
+ * flex shrink cannot clip either; only the agents cell's limit line may end in an ellipsis,
+ * as at stage. Measured to fit 60 px from 1100 to 1599 wide (test/e2e/lead/strip.spec.ts). */
 @media (min-width: 1100px) and (max-width: 1599px) {
   .strip-cell {
-    min-width: min-content;
+    flex: 1 0 auto;
+    justify-content: flex-start;
+    padding: 3px 12px 0;
   }
-  .strip-value--text {
+  /* When the seven cells do not fit on one line each, two give way: the long waiting label
+   * wraps to its second line, then the agents cell's limit line ends in an ellipsis. */
+  .strip-cell[data-cell="strip.waiting"] {
+    flex-shrink: 20;
+    /* Two lines of its label ("WAITING BEHIND / ANOTHER CHANGE"), never three. */
+    min-width: 11.5em;
+  }
+  .strip-cell[data-cell="strip.agents"] {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .strip .strip-main {
+    font-size: var(--size-counter);
+    line-height: 0.8;
     white-space: nowrap;
   }
-  /* 6.2: a counter's line height is 1.0. At 0.8 the agents value, which shares the first
-   * line with its label and puts the limit sentence on the second, stood above the 60 px
-   * cell and was clipped at its top. */
-  .strip-value:not(.strip-value--text) {
+  .strip-cell[data-cell="strip.agents"] .strip-main {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 4px;
+  }
+  .strip .strip-label {
+    display: block;
+    margin-bottom: 2px;
     line-height: 1;
+    white-space: normal;
+  }
+  .strip .strip-value--text {
+    white-space: nowrap;
+  }
+  .strip .strip-bar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 3px;
+    margin: 0;
   }
 }
 /* 2.2: at stage width every cell reads label over value - the label on one line, the

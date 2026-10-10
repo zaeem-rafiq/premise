@@ -166,7 +166,8 @@ describe("07-mcp on the page's lists (03-floor 5.12)", () => {
 
   it("MC4: the limits list names outside agents as switched off while the switch is off, and states their blind spot while it is on", () => {
     const off = limitsList({ ...FEATURES, mcp: false });
-    expect(off).toContain("Not built: text merge, Python and Go modules, audience input.");
+    // Line 9 as 5.12 now gives it: text merge, too, left it for line 15 when it was built (PM3a).
+    expect(off).toContain("Not built: Python and Go modules, audience input.");
     expect(off.find((line) => line.startsWith("Switched off in this build:"))).toContain("outside agents over MCP");
     expect(off.some((line) => line.startsWith("An outside agent over MCP"))).toBe(false);
     const on = limitsList({ ...FEATURES, mcp: true });

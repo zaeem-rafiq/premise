@@ -52,7 +52,7 @@ function lightStrip(lights: readonly LightView[], more: number): { shown: LightV
   return { shown: lights.filter((light) => light.light !== "holds"), holds, more: 0 };
 }
 
-function StatusGlyph({ shape }: { shape: StatusShape }) {
+export function StatusGlyph({ shape }: { shape: StatusShape }) {
   return (
     <svg
       className={`attempt-card__glyph attempt-card__glyph--${shape}`}

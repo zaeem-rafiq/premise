@@ -20,7 +20,7 @@ export type Toast = { id: number; text: string };
 export type ViewState = {
   pool: string; // the id of the main pool, from the address (FE7)
   settings: FloorJson; // the content of /floor.json, read once
-  view: "floor" | "compare" | "swarm";
+  view: "floor" | "compare" | "swarm" | "overview";
   mode: "live" | "replay";
   sheet: SheetTarget;
   git_drawer: boolean;

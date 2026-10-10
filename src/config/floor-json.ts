@@ -35,5 +35,6 @@ export function floorJson(): FloorJson {
     models: MODEL_SHORT_NAMES,
     limits: limitsList(FEATURES),
     related: RELATED_BODY,
+    default_view: "overview",
   };
 }

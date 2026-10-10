@@ -1,0 +1,248 @@
+/* The Overview view (03-floor 2.11): one hero, one sentence, quiet everything else. It sets its
+ * own type in the system face, the way a product page does, and keeps the page's colour tokens. */
+
+.overview {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "head head"
+    "hero side"
+    "ask ask"
+    "facts facts";
+  gap: 20px 28px;
+  padding: 20px 40px 16px;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--checking) 8%, var(--bg)), var(--bg) 60%);
+}
+
+.overview__head {
+  grid-area: head;
+  text-align: center;
+}
+.overview .overview__title {
+  margin: 0;
+  font-family: inherit;
+  font-size: clamp(32px, 3.6vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  color: var(--text);
+}
+.overview .overview__line {
+  margin: 10px 0 0;
+  font-size: var(--size-status);
+  color: var(--muted);
+}
+.overview__play {
+  margin-top: 14px;
+}
+
+.overview__hero {
+  grid-area: hero;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+}
+.overview__hero .pf {
+  width: min(100%, calc((100vh - 420px) * 16 / 9));
+}
+.overview .overview__hero .pf-caption {
+  font-size: var(--size-small);
+}
+.overview .overview__hero .pf-caption-text {
+  font-family: inherit;
+  font-style: normal;
+  font-size: var(--size-small);
+  color: var(--muted);
+}
+.overview .overview__hero .pf-body {
+  border: none;
+  border-radius: 24px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent),
+    0 40px 100px color-mix(in srgb, var(--checking) 18%, transparent),
+    0 20px 40px rgb(0 0 0 / 0.45);
+}
+.overview__noapp {
+  align-self: center;
+  color: var(--muted);
+}
+
+.overview__side {
+  grid-area: side;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.overview .overview__side-title {
+  margin: 0;
+  font-family: inherit;
+  font-size: var(--size-body);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+.overview__empty {
+  margin: 0;
+  color: var(--muted);
+}
+.overview .overview__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 16px;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  backdrop-filter: blur(24px);
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--text);
+}
+.overview__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--size-small);
+  font-weight: 600;
+}
+.overview__status .attempt-card__glyph {
+  width: 14px;
+  height: 14px;
+}
+.overview__card--accent .overview__status {
+  color: var(--accent);
+}
+.overview__card--changed .overview__status {
+  color: var(--changed);
+}
+.overview__card--confirm .overview__status {
+  color: var(--confirm);
+}
+.overview__card--checking .overview__status {
+  color: var(--checking);
+}
+.overview__card--holds .overview__status {
+  color: var(--holds);
+}
+.overview__card--muted .overview__status {
+  color: var(--muted);
+}
+.overview__intent {
+  font-size: var(--size-body);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.overview__meta {
+  font-size: var(--size-small);
+  color: var(--muted);
+}
+.overview .overview__more {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* The input: one pill. The intent box keeps its behaviour; only its frame changes. */
+.overview__ask {
+  grid-area: ask;
+  justify-self: center;
+  width: min(820px, 100%);
+}
+.overview .overview__ask .intent-box {
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  padding: 6px 6px 6px 22px;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  backdrop-filter: blur(30px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.overview .overview__ask .intent-field {
+  min-height: 0;
+  height: 44px;
+  resize: none;
+  padding: 11px 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--size-body);
+}
+.overview .overview__ask .intent-row {
+  margin-top: 0;
+  flex: none;
+}
+.overview .overview__ask .intent-count {
+  display: none;
+}
+.overview .overview__ask .intent-note {
+  margin: 0;
+  padding: 11px 0;
+  font-size: var(--size-body);
+}
+.overview .overview__ask .intent-box button {
+  border-radius: 999px;
+  font-family: inherit;
+}
+
+.overview__facts {
+  grid-area: facts;
+  margin: 0;
+  text-align: center;
+  font-size: var(--size-small);
+  color: var(--muted);
+}
+
+/* 2.9: below 1100 the view is one column. */
+@media (max-width: 1099px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "hero"
+      "side"
+      "ask"
+      "facts";
+    padding: 16px;
+    height: auto;
+  }
+  .overview__hero .pf {
+    width: 100%;
+  }
+}
+
+.overview .overview__hero .pf-btn {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  font-family: inherit;
+}

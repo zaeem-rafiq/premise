@@ -571,3 +571,16 @@
     font-size: min(var(--size-title), 6.5vw);
   }
 }
+
+/* ---- The Overview view (2.11): its headline tells the counters, so the number band steps
+ * aside; the header and the banners stay (FL4). ---- */
+.floor[data-view="overview"] .strip {
+  display: none;
+}
+.floor[data-view="overview"] .header {
+  border-bottom-color: transparent;
+}
+.floor .floor-overview {
+  display: block;
+  padding: 0;
+}

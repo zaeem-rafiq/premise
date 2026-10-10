@@ -8,6 +8,7 @@ export type KeyAction =
   | "focus-intent" // /
   | "view-floor" // F
   | "view-swarm" // S
+  | "view-overview" // O
   | "view-about" // A
   | "view-compare" // C
   | "needs-you" // N: oldest card that needs the owner
@@ -35,6 +36,7 @@ const KEYMAP: Record<string, KeyAction> = {
   "/": "focus-intent",
   f: "view-floor",
   s: "view-swarm",
+  o: "view-overview",
   a: "view-about",
   c: "view-compare",
   n: "needs-you",

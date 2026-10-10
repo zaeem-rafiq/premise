@@ -19,7 +19,7 @@ Conventions:
 ## 0. Rules for the whole page
 
 - **FL1 (pure function).** `FloorState = reduce(events 1..n)` with the reducer of the shared `protocol` module (`01-core.md` EV5). What is on screen is `render(FloorState, ViewState, clock)`. `ViewState` is the local state listed in 4.2 and nothing else. The page MUST NOT read a pool fact from any other source, except the requests listed in 4.5 and the `stats` messages of its own pool frames (CO22), which say only what that frame is running.
-- **FL2 (one page).** One page with three views (Floor view, Compare view, Swarm view), two modes (live, Replay) and two roles (owner, visitor). Every beat of section 1 is reachable by taps and keys on this page. No terminal, no second tool.
+- **FL2 (one page).** One page with four views (Overview, Floor view, Compare view, Swarm view; the Overview was added by the owner's design decision of 2026-10-10), two modes (live, Replay) and two roles (owner, visitor). Every beat of section 1 is reachable by taps and keys on this page. No terminal, no second tool.
 - **FL3 (landed means on `main`).** The word "Landed", the Landed counter, the Why card, and any change of the live pool frame depend only on `landing.landed` (`01-core.md` LP9 to LP11). Between `landing.accepted` and `landing.landed` the page says "Landing…".
 - **FL4 (honest labels).** A pool in which a synthetic attempt was opened (`pool.synthetic`, `01-core.md` EM1a) is always under the SYNTHETIC banner, whether or not the pool is `summary_only`. Replay is always under the REPLAY banner. The plain-merge pool always carries the label `plain.label` and the word "constructed". The real-agent count always shows its limit and the reason for the limit. The page quotes no number that the current stream did not produce.
 - **FL5 (plain words).** The owner never needs to read code, a hash or a state name. Ids and hashes appear only in the "show the git" drawer and in tooltips. Every code-level name shown elsewhere goes through `keyLabel` (5.2).
@@ -428,6 +428,19 @@ The regions and their order are the same as in 2.2. Differences:
 ### 2.9 Narrow layout (below 1100 wide)
 
 One column, in this order: header (view switch becomes a menu), strip (wraps to two rows), banners, intent box, tray, pool frame (full width, 16:9), tabs and attempt cards, file tiles behind the disclosure `tiles.files`. Sheets are full-screen. Compare view stacks the two frames. All functions stay available. This layout is for reading on a small screen; it is not a stage layout.
+
+### 2.11 Overview (owner's design decision of 2026-10-10)
+
+The Overview tells the run the way a product page would: one hero, one sentence, and the rest one key away. A live page opens on it when `/floor.json` says `default_view: "overview"` (the deployments do); Replay opens on the Floor view. Key `O` and `nav.overview` open it; key `F` and `nav.floor` go to the Floor view.
+
+| Part | Content |
+| --- | --- |
+| Header and banners | As on every view (2.10, FL4). The strip is not drawn: its numbers are in the headline and the facts line. |
+| Headline | `overview.landed` then `overview.goarounds`, from `counters.landed_changes` and `counters.go_arounds`; `overview.landed.none` before the first landing; `overview.loading` before the first event. Under it `overview.waiting.none` when `metrics.waiting_behind` is 0 or unknown, else `overview.waiting`. For a visitor on a quiet pool the start card's `start.play` button sits under it (RY23). |
+| Hero | The main pool's live frame (3.5), rounded, with its caption bar, Pause and Compare. |
+| In flight | `overview.inflight`, then at most 3 attempts in flight, newest event first: status shape and word (5.3), intent, model and elapsed time. A card with an open decision opens its card sheet; any other opens the Floor view. `overview.more` opens the Floor view. |
+| Input | The intent box (3.1) with its rules, drawn as one pill. |
+| Facts line | Every other strip cell (3.8) as "label value sub", joined by " · ", so the run clock, the real-agent limit and its reason (FL4), the waiting count, the green line and the spend stay on screen. |
 
 ### 2.10 Always visible
 
@@ -953,7 +966,7 @@ Hover or focus on the cell lists each model's use (`spend.model_line`).
 
 | Part | Content | States |
 | --- | --- | --- |
-| View switch | `nav.floor`, `nav.swarm`, `nav.replay`, `nav.about` | the current view is marked with an underline and `aria-current` |
+| View switch | `nav.overview`, `nav.floor`, `nav.swarm`, `nav.replay`, `nav.about` | the current view is marked with an underline and `aria-current` |
 | Needs-you badge | `needs.badge` with the number of open cards that can be answered (CO38) | absent at 0; opens the oldest open card |
 | Tray | one row per open card that can be answered, oldest first | empty: absent |
 | Tabs | `rail.tab.working`, `rail.tab.landed`, `rail.tab.stopped` with counts | empty texts `rail.empty.*` |
@@ -1252,6 +1265,7 @@ type FloorJson = {                      // (Floor) the static settings; built wi
   models: Record<string, string>;       // model id -> short name
   limits: string[];                     // the limits list of 5.12, lines whose condition is false left out
   related: string;                      // the text of `about.related.body`, so the page and the README show the same words
+  default_view?: "floor" | "overview"; // 2.11: the view a live page opens on; absent means the Floor view
 };
 ```
 
@@ -1391,6 +1405,17 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `app.settings_failed` | Premise could not load its settings. Reload the page. |
 | `nav.floor` | Floor |
 | `nav.swarm` | Swarm |
+| `nav.overview` | Overview |
+| `overview.label` | Overview |
+| `overview.loading` | Waiting for the pool to report. |
+| `overview.landed` | {n} changes landed. (for 1: {n} change landed.) |
+| `overview.landed.none` | No change has landed yet. |
+| `overview.goarounds` | {n} went around. |
+| `overview.waiting.none` | Nobody waited. Every landing is one ordinary commit on main. |
+| `overview.waiting` | {n} waiting behind another change. Every landing is one ordinary commit on main. |
+| `overview.inflight` | In flight |
+| `overview.inflight.none` | Nothing is in flight. |
+| `overview.more` | Every attempt and detail is in the Floor view. |
 | `nav.replay` | Replay |
 | `nav.about` | About |
 | `nav.skip` | Skip to the attempt cards |
@@ -2205,7 +2230,7 @@ Easing `cubic-bezier(0.2, 0.8, 0.2, 1)` for everything. "Reduced" is what happen
 | Key | Does |
 | --- | --- |
 | `/` | Focus the intent box |
-| `F`, `S`, `A` | Floor view, Swarm view, About |
+| `O`, `F`, `S`, `A` | Overview, Floor view, Swarm view, About |
 | `C` | Compare view on and off |
 | `N` | Open the oldest card that needs the owner |
 | `L` | Go to the Landed tab |

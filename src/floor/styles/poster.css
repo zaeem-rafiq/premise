@@ -333,10 +333,16 @@
 }
 
 /* Buttons that are not commands keep sentence case and their own size: file tiles, lights, the
- * tile list's toggle, a card's "Open the card." link and the lights row of an attempt card. */
+ * tile list's toggle and menu, list rows (Who relies, Landed, Why's relied-on rows, recordings), a
+ * card's "Open the card." link and the lights row of an attempt card. */
 .floor .tile,
 .floor .tiles-toggle,
 .floor .light,
+.floor .who-row,
+.floor .landed-row,
+.floor .why-relied__who,
+.floor .replay-item,
+.floor .tile-menu button,
 .floor .attempt-card__open,
 .floor .attempt-card button:not(.primary):not(.danger) {
   text-transform: none;

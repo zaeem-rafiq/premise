@@ -12,8 +12,9 @@ import { withFeatures } from "../../support/features.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { DURABLE_OBJECTS, type DurableObjectBinding } from "../../support/workerd.ts";
 import type { ObjectHandle } from "./real/harness.ts";
+import { WORKER_BUNDLE, workerModules } from "../../support/bundle.ts";
 
-const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
+const BUNDLE = WORKER_BUNDLE;
 const FAKE_ARTIFACTS = join(REPO_ROOT, "test/workerd/agent/attempt-repos-fake.mjs");
 const FAKE_AI = join(REPO_ROOT, "test/workerd/agent/real/fake-ai.mjs");
 const ORIGIN = "http://premise.test";
@@ -222,16 +223,13 @@ export async function startAttemptWorker(options: {
       workers: [
         {
           name: "premise",
-          modules: [
-            {
-              type: "ESModule",
-              path: BUNDLE,
-              contents: withFeatures(readFileSync(BUNDLE, "utf8"), {
-                attempt_repos: options.enabled,
-                race: false,
-              }),
-            },
-          ],
+          // The built Worker with its WebAssembly side modules (test/support/bundle.ts).
+          ...workerModules(
+            withFeatures(readFileSync(BUNDLE, "utf8"), {
+              attempt_repos: options.enabled,
+              race: false,
+            }),
+          ),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: { OWNER_KEY: options.ownerKey, SPEND_CAP_USD: "30" },
@@ -351,7 +349,19 @@ export async function startAttemptWorker(options: {
       await gitServer.close();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      for (const repo of repos.values()) repo.remove();
+      // A git child of the fake server can still be writing objects for a moment after the server
+      // closes (seen with twelve concurrent checkpoint pushes): retry the removal briefly.
+      for (const repo of repos.values()) {
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            repo.remove();
+            break;
+          } catch (cause) {
+            if (attempt >= 20 || (cause as { code?: string }).code !== "ENOTEMPTY") throw cause;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+      }
       rmSync(projectRoot, { recursive: true, force: true });
     },
   };

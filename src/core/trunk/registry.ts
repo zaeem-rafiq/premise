@@ -24,6 +24,16 @@ import type {
 } from "./sets.ts";
 import { beginTrace } from "./sets.ts";
 import { persistPremises, persistOps, persistHeadsUps } from "./attempt-rows.ts";
+import {
+  dispatch as dispatchAsks,
+  overdue as overdueAsks,
+  restartAsks,
+  thawPending,
+  type TriageRequest,
+} from "./triage.ts";
+import type { TriageAnswer } from "./tick.ts";
+import { answerRisk, dispatchRisk, overdueRisk, type RiskRequest } from "./risk.ts";
+import type { RiskAnswers } from "../../protocol/cards.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
@@ -54,7 +64,7 @@ import type { UndoPlanResponse, UndoResponse } from "../../protocol/undo.ts";
 export type PoolOptions = {
   pool_id?: string;
   constants?: Partial<Pool["K"]>;
-  switches?: { CLEF_TRIAGE?: "on" | "off" };
+  switches?: { CLEF_TRIAGE?: "on" | "off"; CLEF_RISK?: "on" | "off" };
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
   features?: { held?: boolean; green?: "none" | "static" | "full" };
@@ -340,6 +350,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
     pool.attempts.set(a.id, a);
     pool.attemptCounter += 1;
   }
+  // TR10: each pending item and its stamp come back from the question store.
+  thawPending(pool);
   // landings + companions
   const filesBySeq = groupRows(sql.exec("SELECT * FROM landing_files ORDER BY seq, path").toArray(), "seq");
   const writesBySeq = groupRows(sql.exec("SELECT * FROM landing_writes ORDER BY seq, kind, key").toArray(), "seq");
@@ -448,6 +460,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       })(),
     K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
     clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    riskOn: opts.switches?.CLEF_RISK === "on",
     killed: opts.killed === true,
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
@@ -1608,11 +1621,52 @@ export class Trunk {
     });
   }
 
-  triage(args: { attempt: string; kind: string; key: string; p?: number | null; asked_at_op?: number }): void {
+  triage(args: TriageAnswer): void {
+    wrapCall(this.pool, () => this.#answer(args));
+  }
+
+  #answer(args: TriageAnswer): void {
+    triage(this.pool, args);
+    const attempt = this.pool.attempts.get(args.attempt);
+    if (attempt?.race && attempt.state === "held") attempt.validated_at = null;
+  }
+
+  /** TR10 dispatch: the requests to send now; questions over the limit close unavailable. */
+  triageDispatch(): { requests: TriageRequest[] } {
+    return wrapCall(this.pool, () => {
+      const { requests, close } = dispatchAsks(this.pool);
+      for (const c of close) this.#answer({ ...c, p: null });
+      return { requests };
+    });
+  }
+
+  /** TR6: the `triage` timer — every question past its deadline is unavailable. */
+  triageDeadline(): void {
     wrapCall(this.pool, () => {
-      triage(this.pool, args);
-      const attempt = this.pool.attempts.get(args.attempt);
-      if (attempt?.race && attempt.state === "held") attempt.validated_at = null;
+      for (const c of overdueAsks(this.pool)) this.#answer({ ...c, p: null });
+    });
+  }
+
+  /** RK1: the held cards' risk questions to send now. */
+  riskDispatch(): { requests: RiskRequest[] } {
+    return wrapCall(this.pool, () => ({ requests: dispatchRisk(this.pool) }));
+  }
+
+  /** RK1/RK3: the answers for one submit fill its card, while that card is open. */
+  riskAnswer(args: { submit_id: string; risk: RiskAnswers }): void {
+    wrapCall(this.pool, () => answerRisk(this.pool, args.submit_id, args.risk));
+  }
+
+  /** The `risk` timer: a risk question past its deadline (or sent by an earlier instance) is
+   * unavailable (RK3). */
+  riskDeadline(args: { restart?: boolean } = {}): void {
+    wrapCall(this.pool, () => overdueRisk(this.pool, args.restart === true));
+  }
+
+  /** TR6 on start-up: questions an earlier instance sent are asked again once. */
+  triageRestart(): void {
+    wrapCall(this.pool, () => {
+      for (const c of restartAsks(this.pool)) this.#answer({ ...c, p: null });
     });
   }
 

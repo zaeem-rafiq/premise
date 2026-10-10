@@ -19,6 +19,7 @@ import { tierOfPath } from "../policy/policy.ts";
 import { curOps, type Attempt, type CardRec, type IntentRec, type Pool, type Premise } from "./sets.ts";
 import { event, emitPoolState, poolPolicy } from "./events.ts";
 import { cardPreview, enqueuePreviews } from "./preview.ts";
+import { enqueueRisk } from "./risk.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
 import { updateRaceSubmit } from "./race.ts";
 
@@ -444,6 +445,8 @@ export function openCard(
   event(pool, "card.opened", { card: body });
   // PV1: the card's preview commits build off the landing path, on the `preview` timer.
   enqueuePreviews(pool, c, extra.head?.seq);
+  // RK1: with CLEF_RISK on, the risk answers fill in after the commit (`card.updated`).
+  enqueueRisk(pool, c);
   return c;
 }
 

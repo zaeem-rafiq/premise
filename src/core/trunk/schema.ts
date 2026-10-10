@@ -293,6 +293,20 @@ export const TRUNK_SCHEMA: readonly string[] = [
     due_at INTEGER NOT NULL,
     PRIMARY KEY (kind, key)
   ) WITHOUT ROWID`,
+
+  // TR10: the Clef question store — one row per pending triage premise (src/core/trunk/triage.ts).
+  `CREATE TABLE IF NOT EXISTS triage_asks (
+    attempt_id    TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    key           TEXT NOT NULL,
+    decider_id    TEXT NOT NULL,
+    frozen        TEXT NOT NULL,
+    asked_op_seq  INTEGER NOT NULL,
+    dispatched_at INTEGER,
+    deadline_at   INTEGER,
+    tries         INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (attempt_id, kind, key)
+  ) WITHOUT ROWID`,
 ];
 
 /** The `meta` keys of 3.2 that a fresh pool carries. */

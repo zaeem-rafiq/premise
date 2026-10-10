@@ -30,6 +30,16 @@ import { runGreenJob } from "./wiring/green.ts";
 import { runPreviewJob } from "./preview-runner.ts";
 import { runRaceCostJob } from "./race-cost-runner.ts";
 import { poolRepoName } from "../repos.ts";
+import {
+  clefRiskOf,
+  clefRiskOn,
+  clefTriageOf,
+  clefTriageOn,
+  hasAsks,
+  hasRisk,
+  runRisk,
+  runTriage,
+} from "./triage-runner.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -336,7 +346,7 @@ export class Trunk extends DurableObject<Env> {
       // drives time-dependent rules — RW1's lapse — without sleeping (LP5a's convention).
       const result = this.#sql.run(
         name,
-        { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES },
+        { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES, switches: this.#switches() },
         (trunk) => entry(input, trunk),
       );
       this.#deliverEvents();
@@ -385,10 +395,74 @@ export class Trunk extends DurableObject<Env> {
         recordTrunkError(this.ctx, "heads_up", "transport");
       }
       this.#deliverEvents();
+      // TR2: Clef is asked only now, after the commit, and nothing here waits for its answer.
+      this.#kickTriage();
       if (!applied) return;
     }
     // The bound was reached with work still to do: the `push` timer continues it (AL1).
     this.#sql.transaction(() => timerPut(this.#sql, "push", "", Date.now()));
+  }
+
+  /** S6a/TR10: the `CLEF_TRIAGE` switch the engine sees — on only with `features.clef` and the
+   * environment's variable `on`; otherwise a real attempt's triage is `OffTriage` (TR5). */
+  #switches(): { CLEF_TRIAGE: "on" | "off"; CLEF_RISK: "on" | "off" } {
+    return {
+      CLEF_TRIAGE: clefTriageOn(this.env) ? "on" : "off",
+      CLEF_RISK: clefRiskOn(this.env) ? "on" : "off",
+    };
+  }
+
+  #triageStarted = false;
+  #triageBusy = false;
+  #triageAgain = false;
+
+  /**
+   * TR10's runner, off the request path: one loop at a time sends the unsent questions and applies
+   * the answers, then runs the after-commit pipeline for the heads-ups they create. The first run
+   * of an instance re-asks what an earlier instance sent (TR6: no request of it is in flight).
+   */
+  #kickTriage(): void {
+    if (this.#triageBusy) {
+      this.#triageAgain = true;
+      return;
+    }
+    const restart = !this.#triageStarted && (hasAsks(this.#sql, "sent") || hasRisk(this.#sql, "sent"));
+    if (!restart && !hasAsks(this.#sql, "unsent") && !hasRisk(this.#sql, "unsent")) return;
+    this.#triageBusy = true;
+    const run = (async () => {
+      try {
+        do {
+          this.#triageAgain = false;
+          if (!this.#triageStarted) {
+            this.#triageStarted = true;
+            if (hasAsks(this.#sql, "sent")) await this.#applyEntry("triage_restart", {});
+            if (hasRisk(this.#sql, "sent")) await this.#applyEntry("risk_deadline", { restart: true });
+          }
+          const apply = (name: string, input: unknown) => this.#applyEntry(name, input);
+          const [asked, risked] = await Promise.all([
+            hasAsks(this.#sql, "unsent") ? runTriage({ apply, triage: clefTriageOf(this.env, this.#pool) }) : 0,
+            hasRisk(this.#sql, "unsent")
+              ? runRisk({ apply, judge: (attempt) => clefRiskOf(this.env, this.#pool, attempt) })
+              : 0,
+          ]);
+          const sent = asked + risked;
+          // The answers' heads-ups and events; a question it creates queues one more pass.
+          if (sent > 0) await this.#postCommit();
+        } while (this.#triageAgain);
+      } catch {
+        recordTrunkError(this.ctx, "triage", "transport");
+      } finally {
+        this.#triageBusy = false;
+      }
+    })();
+    this.ctx.waitUntil(run);
+  }
+
+  /** An engine entry whose failure is a throw (the runner's and the triage timer's calls). */
+  async #applyEntry(name: string, input: unknown, now?: number): Promise<unknown> {
+    const r = await this.#callEngineEntry(name, input, now);
+    if ("error" in r) throw new Error(`${name} failed`);
+    return r.result;
   }
 
   /** One `pushOutbox`. True when the push's answer was applied to the engine, which is when the
@@ -685,6 +759,22 @@ export class Trunk extends DurableObject<Env> {
         );
         await this.#postCommit();
       },
+      // TR6: the `triage` timer closes every question past its deadline, then sends what waits.
+      triage: async (now) => {
+        // TR6 on start-up: an instance woken by this timer re-asks what an earlier one sent
+        // before any deadline decides it.
+        if (!this.#triageStarted && hasAsks(this.#sql, "sent")) {
+          this.#triageStarted = true;
+          await this.#applyEntry("triage_restart", {}, now);
+        }
+        await this.#applyEntry("triage_deadline", {}, now);
+        await this.#postCommit();
+      },
+      // RK3: the `risk` timer — a held card's risk answers past their deadline are unavailable.
+      risk: async (now) => {
+        await this.#applyEntry("risk_deadline", {}, now);
+        await this.#postCommit();
+      },
       raceCost: async (now) => {
         await runRaceCostJob(this.env, this.ctx, async (input) => {
           const r = await this.#callEngineEntry("race_cost_done", input, now);
@@ -698,6 +788,7 @@ export class Trunk extends DurableObject<Env> {
             now: () => now,
             syncTriage: ScriptedTriage,
             features: FEATURES,
+            switches: this.#switches(),
           });
           const result = name === "preview" ? trunk.preview() : trunk.previewDone(input);
           this.#deliverEvents();

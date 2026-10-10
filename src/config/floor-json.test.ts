@@ -223,6 +223,19 @@ describe("floorJson() (03-floor 4.5)", () => {
     }
   });
 
+  it("TR10 (Price): the plan carries Clef's published input price and no output price", () => {
+    const text = readFileSync(`${REPO_ROOT}/docs/spec/01-core.md`, "utf8");
+    const line = text.split("\n").find((l) => l.includes("**Price (TR9).**")) ?? "";
+    const of = (id: string) =>
+      Number(new RegExp(`\`${id.replace(/[/@.-]/g, "\\$&")}\` \\$(\\d+\\.\\d+)`).exec(line)?.[1]);
+    expect(MODEL_PLAN.prices_usd_per_mtok["@cf/cloudflare/clef"]).toEqual({ in: of("@cf/cloudflare/clef"), out: 0 });
+    expect(MODEL_PLAN.prices_usd_per_mtok["@cf/cloudflare/clef-flash"]).toEqual({
+      in: of("@cf/cloudflare/clef-flash"),
+      out: 0,
+    });
+    expect(of("@cf/cloudflare/clef")).toBe(0.24);
+  });
+
   it("ME11: the model plan follows the recorded lead decision, including the six-agent override", () => {
     const record = readFileSync(`${REPO_ROOT}/docs/measurements/models/2026-10-06-engine.md`, "utf8");
     const decision = record.split("## Decision\n")[1];

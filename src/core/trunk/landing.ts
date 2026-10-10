@@ -42,6 +42,7 @@ import {
   unvalidate,
 } from "./intents.ts";
 import { syncTriageOf, triageInputOf, triageOutcome } from "../classify/triage.ts";
+import { closeAsk, reask, recordAsk, thawPending } from "./triage.ts";
 import { classify, rowFor } from "../classify/table.ts";
 import type { Classification, Row } from "../classify/table.ts";
 import { unified } from "../diff/unified.ts";
@@ -484,6 +485,7 @@ export function applyClassification(
       j.asked_op_seq = a.opCount;
       const t: PendingTriage = { a, p, judgment: j, it, cause: cause.type, stamp: a.opCount };
       pool.pendingTriage.push(t);
+      recordAsk(pool, t, deciderOf(it), causeAttempt); // TR10: the question outlives this call
       a.pending.push(j);
       hItems.push(hItem(pool, a, it, "pending", j.cause_seq));
       if (strongest === null) strongest = "info";
@@ -524,24 +526,30 @@ export function reevaluate(pool: Pool, a: Attempt): void {
   const items: Array<{ item: HeadsUpItem; trace: Record<string, unknown> }> = [];
   let strongest: "confirm" | "repair" | null = null;
   const e1keys: string[] = [];
+  thawPending(pool); // TR10: a pending item loaded by a reopened object comes back from its row
   for (const t of pool.pendingTriage.filter((x) => x.a === a)) {
-    if (t.it === null) continue; // a pending row rebuilt after a restart cannot be re-rowed (TR6)
+    if (t.it === null) continue; // a pending row with no stored question (an older store) is not re-rowed
     const row: Row =
       t.it.rule === "QR4" ? ["QR4", "triage", "reader_landed"] : rowFor(pool, a, t.p, t.it, s, t.it.before, t.it.after);
     if (row[1] === "triage") {
       t.stamp = a.opCount;
+      reask(pool, t); // TR10: asked again with the current patch; the older answer is stale (TR4)
       pool.out.reasked.push({ attempt: a.id, kind: t.p.kind, key: t.p.key });
       continue;
     }
     if (row[1] !== "repair" && row[1] !== "confirm") {
       t.stamp = a.opCount;
+      reask(pool, t);
       continue;
     }
     pool.pendingTriage.splice(pool.pendingTriage.indexOf(t), 1);
+    closeAsk(pool, a.id, t.p.kind, t.p.key);
     t.it.rule = row[0];
     t.it.result = row[1];
     t.judgment.result = row[1];
     t.judgment.rule = row[0];
+    t.judgment.reason = row[2];
+    t.it.reason = row[2];
     t.judgment.klass = "rule";
     t.judgment.resolved_at = pool.now();
     t.judgment.dirty = true;

@@ -399,6 +399,10 @@ export async function startLandingWorker(options: {
   /** The gate's `SPEND_CAP_USD` — bound only when `modelUrl` is: the real agent's model calls
    * go through the gate, and an absent cap fails closed (`spend_cap` on every call). */
   spendCapUsd?: string;
+  /** Let `sql()` read the objects' storage (Miniflare's `unsafeInspectDurableObjects`). */
+  inspect?: boolean;
+  /** Plain variables of the deployment, as wrangler's `vars` (the Clef switches, 01-core TR10). */
+  vars?: Record<string, string>;
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
@@ -436,7 +440,7 @@ export async function startLandingWorker(options: {
     convertV4MiniflareOptions({
       cf: false,
       telemetry: { enabled: false },
-      ...(options.floorFaults === true ? { unsafeInspectDurableObjects: true } : {}),
+      ...(options.floorFaults === true || options.inspect === true ? { unsafeInspectDurableObjects: true } : {}),
       // The Durable Objects' SQLite under the test root — a `restart()` then starts a new
       // Worker over the same storage, which is what LP7 reconciles on (C20-C22).
       resourcePersistencePath: join(projectRoot, "persist"),
@@ -451,6 +455,7 @@ export async function startLandingWorker(options: {
             // The gate reads its cap fresh on every call: absent means 0, and every model
             // call is refused `spend_cap` (SE7). Bound where the `AI` binding is bound.
             ...(options.modelUrl === undefined ? {} : { SPEND_CAP_USD: options.spendCapUsd ?? "30" }),
+            ...options.vars,
           },
           durableObjects: Object.fromEntries(
             Object.entries(DURABLE_OBJECTS).map(([binding, className]) => [

@@ -139,13 +139,13 @@ describe("4.4 sentBack / pushStalled / greenRed / quietPool", () => {
       stripCells(second, second.ts, { greenFeature: "full" }).find((cell) => cell.id === "strip.green")?.value,
     ).toBe("failed at landing 1");
     expect(bannerList(second, second.ts, LIVE).find((row) => row.id === "banner.green_red")?.sentence).toBe(
-      "The check failed twice at 1: visible.",
+      "The check failed twice at landing 1: Every creature can be seen.",
     );
 
     const state = stream("green-confirmed-fail");
     expect(state.undo.r_g1).toMatchObject({ cause: "revert", reverted: [1], reopened: ["a_G"] });
     expect(bannerList(state, state.ts, LIVE).find((row) => row.id === "banner.green_red")?.sentence).toBe(
-      "The check failed twice at 1: visible. Trunk is taking back #1 and reopening their agents.",
+      "The check failed twice at landing 1: Every creature can be seen. Trunk is taking back landing 1 and reopening their agents.",
     );
     const base = { pool: "tidepool", src: "trunk" as const, ts: state.ts + 100, t: state.ts + 105 };
     reduce(state, {

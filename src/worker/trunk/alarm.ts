@@ -30,6 +30,8 @@ export type AlarmDeps = {
   rebuild?: (now: number) => Promise<void>;
   /** The `plain` timer's work (11.7): one run of the plain-merge build and push. */
   plain?: (now: number) => Promise<void>;
+  /** The `green` timer's work (11.5, GR1): one green-line verification off the landing path. */
+  green?: (now: number) => Promise<void>;
   /** The `preview` timer's work (PV1): frozen card previews, independent of landing pushes. */
   preview?: (now: number) => Promise<void>;
   /** RC3: read the settled model cost for newly held race candidates. */
@@ -95,6 +97,7 @@ export async function runAlarm({
   resume,
   rebuild,
   plain,
+  green,
   preview,
   raceCost,
   now: at,
@@ -106,6 +109,7 @@ export async function runAlarm({
     ["resume", resume],
     ["rebuild", rebuild],
     ["plain", plain],
+    ["green", green],
     ["preview", preview],
     ["race_cost", raceCost],
   ]);

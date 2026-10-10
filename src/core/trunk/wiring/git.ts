@@ -30,4 +30,8 @@ export function wire(table: EngineTable): void {
   // applies the push's answer.
   table.entries.set("plain", (input, ctx) => trunk(ctx).plain(input as { parent_override?: string }));
   table.entries.set("plain_done", (input, ctx) => trunk(ctx).plainDone(input as { commit: string; remote: string }));
+  // The green line (11.5): `green` on its timer names the next commit to verify, `green_done`
+  // applies the verification's answer after the worker moved `refs/heads/green` (GR2a).
+  table.entries.set("green", (_input, ctx) => trunk(ctx).green());
+  table.entries.set("green_done", (input, ctx) => trunk(ctx).greenDone(input as Parameters<Trunk["greenDone"]>[0]));
 }

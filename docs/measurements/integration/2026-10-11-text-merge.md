@@ -12,7 +12,9 @@ after the live check below.
   rule, the landing, PM5, and git as the oracle). PM3 now says it holds while the switch is off. 5.1's
   "there is no text merge anywhere" gains the exception. FJ1 gains `text_merge`. `docs/spec/03-floor.md`
   gains the copy rows `plain.conflicts.merged` and `plain.conflicts.merged.tip`, CO25 item 4 picks them
-  while the switch is on, AC24 says so, and limits lines 5 and 9 depend on the switch.
+  while the switch is on, and AC24 says so. In the limits list (5.12), line 5 has a second form for the
+  switch on, and "text merge" left line 9 ("Not built") for line 15 ("Switched off in this build"), the
+  way outside agents over MCP did on `main`: the feature is built and switched off.
 - **`src/core/plain/merge3.ts`** (pure, synchronous, no dependency): `splitLines`, `diffLines` (Myers'
   linear-space shortest edit script, written from the 1986 paper; lines that the other side never holds are
   marked changed before the search; runs of changes slide down unless an earlier place lines them up with
@@ -23,10 +25,12 @@ after the live check below.
   (`lines`, `add_add`, `modify_delete` or `no_base`). PM5's revert replays a later merged change by
   merging its recorded base and theirs into the restored content.
 - **`src/core/trunk/plain.ts`**: an `ops_first` landing carries its attempt's `opened_seq` as the fork
-  point; with `pool.featuresTextMerge` on, the replay reads the pool's history through `fileMapAt`, one map
-  per seq, cached for the build.
+  point; with `pool.featuresTextMerge` on, the replay reads the pool's history, built forward from the seed
+  once per build (each landed blob read once). A build over 150 landings took 11 ms with the switch on and
+  11 ms off (scratch benchmark, `Trunk` on Node's SQLite).
 - **The switch**: `Features.text_merge` (`src/protocol/floor-json.ts`, `FEATURE_KEYS`),
-  `FEATURES.text_merge = false`, `PoolOptions.features.text_merge` and `Pool.featuresTextMerge`
+  `FEATURES.text_merge = false`, `FEATURE_OFF_NAMES.text_merge`, `PoolOptions.features.text_merge` and
+  `Pool.featuresTextMerge`
   (`src/core/trunk/registry.ts`, `sets.ts`). The Worker already passes `FEATURES` to the engine
   (`trunk-do.ts`), so no Worker file changed.
 - **The page**: Compare view (`compare.tsx`) shows `plain.conflicts.merged` and its tooltip while the
@@ -104,7 +108,28 @@ the reverse. The count shown under Compare view can then differ from git's by on
    `creatures/jellyfish.js`, run `git merge-file -p` on (base, ours, theirs) as PM3a names them, write the
    merged files over the seed, and compare `git write-tree` with `plain.updated.tree`. The offline test
    `PM3a: hero order 1 through the engine ...` does exactly this against the engine's own build.
-5. If any step fails, set the switch back to `false` (BP4).
+5. Before deploying with the switch on, change two lines of `README.md`'s Limits list, or
+   `npm run check:submission` fails (AC19): line 5 becomes "The plain-merge pool is constructed by Trunk
+   from the same changes. It is a comparison, not a second product. Each change is merged as git merges a
+   file from three versions, and the version its agent started from is taken from the pool's history.",
+   and "text merge" leaves "Switched off in this build". The two lines must equal
+   `limitsList(FEATURES)`; the check prints the expected text.
+6. If any step fails, set the switch back to `false` (BP4).
+
+## A test that raced, fixed
+
+With the switch on, `test/workerd/landing/push-table.test.ts` failed 6 of 9 runs on this Mac (rows
+`retry_notes`, `retry_main` and `repush`). The cause is in the test: after the retry it waited for any
+`batch.pushed`, and the seed's batch 0 had already sent one, so the wait ended before the retry ran
+whenever the Durable Object's own alarm took the retry instead of the test's `runAlarm`. The plain build's
+small extra work made that more likely. Commit `6930568` makes those five rows wait for the landing's
+batch (`batch_id === 1`), which is what they meant; no assertion changed. After it, 3 of 3 runs passed with
+the switch on.
+
+`test/workerd/landing/event-latency.test.ts` ("delivers a tick's accepted event before the alarm's slow
+push retry answers") failed in about half of the runs on this Mac with the switch off as well as on: its
+measured delay was 4 to 5 s while other sessions' test runs loaded the machine (43 test processes at one
+point). It passes when the machine is quiet. It is not caused by this branch.
 
 ## Not done
 

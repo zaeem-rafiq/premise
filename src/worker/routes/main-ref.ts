@@ -18,7 +18,7 @@ import { poolRepoName } from "../repos.ts";
 
 const MAIN_REF = "refs/heads/main";
 
-/** `headOf` answers the commit the repository's `HEAD` names (the binding's `log` from `HEAD`). */
+/** `headOf` answers the repository's head commit: the first row of the binding's `log`, as the import job reads it. */
 export type MainRefDeps = {
   tokenSource: TokenSource;
   pusher: Pusher;
@@ -32,7 +32,7 @@ export function mainRefDeps(env: Env): MainRefDeps {
     headOf: async (pool) => {
       const repo = await (env.POOLS as Artifacts).get(poolRepoName(pool));
       try {
-        return (await repo.log({ ref: "HEAD", limit: 1 }))[0]?.hash ?? null;
+        return (await repo.log({ limit: 1 }))[0]?.hash ?? null;
       } finally {
         repo[Symbol.dispose]();
       }

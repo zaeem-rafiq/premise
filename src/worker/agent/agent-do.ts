@@ -711,6 +711,8 @@ export class Agent extends DurableObject<Env> {
   // `shown_hn` (TL9), so a heads-up counts as delivered only once it is in the client's answer.
 
   #outsideChain: Promise<unknown> = Promise.resolve();
+  /** The send in flight for each try of a journaled outside call (`#toolSendKey`). */
+  readonly #outsideSends = new Map<string, Promise<void>>();
   #outsideInFlight = 0;
   #outsideTurn: OutsideTurn = { calls: 0, stop: null };
 
@@ -864,8 +866,24 @@ export class Agent extends DurableObject<Env> {
         await sleep(Math.min(j.deadline_at - now, deadline - now));
         continue;
       }
-      await this.#serve(j);
-      if (this.#toolRowMessage(call_id) === null) await sleep(250); // a send of the alarm's is still out
+      // One send per try. A send that outlives TOOL_TIMEOUT_MS is the timeout of TL12 — the alarm's
+      // job for a model's call — and none outlives the request's MCP_CALL_WAIT_MS: the journal then
+      // stays for the next call (MC18), and the turn is free again.
+      const key = this.#toolSendKey(j);
+      let send = this.#outsideSends.get(key);
+      if (send === undefined) {
+        send = this.#serve(j).finally(() => this.#outsideSends.delete(key));
+        this.#outsideSends.set(key, send);
+      }
+      const until = Math.min(deadline, waiting ? now + TOOL_TIMEOUT_MS : j.deadline_at);
+      const done = await Promise.race([send.then(() => true), sleep(until - Date.now()).then(() => false)]);
+      if (done && this.#toolRowMessage(call_id) === null) await sleep(50); // a transient answer: look again
+      if (!done && Date.now() < deadline) {
+        const current = journaledCall(this.#sql);
+        if (current !== null && current.call_id === call_id && current.deadline_at <= Date.now()) {
+          this.#callFailed(current, new TrunkTransportError("call deadline passed"));
+        }
+      }
     }
   }
 
@@ -922,7 +940,7 @@ export class Agent extends DurableObject<Env> {
       return this.#outsideRefuse(tool, args, outcome.code, outcome.detail);
     }
     const call_id = callId(this.#meta("attempt_id") as string, this.#int("step") + 1);
-    await this.#toolCall(tool as ToolName, outcome.args);
+    await this.#toolCall(tool as ToolName, outcome.args, false);
     const message = await this.#outsideFinish(call_id);
     await this.#outsideSettleSlot();
     if (message === null) {
@@ -1226,7 +1244,7 @@ export class Agent extends DurableObject<Env> {
 
   // -- one tool call (AG1) -------------------------------------------------------
 
-  async #toolCall(tool: ToolName, args: object): Promise<void> {
+  async #toolCall(tool: ToolName, args: object, send = true): Promise<void> {
     const step = this.#int("step") + 1;
     const attempt_id = this.#meta("attempt_id") as string;
     const isReal = this.#meta("agent_kind") === "real";
@@ -1270,6 +1288,7 @@ export class Agent extends DurableObject<Env> {
       started_at: now,
       deadline_at: now + TOOL_TIMEOUT_MS,
     });
+    if (!send) return; // an outside call is sent by `#outsideFinish` (MC15)
     const journal = journaledCall(this.#sql);
     if (journal !== null) await this.#serve(journal);
   }

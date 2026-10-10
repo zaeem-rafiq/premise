@@ -104,8 +104,40 @@ export function browserEnv(importModule: HostEnv["importModule"]): HostEnv {
   };
   const win = (g.window ?? {}) as NonNullable<typeof g.window>;
   const doc = (g.document ?? {}) as NonNullable<typeof g.document>;
-  const canvas = (doc.querySelector?.("canvas#pool") ?? null) as CanvasLike | null;
-  const canvasEvents = canvas as unknown as {
+  const element = (doc.querySelector?.("canvas#pool") ?? null) as
+    | (Omit<CanvasLike, "rect"> & {
+        getBoundingClientRect(): { left: number; top: number; width: number; height: number };
+      })
+    | null;
+  // HO6: the element has `getBoundingClientRect()`, not `rect()`. Passing the raw element made
+  // every tap throw "rect is not a function", so no creature tap ever opened a Why card (found by
+  // the scripted rehearsal on `test`, 2026-10-10).
+  const canvas: CanvasLike | null =
+    element === null
+      ? null
+      : {
+          get width() {
+            return element.width;
+          },
+          set width(value: number) {
+            element.width = value;
+          },
+          get height() {
+            return element.height;
+          },
+          set height(value: number) {
+            element.height = value;
+          },
+          get clientWidth() {
+            return element.clientWidth;
+          },
+          get clientHeight() {
+            return element.clientHeight;
+          },
+          getContext: (kind) => element.getContext(kind),
+          rect: () => element.getBoundingClientRect(),
+        };
+  const canvasEvents = element as unknown as {
     addEventListener?(type: string, handler: (event: { clientX: number; clientY: number }) => void): void;
     getBoundingClientRect?(): { left: number; top: number; width: number; height: number };
   } | null;

@@ -81,7 +81,13 @@ function specLimits(): string[] {
     let line = numbered[1] ?? "";
     if (line.includes("{runtime sentence}")) {
       if (FEATURES.green === "none") line = "The green line is not in this build.";
-      else line = line.replace("{runtime sentence}", "RUNTIME");
+      else {
+        const sentence = new RegExp(
+          `In line 7 the runtime sentence is "([^"]+)" when \`features\.green\` is \`"static"\`[^"]*"([^"]+)" when it is \`"full"\``,
+        ).exec(floor);
+        if (sentence === null) throw new Error("the runtime sentence of line 7 (5.12) was not found");
+        line = line.replace("{runtime sentence}", (FEATURES.green === "static" ? sentence[1] : sentence[2]) ?? "");
+      }
     }
     if (line.includes("{on or off}")) {
       line = line.replace("{on or off}", FEATURES.clef ? "on" : "off");

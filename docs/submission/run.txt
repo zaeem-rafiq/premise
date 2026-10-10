@@ -25,3 +25,7 @@ To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and 
 
 8. Run the checks at any time. They deploy nothing:
    npm run check
+
+9. Connect an outside agent (optional). Mint a token for a pool, then add the pool to an MCP client:
+   curl -X POST https://YOUR-ADDRESS/api/pools/tidepool/mcp-tokens -H "Authorization: Bearer <owner key>" -H "content-type: application/json" -d '{}'
+   claude mcp add --transport http premise https://YOUR-ADDRESS/mcp/tidepool --header "Authorization: Bearer <token>"

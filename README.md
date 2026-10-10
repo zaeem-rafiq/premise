@@ -31,7 +31,7 @@ The page is called the Floor. It shows one codebase, a small simulated rock pool
 
 ## How it is built
 
-One Worker serves the page, the API and each pool's code at any commit. Four Durable Objects, each with SQLite storage, do the work: **Trunk** (one per pool) serves every read, pins premises, checks them in each landing batch in one transaction and is the only writer of `main`; **Agent** (one per attempt) runs the model's tool loop and survives restarts; **Floor** (one per pool) streams events to every open page; **ModelGate** (one per deployment) holds the rate limits, the spend cap and the kill switch. Artifacts holds each pool as a git repository, with a second one for the plain-merge comparison; every write is a push that names the old and the new value of each ref. Workflows launch the Swarm. Workers AI runs the models.
+One Worker serves the page, the API and each pool's code at any commit. Four Durable Objects, each with SQLite storage, do the work: **Trunk** (one per pool) serves every read, pins premises, checks them in each landing batch in one transaction and is the only writer of `main`; **Agent** (one per attempt) runs the model's tool loop and survives restarts; **Floor** (one per pool) streams events to every open page; **ModelGate** (one per deployment) holds the rate limits, the spend cap and the kill switch. Artifacts holds each pool as a git repository, with `green` marking the newest landing that passed the static checks and a second repository for the plain-merge comparison; each attempt gets its own repository with its transcript, operations and premises; every write is a push that names the old and the new value of each ref. Outside agents can join a pool over MCP. Workflows launch the Swarm. Workers AI runs the models.
 
 The specification is in [`docs/spec/`](docs/spec/): [`01-core.md`](docs/spec/01-core.md) holds the rules and the protocol, and [`premise-cases.json`](docs/spec/premise-cases.json) holds 58 cases that the engine must pass.
 
@@ -65,6 +65,10 @@ To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and 
 8. Run the checks at any time. They deploy nothing:
    npm run check
 
+9. Connect an outside agent (optional). Mint a token for a pool, then add the pool to an MCP client:
+   curl -X POST https://YOUR-ADDRESS/api/pools/tidepool/mcp-tokens -H "Authorization: Bearer <owner key>" -H "content-type: application/json" -d '{}'
+   claude mcp add --transport http premise https://YOUR-ADDRESS/mcp/tidepool --header "Authorization: Bearer <token>"
+
 ## Measured
 
 Every number comes from a file under [`docs/measurements/`](docs/measurements/).
@@ -84,9 +88,9 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - One Trunk serves one pool. Agents read and write files of at most 32,768 bytes. A repository with more than 5,000 entries or 24,000,000 bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.
 - Real agents are limited by the Workers AI rate limits. This build runs at most 6 at once.
 - Numbers in the Swarm view come from scripted agents. They make no model calls.
-- The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.
+- The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product. Each change is merged as git merges a file from three versions, and the version its agent started from is taken from the pool's history.
 - A premise across two pools is not built.
-- The green line is not in this build.
+- The green line checks every landing with static checks only.
 - Clef judgments are off in this build.
 - Not built: audience input.
 - References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
@@ -95,7 +99,7 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
 - A sweep is recognised from the edits an agent makes, not from the words of the request.
 - After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
-- Switched off in this build: attempt repositories, outside agents over MCP, text merge.
+- An outside agent over MCP counts as a real agent. Premise sees only its calls of the seven tools: not what it read elsewhere, and not what its own model cost.
 
 ## This deployment
 

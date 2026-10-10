@@ -9,6 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { emptyFloorState, reduce } from "../../../src/protocol/reducer/index.ts";
 import type { PoolEvent } from "../../../src/protocol/events.ts";
 import { FLOOR_JSON, serveSession } from "../shell/stream.ts";
+import { FEATURES } from "../../../src/config/features.ts";
 
 const NDJSON = readFileSync(join(import.meta.dirname, "../../fixtures/streams/hero-c04.ndjson"), "utf8");
 const EVENTS = NDJSON.trim()
@@ -17,7 +18,9 @@ const EVENTS = NDJSON.trim()
   .map((line) => JSON.parse(line) as PoolEvent);
 
 const MID = 24; // snapshot joins just before the first landing lands (n=25+)
-const FLOOR = { ...FLOOR_JSON, default_pool: "tidepool" };
+// Replay draws with this build's features (src/config/features.ts); the live page gets the same
+// ones, so the three pictures differ only by how the stream arrived.
+const FLOOR = { ...FLOOR_JSON, default_pool: "tidepool", features: FEATURES };
 
 const POOL_PAGE = `<!doctype html><meta charset="utf-8"><title>pool</title><script>
   var part = location.pathname.split("/")[3];

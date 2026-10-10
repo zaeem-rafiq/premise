@@ -14,9 +14,9 @@ export const FEATURES: Features = {
   held: true,
   race: true,
   undo: true,
-  green: "none",
+  green: "static",
   clef: false,
-  attempt_repos: false,
-  mcp: false,
-  text_merge: false,
+  attempt_repos: true,
+  mcp: true,
+  text_merge: true,
 };

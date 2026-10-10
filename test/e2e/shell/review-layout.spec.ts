@@ -193,7 +193,7 @@ test("D33 / 2.8, 3.8: laptop strip values stay on one line without clipping", as
       expect(value.lines, `${theme}: ${value.text}`).toBe(1);
       expect(value.fits, `${theme}: ${value.text} fits its cell`).toBe(true);
     }
-    expect(Math.abs((await box(page.locator(".strip"))).height - 60)).toBeLessThanOrEqual(1);
+    expect(Math.abs((await box(page.locator(".strip"))).height - 112)).toBeLessThanOrEqual(1);
   }
 });
 

@@ -200,15 +200,15 @@ Two reference sizes. **Stage size** is 1920×1080 with large type. **Laptop size
 
 | Region | Stage size | Laptop size | Content |
 | --- | --- | --- | --- |
-| Header | 1920×64 | 1440×56 | Name and pool name, view switch, Needs-you badge, kill switch, owner lock. |
-| Strip | 1920×72 | 1440×60 | Run clock and six counters (3.8). |
+| Header | 1920×88 | 1440×72 | The masthead: name and pool name, view switch, Needs-you badge, kill switch, owner lock. |
+| Strip | 1920×136 | 1440×112 | The number band: run clock and six counters (3.8). |
 | Banners | 1920×40 each | 1440×36 each | Zero or more, stacked, in the fixed order of 3.18. |
 | Body | the rest | the rest | The view. Padding 24 (laptop 16). |
-| Pool area (Floor view) | 1152 wide | 832 wide | Caption bar 40, pool frame 16:9 at full width (1152×648; laptop 832×468), file tiles in the rest. In Replay at stage size the REPLAY banner (40) and the Replay bar (108) leave the pool area 748 high, so LY1 shrinks the frame to 1145×644; each further banner takes its 40 from the frame's height. At laptop size the frame keeps 832×468 (the lead's decision of 2026-10-09). |
+| Pool area (Floor view) | 1152 wide | 832 wide | Caption bar 40, pool frame 16:9 at full width (1152×648; laptop 832×468), file tiles in the rest. In Replay at stage size the REPLAY banner (40) and the Replay bar (108) leave the pool area 748 high, so LY1 shrinks the frame to 1145×644; each further banner takes its 40 from the frame's height. At laptop size the taller masthead and number band (2026-10-10) leave the frame shorter than 468, so LY1 shrinks it there too. |
 | Rail (Floor view) | 696 wide | 560 wide | Intent box, tray, tabs, attempt cards. Only the list of attempt cards scrolls. |
 | Replay bar (Replay only) | 1920×108, at the bottom: the transport row (56) above the chapter row (52) | 1440×96 (48 and 48) | Replay controls (3.16) and the chapter caption (8.5). Two rows by the lead's decision of 2026-10-09 (RR11): one row could not hold the named chapter buttons of 3.16 at the 44×44 of LY5 beside the caption of 8.5. |
 
-- **LY1.** The pool frame keeps 16:9. It uses the full width of the pool area unless the file tiles would get less than one row (64 high); then the frame shrinks and is centred.
+- **LY1.** The pool frame keeps 16:9. It uses the full width of the pool area unless the file tiles would get less than one row (64 high); then the frame shrinks and sits flush left under its caption bar.
 - **LY2.** Banners and the Replay bar take height from the body. They never overlap the frame, the attempt cards or a sheet.
 - **LY3.** The page never scrolls sideways at any width from 320 up. Only the list of attempt cards, the tile overflow list, sheets and the git drawer scroll, and only vertically.
 - **LY4.** Sheets leave the header, the strip and the banners visible and usable.
@@ -269,6 +269,8 @@ The rail is hidden. Opened by the Compare button or key `C`. Closed by the same,
 ```
 
 ### 2.4 Card sheet (held change) and race sheet, stage size
+
+Since 2026-10-10 the held frames at stage are 725×408, not the 808×454 the wireframe below draws: the taller masthead and number band (2.1) leave less height, and the decision row must stay in the window.
 
 Centred sheet, 1680 wide, over the body. The same sheet serves kinds `held`, `race` and `choice`.
 
@@ -402,12 +404,12 @@ The regions and their order are the same as in 2.2. Differences:
 | Item | Laptop |
 | --- | --- |
 | Type | 80% of stage type, never below 14 (6.2). |
-| Pool area and rail | 60% and 40% of the width (832 and 560 at 1440). Pool frame 832×468. |
-| File tiles | Compact tiles (88×48), as many rows as fit, then `tiles.more`. |
+| Pool area and rail | 60% and 40% of the width (832 and 560 at 1440). Pool frame 16:9 at the width the masthead and number band leave it (LY1). |
+| File tiles | Compact tiles (84×48), as many rows as fit, then `tiles.more`. |
 | Strip | The same seven cells. Labels may wrap to two lines. |
-| Card sheet | Width 96% of the window. Held frames 2×(648×364). Race frames 3×(428×241). |
+| Card sheet | Width 96% of the window. Held frames 2×(544×306), so the decision row stays in the window under the masthead and the number band (2026-10-10). Race frames 3×(428×241). |
 | Why sheet and git drawer | Why sheet 560 wide. The git drawer covers the pool area instead of sitting beside it. |
-| Swarm view | The four large numbers stay in one row at 72 high. The wall gets the rest. |
+| Swarm view | The four large numbers stay in one row at 120 high. The wall gets the rest. |
 
 ```
 +--------------------------------------------------------------------------+
@@ -2096,31 +2098,31 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 
 ### 6.1 The language
 
-The page looks like a harbour board at dusk: a still, dark surface, a few large signal shapes, and numbers that can be read from far away.
+The page looks like a poster at night: ink rules on a dark ground, numbers set like headlines, and plain words in spaced capitals. The light theme is the same poster on paper. (Owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions".)
 
 - **VD1 (still unless something happened).** Nothing moves by itself except the pool app and the slow "working" pulse. Every other movement is caused by one event and ends within 720 ms.
 - **VD2 (signals).** The five light shapes (circle, diamond, triangle, ring, half circle) are the identity of the product. They are used for premises and for status only, at every size, in both themes. No other icon set is used; the few other marks (cross, tick, two bars, reader ring, writer square) are drawn in the same weight.
-- **VD3 (above and below the water).** The rail holds what is in flight. The pool area holds what is on `main`. A change crosses from the rail to the pool only on `landing.landed`. Colour reinforces this: the rail and sheets use the `surface` tone, the pool area the darker `bg` tone.
+- **VD3 (above and below the water).** The rail holds what is in flight. The pool area holds what is on `main`. A change crosses from the rail to the pool only on `landing.landed`. One vertical ink rule separates the two regions; the pool frame is an ink-edged plate.
 - **VD4 (labels that cannot be missed).** SYNTHETIC uses its own hue and a diagonal stripe that nothing else uses. REPLAY uses the inverse band and a dotted edge that nothing else uses.
-- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal), one corner radius (8), one border width (1; 3 for focus and for a heads-up panel's edge).
+- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal), square corners (radius 0), two rule widths: 2 (`--rule`, in the `text` colour) between regions, around sheets and on command buttons; 1 between rows. 3 for focus and for a heads-up panel's edge. A faint 40-wide column grid lies behind the page.
 
 ### 6.2 Type
 
-- **VD6.** Text uses the system interface typeface: `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`. Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. No font file is bundled or fetched, so there is no licence to check, no network request and no late change of layout.
+- **VD6.** Numbers, titles, intent text and the masthead name use Instrument Serif. Interface text uses Archivo (variable weight). Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. Both typefaces are under the SIL Open Font License 1.1 (owner's approval of 2026-10-10); their files and licences are bundled in `src/floor/styles/fonts/`, so no font is fetched from another host. Each face falls back to the system stack (`font-display: swap`).
 - **VD7.** Numbers use tabular figures (`font-variant-numeric: tabular-nums`).
-- **VD8.** Weight 400 for text; 600 for status words, titles, counters and buttons. No italics. Capitals only for banner words and section labels, with letter spacing 0.06em.
+- **VD8.** Serif text is set at weight 400 with tight letter spacing. Archivo is weight 400 for text and 600 to 800 for status words, labels and buttons. Capitals with letter spacing 0.06 to 0.1em for banner words, section labels, tabs, status words and command buttons. Italic only for the pool frame's caption.
 
 | Role | Stage size | Laptop size | Used for |
 | --- | --- | --- | --- |
-| Display | 112 | 72 | The four large Swarm numbers |
-| Counter | 40 | 32 | Strip values |
-| Title | 32 | 26 | Sheet titles, card titles in the sheet |
-| Intent | 24 | 19 | Intent text on attempt cards, banner words, the thesis line |
+| Display | 168 | 120 | The four large Swarm numbers (serif) |
+| Counter | 84 | 56 | Strip values and the masthead name (serif); from 1100 to 1599 wide the strip values follow the window (3.9vw, at least 40) |
+| Title | 40 | 32 | Sheet titles, card titles in the sheet, headings (serif) |
+| Intent | 30 | 24 | Intent text on attempt cards (serif), the pool frame's caption (serif italic), banner words, the thesis line |
 | Status | 22 | 18 | Status words, heads-up before and after (code face) |
-| Body | 20 | 16 | Sentences, labels, buttons |
-| Small | 16 | 14 | Strip labels, tags, tile names, the git drawer (code face) |
+| Body | 20 | 16 | Sentences, labels, links |
+| Small | 16 | 14 | Strip labels, tags, tile names, command buttons (capitals), the git drawer (code face) |
 
-Line height is 1.0 for Display and Counter, 1.3 for the others. Lines of running text in sheets are at most 70 characters.
+Line height is 0.9 for Display and Counter, 1.1 to 1.3 for the others. Lines of running text in sheets are at most 70 characters.
 
 ### 6.3 Colour
 
@@ -2130,26 +2132,26 @@ Dark is the default for the video. Light is for bright rooms. The page follows t
 
 | Token | Use | Dark | Lowest contrast | Light | Lowest contrast |
 | --- | --- | --- | --- | --- | --- |
-| `bg` | Page and pool area | `#0B1720` | | `#F3F6F4` | |
-| `surface` | Rail, attempt cards, sheets | `#13242F` | | `#FFFFFF` | |
-| `raised` | Panels inside attempt cards, tiles | `#1C3342` | | `#E8EEEC` | |
-| `line` | Dividers (decoration only) | `#3A5669` | n/a | `#C9D5DA` | n/a |
-| `control` | Borders of fields, buttons, tiles | `#7C98A8` | 4.32 | `#5F727D` | 4.27 |
-| `text` | Text | `#EAF2F4` | 11.55 | `#0E1D26` | 14.62 |
-| `muted` | Secondary text | `#A8BCC6` | 6.66 | `#465A66` | 6.13 |
-| `accent` | Primary button, links, working pulse, writer marks, landing glow | `#6FD6CC` | 7.60 | `#0A6B66` | 5.40 |
-| `holds` | Holds, landed, green line | `#5BD68F` | 7.16 | `#17733A` | 5.03 |
-| `changed` | Changed, stopped, failure banners | `#FF7A6B` | 5.15 | `#B8281C` | 5.32 |
-| `confirm` | Needs a confirm, waiting for the owner, warning banners | `#FFC857` | 8.52 | `#8A5A00` | 5.04 |
-| `checking` | Being checked | `#9DB8FF` | 6.70 | `#2450C0` | 5.99 |
-| `synthetic` | SYNTHETIC only | `#D7A6FF` | 6.74 | `#6A3BB0` | 6.24 |
-| `focus` | Focus ring | `#FFE08A` | 10.17 | `#1B3FA0` | 7.89 |
-| `on-fill` | Text on a filled signal colour or on `accent` | `#06141B` | 7.34 (on `changed`) | `#FFFFFF` | 5.92 (on `holds`) |
+| `bg` | Page and pool area | `#0C0D10` | | `#F1ECE2` | |
+| `surface` | Rail, attempt cards, sheets | `#101216` | | `#F7F3EC` | |
+| `raised` | Panels inside attempt cards, tiles | `#1A1D23` | | `#EBE6DC` | |
+| `line` | Dividers between rows (decoration only) | `#2E323B` | n/a | `#CFC7B8` | n/a |
+| `control` | Borders of fields, disabled buttons | `#8A8F99` | 5.20 | `#6B665C` | 4.59 |
+| `text` | Text, and the 2-wide ink rules | `#F2F2EE` | 15.04 | `#121212` | 15.06 |
+| `muted` | Secondary text | `#9EA3AC` | 6.66 | `#57534B` | 6.15 |
+| `accent` | Primary button, links, the active view number, working pulse, writer marks, landing glow | `#FF5A1F` | 5.41 | `#B83A08` | 4.63 |
+| `holds` | Holds, landed, green line | `#5BD68F` | 9.21 | `#17733A` | 4.76 |
+| `changed` | Changed, stopped, failure banners | `#FF7A6B` | 6.63 | `#B8281C` | 5.03 |
+| `confirm` | Needs a confirm, waiting for the owner, warning banners | `#FFC857` | 10.97 | `#8A5A00` | 4.77 |
+| `checking` | Being checked | `#9DB8FF` | 8.63 | `#2450C0` | 5.66 |
+| `synthetic` | SYNTHETIC only | `#D7A6FF` | 8.67 | `#6A3BB0` | 5.89 |
+| `focus` | Focus ring | `#FFE08A` | 13.09 | `#1B3FA0` | 7.45 |
+| `on-fill` | Text on a filled signal colour or on `accent` | `#0C0D10` | 6.23 (on `accent`) | `#FFFFFF` | 5.76 (on `accent`) |
 
 - **VD9.** A unit test computes these ratios from the token values and fails below: 7 for `text`; 4.5 for every other token used for text; 3 for `control`, `focus` and every signal colour used for a shape.
 - **VD10.** No state is carried by colour alone. Each has a shape and a word (3.3, 5.3). Changed characters in a diff have an underline as well as a background.
 - **VD11.** The signal colours are used only for their meaning. A decorative use of `changed`, `confirm`, `holds`, `checking` or `synthetic` is a defect.
-- **VD12.** The pool app's own colours belong to the pool. The Floor draws a 1-wide `control` border around every pool frame so its edge is visible on any background.
+- **VD12.** The pool app's own colours belong to the pool. The Floor draws a 2-wide border in the `text` colour around every pool frame so its edge is visible on any background.
 
 ### 6.4 Motion
 

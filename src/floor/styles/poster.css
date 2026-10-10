@@ -1,0 +1,463 @@
+/* The poster layer of the Floor's visual direction (03-floor 6.1): ink rules, square corners,
+ * the masthead, the number band, the "In flight" rail and the "On main" pool area. It changes
+ * how things look, never what they say or do. Every selector starts at `.floor`, so it outranks
+ * the components' own single-class rules, including the sheets they adopt at run time. */
+
+/* ---- The page: a faint 40-px column grid behind everything ---- */
+.floor {
+  background-color: var(--bg);
+  background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px);
+  background-size: 40px 100%;
+}
+
+/* ---- Type: serif display, spaced capitals for labels ---- */
+.floor .sheet-title,
+.floor .start-card h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+/* ---- Controls: square, ink-edged, capitals ---- */
+.floor button,
+.floor .pf-btn {
+  border-radius: 0;
+  border-width: var(--rule);
+  border-color: var(--text);
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--size-small);
+  font-weight: 700;
+}
+.floor button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-fill);
+}
+.floor button.danger {
+  background: var(--changed);
+  border-color: var(--changed);
+  color: var(--on-fill);
+}
+.floor button:disabled {
+  border-color: var(--control);
+}
+
+/* ---- Header: the masthead ---- */
+.floor .header {
+  background: transparent;
+  border-bottom: var(--rule) solid var(--text);
+  gap: 28px;
+  padding: 0 28px;
+}
+.floor .header-name {
+  gap: 16px;
+  align-items: center;
+}
+.floor .app-name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--size-counter);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+.floor .pool-name {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-text);
+  font-weight: 600;
+  color: var(--text);
+}
+.floor .view-switch {
+  gap: 2px;
+  counter-reset: nav;
+}
+.floor .nav-item {
+  border: none;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: var(--size-body);
+  counter-increment: nav;
+}
+.floor .nav-item::before {
+  content: "0" counter(nav) " ";
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.floor .nav-item[aria-current="page"] {
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+.floor .nav-item[aria-current="page"]::before {
+  color: var(--accent);
+}
+.floor .needs-badge {
+  background: var(--confirm);
+  border-color: var(--confirm);
+  color: var(--on-fill);
+}
+.floor .owner-button,
+.floor .kill-open {
+  background: transparent;
+}
+
+/* ---- Banners: full-width bands between ink rules ---- */
+.floor .banner {
+  border-bottom: var(--rule) solid var(--text);
+}
+.floor .banner-word {
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+/* ---- The strip: the number band ---- */
+.floor .strip {
+  gap: 0;
+  background: transparent;
+  border-bottom: var(--rule) solid var(--text);
+}
+.floor .strip-cell {
+  background: transparent;
+  padding: 10px 20px 0;
+  justify-content: flex-start;
+}
+.floor .strip-cell + .strip-cell {
+  border-left: var(--rule) solid var(--text);
+}
+.floor .strip-label {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.floor .strip .strip-main {
+  font-size: var(--size-small);
+  line-height: 1.1;
+  white-space: normal;
+}
+.floor .strip .strip-label {
+  display: block;
+  margin-bottom: 4px;
+}
+.floor .strip-value {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--size-counter);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+.floor .strip-value--text {
+  font-family: var(--font-text);
+  font-size: var(--size-status);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+  white-space: normal;
+}
+.floor .strip-sub {
+  font-family: var(--font-text);
+  letter-spacing: 0;
+}
+.floor .strip-bar {
+  height: 3px;
+  border-radius: 0;
+}
+
+/* ---- Body: pool area and rail, with one ink rule between them ---- */
+.floor .rail {
+  background: transparent;
+  border-left: var(--rule) solid var(--text);
+  padding-left: var(--body-gap);
+}
+
+/* The pool frame: an ink-edged plate, square. */
+.floor .pf-caption-text {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--size-intent);
+  color: var(--text);
+}
+.floor .pf-chip {
+  border-radius: 0;
+}
+.floor .pf-body {
+  border: var(--rule) solid var(--text);
+  border-radius: 0;
+}
+.floor .pf-body--framefocus {
+  border-radius: 0;
+}
+.floor .pf-selftest {
+  border-radius: 0;
+}
+
+/* The file tiles: a typographic list, not boxes. */
+.floor .tile {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+}
+.floor .tile-label {
+  color: var(--muted);
+}
+.floor .tile-tag {
+  border-radius: 0;
+}
+
+/* ---- The rail: "In flight" ---- */
+.floor .intent-box {
+  padding: 0 0 14px;
+  border-bottom: var(--rule) solid var(--text);
+}
+.floor .intent-field {
+  background: transparent;
+  border: none;
+  border-bottom: var(--border) solid var(--control);
+  border-radius: 0;
+  padding: 6px 0;
+  font-family: var(--font-display);
+  font-size: calc(var(--size-title) * 0.85);
+  line-height: 1.15;
+}
+.floor .intent-field::placeholder {
+  color: var(--muted);
+}
+.floor .tray {
+  margin: 14px 0 0;
+  border-bottom: none;
+}
+.floor .tray-row {
+  border: none;
+  border-radius: 0;
+  background: var(--confirm);
+  color: var(--on-fill);
+  padding: 8px 8px 8px 14px;
+}
+.floor .tray-row button {
+  border-color: var(--on-fill);
+  color: var(--on-fill);
+}
+.floor .tabs {
+  border-bottom: var(--border) solid var(--line);
+  margin-top: 10px;
+}
+.floor .tab {
+  border: none;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--size-small);
+}
+.floor .tab[aria-selected="true"] {
+  box-shadow: inset 0 calc(-1 * var(--rule)) 0 var(--accent);
+}
+.floor .rail-list {
+  padding: 0;
+  gap: 0;
+  counter-reset: attempt;
+}
+
+/* Attempt cards: numbered rows of a timetable. */
+.floor .attempt-card {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-top: var(--border) solid var(--line);
+  border-radius: 0;
+  padding: 14px 0 14px 64px;
+  counter-increment: attempt;
+}
+.floor .attempt-card::before {
+  content: counter(attempt, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 8px;
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 1;
+  color: var(--muted);
+}
+.floor .attempt-card__tag {
+  border-radius: 0;
+}
+.floor .attempt-card__intent {
+  font-family: var(--font-display);
+  font-size: var(--size-intent);
+  line-height: 1.1;
+}
+.floor .attempt-card__status {
+  font-size: var(--size-status);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.floor .attempt-card__glyph {
+  width: 16px;
+  height: 16px;
+}
+.floor .race-group {
+  border-radius: 0;
+  border-width: var(--border);
+}
+.floor .landed-row {
+  background: transparent;
+  border: none;
+  border-top: var(--border) solid var(--line);
+  border-radius: 0;
+}
+.floor .landed-name {
+  font-family: var(--font-display);
+  font-size: calc(var(--size-intent) * 1.1);
+}
+
+/* ---- Sheets: ink-ruled plates ---- */
+.floor .sheet,
+.floor .start-card,
+.floor .toast,
+.floor .strip-tip {
+  border-radius: 0;
+  border: var(--rule) solid var(--text);
+  background: var(--surface);
+}
+
+/* ---- Swarm numbers ---- */
+.floor .swarm-cell .strip-value {
+  font-size: var(--size-display);
+}
+.floor .swarm-tile {
+  border-radius: 0;
+}
+
+/* Buttons that are not commands keep sentence case and their own size: file tiles, lights, the
+ * tile list's toggle and menu, list rows (Who relies, Landed, Why's relied-on rows, recordings), a
+ * card's "Open the card." link and the lights row of an attempt card. */
+.floor .tile,
+.floor .tiles-toggle,
+.floor .light,
+.floor .who-row,
+.floor .landed-row,
+.floor .why-relied__who,
+.floor .replay-item,
+.floor .tile-menu button,
+.floor .attempt-card__open,
+.floor .attempt-card button:not(.primary):not(.danger) {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.floor .tile,
+.floor .light {
+  border-color: transparent;
+}
+.floor .tile-name {
+  font-weight: 600;
+}
+.floor .attempt-card__open {
+  border: none;
+}
+
+/* A height-bound pool frame sits flush left under its caption, like a plate on a page. */
+.floor .pool-area[data-tight="true"] .pf-body {
+  margin-inline: 0 auto;
+}
+.floor input[type="range"] {
+  accent-color: var(--accent);
+}
+
+/* Headings in sheets and views are set in the display face, like the masthead. */
+.floor h1,
+.floor h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.floor h2 {
+  font-size: var(--size-title);
+}
+
+/* 2.8: from 1100 to 1599 the number band's figures follow the window, so the seven cells keep
+ * one line each at 1100 and reach the full counter size near 1440. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .floor .strip-value:not(.strip-value--text) {
+    font-size: clamp(40px, 3.9vw, var(--size-counter));
+  }
+}
+
+/* 2.9: the narrow layout is one column; the rule between the regions and its gutters go. */
+@media (max-width: 1099px) {
+  .floor .rail {
+    border-left: none;
+    padding-left: 0;
+  }
+  .floor .strip-cell + .strip-cell {
+    border-left: none;
+  }
+  .floor .strip-cell {
+    padding: 6px 10px;
+    border-bottom: var(--border) solid var(--line);
+  }
+  .floor .attempt-card {
+    padding-left: 48px;
+  }
+  .floor .attempt-card::before {
+    font-size: 32px;
+  }
+}
+
+/* The Replay bar keeps its track at least half the bar's width (RY19): its capitals run tighter. */
+.floor .replay-bar button {
+  letter-spacing: 0.02em;
+  padding: 0 8px;
+}
+
+/* 2.8: the waiting label takes two lines at 1100, never three. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .floor .strip-cell[data-cell="strip.waiting"] {
+    min-width: 13em;
+  }
+}
+@media (max-width: 1099px) {
+  .floor .strip-value:not(.strip-value--text) {
+    font-size: min(var(--size-counter), 6.5vw);
+  }
+}
+
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .floor .strip-cell {
+    padding-top: 6px;
+  }
+  .floor .strip .strip-label {
+    margin-bottom: 2px;
+  }
+  /* 2.8: compact tiles are 84 wide, so a row of the pool area holds nine cells. */
+  .floor .tiles {
+    --tile-w: 84px;
+  }
+  /* 2.4: the card sheet's frames leave the decision row inside the window without scrolling. */
+  .floor .card-sheet .sheet-frame__body {
+    max-width: calc((100vh - var(--header-h) - var(--strip-h) - 410px) * 16 / 9);
+  }
+}
+@media (min-width: 1600px) {
+  .floor .card-sheet .sheet-frame__body {
+    max-width: calc((100vh - var(--header-h) - var(--strip-h) - 448px) * 16 / 9);
+  }
+}
+.floor .header button {
+  font-size: var(--size-small);
+}
+
+/* Section headings inside sheets read as poster labels: spaced capitals. */
+.floor h3 {
+  font-family: var(--font-text);
+  font-size: var(--size-small);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

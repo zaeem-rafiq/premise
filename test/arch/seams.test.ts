@@ -134,6 +134,10 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         "tick",
         "tool",
         "triage",
+        // TR10 (01-core 7.3): the asynchronous Clef path's dispatch, deadline and restart re-ask.
+        "triage_deadline",
+        "triage_dispatch",
+        "triage_restart",
         // 13.6: the owner's undo routes (UN4, UN5) reach the Trunk object as these two entries.
         "undo",
         "undo_plan",

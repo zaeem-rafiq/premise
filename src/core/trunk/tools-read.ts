@@ -29,7 +29,7 @@ import { blobId } from "../sync/sha1.ts";
 import { utf8 } from "../sync/bytes.ts";
 import { entitySignature, parseModule } from "../entities/entities.ts";
 import { matchContainers } from "../keys/search.ts";
-import { pin, ref } from "./premises.ts";
+import { byNameModule, pin, ref } from "./premises.ts";
 import { MAX_FILE_BYTES, MAX_LIST_ENTRIES, MAX_QUERY_LEN, MAX_SEARCH_LINES } from "../../protocol/constants.ts";
 
 export type ToolOut =
@@ -154,6 +154,8 @@ export function toolRead(pool: Pool, a: Attempt, args: { path: string; entity?: 
   const p = pin(pool, a, "entity", key, { read: true, repin: true });
   const e = entityAt(v, key, pool.languages);
   if (e === null) return err("not_found", `no such entity: ${key}`, [p]);
+  // LG4: an entity read of a Python or Go module also watches the whole file (syncPremises keeps it).
+  const watched = byNameModule(pool, args.path) ? [pin(pool, a, "file", args.path, { derived: true })] : [];
   const headE = entityAt(head, key, pool.languages);
   const result: ReadResult = {
     key,
@@ -163,7 +165,7 @@ export function toolRead(pool: Pool, a: Attempt, args: { path: string; entity?: 
     lines: linesRange(v.get(args.path) ?? "", mod.regions, args.entity, 1),
     edited_by_you: headE === null ? false : headE.hash !== e.hash,
   };
-  return ok(result, [p]);
+  return ok(result, [p, ...watched]);
 }
 
 /** 4.5 `list`: one directory, not recursive; created files appear as `yours`. */

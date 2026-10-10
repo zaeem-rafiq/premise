@@ -299,6 +299,7 @@ export type Pool = {
   ids: { next(kind: string): string };
   K: { GO_AROUND_LIMIT: number; STARVATION_AFTER: number; MAX_BATCH: number; T_REPAIR: number; T_CONFIRM: number };
   clefOn: boolean; // switches.CLEF_TRIAGE === "on"
+  riskOn: boolean; // switches.CLEF_RISK === "on": a full held card asks Clef the 10.4 questions (RK1)
   killed: boolean; // the kill switch (SE10) as the pool last heard it: OffTriage (TR5)
   syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal

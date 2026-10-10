@@ -5,8 +5,16 @@
 // recorded `stale` (TR4). Nothing on the landing path waits for this.
 
 import { FEATURES } from "../../config/features.ts";
-import { CLEF_TRIAGE_MODEL, CLEF_TRIAGE_MODEL_ID } from "../../protocol/constants.ts";
-import type { Sql, Triage, TriageAnswers } from "../../protocol/ports.ts";
+import {
+  CLEF_RISK_MODEL,
+  CLEF_RISK_MODEL_ID,
+  CLEF_TRIAGE_MODEL,
+  CLEF_TRIAGE_MODEL_ID,
+} from "../../protocol/constants.ts";
+import type { RiskAnswers } from "../../protocol/cards.ts";
+import type { RiskJudge, Sql, Triage, TriageAnswers } from "../../protocol/ports.ts";
+import type { RiskRequest } from "../../core/trunk/risk.ts";
+import { ClefRisk } from "../adapters/risk/clef-risk.ts";
 import type { TriageRequest } from "../../core/trunk/triage.ts";
 import { GateCalls, gateDurableObjectTransport } from "../agent/gate-client.ts";
 import { ClefTriage } from "../adapters/triage/clef-triage.ts";
@@ -69,6 +77,56 @@ export async function runTriage(deps: TriageRunnerDeps): Promise<number> {
           ...(p === null ? { error: answers.error ?? "malformed" } : {}),
         });
       }
+    }),
+  );
+  return requests.length;
+}
+
+/** RK1: the held card's risk questions are asked only with `features.clef` and `CLEF_RISK = on`. */
+export function clefRiskOn(env: Pick<Env, "CLEF_RISK">, features: { clef: boolean } = FEATURES): boolean {
+  return features.clef && env.CLEF_RISK === "on";
+}
+
+/** The deployment's `ClefRisk` for one submit's attempt: Workers AI behind the model gate (TR9). */
+export function clefRiskOf(env: Env, pool: string, attempt_id: string): RiskJudge {
+  const gate = env.GATE === undefined ? null : new GateCalls(gateDurableObjectTransport(env.GATE));
+  return new ClefRisk({ ai: env.AI, gate, pool, modelId: CLEF_RISK_MODEL_ID, model: CLEF_RISK_MODEL }, attempt_id);
+}
+
+/** The risk queue's state in `meta` (`risk_pending`), read without opening the engine. */
+export function hasRisk(sql: Sql, state: "unsent" | "sent"): boolean {
+  try {
+    const raw = sql.exec("SELECT v FROM meta WHERE k = 'risk_pending'").toArray()[0]?.v;
+    if (typeof raw !== "string") return false;
+    const entries = Object.values(JSON.parse(raw) as Record<string, { dispatched_at: number | null }>);
+    return entries.some((e) => (state === "unsent") === (e.dispatched_at === null));
+  } catch {
+    return false;
+  }
+}
+
+/** One risk dispatch: ask every queued submit, fill each card. Resolves the number of requests. */
+export async function runRisk(deps: {
+  apply: (name: string, input: unknown) => Promise<unknown>;
+  judge: (attempt_id: string) => RiskJudge;
+}): Promise<number> {
+  const out = (await deps.apply("risk_dispatch", {})) as { requests?: RiskRequest[] } | undefined;
+  const requests = out?.requests ?? [];
+  await Promise.all(
+    requests.map(async (request) => {
+      let risk: RiskAnswers;
+      try {
+        risk = await deps.judge(request.attempt_id).judge(request.input);
+      } catch {
+        risk = {
+          model: CLEF_RISK_MODEL,
+          does_what_asked: null,
+          changes_shared_meaning: null,
+          unrelated_edits: null,
+          error: "model_unavailable",
+        };
+      }
+      await deps.apply("risk_answer", { submit_id: request.submit_id, risk });
     }),
   );
   return requests.length;

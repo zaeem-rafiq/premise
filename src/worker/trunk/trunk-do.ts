@@ -29,7 +29,16 @@ import { runPlainJob } from "./plain-runner.ts";
 import { runPreviewJob } from "./preview-runner.ts";
 import { runRaceCostJob } from "./race-cost-runner.ts";
 import { poolRepoName } from "../repos.ts";
-import { clefTriageOf, clefTriageOn, hasAsks, runTriage } from "./triage-runner.ts";
+import {
+  clefRiskOf,
+  clefRiskOn,
+  clefTriageOf,
+  clefTriageOn,
+  hasAsks,
+  hasRisk,
+  runRisk,
+  runTriage,
+} from "./triage-runner.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -395,8 +404,11 @@ export class Trunk extends DurableObject<Env> {
 
   /** S6a/TR10: the `CLEF_TRIAGE` switch the engine sees — on only with `features.clef` and the
    * environment's variable `on`; otherwise a real attempt's triage is `OffTriage` (TR5). */
-  #switches(): { CLEF_TRIAGE: "on" | "off" } {
-    return { CLEF_TRIAGE: clefTriageOn(this.env) ? "on" : "off" };
+  #switches(): { CLEF_TRIAGE: "on" | "off"; CLEF_RISK: "on" | "off" } {
+    return {
+      CLEF_TRIAGE: clefTriageOn(this.env) ? "on" : "off",
+      CLEF_RISK: clefRiskOn(this.env) ? "on" : "off",
+    };
   }
 
   #triageStarted = false;
@@ -413,8 +425,8 @@ export class Trunk extends DurableObject<Env> {
       this.#triageAgain = true;
       return;
     }
-    const restart = !this.#triageStarted && hasAsks(this.#sql, "sent");
-    if (!restart && !hasAsks(this.#sql, "unsent")) return;
+    const restart = !this.#triageStarted && (hasAsks(this.#sql, "sent") || hasRisk(this.#sql, "sent"));
+    if (!restart && !hasAsks(this.#sql, "unsent") && !hasRisk(this.#sql, "unsent")) return;
     this.#triageBusy = true;
     const run = (async () => {
       try {
@@ -423,12 +435,16 @@ export class Trunk extends DurableObject<Env> {
           if (!this.#triageStarted) {
             this.#triageStarted = true;
             if (hasAsks(this.#sql, "sent")) await this.#applyEntry("triage_restart", {});
+            if (hasRisk(this.#sql, "sent")) await this.#applyEntry("risk_deadline", { restart: true });
           }
-          if (!hasAsks(this.#sql, "unsent")) break;
-          const sent = await runTriage({
-            apply: (name, input) => this.#applyEntry(name, input),
-            triage: clefTriageOf(this.env, this.#pool),
-          });
+          const apply = (name: string, input: unknown) => this.#applyEntry(name, input);
+          const [asked, risked] = await Promise.all([
+            hasAsks(this.#sql, "unsent") ? runTriage({ apply, triage: clefTriageOf(this.env, this.#pool) }) : 0,
+            hasRisk(this.#sql, "unsent")
+              ? runRisk({ apply, judge: (attempt) => clefRiskOf(this.env, this.#pool, attempt) })
+              : 0,
+          ]);
+          const sent = asked + risked;
           // The answers' heads-ups and events; a question it creates queues one more pass.
           if (sent > 0) await this.#postCommit();
         } while (this.#triageAgain);
@@ -729,6 +745,11 @@ export class Trunk extends DurableObject<Env> {
       // TR6: the `triage` timer closes every question past its deadline, then sends what waits.
       triage: async (now) => {
         await this.#applyEntry("triage_deadline", {}, now);
+        await this.#postCommit();
+      },
+      // RK3: the `risk` timer — a held card's risk answers past their deadline are unavailable.
+      risk: async (now) => {
+        await this.#applyEntry("risk_deadline", {}, now);
         await this.#postCommit();
       },
       raceCost: async (now) => {

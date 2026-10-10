@@ -129,6 +129,10 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
         "restart",
         // RW1: the `right_of_way` timer's entry (01-core 3.3).
         "right_of_way",
+        // RK1 (01-core 10.4): the held card's risk questions — dispatch, answer and deadline.
+        "risk_answer",
+        "risk_deadline",
+        "risk_dispatch",
         "stop",
         "sync",
         "tick",

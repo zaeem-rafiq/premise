@@ -32,6 +32,8 @@ import {
   type TriageRequest,
 } from "./triage.ts";
 import type { TriageAnswer } from "./tick.ts";
+import { answerRisk, dispatchRisk, overdueRisk, type RiskRequest } from "./risk.ts";
+import type { RiskAnswers } from "../../protocol/cards.ts";
 import { applySchema, metaAll, metaSet, migrateSchema, SCHEMA_VERSION, HASH_VERSION } from "./schema.ts";
 import { event, emitPoolFiles, emitPoolState, syncRealAgents } from "./events.ts";
 import { clearPreviews, previewBuild, previewDone } from "./preview.ts";
@@ -61,7 +63,7 @@ import type { UndoPlanResponse, UndoResponse } from "../../protocol/undo.ts";
 export type PoolOptions = {
   pool_id?: string;
   constants?: Partial<Pool["K"]>;
-  switches?: { CLEF_TRIAGE?: "on" | "off" };
+  switches?: { CLEF_TRIAGE?: "on" | "off"; CLEF_RISK?: "on" | "off" };
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
   features?: { held?: boolean };
@@ -455,6 +457,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
       })(),
     K: { ...DEFAULT_K, ...(opts.constants ?? {}) },
     clefOn: (opts.switches?.CLEF_TRIAGE ?? "on") === "on",
+    riskOn: opts.switches?.CLEF_RISK === "on",
     killed: opts.killed === true,
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
@@ -1628,6 +1631,22 @@ export class Trunk {
     wrapCall(this.pool, () => {
       for (const c of overdueAsks(this.pool)) this.#answer({ ...c, p: null });
     });
+  }
+
+  /** RK1: the held cards' risk questions to send now. */
+  riskDispatch(): { requests: RiskRequest[] } {
+    return wrapCall(this.pool, () => ({ requests: dispatchRisk(this.pool) }));
+  }
+
+  /** RK1/RK3: the answers for one submit fill its card, while that card is open. */
+  riskAnswer(args: { submit_id: string; risk: RiskAnswers }): void {
+    wrapCall(this.pool, () => answerRisk(this.pool, args.submit_id, args.risk));
+  }
+
+  /** The `risk` timer: a risk question past its deadline (or sent by an earlier instance) is
+   * unavailable (RK3). */
+  riskDeadline(args: { restart?: boolean } = {}): void {
+    wrapCall(this.pool, () => overdueRisk(this.pool, args.restart === true));
   }
 
   /** TR6 on start-up: questions an earlier instance sent are asked again once. */

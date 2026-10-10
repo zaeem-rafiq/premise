@@ -67,6 +67,14 @@ export function wireEngineEntries(table: EngineTable): void {
   table.entries.set("triage_restart", (_input, ctx) => {
     trunk(ctx).triageRestart();
   });
+  // RK1: the held cards' risk questions — dispatch, answer, and the `risk` timer's deadline.
+  table.entries.set("risk_dispatch", (_input, ctx) => trunk(ctx).riskDispatch());
+  table.entries.set("risk_answer", (input, ctx) => {
+    trunk(ctx).riskAnswer(input as Parameters<Trunk["riskAnswer"]>[0]);
+  });
+  table.entries.set("risk_deadline", (input, ctx) => {
+    trunk(ctx).riskDeadline((input ?? {}) as { restart?: boolean });
+  });
   table.entries.set("restart", (input, ctx) => trunk(ctx).restart(input as Parameters<Trunk["restart"]>[0]));
   // RW1's lapse (3.3): the row's `due_at` identifies the grant it was armed for — the entry
   // clears only a mark still holding that grant, then runs the tick that lands what waited.

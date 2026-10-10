@@ -36,6 +36,8 @@ export type AlarmDeps = {
   raceCost?: (now: number) => Promise<void>;
   /** The `triage` timer's work (TR6, TR10): Clef questions past their deadline, then the dispatch. */
   triage?: (now: number) => Promise<void>;
+  /** The `risk` timer's work (RK3): risk questions past their deadline. */
+  risk?: (now: number) => Promise<void>;
   /** The time the due-check reads; absent, the wall clock. A test drives the schedule through
    * `?now=` on `/internal/alarm` instead of sleeping for the real backoff. */
   now?: number;
@@ -100,6 +102,7 @@ export async function runAlarm({
   preview,
   raceCost,
   triage,
+  risk,
   now: at,
 }: AlarmDeps): Promise<void> {
   const now = at ?? Date.now();
@@ -112,6 +115,7 @@ export async function runAlarm({
     ["preview", preview],
     ["race_cost", raceCost],
     ["triage", triage],
+    ["risk", risk],
   ]);
   for (const timer of timerDue(sql, now)) {
     if (timer.kind === "events") {

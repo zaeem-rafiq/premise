@@ -2408,6 +2408,7 @@ The `protocol` module fixes these paths. "Owner" routes are the mutating routes 
     green: "none" | "static" | "full";   // 11.5: no verification | static checks only (GR5) | the isolate self-test
     clef: boolean;                       // Clef triage and risk questions (7.3, 10.4). false: `CLEF_TRIAGE`, `CLEF_RISK` and `CLEF_CONTRADICTION` are off
     attempt_repos: boolean;              // S3: attempt repositories are provisioned
+    mcp: boolean;                        // `07-mcp.md`: outside agents over MCP (added 2026-10-10 by the owner's decision to build the extensions)
     text_merge: boolean;                 // 11.7 PM3a: the plain-merge pool merges each change with a three-way line merge (added 2026-10-10 by the owner's decision to build the extensions)
   };
   ```

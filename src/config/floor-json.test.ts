@@ -64,11 +64,13 @@ function specRelated(): string {
 function specLimits(): string[] {
   const content = /The limits list is one file[\s\S]*?Content:\s*\n([\s\S]*?)\n\n/.exec(floor);
   if (content === null) throw new Error("the limits list of 5.12 was not found");
-  const names: Record<"held" | "race" | "undo" | "attempt_repos", string> = {
+  const names: Record<"held" | "race" | "undo" | "attempt_repos" | "mcp" | "text_merge", string> = {
     held: "the held card with previews",
     race: "comparing attempts",
     undo: "Undo",
     attempt_repos: "attempt repositories",
+    mcp: "outside agents over MCP",
+    text_merge: "text merge",
   };
   const off = (Object.keys(names) as Array<keyof typeof names>).filter((key) => FEATURES[key] === false);
   const lines: string[] = [];
@@ -91,16 +93,13 @@ function specLimits(): string[] {
     const textMergeForm = / \(Or, while `features\.text_merge` is on: (.*)\)$/.exec(line);
     if (textMergeForm !== null)
       line = FEATURES.text_merge ? (textMergeForm[1] ?? "") : line.slice(0, textMergeForm.index);
-    // Line 9: "text merge" is listed only while `features.text_merge` is off.
-    const listedNote = / \("text merge" is listed only while `features\.text_merge` is off; added 2026-10-10\.\)$/.exec(
-      line,
-    );
-    if (listedNote !== null) {
-      line = line.slice(0, listedNote.index);
-      if (FEATURES.text_merge) line = line.replace("text merge, ", "");
-    }
-    // The parenthetical notes of lines 7 and 15 are the conditions, not part of the shown line.
-    line = line.replace(/ \(Or:.*\)$/, "").replace(/ \(Left out.*\)$/, "");
+    // Line 16 is shown only while its feature is on (07-mcp).
+    if (line.endsWith("(Only when `features.mcp` is true.)") && !FEATURES.mcp) continue;
+    // The parenthetical notes of lines 7, 15 and 16 are the conditions, not part of the shown line.
+    line = line
+      .replace(/ \(Or:.*\)$/, "")
+      .replace(/ \(Left out.*\)$/, "")
+      .replace(/ \(Only when .*\)$/, "");
     // 5.12: a number in a line is written with a comma every three places.
     const n = (value: number) => value.toLocaleString("en-US");
     lines.push(
@@ -256,10 +255,9 @@ describe("floorJson() (03-floor 4.5)", () => {
     });
   });
 
-  it("features carries the keys of Features (FJ1) and no other", () => {
-    // FJ1's seven keys; `text_merge` added 2026-10-10 by the owner's decision to build the extensions.
+  it("features carries the eight keys of Features (FJ1, with 07-mcp's mcp and PM3a's text_merge) and no other", () => {
     expect(Object.keys(json.features).sort()).toEqual(
-      ["attempt_repos", "clef", "green", "held", "race", "text_merge", "undo"].sort(),
+      ["attempt_repos", "clef", "green", "held", "mcp", "race", "text_merge", "undo"].sort(),
     );
   });
 });

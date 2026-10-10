@@ -359,6 +359,8 @@ export function tagsOf(state: FloorState, attempt: AttemptView): string[] {
     tags.push(text("attempt.tag.reopened", { cause: REOPENED_CAUSE[attempt.reopened_by] ?? attempt.reopened_by }));
   }
   if (attempt.right_of_way) tags.push(text("attempt.tag.right_of_way"));
+  // 07-mcp MC24: an outside agent's attempt; its model short name is the client's name.
+  if (attempt.model?.startsWith("mcp/") === true) tags.push(text("attempt.tag.mcp"));
   return tags;
 }
 

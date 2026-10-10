@@ -11,6 +11,7 @@ const ENABLED: Features = {
   green: "full",
   clef: true,
   attempt_repos: true,
+  mcp: true,
   text_merge: true,
 };
 import {

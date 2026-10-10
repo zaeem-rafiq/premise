@@ -277,9 +277,15 @@ for (const size of SIZES) {
       await expect(lights).toHaveCount(2);
       await assertTargets(lights);
       await assertTargets(page.locator(".intent-prewritten"));
-      const first = await box(lights.nth(0));
-      const second = await box(lights.nth(1));
-      expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+      // Both rectangles in one frame: measured one after the other, a card still settling moves
+      // between the two reads and the pair looks overlapped by a pixel or two.
+      const [first, second] = await lights.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, width: r.width };
+        }),
+      );
+      expect(second!.x).toBeGreaterThanOrEqual(first!.x + first!.width);
       for (const svg of await lights.locator("svg").all()) {
         const drawn = await box(svg);
         expect(drawn.width).toBe(attempts === 1 ? 28 : 20);

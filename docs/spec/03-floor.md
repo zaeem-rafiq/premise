@@ -499,7 +499,7 @@ Anatomy, collapsed (stage size 696×132):
 +--------------------------------------------------------------------+
 ```
 
-Line 1: requester, tags (`attempt.tag.prewritten`, `attempt.tag.synthetic`, `attempt.tag.reopened`, `attempt.tag.right_of_way`), model short name, time since `opened_ts`. Line 2: the intent text, at most two lines, then an ellipsis. Line 3: status shape and word (5.3), then `attempt.sent_back_n` when `go_arounds + pull_backs` is above 0, then the lights (3.3). Line 4: the activity line (5.5), or the newest heads-up sentence, or the stop sentence.
+Line 1: requester, tags (`attempt.tag.prewritten`, `attempt.tag.synthetic`, `attempt.tag.reopened`, `attempt.tag.right_of_way`, and `attempt.tag.mcp` for an outside agent, `07-mcp.md` MC24, added 2026-10-10 by the owner's decision to build the extensions), model short name, time since `opened_ts`. Line 2: the intent text, at most two lines, then an ellipsis. Line 3: status shape and word (5.3), then `attempt.sent_back_n` when `go_arounds + pull_backs` is above 0, then the lights (3.3). Line 4: the activity line (5.5), or the newest heads-up sentence, or the stop sentence.
 
 Expanded (tap or Enter on the attempt card) adds, in this order: heads-up panels (3.4), "Relies on" as a list (3.3), "What it changes" (paths and entities from `ops`), checks (5.7), and for an owner the button `attempt.stop` (the stop route of 4.5). While the stop request is in flight the button is disabled and reads `attempt.stopping` (FL10, amended 2026-10-07).
 
@@ -1448,6 +1448,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `attempt.tag.reopened` | Reopened by {cause: undo, the green line, the owner} |
 | `attempt.same_agent` | Same agent, same conversation. |
 | `attempt.tag.right_of_way` | Right of way |
+| `attempt.tag.mcp` | Over MCP |
 | `attempt.model_changed` | A different model is continuing this work. The model that started it was not available. |
 | `attempt.queue` | It starts when an agent slot is free. The limit is {max}. |
 | `attempt.starting` | The agent is starting. |
@@ -2038,7 +2039,7 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 | 6 | Workers AI: the coding models, and Clef for judgments |
 | 7 | Artifacts: main, the green line, and the notes; one repository per attempt for its conversation |
 
-A box names a part only when the build has it: box 5 reads "Workflows: the Swarm" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off).
+A box names a part only when the build has it: box 3 adds ", or the calls of an outside agent over MCP" when `features.mcp` is true (`07-mcp.md` MC24, added 2026-10-10 by the owner's decision to build the extensions); box 5 reads "Workflows: the Swarm" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off).
 
 The limits list is one file in the repository, shown here and in the README from the same source. A line whose condition is false for the build is left out. Content:
 
@@ -2050,15 +2051,16 @@ The limits list is one file in the repository, shown here and in the README from
 6. A premise across two pools is not built.
 7. The green line checks {runtime sentence}. (Or: The green line is not in this build.)
 8. Clef judgments are {on or off} in this build.
-9. Not built: text merge, Python and Go modules, outside agents over MCP, audience input. ("text merge" is listed only while `features.text_merge` is off; added 2026-10-10.)
+9. Not built: Python and Go modules, audience input.
 10. References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
 11. A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
 12. Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
 13. A sweep is recognised from the edits an agent makes, not from the words of the request.
 14. After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
 15. Switched off in this build: {the names of the features that are off}. (Left out when none is off.)
+16. An outside agent over MCP counts as a real agent. Premise sees only its calls of the seven tools: not what it read elsewhere, and not what its own model cost. (Only when `features.mcp` is true.)
 
-Lines 10 to 13 are the stated limits of `01-core.md` 6.5 (HC3) and of `02-tidepool.md` 7.6. Lines 1 and 2 follow `06-repos.md` LG1 and IR4, line 9 names what is not built of LG1, and line 10 also states the blind spot of LG3 (amended 2026-10-07). A number in a line is written with a comma every three places. Line 14 is the limit of `01-core.md` RB0. In line 15 the names are: "the held card with previews" (`features.held`), "comparing attempts" (`features.race`), "Undo" (`features.undo`), "attempt repositories" (`features.attempt_repos`). The green line and Clef have their own lines, 7 and 8.
+Lines 10 to 13 are the stated limits of `01-core.md` 6.5 (HC3) and of `02-tidepool.md` 7.6. Lines 1 and 2 follow `06-repos.md` LG1 and IR4, line 9 names what is not built of LG1, and line 10 also states the blind spot of LG3 (amended 2026-10-07). A number in a line is written with a comma every three places. Line 14 is the limit of `01-core.md` RB0. In line 15 the names are: "the held card with previews" (`features.held`), "comparing attempts" (`features.race`), "Undo" (`features.undo`), "attempt repositories" (`features.attempt_repos`), "outside agents over MCP" (`features.mcp`), "text merge" (`features.text_merge`). Line 16 is the blind spot of `07-mcp.md`; outside agents over MCP left line 9 for line 15 when they were built, and so did text merge (`01-core.md` PM3a), whose own blind spot is in line 5's other form (added 2026-10-10 by the owner's decision to build the extensions). The green line and Clef have their own lines, 7 and 8.
 
 ### 5.13 Screen-reader log lines
 

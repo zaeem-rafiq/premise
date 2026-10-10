@@ -15,7 +15,16 @@ const SETTINGS: FloorJson = {
   prewritten: [],
   models: {},
   limits: [],
-  features: { race: true, held: true, undo: true, clef: false, green: "none", attempt_repos: false, text_merge: false },
+  features: {
+    race: true,
+    held: true,
+    undo: true,
+    clef: false,
+    green: "none",
+    attempt_repos: false,
+    mcp: false,
+    text_merge: false,
+  },
   swarm_defaults: { seed: 1, launch_per_second: 1, think_ms: [0, 0], rescale_every_s: 60 },
 };
 

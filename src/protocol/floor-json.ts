@@ -1,7 +1,7 @@
 // `/floor.json`: the static settings the page reads before anything else (03-floor 4.5).
 // The values come from `src/config/` — the build writes the same file into `public/` (FJ1).
 
-export const FEATURE_KEYS = ["held", "race", "undo", "green", "clef", "attempt_repos", "text_merge"] as const;
+export const FEATURE_KEYS = ["held", "race", "undo", "green", "clef", "attempt_repos", "mcp", "text_merge"] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -13,6 +13,7 @@ export type Features = {
   green: "none" | "static" | "full"; // 11.5: no verification | static checks only (GR5) | the isolate self-test
   clef: boolean; // triage (7.3), risk (10.4) and contradiction (GL4) questions
   attempt_repos: boolean; // 11.5a
+  mcp: boolean; // 07-mcp: outside agents over MCP
   text_merge: boolean; // 11.7 PM3a: the plain-merge pool merges each change three ways (added 2026-10-10)
 };
 

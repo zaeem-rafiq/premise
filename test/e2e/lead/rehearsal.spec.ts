@@ -408,7 +408,11 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
     await check("Compare opens with key C", async () => {
       // The single-key shortcuts of 6.6 start once the page has its settings and stream.
       await expect(page.locator(".pf-caption")).toBeVisible({ timeout: 30_000 });
-      await page.waitForTimeout(1500);
+      // Key C does something only once Compare is offered (the pool's app and plain-merge
+      // repository are known): wait for the caption's Compare button, as a viewer would see it.
+      await expect(page.locator(".pool-area .pf-caption").getByRole("button", { name: "Compare" })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.keyboard.press("c");
       await expect(page.locator(".cmp")).toBeVisible({ timeout: 10_000 });
@@ -817,7 +821,13 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
       for (const fy of [0.9, 0.88, 0.92]) {
         for (let x = box.x + 20; x < box.x + box.width - 20; x += 14) {
           await page.mouse.click(x, box.y + box.height * fy);
-          if (await why.isVisible().catch(() => false)) {
+          // The tap travels frame -> host -> Floor by postMessage, so the sheet opens a moment later.
+          if (
+            await why
+              .waitFor({ state: "visible", timeout: 600 })
+              .then(() => true)
+              .catch(() => false)
+          ) {
             const sub = await why.locator("p").first().innerText();
             if (sub.startsWith("crab"))
               return `tapped at (${Math.round(x)}, ${Math.round(box.y + box.height * fy)}): ${sub}`;

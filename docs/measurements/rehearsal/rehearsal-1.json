@@ -3,23 +3,23 @@
   "run": 1,
   "driven_by": "test/e2e/lead/rehearsal.spec.ts, with the canned cast",
   "deployment_host": "premise-test.rk3469.workers.dev",
-  "pool": "reh-mv2eqrla",
-  "recorded_at": "2026-10-10T13:05:58.318Z",
-  "total_s": 112,
+  "pool": "reh-mv2fxv6c",
+  "recorded_at": "2026-10-10T13:39:29.171Z",
+  "total_s": 166,
   "within_10_min": true,
   "key_r_used": false,
   "cast": {
-    "hero-j": "a_3897H0C1H30APYYW6TDJBPKDA1",
-    "hero-c": "a_62J8RY6XPFZKZ8NY4CSPXV7593",
-    "hero-h": "a_50A7W14P4312Q2TBMVYKFQHR17",
-    "hero-s": "a_7D4MG75K5YWTQ44SECS1DTAZV5",
-    "sweep-a": "a_1CDYM0113KX09GZVW1TGWD94R4",
-    "sweep-b": "a_07Y9H060VWCVC80KT1NGV3A5YY"
+    "hero-j": "a_073KC5GAB93BGJKPMC3MDGFRW4",
+    "hero-c": "a_7N95ZZARSMK35FKS05S7XCNYZ0",
+    "hero-h": "a_05KJ92JMWT1QT34BA4YY34GQW4",
+    "hero-s": "a_4KC4KTSV4XP5JP0PP84MY4MKGF",
+    "sweep-a": "a_0TKD009V1FCNQXCMQJ6F6DGQAW",
+    "sweep-b": "a_0ECWE7CK6H9M3886SN0ABMBS6S"
   },
-  "events": 473,
+  "events": 516,
   "landings": 10,
   "spend_before": "SPEND $3.45 of $10.00",
-  "spend_after": "SPEND $3.45 of $10.00",
+  "spend_after": "SPEND $0.11 of $0.25",
   "preflight": [
     {
       "name": "PS1 landed history",
@@ -59,7 +59,7 @@
       "window": "0:00-0:20",
       "proves": "The plain-merge pool, labelled as constructed. The thesis.",
       "start_s": 10,
-      "end_s": 12,
+      "end_s": 11,
       "start_clock": "–",
       "end_clock": "–",
       "status": "substituted",
@@ -96,7 +96,7 @@
       ],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-00-compare-empty.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-00-compare-empty.png"
       ]
     },
     {
@@ -104,8 +104,8 @@
       "title": "Floor: the pool runs, starter set, crab race",
       "window": "0:20-1:05",
       "proves": "Several agents at once on one codebase. Reads observed by the platform. Landing with no queue and no review step. The stated limit on real agents.",
-      "start_s": 12,
-      "end_s": 17,
+      "start_s": 11,
+      "end_s": 16,
       "start_clock": "–",
       "end_clock": "00:00:04",
       "status": "substituted",
@@ -175,9 +175,9 @@
         "The crab cards do not reach \"Waiting for you\" on a race card: the canned crab is one attempt held before submit, so it shows as working until released in beat 3."
       ],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-01-race-control.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-01-cards-working.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-01-jellyfish-landed.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-01-race-control.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-01-cards-working.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-01-jellyfish-landed.png"
       ]
     },
     {
@@ -185,10 +185,10 @@
       "title": "Shared rule and Who relies",
       "window": "1:05-1:35",
       "proves": "Blog question 1. Who relies.",
-      "start_s": 17,
+      "start_s": 16,
       "end_s": 19,
       "start_clock": "00:00:04",
-      "end_clock": "00:00:06",
+      "end_clock": "00:00:07",
       "status": "substituted",
       "proves_observed": true,
       "checks": [
@@ -205,7 +205,7 @@
         {
           "name": "tile energy, ENERGY_MAX, Who relies: In flight lists the crab",
           "ok": true,
-          "note": "Who relies on ENERGY_MAX in world/energy.js Close IN FLIGHT (3) \"make energy a fraction from…\" Working (the agent read it) shrimp Working (the agent read it) crab Working (the agent read it, the new code uses it) LANDED (0)"
+          "note": "Who relies on ENERGY_MAX in world/energy.js Close IN FLIGHT (3) \"make energy a fraction from…\" Waiting for you (the agent read it) shrimp Working (the agent read it) crab Working (the agent read it, the new code uses it) LANDED (0)"
         }
       ],
       "substitutions": [
@@ -213,8 +213,8 @@
       ],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-02-shared-rule-working.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-02-who-relies.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-02-shared-rule-working.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-02-who-relies.png"
       ]
     },
     {
@@ -224,8 +224,8 @@
       "proves": "A conflict is a broken premise caught when main moves. Held path, one tap, before and after, blast radius. The same agents adapt.",
       "start_s": 19,
       "end_s": 35,
-      "start_clock": "00:00:06",
-      "end_clock": "00:00:22",
+      "start_clock": "00:00:07",
+      "end_clock": "00:00:23",
       "status": "substituted",
       "proves_observed": true,
       "checks": [
@@ -290,9 +290,9 @@
       ],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-03-held-card.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-03-heads-up.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-03-go-around-answered.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-03-held-card.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-03-heads-up.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-03-go-around-answered.png"
       ]
     },
     {
@@ -302,8 +302,8 @@
       "proves": "Compare attempts and decide which ships. The plain-merge pool shows the break.",
       "start_s": 35,
       "end_s": 44,
-      "start_clock": "00:00:22",
-      "end_clock": "00:00:31",
+      "start_clock": "00:00:23",
+      "end_clock": "00:00:32",
       "status": "substituted",
       "proves_observed": true,
       "checks": [
@@ -341,7 +341,7 @@
         "The conflicts line reads \"Text conflicts in the plain merge: 0\", without \"(approximated)\" as beat 4 has it."
       ],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-04-compare-after.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-04-compare-after.png"
       ]
     },
     {
@@ -350,8 +350,8 @@
       "window": "3:35-4:05",
       "proves": "A query premise gains a match (QT1). A card never approves more than it showed.",
       "start_s": 44,
-      "end_s": 62,
-      "start_clock": "00:00:31",
+      "end_s": 61,
+      "start_clock": "00:00:32",
       "end_clock": "00:00:49",
       "status": "substituted",
       "proves_observed": true,
@@ -397,9 +397,9 @@
       ],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-05-sweep-waiting.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-05-sweep-caught.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-05-sweep-second-card.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-05-sweep-waiting.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-05-sweep-caught.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-05-sweep-second-card.png"
       ]
     },
     {
@@ -407,22 +407,17 @@
       "title": "Why card and Show the git",
       "window": "4:05-4:50",
       "proves": "Blog question 4. The record lives in git notes on Artifacts.",
-      "start_s": 62,
-      "end_s": 65,
+      "start_s": 61,
+      "end_s": 83,
       "start_clock": "00:00:49",
-      "end_clock": "00:00:52",
-      "status": "failed",
-      "proves_observed": false,
+      "end_clock": "00:01:11",
+      "status": "observed",
+      "proves_observed": true,
       "checks": [
         {
           "name": "tap the crab in the pool frame",
-          "ok": false,
-          "note": "no Why card opened from 237 taps on the frame; the pool frame logged 240 errors, e.g. \"p.rect is not a function\""
-        },
-        {
-          "name": "Why card from the crab tile",
           "ok": true,
-          "note": ""
+          "note": "tapped at (493, 822): crab · landing 4 · 08:39:59"
         },
         {
           "name": "Why card: who asked, in their words",
@@ -446,12 +441,10 @@
         }
       ],
       "substitutions": [],
-      "deviations": [
-        "The crab could not be hit in the frame; the Why card was opened from the crab tile instead."
-      ],
+      "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-06-why-crab.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-06-show-the-git.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-06-why-crab.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-06-show-the-git.png"
       ]
     },
     {
@@ -459,10 +452,10 @@
       "title": "Causal Undo",
       "window": "4:50-5:30",
       "proves": "Causal Undo. A reopened author keeps its context.",
-      "start_s": 65,
-      "end_s": 75,
-      "start_clock": "00:00:52",
-      "end_clock": "00:01:02",
+      "start_s": 83,
+      "end_s": 94,
+      "start_clock": "00:01:11",
+      "end_clock": "00:01:22",
       "status": "observed",
       "proves_observed": true,
       "checks": [
@@ -497,9 +490,9 @@
         "After the undo put ENERGY_MAX back to 100, the scripted crab still said \"Energy is now a fraction from 0 to 1, so the crab hides below 0.3.\": the canned cast has one fixed sentence (02-tidepool 7.5). A real agent would describe the reverse change."
       ],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-07-undo-sheet.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-07-reopened.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-07-crab-relanded.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-07-undo-sheet.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-07-reopened.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-07-crab-relanded.png"
       ]
     },
     {
@@ -507,10 +500,10 @@
       "title": "Swarm view",
       "window": "5:30-6:25",
       "proves": "Measured scale on one Trunk, under the SYNTHETIC banner.",
-      "start_s": 76,
-      "end_s": 76,
-      "start_clock": "00:01:02",
-      "end_clock": "00:01:03",
+      "start_s": 94,
+      "end_s": 95,
+      "start_clock": "00:01:22",
+      "end_clock": "00:01:23",
       "status": "substituted",
       "proves_observed": false,
       "checks": [
@@ -540,7 +533,7 @@
       ],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-08-swarm-view.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-08-swarm-view.png"
       ]
     },
     {
@@ -548,10 +541,10 @@
       "title": "About sheet",
       "window": "6:25-7:05",
       "proves": "Honest limits. Cloudflare use. No priority claim.",
-      "start_s": 76,
-      "end_s": 77,
-      "start_clock": "00:01:03",
-      "end_clock": "00:01:04",
+      "start_s": 95,
+      "end_s": 96,
+      "start_clock": "00:01:23",
+      "end_clock": "00:01:24",
       "status": "observed",
       "proves_observed": true,
       "checks": [
@@ -579,7 +572,7 @@
       "substitutions": [],
       "deviations": [],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-09-about.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-09-about.png"
       ]
     },
     {
@@ -587,12 +580,12 @@
       "title": "Lock and play the Replay",
       "window": "7:05-7:30",
       "proves": "Replay with no credentials. The page is a function of the stream.",
-      "start_s": 77,
-      "end_s": 112,
-      "start_clock": "00:01:04",
-      "end_clock": "00:01:39",
-      "status": "failed",
-      "proves_observed": false,
+      "start_s": 96,
+      "end_s": 166,
+      "start_clock": "00:01:24",
+      "end_clock": "–",
+      "status": "observed",
+      "proves_observed": true,
       "checks": [
         {
           "name": "Owner, then Lock",
@@ -606,8 +599,8 @@
         },
         {
           "name": "Play the Replay: the REPLAY banner and the same page",
-          "ok": false,
-          "note": "locator.click: Timeout 30000ms exceeded. / Call log: /   - waiting for getByRole('button', { name: /^Play the Replay \\(/ })"
+          "ok": true,
+          "note": "REPLAY Recorded · \"hero-canned\" · nothing here changes a pool"
         }
       ],
       "substitutions": [],
@@ -615,15 +608,15 @@
         "The default recording on this deployment is `hero-canned`, not `rehearsal` (PS5, RY26): run 2 makes that recording."
       ],
       "screenshots": [
-        "test-results/rehearsal/reh-mv2eqrla/beat-10-locked.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-10-start-card.png",
-        "test-results/rehearsal/reh-mv2eqrla/beat-10-replay-playing.png"
+        "test-results/rehearsal/reh-mv2fxv6c/beat-10-locked.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-10-start-card.png",
+        "test-results/rehearsal/reh-mv2fxv6c/beat-10-replay-playing.png"
       ]
     }
   ],
   "summary": {
-    "observed": 2,
+    "observed": 4,
     "substituted": 7,
-    "failed": 2
+    "failed": 0
   }
 }

@@ -2,11 +2,16 @@
 // the two registration calls of PL1/EV2a, the not_built tolerance of the build order, the fixed
 // error codes (SE5b) and the read scope of SE5c. The workerd tests prove the same end to end.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { READ_TOKEN_TTL_S } from "../../protocol/constants.ts";
 import type { Env } from "../env.ts";
 import { notBuiltError } from "../not-built.ts";
 import { createPool, readToken, registerPool } from "./pools.ts";
+import { ensureMainRef } from "./main-ref.ts";
+
+// IR2a's ref step runs against a real remote; its own unit test is main-ref.test.ts. Here it only
+// records the branch it was given, and a test makes it fail.
+vi.mock("./main-ref.ts", () => ({ mainRefDeps: () => ({}), ensureMainRef: vi.fn(async () => {}) }));
 
 const KEY = "owner-key-for-tests-0123456789abcdef";
 
@@ -238,6 +243,23 @@ describe("POST /api/pools with source (IR1, IR2)", () => {
     });
     expect((trunk?.init as { body: string }).body).not.toContain("art_v1_dropped");
     expect(text.status).toBe(200);
+  });
+
+  it("IR2a: points main at the imported branch, and a failure to do so answers 502 upstream_unavailable", async () => {
+    const mocked = vi.mocked(ensureMainRef);
+    mocked.mockClear();
+    const { env } = fakeEnv({ pools: {} });
+    const res = await createPool(
+      input(post("/api/pools", { ...good, source: { url: "https://github.com/octo/app", branch: "master" } }), env),
+    );
+    expect(res.status).toBe(200);
+    expect(mocked.mock.calls.map((c) => [c[1], c[2]])).toEqual([["tp-repo", "master"]]);
+    mocked.mockRejectedValueOnce(new Error("main was not created (rejected)"));
+    const failed = await createPool(
+      input(post("/api/pools", { ...good, request_id: "r10" }), fakeEnv({ pools: {} }).env),
+    );
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: { code: "upstream_unavailable" } });
   });
 
   it("accepts every supported host and owner/name character of IR1", async () => {

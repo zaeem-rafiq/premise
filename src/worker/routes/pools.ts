@@ -10,6 +10,7 @@ import { SEEDS } from "../../config/pools.ts";
 import type { CreatePoolRequest, ReadTokenResponse } from "../../protocol/routes.ts";
 import { notBuilt } from "../not-built.ts";
 import { parseRepoSource, poolRepoName } from "../repos.ts";
+import { ensureMainRef, mainRefDeps } from "./main-ref.ts";
 import type { RouteHandler } from "../index.ts";
 import type { Env } from "../env.ts";
 
@@ -238,6 +239,8 @@ export const createPool: RouteHandler = async ({ request, env }) => {
     if ((env.POOLS as Artifacts | undefined) === undefined) return notBuilt();
     try {
       const imported = await importRemote(env, parsed.pool, parsed.source);
+      // IR2a: every writer and reader of the pool repository works on `main`.
+      await ensureMainRef(mainRefDeps(env), parsed.pool, imported.branch);
       remote = imported.remote;
       branch = imported.branch;
     } catch (cause) {

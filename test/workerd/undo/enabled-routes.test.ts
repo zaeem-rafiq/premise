@@ -10,6 +10,7 @@ import type { UndoPlan } from "../../../src/protocol/undo.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { bearer, KEY } from "../collide/helpers.ts";
 import { withFeatures } from "../../support/features.ts";
+import { workerModules } from "../../support/bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://premise.test";
@@ -64,7 +65,7 @@ describe("enabled undo public handlers with an in-memory feature fixture", () =>
         workers: [
           {
             name: "premise",
-            modules: [{ type: "ESModule", path: BUNDLE, contents: withFeatures(original, { undo: true }) }],
+            ...workerModules(withFeatures(original, { undo: true })),
             compatibilityDate: "2026-10-01",
             compatibilityFlags: ["nodejs_compat"],
             bindings: { OWNER_KEY: KEY },

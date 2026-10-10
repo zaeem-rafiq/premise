@@ -14,6 +14,7 @@ import { MODEL_PLAN } from "../../../src/config/model-plan.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { bearer, KEY } from "../collide/helpers.ts";
 import { withFeatures } from "../../support/features.ts";
+import { workerModules } from "../../support/bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://premise.test";
@@ -66,7 +67,7 @@ async function startWorker(contents: string): Promise<Miniflare> {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE, contents }],
+          ...workerModules(contents),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: { OWNER_KEY: KEY },

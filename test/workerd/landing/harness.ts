@@ -24,6 +24,7 @@ import {
   type GitHttpServer,
   type RecordedRequest,
 } from "../../git/helpers.ts";
+import { workerModules } from "../../support/bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
@@ -443,7 +444,7 @@ export async function startLandingWorker(options: {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE, ...(contents === null ? {} : { contents }) }],
+          ...workerModules(contents ?? undefined),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: {

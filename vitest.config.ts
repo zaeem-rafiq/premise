@@ -1,5 +1,5 @@
 // One vitest configuration, one project per kind of test (docs/spec/04-build-plan.md 1.4).
-// `npm test` runs unit, arch, cases, git and tidepool: all offline. The other two have their own commands.
+// `npm test` runs unit, arch, cases, git, tidepool and languages: all offline. The other two have their own commands.
 
 import { defineConfig } from "vitest/config";
 
@@ -35,6 +35,8 @@ export default defineConfig({
       project("git", ["test/git/**/*.test.ts"], 60_000),
       // The seed pool.
       project("tidepool", ["test/tidepool/**/*.test.ts"]),
+      // Python and Go through the real tree-sitter parsers, loaded in Node (06-repos.md LG4).
+      project("languages", ["test/languages/**/*.test.ts"]),
       // Local workerd through the Miniflare API, over the built bundle: `npm run test:workerd`.
       project("workerd", ["test/workerd/**/*.test.ts"], 60_000),
       // Against the deployed `test` environment: `npm run test:integration`.

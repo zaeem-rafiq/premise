@@ -66,7 +66,7 @@ export async function startRealWorker(options: RealWorkerOptions): Promise<RealW
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          ...workerModules(),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings,
@@ -437,6 +437,7 @@ import { mkdirSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { git, gitBytes, startGitServer } from "../../../git/helpers.ts";
+import { workerModules } from "../../../support/bundle.ts";
 
 const FAKE_ARTIFACTS = join(REPO_ROOT, "test/workerd/landing/fake-artifacts.mjs");
 
@@ -529,7 +530,7 @@ export async function startRealLandingWorker(options: {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE, ...(contents === null ? {} : { contents }) }],
+          ...workerModules(contents ?? undefined),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: {

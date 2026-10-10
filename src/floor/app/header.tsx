@@ -9,7 +9,7 @@ import { ShellContext } from "./context.ts";
 
 export type HeaderProps = {
   pool: string; // the pool name in the address (FE7), or the recording's pool
-  view: "floor" | "compare" | "swarm";
+  view: "floor" | "compare" | "swarm" | "overview";
   mode: "live" | "replay";
   needs: number; // open cards that can be answered
   owner: boolean;
@@ -17,7 +17,7 @@ export type HeaderProps = {
   /** FR10/CO3: the connection is lost - owner controls are off (the rest keeps its last
    * content, dimmed). */
   offline?: boolean;
-  onView: (view: "floor" | "compare" | "swarm") => void;
+  onView: (view: "floor" | "compare" | "swarm" | "overview") => void;
   onReplayMenu: () => void;
   onAbout: () => void;
   onNeeds: () => void;
@@ -29,7 +29,7 @@ export function Header(props: HeaderProps) {
   const shell = useContext(ShellContext)!;
   const t = shell.t;
   const menu = useRef<HTMLDetailsElement>(null);
-  const item = (view: "floor" | "swarm", label: string) => (
+  const item = (view: "overview" | "floor" | "swarm", label: string) => (
     <button
       type="button"
       className="nav-item"
@@ -41,6 +41,7 @@ export function Header(props: HeaderProps) {
   );
   const items = (
     <>
+      {item("overview", t("nav.overview"))}
       {item("floor", t("nav.floor"))}
       {item("swarm", t("nav.swarm"))}
       <button type="button" className="nav-item" onClick={props.onReplayMenu}>
@@ -64,7 +65,9 @@ export function Header(props: HeaderProps) {
         {items}
       </nav>
       <details className="nav-menu" ref={menu}>
-        <summary className="nav-menu-summary">{props.view === "swarm" ? t("nav.swarm") : t("nav.floor")}</summary>
+        <summary className="nav-menu-summary">
+          {props.view === "swarm" ? t("nav.swarm") : props.view === "overview" ? t("nav.overview") : t("nav.floor")}
+        </summary>
         <nav
           className="nav-menu-list"
           aria-label={t("nav.label")}

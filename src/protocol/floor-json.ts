@@ -39,4 +39,6 @@ export type FloorJson = {
   models: Record<string, string>; // model id -> short name
   limits: string[]; // the limits list of 5.12, lines whose condition is false left out
   related: string; // the text of `about.related.body`, so the page and the README show the same words
+  /** 2.11 (2026-10-10): the view a live page opens on. Absent: the Floor view. */
+  default_view?: "floor" | "overview";
 };

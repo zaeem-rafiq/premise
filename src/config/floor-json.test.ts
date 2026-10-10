@@ -164,7 +164,17 @@ describe("floorJson() (03-floor 4.5)", () => {
 
   it("carries the fields of the FloorJson type", () => {
     expect(Object.keys(json).sort()).toEqual(
-      ["default_pool", "swarm_pool", "features", "prewritten", "swarm_defaults", "models", "limits", "related"].sort(),
+      [
+        "default_pool",
+        "swarm_pool",
+        "features",
+        "prewritten",
+        "swarm_defaults",
+        "models",
+        "limits",
+        "related",
+        "default_view",
+      ].sort(),
     );
     expect(json.swarm_defaults).toEqual({
       seed: expect.any(Number),
@@ -172,6 +182,10 @@ describe("floorJson() (03-floor 4.5)", () => {
       think_ms: [expect.any(Number), expect.any(Number)],
       rescale_every_s: expect.any(Number),
     });
+  });
+
+  it("opens a live page on the Overview (2.11)", () => {
+    expect(json.default_view).toBe("overview");
   });
 
   it("names the main pool and the Swarm pool by their seeds (PL1)", () => {

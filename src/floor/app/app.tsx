@@ -31,6 +31,7 @@ import { KillDialog, allowAgents } from "../components/kill-switch/kill-switch.t
 import { SwarmView } from "../components/swarm/swarm.tsx";
 import { PoolArea } from "../components/pool-frame/pool-area.tsx";
 import { Rail } from "../components/rail/rail.tsx";
+import { Overview } from "../components/overview/overview.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ViewBoundary } from "./view-boundary.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
@@ -101,7 +102,13 @@ function keep(key: string, value: string): void {
 export function FloorApp({ settings, table }: { settings: FloorJson; table: RegistryTable }) {
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
-  const [view, setView] = useState<"floor" | "compare" | "swarm">("floor");
+  // 2.11: a live page opens on the view `/floor.json` names (the Overview on a deployment);
+  // Replay opens on the Floor view, where the recording's beats play.
+  const [view, setView] = useState<"floor" | "compare" | "swarm" | "overview">(() =>
+    settings.default_view === "overview" && parseRoute(window.location.pathname).kind !== "replay"
+      ? "overview"
+      : "floor",
+  );
   const [sheet, setSheet] = useState<SheetTarget>({ kind: "none" });
   const [owner, setOwner] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -333,6 +340,9 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
           break;
         case "view-swarm":
           setView("swarm");
+          break;
+        case "view-overview":
+          setView("overview");
           break;
         case "view-about":
           openSheet({ kind: "about" });
@@ -653,6 +663,46 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             onPausedChange: setFramesPaused,
             onBack: () => setView("floor"),
           })}
+        </ViewBoundary>
+      </main>
+    );
+  } else if (view === "overview") {
+    body = (
+      <main className="floor-body floor-overview" data-view="overview">
+        <ViewBoundary key="overview">
+          <Overview
+            pool={pool}
+            floor={floor}
+            mode={replay ? "replay" : "live"}
+            owner={owner}
+            visitor={shell.visitor}
+            clock={clock}
+            capReached={capReached(floor)}
+            cells={cells}
+            paused={framesPaused}
+            onPausedChange={setFramesPaused}
+            onCompare={
+              floor.pool.plain_remote !== null && floor.pool.app !== null ? () => setView("compare") : undefined
+            }
+            onTapped={
+              table.entries.has("sheet.why")
+                ? (path) => {
+                    const seq = floor.files[path]?.last_landed_seq;
+                    if (seq !== null && seq !== undefined) openSheet({ kind: "why", seq });
+                  }
+                : undefined
+            }
+            onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
+            onFloor={() => setView("floor")}
+            replayOffer={
+              showStartCard(owner, replay, quietPool(floor, clock), startDismissed)
+                ? {
+                    label: shell.t("start.play", { duration: defaultRecordingDuration() }),
+                    onPlay: openDefaultRecording,
+                  }
+                : undefined
+            }
+          />
         </ViewBoundary>
       </main>
     );

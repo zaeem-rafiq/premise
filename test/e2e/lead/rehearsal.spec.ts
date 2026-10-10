@@ -344,6 +344,10 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
   log("page loaded");
   await expect(page.locator(".pool-name")).toHaveText(pool, { timeout: 30_000 });
   log("pool name shown");
+  // 2.11: a deployment opens a live page on the Overview; the beats run in the Floor view (key F).
+  await expect(page.locator(".overview")).toBeVisible({ timeout: 30_000 });
+  await page.keyboard.press("f");
+  await expect(page.locator(".rail")).toBeVisible();
   const look = page.getByRole("button", { name: "Look around the live pool" });
   // The start card can show for a moment before the session read answers, then go: never wait on it.
   if (await look.isVisible().catch(() => false)) await look.click({ timeout: 3000 }).catch(() => undefined);
@@ -1058,6 +1062,12 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
       let flashed = false;
       for (;;) {
         await page.goto(`/p/${pool}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+        // 2.11: the start card belongs to the Floor view; the page opens on the Overview.
+        await page
+          .locator(".overview")
+          .waitFor({ timeout: 30_000 })
+          .catch(() => undefined);
+        await page.keyboard.press("f");
         await page.waitForTimeout(1000);
         const early = await startCard.isVisible().catch(() => false);
         await page.waitForTimeout(4000);

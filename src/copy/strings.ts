@@ -72,6 +72,19 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "app.settings_failed": { text: "Premise could not load its settings. Reload the page." },
   "nav.floor": { text: "Floor" },
   "nav.swarm": { text: "Swarm" },
+  "nav.overview": { text: "Overview" },
+  "overview.label": { text: "Overview" },
+  "overview.loading": { text: "Waiting for the pool to report." },
+  "overview.landed": { text: "{n} changes landed.", one: "{n} change landed." },
+  "overview.landed.none": { text: "No change has landed yet." },
+  "overview.goarounds": { text: "{n} went around." },
+  "overview.waiting.none": { text: "Nobody waited. Every landing is one ordinary commit on main." },
+  "overview.waiting": {
+    text: "{n} waiting behind another change. Every landing is one ordinary commit on main.",
+  },
+  "overview.inflight": { text: "In flight" },
+  "overview.inflight.none": { text: "Nothing is in flight." },
+  "overview.more": { text: "Every attempt and detail is in the Floor view." },
   "nav.replay": { text: "Replay" },
   "nav.about": { text: "About" },
   "nav.skip": { text: "Skip to the attempt cards" },
@@ -754,7 +767,7 @@ export const REOPENED_CAUSE: Readonly<Record<string, string>> = {
  */
 export const SHORTCUT_ROWS: ReadonlyArray<{ key: string; does: string }> = [
   { key: "/", does: "Focus the intent box" },
-  { key: "F, S, A", does: "Floor view, Swarm view, About" },
+  { key: "O, F, S, A", does: "Overview, Floor view, Swarm view, About" },
   { key: "C", does: "Compare view on and off" },
   { key: "N", does: "Open the oldest card that needs the owner" },
   { key: "L", does: "Go to the Landed tab" },

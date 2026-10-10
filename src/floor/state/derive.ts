@@ -320,7 +320,7 @@ export function bannerList(
   clock: number,
   opts: {
     replay: { active: boolean; synthetic: boolean; title: string; date: string };
-    view: "floor" | "compare" | "swarm";
+    view: "floor" | "compare" | "swarm" | "overview";
     connection: "connecting" | "open" | "lost";
     connectionTries: number;
     staleFor: number | null; // ms since the newest applied event's ts (banner.offline)

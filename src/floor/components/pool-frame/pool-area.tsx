@@ -69,10 +69,13 @@ export function PoolArea(props: PoolAreaProps) {
       const caption = el.querySelector(".pf-caption");
       const captionH = caption?.getBoundingClientRect().height ?? 0;
       // The caption sits on the frame (.pf gap is 0) and the tiles' row holds its own spacing.
-      const need = el.clientWidth * (9 / 16) + captionH + TILES_MIN_PX;
+      // The page's styles may reserve more than one row (`--tiles-min`, 2.1); 64 px is the floor.
+      const reserved = Number.parseFloat(getComputedStyle(el).getPropertyValue("--tiles-min"));
+      const tilesMin = Number.isFinite(reserved) ? Math.max(reserved, TILES_MIN_PX) : TILES_MIN_PX;
+      const need = el.clientWidth * (9 / 16) + captionH + tilesMin;
       if (el.clientHeight > 0 && need > el.clientHeight) {
         el.dataset.tight = "true";
-        el.style.setProperty("--pf-body-h", `${Math.max(0, el.clientHeight - captionH - TILES_MIN_PX)}px`);
+        el.style.setProperty("--pf-body-h", `${Math.max(0, el.clientHeight - captionH - tilesMin)}px`);
       } else {
         delete el.dataset.tight;
         el.style.removeProperty("--pf-body-h");

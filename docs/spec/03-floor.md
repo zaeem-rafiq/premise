@@ -208,7 +208,7 @@ Two reference sizes. **Stage size** is 1920×1080 with large type. **Laptop size
 | Rail (Floor view) | 696 wide | 560 wide | Intent box, tray, tabs, attempt cards. Only the list of attempt cards scrolls. |
 | Replay bar (Replay only) | 1920×108, at the bottom: the transport row (56) above the chapter row (52) | 1440×96 (48 and 48) | Replay controls (3.16) and the chapter caption (8.5). Two rows by the lead's decision of 2026-10-09 (RR11): one row could not hold the named chapter buttons of 3.16 at the 44×44 of LY5 beside the caption of 8.5. |
 
-- **LY1.** The pool frame keeps 16:9. It uses the full width of the pool area unless the file tiles would get less than one row (64 high); then the frame shrinks and sits flush left under its caption bar.
+- **LY1.** The pool frame keeps 16:9. It uses the full width of the pool area unless the file tiles would get less than one row (64 high) at laptop size, or less than two rows of 48-high tiles (112) at stage size; then the frame shrinks and sits flush left under its caption bar.
 - **LY2.** Banners and the Replay bar take height from the body. They never overlap the frame, the attempt cards or a sheet.
 - **LY3.** The page never scrolls sideways at any width from 320 up. Only the list of attempt cards, the tile overflow list, sheets and the git drawer scroll, and only vertically.
 - **LY4.** Sheets leave the header, the strip and the banners visible and usable.

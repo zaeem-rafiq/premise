@@ -83,7 +83,9 @@ const REPLAY_BAR = { stage: { transport: 56, chapters: 52 }, laptop: { transport
 function replayFrame(size: (typeof SIZES)[number]): { width: number; height: number } {
   const bar = REPLAY_BAR[size.name].transport + REPLAY_BAR[size.name].chapters;
   const area = size.h - size.header - size.strip - size.banner - bar - 2 * size.pad;
-  const height = Math.min(size.frameH, area - 40 - 64);
+  // LY1 (2026-10-10): the tiles keep one row (64) at laptop size and two rows (112) at stage size.
+  const tilesMin = size.name === "stage" ? 112 : 64;
+  const height = Math.min(size.frameH, area - 40 - tilesMin);
   return { width: (height * 16) / 9, height };
 }
 

@@ -137,11 +137,14 @@
 .floor .strip .strip-main {
   font-size: var(--size-small);
   line-height: 1.1;
-  white-space: normal;
+  white-space: nowrap;
 }
+/* A label may wrap; the value and its sub-line keep one line, and only the agents cell's
+ * limit line gives way with an ellipsis (2.2, 2.8). */
 .floor .strip .strip-label {
   display: block;
   margin-bottom: 4px;
+  white-space: normal;
 }
 .floor .strip-value {
   font-family: var(--font-display);
@@ -460,4 +463,15 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* 2.1: at stage width the pool area keeps two rows of tiles (48 high each) under the frame, so
+ * the creatures/ row shows beside world/. */
+@media (min-width: 1600px) {
+  .floor .pool-area {
+    --tiles-min: 112px;
+  }
+  .floor .tiles {
+    --tile-h: 48px;
+  }
 }

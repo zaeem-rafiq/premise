@@ -55,6 +55,33 @@ function withFiles(
 }
 
 describe("3.7 the cells (CO26)", () => {
+  it("3.7: with the grid's columns, every group's label starts a row; the row before it ends in gaps", () => {
+    const files = [
+      ["world/energy.js", "held"],
+      ["world/bounds.js", "held"],
+      ["creatures/fish.js", "auto"],
+      ["main.js", "held"],
+    ] as [string, string][];
+    const cells = tileCells(withFiles(emptyFloorState(), files), { columns: 4 });
+    expect(cells.map((c) => c.kind)).toEqual([
+      "label",
+      "file",
+      "file",
+      "gap",
+      "label",
+      "file",
+      "gap",
+      "gap",
+      "label",
+      "file",
+    ]);
+    for (const [i, c] of cells.entries()) if (c.kind === "label") expect(i % 4).toBe(0);
+    // Capped at two rows, the gaps count as slots and the last slot is `tiles.more` for the rest.
+    const capped = tileCells(withFiles(emptyFloorState(), files), { columns: 4, capacity: 8 });
+    expect(capped.map((c) => c.kind)).toEqual(["label", "file", "file", "gap", "label", "file", "more"]);
+    expect(capped.at(-1)).toMatchObject({ kind: "more", hidden: 1 });
+  });
+
   it.each([18, 16])("D17 2.2/3.7/CO28: world and energy stay visible with %i cells", (capacity) => {
     const files = [
       [".premise/policy.json", "held"],

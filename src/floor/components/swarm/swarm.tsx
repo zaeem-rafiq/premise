@@ -167,7 +167,12 @@ export function SwarmView({
                   : t("swarm.stop")}
             </button>
           ) : (
-            <button type="button" disabled={busy || blocked || offline} onClick={() => void send(true)}>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy || blocked || offline}
+              onClick={() => void send(true)}
+            >
               {pending === "start"
                 ? t("swarm.starting", { n: agents })
                 : pending === "stop"

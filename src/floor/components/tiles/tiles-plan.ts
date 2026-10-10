@@ -36,7 +36,9 @@ export function tileKeepsExtension(state: FloorState): boolean {
 export type TileCell =
   | { kind: "label"; dir: string; readers: readonly string[] }
   | { kind: "file"; file: FileView; removed: boolean; glow: boolean }
-  | { kind: "more"; hidden: number };
+  | { kind: "more"; hidden: number }
+  /** An empty slot that ends a row, so the next group's label starts the next row (3.7). */
+  | { kind: "gap" };
 
 /** The reader marks a group label carries (CO26): a listing premise or a text search over the
  * directory marks the label, recorded under `dirs` — the key is written both with and without
@@ -57,7 +59,15 @@ export function dirReaders(state: FloorState, dir: string): readonly string[] {
  */
 export function tileCells(
   state: FloorState,
-  opts: { capacity?: number; removedPaths?: ReadonlySet<string>; glowPaths?: ReadonlySet<string> } = {},
+  opts: {
+    capacity?: number;
+    /** Columns of the grid: with it, each group's label starts a row of its own (3.7, "a group
+     * starts with a label cell"), the rest of the row before it left as `gap` slots. The open full
+     * list (CO28) passes it; the collapsed grid does not, so it packs as many groups as fit. */
+    columns?: number;
+    removedPaths?: ReadonlySet<string>;
+    glowPaths?: ReadonlySet<string>;
+  } = {},
 ): TileCell[] {
   const groups = new Map<string, { files: FileView[]; removed: FileView[] }>();
   const order: string[] = [];
@@ -83,6 +93,8 @@ export function tileCells(
   for (const dir of order) {
     const group = groups.get(dir)!;
     if (group.files.length === 0 && group.removed.length === 0) continue;
+    const columns = opts.columns;
+    if (columns !== undefined && columns > 1) while (cells.length % columns !== 0) cells.push({ kind: "gap" });
     cells.push({ kind: "label", dir, readers: dirReaders(state, dir) });
     for (const file of group.files) {
       cells.push({
@@ -101,6 +113,7 @@ export function tileCells(
   if (capacity === undefined || cells.length <= capacity) return cells;
   // CO28: the last cell is `tiles.more`; its {n} counts the file tiles that did not fit.
   const shown = cells.slice(0, Math.max(0, capacity - 1));
+  while (shown.length > 0 && shown[shown.length - 1]!.kind === "gap") shown.pop();
   const totalFiles = cells.filter((c) => c.kind === "file").length;
   const shownFiles = shown.filter((c) => c.kind === "file").length;
   return [...shown, { kind: "more", hidden: Math.max(1, totalFiles - shownFiles) }];

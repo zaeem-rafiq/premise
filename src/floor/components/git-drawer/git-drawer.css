@@ -22,11 +22,10 @@
   margin-bottom: 16px;
 }
 
+/* Sentence case, like every other sheet title ("Why is this here?"): the copy is "Show the git". */
 .git-drawer__title {
   margin: 0;
   font-size: var(--size-title);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .git-lead {

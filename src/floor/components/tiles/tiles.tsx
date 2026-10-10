@@ -95,6 +95,7 @@ export function FileTiles(props: FileTilesProps) {
   const [glow, setGlow] = useState<ReadonlySet<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [capacity, setCapacity] = useState<number | undefined>(undefined);
+  const [columns, setColumns] = useState<number | undefined>(undefined);
   const [menu, setMenu] = useState<{ path: string; seq: number | null; left: number; top: number } | null>(null);
 
   // The just-landed sets: a landing's changed files glow for FLASH_MS and the ones it removed
@@ -147,6 +148,7 @@ export function FileTiles(props: FileTilesProps) {
       const rowsFit = section.clientHeight <= 0 ? cap : Math.max(1, Math.floor((room - toggleH + gap) / (th + gap)));
       const rows = Math.min(cap, rowsFit);
       setCapacity(cols * rows);
+      setColumns(cols);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(section);
@@ -165,10 +167,12 @@ export function FileTiles(props: FileTilesProps) {
   // `reduce` mutates `FloorState` in place: `state.n` in the deps stands for "the stream
   // moved" the way the rail's `[floor, floor.n]` does — a bare `[state]` never recomputes.
   const allCells = useMemo(
-    () => tileCells(state, { removedPaths: gone, glowPaths: glow }),
-    [state, state.n, gone, glow],
+    () => tileCells(state, { columns, removedPaths: gone, glowPaths: glow }),
+    [state, state.n, columns, gone, glow],
   );
   const clipped = useMemo(
+    // Collapsed, the grid packs groups one after another, so a small region still shows every
+    // group it can; the open full list (CO28) starts each group on a row of its own.
     () => tileCells(state, { capacity, removedPaths: gone, glowPaths: glow }),
     [state, state.n, capacity, gone, glow],
   );
@@ -179,6 +183,7 @@ export function FileTiles(props: FileTilesProps) {
   const empty = Object.keys(state.files).length === 0;
 
   const renderCell = (cell: TileCell, i: number): ReactNode => {
+    if (cell.kind === "gap") return <div key={`gap-${i}`} className="tile-gap" aria-hidden />;
     if (cell.kind === "label") {
       const marks = tileMarks(cell.readers, []);
       return (

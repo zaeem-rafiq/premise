@@ -288,15 +288,15 @@ describe("06-repos step 1 in local workerd (IR1-IR8)", () => {
     // A managed executable reads whole; an opaque-language file reads whole (LG5's file level).
     const exec = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: EXEC } }, 5);
     expect(String((exec.result as { content: string }).content)).toContain("echo run");
-    const py = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: "lib/lib.py" } }, 6);
-    expect(String((py.result as { content: string }).content)).toContain("def weigh");
+    const rs = await tool(worker, POOL, "imp-a1", { tool: "read", args: { path: "src/lib.rs" } }, 6);
+    expect(String((rs.result as { content: string }).content)).toContain("pub fn add");
     const outline = await worker.trunk(POOL).fetch("/tool", {
       method: "POST",
       body: JSON.stringify({
         attempt_id: "imp-a1",
         call_id: "imp-a1:out",
         tool: "outline",
-        args: { path: "lib/lib.py" },
+        args: { path: "src/lib.rs" },
         ack: 0,
       }),
     });

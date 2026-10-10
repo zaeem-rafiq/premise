@@ -9,6 +9,7 @@ import { tsPlugin } from "@sveltejs/acorn-typescript";
 import { H } from "../sync/h.ts";
 import type { Language } from "../keys/paths.ts";
 import type { EntityKind } from "../../protocol/premise.ts";
+import { parseTreeModule, type SyntaxInfo } from "./tree-modules.ts";
 
 export const PARSE_OPTIONS = { ecmaVersion: 2025, sourceType: "module" } as const;
 
@@ -62,6 +63,8 @@ export type ModuleInfo = Readonly<{
   entities: readonly Entity[]; // in the order their first contributing statement appears
   regions: readonly Region[];
   imports: ImportTable;
+  /** Python and Go (LG4): the names each entity uses and what the imports bind. Absent for JavaScript and TypeScript. */
+  syntax?: SyntaxInfo;
 }>;
 
 // ---- 2.4 step 2: cleaning a node ----
@@ -254,6 +257,8 @@ export function parseModule(source: string, language: Language = "javascript"): 
 }
 
 function parseUncached(source: string, language: Language): ModuleInfo {
+  // LG4: Python and Go parse through tree-sitter (LG6 to LG8), before the TSX fallback below.
+  if (language === "python" || language === "go") return parseTreeModule(source, language);
   const program = (language === "javascript"
     ? acorn.parse(source, PARSE_OPTIONS as { ecmaVersion: 2025; sourceType: "module" })
     : (language === "typescript" ? TS_PARSER : TSX_PARSER).parse(
@@ -525,6 +530,7 @@ export function moduleHash(info: ModuleInfo): string {
 export function entitySignature(source: string, info: ModuleInfo, name: string): string | null {
   const entity = info.entities.find((entry) => entry.name === name);
   if (entity === undefined) return null;
+  if (info.syntax !== undefined) return info.syntax.signatures.get(name) ?? name; // LG6, LG7
   const prefix = entity.exports.length > 0 ? "export " : "";
   switch (entity.kind as string) {
     case "function": {

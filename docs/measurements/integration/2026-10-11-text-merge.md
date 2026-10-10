@@ -60,6 +60,14 @@ hero's four changes touch four different files. So nothing is valid only while t
 
 ## Suites
 
+**Second merge of `main` (at `12e6681`: MCP, green line, Clef, Python and Go), merge commit `16deef2`.**
+Every suite exits 0 with the switch off: `npm run check` 2,770 passed and 1 expected failure (with
+`check:secrets` clean over 671 commits), workerd 271 passed and 3 skipped, cases 106, required cases 106,
+integration 728, browser 361, `check:submission` and `rules-coverage` (303 ids, 0 uncovered). Python and Go
+left limits line 9, so line 9 is now "Not built: audience input." and text merge is named in line 16.
+The first merge's results follow.
+
+
 After `git merge origin/main` (outside agents over MCP had landed; both switches are kept), on
 `feat/text-merge` at `afe1520`, switch off (the committed state):
 

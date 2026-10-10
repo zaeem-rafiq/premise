@@ -67,6 +67,8 @@ test("2.11: a live page opens on the Overview; its headline tells the strip's co
   });
   await expect(page.locator(".overview__facts")).toContainText("Run clock");
   await expect(page.locator(".overview__facts")).not.toContainText("Landed");
+  // A sub-line is set off by a dash, never run into its value (2.11).
+  await expect(page.locator(".overview__facts")).not.toContainText(/\d Limit/);
   // At most three cards in flight (2.11).
   expect(await page.locator(".overview__card").count()).toBeLessThanOrEqual(3);
 

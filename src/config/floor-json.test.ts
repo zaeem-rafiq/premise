@@ -88,9 +88,9 @@ function specLimits(): string[] {
       if (off.length === 0) continue; // left out when none is off
       line = line.replace("{the names of the features that are off}", off.map((key) => names[key]).join(", "));
     }
-    // Line 16 is shown only while its feature is on (07-mcp).
+    // Line 17 is shown only while its feature is on (07-mcp).
     if (line.endsWith("(Only when `features.mcp` is true.)") && !FEATURES.mcp) continue;
-    // The parenthetical notes of lines 7, 15 and 16 are the conditions, not part of the shown line.
+    // The parenthetical notes of lines 7, 16 and 17 are the conditions, not part of the shown line.
     line = line
       .replace(/ \(Or:.*\)$/, "")
       .replace(/ \(Left out.*\)$/, "")

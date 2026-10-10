@@ -47,6 +47,77 @@ A pool so far is made from a seed of the tide pool (`02-tidepool.md`). This file
 - **LG4 (references by name: Python and Go).** For Python and Go, entities are the top-level definitions (functions, classes, types, constants, variables; for Go also methods, keyed `Type.Method`), each import statement as one `(import ...)` entity, and `(top)` for the rest, with the regions of EN6. A reference is an identifier that names a definition of the same module, of the same Go package (any file of the directory), or of a module or package that the file imports and that is a file of the pool. Where a name matches several definitions, every match is a reference. Where it matches none, there is no reference. References by name can be wrong in both directions, so for these languages Trunk keeps one more premise: every module an attempt reads by entity also gets a `file` premise with `derived = 1`. A change anywhere in such a file therefore reaches the attempt, at worst as one more `confirm`.
 - **LG5 (`outline` and `read`).** For every module language, `outline` and `read` with `entity` work as in 4.3 and 4.4. For an opaque file, `outline` answers `not_a_module`, and the agent reads the whole file.
 
+The rules LG6 to LG10 settle what LG4 leaves open. They are the lead's decisions of 2026-10-09 (`docs/plans/step-3-python-go.md` section 3).
+
+- **LG6 (Python entities).** The top-level statements, in source order, each with its EN6 region:
+  - `def` and `async def` give an entity of kind `function`, and `class` gives one of kind `class`. A
+    decorated definition is one statement with its decorators.
+  - An assignment, annotated assignment or augmented assignment whose targets are names gives one entity per
+    bound name, kind `var`. A statement that binds several names (`a, b = …`, `a = b = …`) contributes one
+    entity per name, sharing the statement, as 2.3 does for `const { p, q } = obj`. An assignment to an
+    attribute or a subscript belongs to `(top)`.
+  - `type X = …` gives `X`, of kind `type`.
+  - `import a.b`, `import a.b as c`, `from m import x`, `from . import x` and `from .m import x` give
+    `(import <module as written>)`, of kind `import`. A statement that imports several modules contributes
+    one entity per module, and statements that import the same module share its entity (EN4).
+  - Every other statement belongs to `(top)`: docstrings, expression statements, `if`, `try`, `for`, `with`
+    and so on. Imports nested inside them belong to `(top)` and resolve no reference.
+  - A name bound twice at the top level is one entity with several nodes (EN4).
+  - `exports` is `[]`. `arity` is the number of parameters as written, `self` included.
+- **LG7 (Go entities).**
+  - The package clause belongs to `(top)`.
+  - `func F(…)` gives `F`, of kind `function`. `func (r T) M(…)`, `func (r *T) M(…)` and `func (r T[K]) M(…)`
+    give `T.M`, of kind `method`. `func init()` belongs to `(top)`: Go forbids referring to it, and a file may
+    have several.
+  - `type T …` gives `T`, of kind `type`. `const` and `var`, single or grouped, give one entity per bound name,
+    of kind `const` or `var`. Grouped specs share their statement. A spec that binds only `_` belongs to
+    `(top)`.
+  - In a grouped `const ( … )`, a spec with no value repeats the last explicit type and value of the group
+    (Go's implicit repetition). Its canonical form (LG8) includes that type and value and its index in the
+    group, which is the value of `iota`.
+  - `import "p"`, `import a "p"` and `import ( … )` give `(import p)` per import path, sharing the statement
+    (EN4).
+  - `exports` is `[]`: Go exports by a capital initial, which the name already carries. `arity` is the number
+    of parameters: `a, b int` counts two, and the receiver does not count.
+- **LG8 (canonical form and hash for Python and Go).** The canonical form of a node is its tree-sitter syntax
+  tree without positions. A node with children is `{"type": <node type>, "children": [ … ]}`. A node without
+  children is `{"type": <node type>, "text": <its source text>}`. Named and anonymous nodes are both kept, and
+  `comment` nodes are dropped. A node with children also keeps its `text` when its children leave source text other than whitespace
+  uncovered, and a Python `string_content` node with children (an escape sequence inside a string) always keeps
+  it: every character that counts is then in the form. The hash is `H(canon({exports, nodes}))` as in 2.4, over the canonical forms of
+  the entity's nodes in source order. A change that tree-sitter represents (parentheses, a trailing comma)
+  changes the hash. Whitespace and comments do not. `hash_version` stays `ast1`: 2.4 holds for JavaScript and
+  TypeScript, and LG8 holds for Python and Go. The grammar versions are pinned. Changing one changes hashes
+  and is recorded in a measurement file.
+- **LG9 (resolution for Python and Go).**
+  - **Python modules.** An absolute module `a.b.c` is the pool file `a/b/c.py` or `a/b/c/__init__.py`. The
+    repository root is the only search root. A relative module (`.`, `.m`, `..m.n`) resolves against the
+    importing file's directory, as Python does. In `from p import n`, when `p`'s `__init__.py` defines no `n`
+    but the file `p/n.py` exists, `n` is that whole module. Every other module is external: no premise and no
+    check failure (as LG3).
+  - **Go modules and packages.** The pool's module path is the `module` line of `go.mod` at the repository
+    root. An import path equal to it, or starting with it and `/`, names the pool directory of the rest of the
+    path. Every other import path is external. A package is the `.go` files of one directory that share a
+    `package` clause. A `_test.go` file with package `<name>_test` is its own package. Without a root `go.mod`,
+    every import is external.
+  - **References by name (LG4)** inside an entity's nodes. Each of these is a reference:
+    - an identifier that names a definition of the same module (Python) or of the same package (Go);
+    - a name bound by `from m import n` or `from m import n as a`, to `n` of `m`;
+    - an attribute `a.x`, where `a` is bound by `import m` or `import m as a` (Python) or is a Go import's
+      package name (its alias, or the imported package's `package` clause name), to `x` of that module or
+      package. In Go it also refers to every method named `x` there (`T.x`).
+
+    Every match is a reference, and no match gives none.
+- **LG10 (the extra premise of LG4 in 7.2).** The `file` premise that LG4 adds (`derived = 1`) is classified
+  as if its path were in `ModuleRefs`:
+  - an entity change in the file gives F3m (`confirm`, `module_reference_changed`), unless F1 or F3 applies
+    first;
+  - the file becoming opaque, or being removed, gives F5 (`repair`);
+  - a change only to comments or whitespace gives F2 (`holds`).
+
+  F7 never deletes the premise while the attempt holds an entity premise in that file, and `syncPremises`
+  keeps it.
+
 ## 3. The agent's prompt for an imported pool
 
 - **IR9 (the guide).** The system prompt of `05-agent.md` names a guide with `{{GUIDE_PATH}}`. For a tide-pool pool it is `GUIDE.md`, as before. For an imported pool it is the first of `AGENTS.md`, `CONTRIBUTING.md`, `README.md` that exists in the head tree at import, stored in `meta` as `guide_path`. When none exists, step 1 of "How to work" reads: "1. Start with list on the root directory." and the sentence "The guide is the one file whose rules you follow." is left out.

@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { workerModules } from "../../support/bundle.ts";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
@@ -97,7 +98,7 @@ beforeAll(async () => {
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          ...workerModules(),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: { OWNER_KEY },

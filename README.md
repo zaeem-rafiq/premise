@@ -80,7 +80,7 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 
 ## Limits
 
-- Premise understands JavaScript and TypeScript modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts and .tsx in a pool imported from a repository. Other files are tracked as whole files.
+- Premise understands JavaScript, TypeScript, Python and Go modules: .js and .mjs in the tide pool, and .js, .mjs, .cjs, .jsx, .ts, .mts, .cts, .tsx, .py and .go in a pool imported from a repository. Other files are tracked as whole files.
 - One Trunk serves one pool. Agents read and write files of at most 32,768 bytes. A repository with more than 5,000 entries or 24,000,000 bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.
 - Real agents are limited by the Workers AI rate limits. This build runs at most 6 at once.
 - Numbers in the Swarm view come from scripted agents. They make no model calls.
@@ -88,8 +88,9 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - A premise across two pools is not built.
 - The green line is not in this build.
 - Clef judgments are off in this build.
-- Not built: text merge, Python and Go modules, audience input.
+- Not built: text merge, audience input.
 - References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
+- In Python and Go, references are found by name and can be wrong both ways. Every Python or Go file an agent reads from is also watched as a whole, so any change to it asks the agent to confirm.
 - A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
 - Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
 - A sweep is recognised from the edits an agent makes, not from the words of the request.

@@ -7,6 +7,7 @@ import { isPath, languageOfPath, TIDEPOOL_LANGUAGES } from "../keys/paths.ts";
 import type { LanguageSet } from "../keys/paths.ts";
 import { moduleHash, parseModule } from "../entities/entities.ts";
 import type { AstNode, ModuleInfo } from "../entities/entities.ts";
+import { addByNameRefs } from "./by-name.ts";
 
 /** A specifier that does not start `./` or `../` is a bare or URL specifier (CK5 banned_import). */
 export function isExternalSpecifier(specifier: string): boolean {
@@ -788,6 +789,16 @@ export function analyse(files: ReadonlyMap<string, string>, languages: LanguageS
   const banned: Array<{ from: string; specifier: string }> = [];
 
   for (const [path, info] of modules) {
+    if (info.syntax !== undefined) {
+      // LG4: a Python or Go module's references are by name, added below for every module at once.
+      for (const entity of info.entities) {
+        const from = `${path}#${entity.name}`;
+        refs.set(from, new Set());
+        globals.set(from, new Set());
+        negatives.set(from, new Set());
+      }
+      continue;
+    }
     const topLevel = new Set(info.entities.filter((entity) => TOP_LEVEL.has(entity.kind)).map((e) => e.name));
     const addNamed = (from: string, specifier: string, imported: string): void => {
       const T = resolveSpecifier(path, specifier, languages, existing);
@@ -863,6 +874,7 @@ export function analyse(files: ReadonlyMap<string, string>, languages: LanguageS
       }
     }
   }
+  addByNameRefs(modules, files, existing, (from, to) => refs.get(from)!.add(to));
   return { modules, refs, globals, negatives, unresolved, banned };
 }
 

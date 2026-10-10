@@ -7,8 +7,8 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import type { Card } from "../../../src/protocol/cards.ts";
 import { REPO_ROOT } from "../../support/source.ts";
 import { waitFor } from "../trunk/harness.ts";
+import { workerModules } from "../../support/bundle.ts";
 
-const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://premise.test";
 const MODEL = "@cf/openai/gpt-oss-120b";
 const FIRST_COST = 0.0125;
@@ -82,7 +82,7 @@ describe("race candidate settled spend in local workerd", () => {
         workers: [
           {
             name: "premise",
-            modules: [{ type: "ESModule", path: BUNDLE }],
+            ...workerModules(),
             compatibilityDate: "2026-10-01",
             compatibilityFlags: ["nodejs_compat"],
             durableObjects: {

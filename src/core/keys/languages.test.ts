@@ -11,7 +11,7 @@ describe("the language sets of LG1", () => {
     expect(TIDEPOOL_LANGUAGES.languages[".mjs"]).toBe("javascript");
   });
 
-  it("the imported-pool set holds LG1's JavaScript and TypeScript extensions", () => {
+  it("the imported-pool set holds LG1's JavaScript, TypeScript, Python and Go extensions", () => {
     expect(IMPORT_LANGUAGES.languages).toEqual({
       ".js": "javascript",
       ".mjs": "javascript",
@@ -21,6 +21,8 @@ describe("the language sets of LG1", () => {
       ".mts": "typescript",
       ".cts": "typescript",
       ".tsx": "tsx",
+      ".py": "python",
+      ".go": "go",
     });
   });
 
@@ -33,7 +35,9 @@ describe("the language sets of LG1", () => {
     expect(languageOfPath("a/b.cjs", IMPORT_LANGUAGES)).toBe("javascript");
     expect(languageOfPath("a/b.js", IMPORT_LANGUAGES)).toBe("javascript");
     expect(languageOfPath("a/b.d.ts", IMPORT_LANGUAGES)).toBe("typescript"); // ends in .ts
-    expect(languageOfPath("a/b.py", IMPORT_LANGUAGES)).toBeNull();
+    expect(languageOfPath("a/b.py", IMPORT_LANGUAGES)).toBe("python");
+    expect(languageOfPath("a/b.go", IMPORT_LANGUAGES)).toBe("go");
+    expect(languageOfPath("a/b.rs", IMPORT_LANGUAGES)).toBeNull();
     expect(languageOfPath("a/b", IMPORT_LANGUAGES)).toBeNull();
     expect(languageOfPath("a/b.ts", TIDEPOOL_LANGUAGES)).toBeNull();
     expect(languageOfPath("a/b.js", TIDEPOOL_LANGUAGES)).toBe("javascript");
@@ -43,16 +47,16 @@ describe("the language sets of LG1", () => {
 describe("isModulePath under each set (2.1, LG1)", () => {
   it("under the tide-pool set only .js and .mjs are modules", () => {
     for (const path of ["a.js", "x/y.mjs"]) expect(isModulePath(path, TIDEPOOL_LANGUAGES)).toBe(true);
-    for (const path of ["a.cjs", "a.jsx", "a.ts", "a.mts", "a.cts", "a.tsx", "a.py", "a.txt"]) {
+    for (const path of ["a.cjs", "a.jsx", "a.ts", "a.mts", "a.cts", "a.tsx", "a.py", "a.go", "a.txt"]) {
       expect(isModulePath(path, TIDEPOOL_LANGUAGES), path).toBe(false);
     }
   });
 
-  it("under the imported-pool set LG1's eight extensions are modules", () => {
-    for (const path of ["a.js", "a.mjs", "a.cjs", "a.jsx", "a.ts", "a.mts", "a.cts", "a.tsx"]) {
+  it("under the imported-pool set LG1's ten extensions are modules", () => {
+    for (const path of ["a.js", "a.mjs", "a.cjs", "a.jsx", "a.ts", "a.mts", "a.cts", "a.tsx", "a.py", "a.go"]) {
       expect(isModulePath(path, IMPORT_LANGUAGES), path).toBe(true);
     }
-    for (const path of ["a.py", "a.go", "a.txt", "a.json", "noext"]) {
+    for (const path of ["a.rs", "a.txt", "a.json", "noext"]) {
       expect(isModulePath(path, IMPORT_LANGUAGES), path).toBe(false);
     }
   });

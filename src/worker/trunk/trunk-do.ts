@@ -40,6 +40,8 @@ import {
   runRisk,
   runTriage,
 } from "./triage-runner.ts";
+import { initParsers, parse as parseSyntax } from "../parsers/tree-sitter.ts";
+import { setSyntaxParser } from "../../core/entities/syntax.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -170,6 +172,13 @@ export class Trunk extends DurableObject<Env> {
     this.#sql = sqlOf(ctx);
     applyShellSchema(this.#sql);
     this.#engine = engineTable();
+    // LG4: Python and Go parse through tree-sitter, which loads asynchronously; the engine is
+    // synchronous. Every engine entry runs inside this object, so no event reaches it before the
+    // parsers are installed. A failed load throws here and resets the object.
+    void ctx.blockConcurrencyWhile(async () => {
+      await initParsers();
+      setSyntaxParser(parseSyntax);
+    });
   }
 
   get #pool(): string {

@@ -9,6 +9,7 @@ import type { PremiseKind, PremiseRef } from "../../protocol/premise.ts";
 import { ABSENT } from "../../protocol/premise.ts";
 import type { Attempt, FileMap, Pool, Premise } from "./sets.ts";
 import { curOps, entityAt, keyHash, pathOf, setsOf } from "./sets.ts";
+import { languageOfPath } from "../keys/paths.ts";
 
 export const pid = (kind: string, key: string): string => `${kind}|${key}`;
 
@@ -109,6 +110,11 @@ export function syncPremises(pool: Pool, a: Attempt): Premise[] {
     } else if (head.has(K)) wantDerived.add(pid("file", K));
   }
   for (const K of s.Altered) wantDerived.add(pid("query", `refs:${K}`));
+  // LG4: references by name can be wrong both ways, so a Python or Go module the attempt reads by
+  // entity is also watched as a whole: a `file` premise with `derived` (LG10 classifies it).
+  for (const p of a.premises.values()) {
+    if (p.kind === "entity" && p.read && byNameModule(pool, pathOf(p.key))) wantDerived.add(pid("file", pathOf(p.key)));
+  }
 
   for (const id of wantEdit) {
     const i = id.indexOf("|");
@@ -138,6 +144,12 @@ export function syncPremises(pool: Pool, a: Attempt): Premise[] {
     }
   }
   return [...changed];
+}
+
+/** True when `path` is a Python or Go module at head, whose references are by name (LG4). */
+export function byNameModule(pool: Pool, path: string): boolean {
+  const language = languageOfPath(path, pool.languages);
+  return (language === "python" || language === "go") && pool.files.has(path);
 }
 
 /** The read-covered test of section 7: a `read` flag, or a `read` file premise on the entity's module. */

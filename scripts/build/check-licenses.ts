@@ -3,9 +3,10 @@
 // BP5: reads the bundlers' module lists and fails on any package whose licence is not allowed.
 // The lists are written by `npm run build`: dist/meta/floor.json and dist/meta/host.json (Vite, through
 // scripts/build/module-list.ts) and dist/meta/worker.json (the esbuild metafile that wrangler writes).
-// It also checks every direct dependency of package.json.
+// It also checks every direct dependency of package.json, and the package of every WebAssembly file
+// wrangler writes beside the Worker (`<sha1>-<name>.wasm`): those are not metafile inputs.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { licenseAllowed, packageDirectoryOf } from "./licenses.ts";
@@ -40,6 +41,16 @@ function modulesOf(bundle: "floor" | "host" | "worker"): string[] {
   return Object.keys(inputs);
 }
 
+/** The WebAssembly modules wrangler wrote beside `dist/worker/index.js`. */
+function wasmFilesOfWorker(): string[] {
+  const directory = join(repoRoot, "dist/worker");
+  return existsSync(directory)
+    ? readdirSync(directory)
+        .filter((file) => file.endsWith(".wasm"))
+        .sort()
+    : [];
+}
+
 function main(): number {
   // Package directory -> where it was found.
   const packages = new Map<string, string>();
@@ -53,12 +64,22 @@ function main(): number {
 
   const own = readJson("package.json") as PackageJson;
   const direct = [...Object.keys(own.dependencies ?? {}), ...Object.keys(own.devDependencies ?? {})];
+
+  const refused: string[] = [];
+  for (const file of wasmFilesOfWorker()) {
+    const base = file.replace(/^[0-9a-f]{40}-/, "");
+    const owner = Object.keys(own.dependencies ?? {}).find((name) =>
+      existsSync(join(repoRoot, "node_modules", name, base)),
+    );
+    if (owner === undefined) refused.push(`dist/worker/${file}: no dependency of package.json ships ${base}.`);
+    else if (!packages.has(`node_modules/${owner}`))
+      packages.set(`node_modules/${owner}`, `the worker bundle (${file})`);
+  }
   for (const name of direct) {
     const directory = `node_modules/${name}`;
     if (!packages.has(directory)) packages.set(directory, "package.json");
   }
 
-  const refused: string[] = [];
   for (const [directory, where] of [...packages].sort()) {
     const manifest = `${directory}/package.json`;
     if (!existsSync(join(repoRoot, manifest))) {

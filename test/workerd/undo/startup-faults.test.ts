@@ -7,6 +7,7 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import type { AgentOpenRequest } from "../../../src/protocol/internal.ts";
 import { WORKHORSE_MODEL } from "../../../src/config/model-plan.ts";
 import { REPO_ROOT } from "../../support/source.ts";
+import { workerModules } from "../../support/bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const ORIGIN = "http://startup-fault.test";
@@ -109,7 +110,7 @@ describe("durable fresh-Agent delivery after a reopen failure", () => {
         workers: [
           {
             name: "startup-faults",
-            modules: [{ type: "ESModule", path: BUNDLE, contents: original + PROBE }],
+            ...workerModules(original + PROBE),
             compatibilityDate: "2026-10-01",
             compatibilityFlags: ["nodejs_compat"],
             durableObjects: { PROBE: { className: "StartupFaultProbe", useSQLite: true } },

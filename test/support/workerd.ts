@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { REPO_ROOT } from "./source.ts";
+import { workerModules } from "./bundle.ts";
 
 const BUNDLE = join(REPO_ROOT, "dist/worker/index.js");
 const CLIENT = join(REPO_ROOT, "dist/client");
@@ -60,7 +61,7 @@ export async function startWorker(options?: WorkerOptions): Promise<LocalWorker>
       workers: [
         {
           name: "premise",
-          modules: [{ type: "ESModule", path: BUNDLE }],
+          ...workerModules(),
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
           bindings: options?.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey },

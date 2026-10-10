@@ -63,7 +63,19 @@ export const ZONES: readonly Zone[] = [
   },
   {
     files: "src/worker/",
-    allow: { paths: ["src/"], notPaths: ["src/floor/", "src/host/"], packages: ["cloudflare:workers", "node:"] },
+    // `web-tree-sitter` and the two grammars' `.wasm` files: the parsers of Python and Go (06-repos.md LG1),
+    // loaded only by `src/worker/parsers/tree-sitter.ts`.
+    allow: {
+      paths: ["src/"],
+      notPaths: ["src/floor/", "src/host/"],
+      packages: [
+        "cloudflare:workers",
+        "node:",
+        "web-tree-sitter",
+        "tree-sitter-python/tree-sitter-python.wasm",
+        "tree-sitter-go/tree-sitter-go.wasm",
+      ],
+    },
   },
 ];
 

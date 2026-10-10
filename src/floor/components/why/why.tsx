@@ -222,10 +222,17 @@ export function WhySheet({ floor, seq, onClose, mode = "live", onOpenWho, onOpen
                         light={{ id: row.id, light: row.light, edit: row.edit, tip: row.label }}
                         size="list"
                       />
-                      <span className="why-relied__label" dir="auto">
-                        {row.label}
+                      <span className="why-relied__text">
+                        <span className="why-relied__label" dir="auto">
+                          {row.label}
+                        </span>
+                        {row.flags.length > 0 && (
+                          <>
+                            {" "}
+                            <span className="why-relied__flags">({row.flags.join(", ")})</span>
+                          </>
+                        )}
                       </span>
-                      {row.flags.length > 0 && <span className="why-relied__flags">({row.flags.join(", ")})</span>}
                       {onOpenWho !== undefined && (
                         <button
                           type="button"

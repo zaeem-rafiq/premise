@@ -54,8 +54,12 @@
   gap: 6px;
 }
 
+/* One row per premise: the light, then its sentence (which may wrap), then "Who relies on
+ * this" in a column of its own, so the buttons line up and a long sentence never squeezes
+ * the button into two lines. */
 .why-relied__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }

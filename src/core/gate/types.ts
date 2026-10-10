@@ -32,6 +32,11 @@ export type GateSettleRequest = {
 
 export type GateReleaseRequest = { attempt_id: string };
 
+/** `POST /internal/claim` (07-mcp MC20): an outside attempt takes an agent slot with no model call. */
+export type GateClaimRequest = { attempt_id: string; pool: string };
+
+export type GateClaimResponse = { ok: true } | { ok: false; refused: "killed" } | { ok: false; retry_after_ms: number };
+
 // ---- The rest of the shell's protocol (pool registration, kill, may-start, sweep) ----
 
 /** `POST /internal/register-pool` (PL1, EV2a): the pool's id; `request_id` rides along so the route
@@ -87,6 +92,7 @@ export type GateCall =
   | { call: "reserve"; request: GateReserveRequest }
   | { call: "settle"; request: GateSettleRequest }
   | { call: "release"; request: GateReleaseRequest }
+  | { call: "claim"; request: GateClaimRequest }
   | { call: "register-pool"; request: GateRegisterPoolRequest }
   | { call: "kill"; request: KillRequest }
   | { call: "may-start"; request: GateMayStartRequest }
@@ -96,6 +102,7 @@ export type GateAnswer =
   | GateReserveResponse
   | GateSettleResponse
   | GateReleaseResponse
+  | GateClaimResponse
   | GateRegisterPoolResponse
   | GateKillResponse
   | GateMayStartResponse

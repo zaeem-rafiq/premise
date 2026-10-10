@@ -13,6 +13,10 @@
 //
 // The model driver (05-agent) and the turn rendering of src/core/agent/loop
 // are another track; real agents answer not_built until then.
+//
+// An outside attempt (07-mcp) is a real attempt whose calls come from an MCP
+// client: the route hands each call to `/outside/call`, which runs it through
+// the same TD3-TD7 processing, journal and tool row as a model's call.
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env.ts";
@@ -30,6 +34,7 @@ import {
   MAX_MODEL_CALLS,
   MAX_ATTEMPT_TOKENS,
   MAX_ATTEMPT_USD,
+  MAX_TOOL_CALLS_PER_TURN,
   TOOL_RETRIES,
   TOOL_TIMEOUT_MS,
   WAIT_BACKOFF_BASE_MS,
@@ -100,9 +105,19 @@ import {
   callTarget,
   headsUpUserMessage,
   messageForResponse,
+  processCall,
   textsForGuide,
+  toHeadsUpForModel,
+  toolMessageFor,
+  unshownRun,
   writeToolRow,
+  type LoopState,
+  type Row,
+  type ToolRowBody,
 } from "../../core/agent/loop/index.ts";
+import { MCP_CALL_WAIT_MS, MCP_POLL_MS, MCP_SILENCE_MS, MCP_WAIT_MS } from "../mcp/constants.ts";
+import { OUTSIDE_DRIVER, type OutsideAnswer, type OutsideTurn } from "../mcp/outside.ts";
+import { statusNext } from "../mcp/texts.ts";
 
 // What a pool's launcher POSTs to the Agent's /open is `AgentOpenRequest` of
 // src/protocol/internal.ts (SW4; the swarm lane's launch call carries the same
@@ -146,6 +161,10 @@ function invalid(detail: string): Response {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
 export class Agent extends DurableObject<Env> {
@@ -207,6 +226,10 @@ export class Agent extends DurableObject<Env> {
     // `model_unavailable`, never silent success.
     if (this.env.GATE !== undefined) {
       this.#gate = new GateCalls(gateDurableObjectTransport(this.env.GATE));
+    }
+    if (this.#meta("driver") === "outside") {
+      this.#driver = OUTSIDE_DRIVER; // 07-mcp: the client chooses every call
+      return;
     }
     if (this.#meta("driver") === "model") {
       const ai = this.env.AI as unknown as {
@@ -384,6 +407,12 @@ export class Agent extends DurableObject<Env> {
           return await this.#resume(body);
         case "/stop":
           return await this.#ownerStop();
+        case "/outside/call":
+          return await this.#outsideCall(body);
+        case "/outside/status":
+          return await this.#outsideSerial((turn) => this.#outsideStatus(isRecord(body) && body.wait === true, turn));
+        case "/outside/kill":
+          return this.#outsideKill();
         case "/internal/inspect":
           return await this.#inspect();
         case "/internal/spend":
@@ -462,10 +491,12 @@ export class Agent extends DurableObject<Env> {
       }
       fills = importedFills(imp as unknown as ImportedPrompt);
     }
+    // 07-mcp MC14: an outside attempt is real, with the `outside` driver and no model call.
+    const isOutside = isReal && body.driver === "outside";
     if (isReal) {
       // A real attempt needs the model driver, a model id of the plan and the
       // intent's text — the first two transcript rows are built from it (SP1, SP2).
-      if (body.driver !== "model") return invalid("a real attempt requires driver model");
+      if (body.driver !== "model" && !isOutside) return invalid("a real attempt requires driver model");
       if (typeof body.model !== "string" || body.model === "") return invalid("model is required");
       if (typeof body.intent_text !== "string" || body.intent_text === "") {
         return invalid("intent_text is required");
@@ -539,10 +570,16 @@ export class Agent extends DurableObject<Env> {
         init.hold = body.hold === true ? "1" : "0";
         init.think_ms = JSON.stringify(Array.isArray(body.think_ms) ? body.think_ms : [0, 0]);
       }
-      if (isReal) init.driver = "model";
+      if (isReal) init.driver = isOutside ? "outside" : "model";
+      if (isOutside) {
+        // MC20: the route claimed the slot before the open; MC21: silence counts from now.
+        init.may_started = "1";
+        init.slot = "1";
+        init.outside_seen = now;
+      }
       if (typeof body.trunk_url === "string") init.trunk_url = body.trunk_url;
       for (const [k, v] of Object.entries(init)) metaSet(this.#sql, k, v);
-      if (isReal) {
+      if (isReal && !isOutside) {
         // SP1/SP2: the system prompt and the first user message — rows 1 and 2, filled by the
         // pool's own context (the tide pool's for a seed pool, IR9 to IR11's for an imported).
         for (const [i, row] of firstRows(String(body.intent_text), fills).entries()) {
@@ -666,6 +703,279 @@ export class Agent extends DurableObject<Env> {
     return json({ ok: true });
   }
 
+  // -- the outside attempt (07-mcp) ---------------------------------------------
+  //
+  // The client's calls arrive as requests and are served one at a time (MC17). Each runs through
+  // the model path's own processing — TD3 to TD7, the journal of AG1, the tool row of TL14 — and the
+  // client gets the `ModelToolMessage` a model would read (MC15). Writing that row is what raises
+  // `shown_hn` (TL9), so a heads-up counts as delivered only once it is in the client's answer.
+
+  #outsideChain: Promise<unknown> = Promise.resolve();
+  #outsideInFlight = 0;
+  #outsideTurn: OutsideTurn = { calls: 0, stop: null };
+
+  #isOutside(): boolean {
+    return this.#meta("driver") === "outside";
+  }
+
+  /** MC17: one call at a time, in arrival order; a call that arrives while another is in progress
+   * joins that call's turn. MC21: every request counts as the client being there. */
+  async #outsideSerial(run: (turn: OutsideTurn) => Promise<OutsideAnswer>): Promise<Response> {
+    if (this.#meta("attempt_id") === null || !this.#isOutside()) {
+      return json({ ok: false, error: "attempt_unknown" });
+    }
+    this.#set("outside_seen", Date.now());
+    if (this.#outsideInFlight === 0) this.#outsideTurn = { calls: 0, stop: null };
+    const turn = this.#outsideTurn;
+    this.#outsideInFlight += 1;
+    const next = this.#outsideChain.then(() => run(turn));
+    this.#outsideChain = next.catch(() => undefined);
+    try {
+      return json({ ok: true, answer: await next });
+    } finally {
+      this.#outsideInFlight -= 1;
+      this.#set("outside_seen", Date.now());
+    }
+  }
+
+  async #outsideCall(body: unknown): Promise<Response> {
+    if (!isRecord(body) || typeof body.tool !== "string") return invalid("tool is required");
+    const tool = body.tool;
+    const args = isRecord(body.args) ? body.args : {};
+    return this.#outsideSerial((turn) => this.#outsideOne(tool, args, turn));
+  }
+
+  /** MC22: the kill switch is on. The attempt stops with `killed` (TA9). */
+  #outsideKill(): Response {
+    if (this.#meta("attempt_id") !== null && !TERMINAL_STATES.has(this.#meta("state") as AttemptState)) {
+      if (this.#meta("pending_stop") === null) this.#set("pending_stop", "killed");
+      this.ctx.waitUntil(this.#run());
+    }
+    return json({ ok: true });
+  }
+
+  #outsideState(): string {
+    return this.#meta("state") ?? "opened";
+  }
+
+  /** MC23: an ended attempt — or one whose stop is pending — answers `attempt_closed`. */
+  #outsideClosed(): OutsideAnswer | null {
+    if (!TERMINAL_STATES.has(this.#outsideState() as AttemptState) && this.#meta("pending_stop") === null) return null;
+    return {
+      kind: "message",
+      state: this.#outsideState(),
+      message: toolMessageFor({
+        error: { code: "attempt_closed" },
+        texts: textsForGuide(loadLoopState(this.#sql).fills.guide),
+      }),
+    };
+  }
+
+  /** The tool row of TL14 for `call_id`, once it is written. */
+  #toolRowMessage(call_id: string): ToolRowBody["message"] | null {
+    const row = transcriptRows(this.#sql).find((r) => r.call_id === call_id);
+    return row === undefined ? null : (JSON.parse(String(row.content)) as ToolRowBody).message;
+  }
+
+  /** Persist rows that `writeToolRow` appended to `s`, with the heads-ups they showed (TL9). */
+  #persistOutsideRows(s: LoopState, rows: Row[]): void {
+    this.#sql.transaction(() => {
+      for (const row of rows) {
+        transcriptAppend(this.#sql, { ...row, content: redact(row.content, this.#secrets()) });
+      }
+      for (const entry of s.inbox) {
+        if (entry.shown_step !== null) {
+          this.#sql.exec("UPDATE inbox SET shown_step = ? WHERE hn = ?", entry.shown_step, entry.heads_up.hn);
+        }
+      }
+      this.#set("step", s.meta.step);
+      this.#set("shown_hn", s.meta.shown_hn);
+    });
+  }
+
+  /** A call the Agent refuses itself (TD4, TL8 via MC17): a tool row with no `call_id`, carrying
+   * the unshown run of heads-ups as a model's refusal row does. */
+  #outsideRefuse(tool: string, args: Record<string, unknown>, code: string, detail: object): OutsideAnswer {
+    const s = loadLoopState(this.#sql);
+    const texts = textsForGuide(s.fills.guide);
+    const now = Date.now();
+    const message = toolMessageFor({
+      error: { code, detail },
+      heads_ups: unshownRun(s).show.map((hu) => toHeadsUpForModel(hu, texts)),
+      texts,
+    });
+    const row = writeToolRow(s, {
+      tool,
+      call_id: null,
+      model_call_id: `mcp_${s.meta.step + 1}`,
+      args,
+      message,
+      counts_step: false,
+      started_at: now,
+      ended_at: now,
+    });
+    this.#persistOutsideRows(s, [row]);
+    return { kind: "message", state: this.#outsideState(), message };
+  }
+
+  /** MC20: a working outside attempt holds a slot; a handed-in or ended one does not need one. */
+  async #outsideClaim(): Promise<"ok" | "busy" | "killed"> {
+    const state = this.#outsideState() as AttemptState;
+    if (WAIT_STATES.has(state) || TERMINAL_STATES.has(state) || this.#meta("slot") === "1") return "ok";
+    if (this.#gate === null) return "busy";
+    try {
+      const answer = await this.#gate.claim(this.#meta("attempt_id") as string, this.#meta("pool_id") ?? "");
+      if (answer.ok) {
+        this.#set("slot", "1");
+        return "ok";
+      }
+      return "refused" in answer ? "killed" : "busy";
+    } catch {
+      return "busy";
+    }
+  }
+
+  /** MC20: the slot goes once the change is handed in or the attempt ended (MG5). */
+  async #outsideSettleSlot(): Promise<void> {
+    const state = this.#outsideState() as AttemptState;
+    if (this.#meta("slot") !== "1" || !(WAIT_STATES.has(state) || TERMINAL_STATES.has(state))) return;
+    this.#set("slot", "0");
+    await this.#releaseGateSlot();
+  }
+
+  /** Serve the journaled call `call_id` to its answer inside this request (MC15): the waits and
+   * retries of TL12 and the register of 3.6 step 6, for at most MCP_CALL_WAIT_MS. Null when the
+   * call ended without a row (a stop abandoned it) or the time ran out (the journal stays: MC18). */
+  async #outsideFinish(call_id: string): Promise<ToolRowBody["message"] | null> {
+    const deadline = Date.now() + MCP_CALL_WAIT_MS;
+    for (;;) {
+      const message = this.#toolRowMessage(call_id);
+      if (message !== null) return message;
+      const j = journaledCall(this.#sql);
+      if (j === null || j.call_id !== call_id || this.#meta("pending_stop") !== null) return null;
+      const now = Date.now();
+      if (now >= deadline) return null;
+      if (this.#meta("register_needed") === "1") {
+        if (!(await this.#register())) await sleep(Math.min(HEADS_UP_REPUSH_MS, deadline - now));
+        continue;
+      }
+      const waiting = (j.request as { waiting?: boolean }).waiting === true;
+      if (waiting && j.deadline_at > now) {
+        await sleep(Math.min(j.deadline_at - now, deadline - now));
+        continue;
+      }
+      await this.#serve(j);
+      if (this.#toolRowMessage(call_id) === null) await sleep(250); // a send of the alarm's is still out
+    }
+  }
+
+  /** One of the seven tools for the client (MC15 to MC18, MC20). */
+  async #outsideOne(tool: string, args: Record<string, unknown>, turn: OutsideTurn): Promise<OutsideAnswer> {
+    const closed = this.#outsideClosed();
+    if (closed !== null) return closed;
+    const texts = textsForGuide(loadLoopState(this.#sql).fills.guide);
+    const other = (): OutsideAnswer => ({
+      kind: "message",
+      state: this.#outsideState(),
+      message: toolMessageFor({ error: { code: "other" }, texts }),
+    });
+
+    // MC18: an earlier call whose request ended first is finished, and its answer goes out instead.
+    const orphan = journaledCall(this.#sql);
+    if (orphan !== null && orphan.kind === "tool") {
+      turn.stop ??= "earlier_failed";
+      const message = await this.#outsideFinish(orphan.call_id);
+      await this.#outsideSettleSlot();
+      if (message === null) return this.#outsideClosed() ?? other();
+      return { kind: "interrupted", state: this.#outsideState(), message };
+    }
+
+    // MC17 (TL8): the turn's later calls after a failure, a heads-up or a submit; and its size.
+    if (turn.stop !== null) return this.#outsideRefuse(tool, args, "not_run", { reason: turn.stop });
+    if (turn.calls >= MAX_TOOL_CALLS_PER_TURN)
+      return this.#outsideRefuse(tool, args, "not_run", { reason: "too_many" });
+    turn.calls += 1;
+
+    const slot = await this.#outsideClaim();
+    if (slot === "killed") {
+      this.#set("pending_stop", "killed");
+      this.ctx.waitUntil(this.#run());
+      return this.#outsideClosed() ?? other();
+    }
+    if (slot === "busy") return { kind: "text", state: this.#outsideState(), key: "busy" };
+
+    // AG4: the step budget is checked before the call it would exceed.
+    if (this.#int("tool_steps") >= this.#int("step_limit")) {
+      this.#set("pending_stop", "budget");
+      this.ctx.waitUntil(this.#run());
+      return this.#outsideClosed() ?? other();
+    }
+
+    const s = loadLoopState(this.#sql);
+    const outcome = processCall(
+      s,
+      { id: `mcp_${s.meta.step + 1}`, type: "function", function: { name: tool, arguments: args } },
+      null,
+    );
+    if (outcome.kind === "error") {
+      turn.stop = "earlier_failed";
+      return this.#outsideRefuse(tool, args, outcome.code, outcome.detail);
+    }
+    const call_id = callId(this.#meta("attempt_id") as string, this.#int("step") + 1);
+    await this.#toolCall(tool as ToolName, outcome.args);
+    const message = await this.#outsideFinish(call_id);
+    await this.#outsideSettleSlot();
+    if (message === null) {
+      turn.stop = "earlier_failed";
+      return this.#outsideClosed() ?? other();
+    }
+    if (message.error !== undefined) turn.stop = "earlier_failed";
+    else if ((message.heads_ups?.length ?? 0) > 0) turn.stop = "heads_up";
+    else if (tool === "submit") turn.stop = "after_submit";
+    return { kind: "message", state: this.#outsideState(), message };
+  }
+
+  /** MC19: `premise_status` — a sync, an optional wait for news, then the state and every heads-up
+   * the client has not seen. Showing heads-ups writes a tool row, which raises `shown_hn`. */
+  async #outsideStatus(wait: boolean, turn: OutsideTurn): Promise<OutsideAnswer> {
+    const before = this.#outsideState();
+    await this.#sync();
+    if (wait) {
+      const deadline = Date.now() + MCP_WAIT_MS;
+      const news = (): boolean =>
+        this.#outsideState() !== before ||
+        TERMINAL_STATES.has(this.#outsideState() as AttemptState) ||
+        inbox.next(this.#sql, this.#int("shown_hn")).show.length > 0;
+      while (!news() && Date.now() < deadline) {
+        await sleep(Math.min(MCP_POLL_MS, deadline - Date.now()));
+        await this.#sync();
+        this.#set("outside_seen", Date.now()); // MC21: a client waiting here is not silent
+      }
+    }
+    await this.#outsideSettleSlot();
+    const s = loadLoopState(this.#sql);
+    const texts = textsForGuide(s.fills.guide);
+    const state = this.#outsideState();
+    const result = { state, stop_reason: this.#meta("stop_reason"), next: statusNext(state) };
+    const run = unshownRun(s).show;
+    if (run.length === 0) return { kind: "message", state, message: { result } };
+    const message = toolMessageFor({ result, heads_ups: run.map((hu) => toHeadsUpForModel(hu, texts)), texts });
+    const now = Date.now();
+    const row = writeToolRow(s, {
+      tool: "premise_status",
+      call_id: null,
+      model_call_id: `mcp_${s.meta.step + 1}`,
+      args: { wait },
+      message,
+      counts_step: false,
+      started_at: now,
+      ended_at: now,
+    });
+    this.#persistOutsideRows(s, [row]);
+    turn.stop ??= "heads_up";
+    return { kind: "message", state, message };
+  }
+
   // -- the pump -----------------------------------------------------------------
   //
   // One in-flight step at a time. Everything the loop needs is durable, so a
@@ -711,6 +1021,9 @@ export class Agent extends DurableObject<Env> {
 
         const journal = journaledCall(this.#sql);
         if (journal !== null) {
+          // MC15, MC18: an outside call is served inside the client's request, and a call whose
+          // request ended is finished by the next one — never here, where no client reads it.
+          if (this.#isOutside()) return;
           if (journal.kind === "tool" && this.#retrySends.has(this.#toolSendKey(journal))) return;
           // A call parked on its `call` timer is re-served when the timer
           // fires. A heads-up, sync or recovery must not cut its wait short.
@@ -738,6 +1051,9 @@ export class Agent extends DurableObject<Env> {
           }
           continue;
         }
+        // MC19: an outside attempt has no conversation to append a heads-up to. Its heads-ups
+        // ride in its next tool result or `premise_status`; its calls come from the client.
+        if (this.#isOutside()) return;
         const run = next.show.filter((hn) => this.#headsUp(hn)?.wake === true);
         const isReal = this.#meta("agent_kind") === "real";
         if (this.#meta("resume_show") === "1") {
@@ -1533,8 +1849,10 @@ export class Agent extends DurableObject<Env> {
             else await this.#sendStop(pending);
           } else if (t.kind === "call") {
             const j = journaledCall(this.#sql);
-            if (j === null || j.call_id !== t.key) timerDelete(this.#sql, "call", t.key);
-            else if (j.deadline_at > now)
+            // MC15, MC18: an outside call is retried inside the client's request, not by the alarm.
+            if (j === null || j.call_id !== t.key || (this.#isOutside() && j.kind === "tool")) {
+              timerDelete(this.#sql, "call", t.key);
+            } else if (j.deadline_at > now)
               continue; // a previous awaited handler moved this timer
             else if (j.kind === "model") {
               // Only a parked wait is re-served here: a journal marked `waiting`
@@ -1599,6 +1917,22 @@ export class Agent extends DurableObject<Env> {
     }
     await this.#sync(); // the watchdog syncs before it judges (AG3)
     const state = this.#meta("state") as AttemptState;
+    if (this.#isOutside()) {
+      // MC21: a working outside attempt that has received nothing for MCP_SILENCE_MS stops. While
+      // its change is handed in, or a call is being served, the client may be silent.
+      if (
+        TERMINAL_STATES.has(state) ||
+        WAIT_STATES.has(state) ||
+        this.#meta("pending_stop") !== null ||
+        this.#outsideInFlight > 0
+      ) {
+        this.#set("outside_seen", now);
+      } else if (now - this.#int("outside_seen") >= MCP_SILENCE_MS) {
+        this.#set("pending_stop", "stalled");
+      }
+      timerPut(this.#sql, "watchdog", "main", now + AGENT_WATCHDOG_MS);
+      return;
+    }
     // A wake run the sync just delivered is work the loop has not run yet — not a stall.
     const wakePending = inbox.next(this.#sql, this.#int("shown_hn")).show.some((hn) => {
       const hu = this.#headsUp(hn);

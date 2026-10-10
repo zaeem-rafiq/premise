@@ -12,6 +12,7 @@ import type {
   GateReserveResponse,
   GateSettleResponse,
 } from "../../protocol/internal.ts";
+import type { GateClaimResponse } from "../../core/gate/index.ts";
 
 export const GATE_OBJECT = "premise";
 
@@ -20,6 +21,7 @@ export const GATE_PATHS = {
   reserve: "/internal/reserve",
   settle: "/internal/settle",
   release: "/internal/release",
+  claim: "/internal/claim",
 } as const;
 
 export interface GateTransport {
@@ -80,6 +82,11 @@ export class GateCalls {
     usage: { tokens_in: number; tokens_out: number } | null;
   }): Promise<GateSettleResponse> {
     return this.#post<GateSettleResponse>(GATE_PATHS.settle, request);
+  }
+
+  /** 07-mcp MC20: an outside attempt takes a slot with no model call. */
+  claim(attemptId: string, pool: string): Promise<GateClaimResponse> {
+    return this.#post<GateClaimResponse>(GATE_PATHS.claim, { attempt_id: attemptId, pool });
   }
 
   /** MG5: the attempt's real-agent slot is free again. Idempotent. */

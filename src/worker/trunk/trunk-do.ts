@@ -29,6 +29,7 @@ import { runPlainJob } from "./plain-runner.ts";
 import { runGreenJob } from "./wiring/green.ts";
 import { runPreviewJob } from "./preview-runner.ts";
 import { runRaceCostJob } from "./race-cost-runner.ts";
+import { attemptCheckpointView, recordAttemptRepository } from "./attempt-repo.ts";
 import { poolRepoName } from "../repos.ts";
 import {
   clefRiskOf,
@@ -674,6 +675,17 @@ export class Trunk extends DurableObject<Env> {
       }
       const input = await this.#readInput(request, url);
       if (input === BAD_JSON) return json({ error: { code: "bad_json" } }, 400);
+      if (pathname === "/internal/attempt-repo" || pathname === "/internal/attempt-checkpoint") {
+        if (!FEATURES.attempt_repos) return notBuilt();
+        if (metaGet(this.#sql, "pool_id") === null) return json({ ok: false, error: "pool_not_found" }, 404);
+        if (pathname === "/internal/attempt-repo") return recordAttemptRepository(this.#sql, input);
+        const attemptId = (input as { attempt_id?: unknown } | null)?.attempt_id;
+        if (typeof attemptId !== "string") return json({ ok: false, error: "invalid_args" }, 400);
+        const snapshot = this.#sql.run("attempt_checkpoint", { features: FEATURES }, (trunk) =>
+          attemptCheckpointView(trunk.pool, attemptId),
+        );
+        return snapshot === null ? json({ ok: false, error: "attempt_unknown" }, 404) : json(snapshot);
+      }
       const name = this.#entryFor(pathname, input);
       if (name === null) return notBuilt();
       return await this.#runEntry(name, input, pathname, url.searchParams);

@@ -96,6 +96,8 @@ import { sqlOver } from "../sql-port.ts";
 import { ModelDriver, budgetExtension, loadLoopState } from "./model-driver.ts";
 import { GateCalls, gateDurableObjectTransport } from "./gate-client.ts";
 import { appendEvent, deliverEvents, ensureEventsSchema, pendingEvents } from "./events.ts";
+import { FEATURES } from "../../config/features.ts";
+import { AttemptRepositoryArchive, isAttemptRepoTimer } from "./attempt-repo.ts";
 import { MODEL_PLAN } from "../../config/model-plan.ts";
 import { RESUME_MESSAGE } from "../../protocol/agent-prompt.ts";
 import { firstRows } from "../../core/agent/loop/context.ts";
@@ -174,6 +176,7 @@ export class Agent extends DurableObject<Env> {
   #driver: Driver | null = null;
   #model: ModelDriver | null = null;
   #running = false;
+  #archive: AttemptRepositoryArchive | null = null;
   // Alarms can send a retry outside the pump. One send per retry generation
   // prevents a concurrent wake from bypassing its wait; a timed-out older
   // send may still finish while the next generation is in flight.
@@ -192,6 +195,10 @@ export class Agent extends DurableObject<Env> {
     // (AL1: an unfinished Agent always has an alarm that fires).
     const unfinished = this.#meta("attempt_id") !== null && !TERMINAL_STATES.has(this.#meta("state") as AttemptState);
     if (journaledCall(this.#sql) !== null || unfinished) this.ctx.waitUntil(this.#run());
+    const archive = this.#attemptRepo();
+    if (unfinished) archive?.start();
+    else if (this.#meta("attempt_id") !== null) archive?.requestCheckpoint(true);
+    archive?.kick(Date.now());
   }
 
   // -- plumbing --------------------------------------------------------------
@@ -268,6 +275,23 @@ export class Agent extends DurableObject<Env> {
     if (this.#driver === null && script !== null) {
       this.#driver = new ScriptedDriver(JSON.parse(script) as Script);
     }
+  }
+
+  #attemptRepo(): AttemptRepositoryArchive | null {
+    if (!FEATURES.attempt_repos || this.#meta("agent_kind") !== "real") return null;
+    if (this.#archive === null) {
+      const trunkUrl = this.#meta("trunk_url");
+      this.#archive = new AttemptRepositoryArchive({
+        sql: this.#sql,
+        env: this.env,
+        ctx: this.ctx,
+        trunk:
+          trunkUrl === null ? durableObjectTransport(this.env.TRUNK, this.#meta("pool_id")!) : urlTransport(trunkUrl),
+        arm: () => this.#armAlarm(),
+        events: () => this.#deliverEvents(),
+      });
+    }
+    return this.#archive;
   }
 
   #secrets(): string[] {
@@ -415,6 +439,8 @@ export class Agent extends DurableObject<Env> {
           return this.#outsideKill();
         case "/internal/inspect":
           return await this.#inspect();
+        case "/internal/attempt-repo":
+          return this.#attemptRepo()?.receive(body) ?? notBuilt();
         case "/internal/spend":
           return this.#spend(body);
         case "/internal/recover":
@@ -604,6 +630,8 @@ export class Agent extends DurableObject<Env> {
       timerPut(this.#sql, "attempt_timeout", "main", started + ATTEMPT_TIMEOUT_MS);
     });
     this.#open_attempt();
+    this.#attemptRepo()?.start();
+    this.#attemptRepo()?.kick(Date.now());
     this.ctx.waitUntil(this.#run());
     return json({ ok: true });
   }
@@ -1129,6 +1157,9 @@ export class Agent extends DurableObject<Env> {
       }
     } finally {
       this.#running = false;
+      const archive = this.#attemptRepo();
+      if (TERMINAL_STATES.has(this.#meta("state") as AttemptState)) archive?.requestCheckpoint(true);
+      archive?.kick(Date.now());
       try {
         await this.#deliverEvents();
       } finally {
@@ -1149,7 +1180,8 @@ export class Agent extends DurableObject<Env> {
   #retireTimers(): void {
     this.#sql.transaction(() => {
       for (const timer of timerList(this.#sql)) {
-        if (timer.kind !== "events" && timer.kind !== "release") timerDelete(this.#sql, timer.kind, timer.key);
+        if (timer.kind !== "events" && timer.kind !== "release" && !isAttemptRepoTimer(timer.kind))
+          timerDelete(this.#sql, timer.kind, timer.key);
       }
     });
   }
@@ -1336,6 +1368,7 @@ export class Agent extends DurableObject<Env> {
     try {
       const response = await (this.#trunk as TrunkCalls).tool(request);
       this.#applyToolResponse(journal, response);
+      this.#attemptRepo()?.kick(Date.now());
     } catch (e) {
       this.#callFailed(journal, e);
     } finally {
@@ -1606,6 +1639,9 @@ export class Agent extends DurableObject<Env> {
           inbox.prune(this.#sql, request.ack);
         }
       }
+      // AG5: the durable trigger commits with the submit transcript. A reset cannot
+      // lose the checkpoint between clearing the journal and scheduling background work.
+      if (request.tool === "submit") this.#attemptRepo()?.requestCheckpoint(false, true);
       this.#emitStep({
         step: row.step,
         tool: request.tool,
@@ -1789,6 +1825,7 @@ export class Agent extends DurableObject<Env> {
         this.#heldMirror(this.#meta("state") ?? "", res.attempt.state);
         this.#set("state", res.attempt.state);
         this.#set("register_needed", "0");
+        this.#attemptRepo()?.registered();
       } else if (res.error === "attempt_closed") {
         this.#set("register_needed", "0");
         this.#set("sync_needed", "1"); // the attempt's real state comes by sync
@@ -1860,7 +1897,11 @@ export class Agent extends DurableObject<Env> {
     try {
       for (const t of timerDue(this.#sql, now)) {
         try {
-          if (t.kind === "call" && t.key === "stop") {
+          if (isAttemptRepoTimer(t.kind)) {
+            const archive = this.#attemptRepo();
+            if (archive === null) timerDelete(this.#sql, t.kind, t.key);
+            else archive.kick(now);
+          } else if (t.kind === "call" && t.key === "stop") {
             const pending = this.#meta("pending_stop") as AgentStopReason | null;
             // A stale row that outlived its reason — a resume cleared it —
             // sends nothing; it is only retired.

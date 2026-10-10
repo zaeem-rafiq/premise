@@ -26,6 +26,9 @@ export const MODEL_PLAN: ModelPlan = {
     "@cf/openai/gpt-oss-120b": { in: 0.35, out: 0.75 },
     "@cf/moonshotai/kimi-k2.7-code": { in: 0.95, out: 4.0 },
     "@cf/zai-org/glm-5.3-flash": { in: 0.15, out: 0.5 },
+    // 01-core TR10 (Price): Clef's requests are priced by input tokens only (TR9 reserves them).
+    "@cf/cloudflare/clef": { in: 0.24, out: 0 },
+    "@cf/cloudflare/clef-flash": { in: 0.038, out: 0 },
   },
 };
 

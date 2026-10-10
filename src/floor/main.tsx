@@ -9,6 +9,7 @@ import { registry } from "./app/registry.ts";
 import { FloorApp } from "./app/app.tsx";
 import { text } from "../copy/strings.ts";
 import "./styles/base.css";
+import "./styles/poster.css";
 
 async function loadSettings(): Promise<FloorJson | null> {
   try {

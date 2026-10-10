@@ -1,59 +1,88 @@
-/* The Floor's visual direction (03-floor 6). Plain CSS, custom properties, the system font
- * stack (VD6), tabular figures (VD7). Dark is the default theme; `data-theme="light"`
- * switches. `data-size="stage"` is the larger reading size (VD19, key Z); without a saved
- * choice it follows the window width - stage at 1600 and above (2.1).
+/* The Floor's visual direction (03-floor 6): "Poster at night". Plain CSS and custom
+ * properties. Two bundled typefaces under the SIL Open Font License (VD6): Instrument Serif for
+ * the numbers and titles, Archivo for the interface; code keeps the system monospace stack.
+ * Tabular figures (VD7). Dark is the default theme; `data-theme="light"` switches to the paper
+ * version. `data-size="stage"` is the larger reading size (VD19, key Z); without a saved choice
+ * it follows the window width - stage at 1600 and above (2.1). The poster layer itself (rules,
+ * square corners, the masthead, the number band) is `poster.css`.
  *
  * The layout picks its sizes from the window width: stage from 1600, the laptop layout
  * from 1100 to 1599, the narrow single column below 1100 (2.8, 2.9). Region heights are
- * fixed (2.1): header 64/56, banners 40/36 each, the strip 72/60, the Replay bar 108/96 (its
+ * fixed (2.1): header 88/72, banners 40/36 each, the strip 136/112, the Replay bar 108/96 (its
  * transport row 56/48 and its chapter row 52/48). */
 
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/archivo-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/instrument-serif-latin-400-italic.woff2") format("woff2");
+}
+
 :root {
-  --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-text: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --radius: 8px;
+  --radius: 0px;
   --border: 1px;
+  --rule: 2px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --banner-bg: var(--surface);
   /* Region sizes of 2.1 - the laptop layout is the default. */
-  --header-h: 56px;
+  --header-h: 72px;
   --banner-h: 36px;
-  --strip-h: 60px;
+  --strip-h: 112px;
   --replay-h: 48px;
   --replay-chapters-h: 48px;
-  --body-gap: 16px;
-  --body-pad: 16px;
+  --body-gap: 24px;
+  --body-pad: 20px;
 }
 
-/* Dark theme (6.3). */
+/* Dark theme (6.3): ink on night. */
 :root,
 :root[data-theme="dark"] {
-  --bg: #0b1720;
-  --surface: #13242f;
-  --raised: #1c3342;
-  --line: #3a5669;
-  --control: #7c98a8;
-  --text: #eaf2f4;
-  --muted: #a8bcc6;
-  --accent: #6fd6cc;
+  --bg: #0c0d10;
+  --surface: #101216;
+  --raised: #1a1d23;
+  --line: #2e323b;
+  --control: #8a8f99;
+  --text: #f2f2ee;
+  --muted: #9ea3ac;
+  --accent: #ff5a1f;
   --holds: #5bd68f;
   --changed: #ff7a6b;
   --confirm: #ffc857;
   --checking: #9db8ff;
   --synthetic: #d7a6ff;
   --focus: #ffe08a;
-  --on-fill: #06141b;
+  --on-fill: #0c0d10;
+  --grid: rgb(255 255 255 / 0.028);
 }
 
+/* Light theme (6.3): ink on paper. */
 :root[data-theme="light"] {
-  --bg: #f3f6f4;
-  --surface: #ffffff;
-  --raised: #e8eeec;
-  --line: #c9d5da;
-  --control: #5f727d;
-  --text: #0e1d26;
-  --muted: #465a66;
-  --accent: #0a6b66;
+  --bg: #f1ece2;
+  --surface: #f7f3ec;
+  --raised: #ebe6dc;
+  --line: #cfc7b8;
+  --control: #6b665c;
+  --text: #121212;
+  --muted: #57534b;
+  --accent: #b83a08;
   --holds: #17733a;
   --changed: #b8281c;
   --confirm: #8a5a00;
@@ -61,22 +90,23 @@
   --synthetic: #6a3bb0;
   --focus: #1b3fa0;
   --on-fill: #ffffff;
+  --grid: rgb(0 0 0 / 0.035);
 }
 
 /* Type scale (6.2): laptop first; `data-size="stage"` is the stage size. */
 :root {
-  --size-display: 72px;
-  --size-counter: 32px;
-  --size-title: 26px;
+  --size-display: 120px;
+  --size-counter: 64px;
+  --size-title: 32px;
   --size-intent: 19px;
   --size-status: 18px;
   --size-body: 16px;
   --size-small: 14px;
 }
 :root[data-size="stage"] {
-  --size-display: 112px;
-  --size-counter: 40px;
-  --size-title: 32px;
+  --size-display: 168px;
+  --size-counter: 84px;
+  --size-title: 40px;
   --size-intent: 24px;
   --size-status: 22px;
   --size-body: 20px;
@@ -87,13 +117,13 @@
  * type size). */
 @media (min-width: 1600px) {
   :root {
-    --header-h: 64px;
+    --header-h: 88px;
     --banner-h: 40px;
-    --strip-h: 72px;
+    --strip-h: 136px;
     --replay-h: 56px;
     --replay-chapters-h: 52px;
-    --body-gap: 24px;
-    --body-pad: 24px;
+    --body-gap: 32px;
+    --body-pad: 28px;
   }
 }
 

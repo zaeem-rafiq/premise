@@ -67,11 +67,11 @@ for (const theme of ["dark", "light"]) {
       await openCard(page, kind, theme);
       await expect(page.locator(".card-sheet")).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(255, 255, 255)" : "rgb(19, 36, 47)",
+        theme === "light" ? "rgb(247, 243, 236)" : "rgb(16, 18, 22)",
       );
       await expect(page.locator(".card-sheet__title")).toHaveCSS(
         "color",
-        theme === "light" ? "rgb(14, 29, 38)" : "rgb(234, 242, 244)",
+        theme === "light" ? "rgb(18, 18, 18)" : "rgb(242, 242, 238)",
       );
     });
   }
@@ -102,8 +102,8 @@ for (const width of [1440, 1920]) {
 }
 
 for (const [width, title, thesis] of [
-  [1920, 32, 24],
-  [1440, 26, 19],
+  [1920, 40, 30],
+  [1440, 32, 24],
 ] as const) {
   test(`D4 VD15/6.2: sheet Title and Compare Intent roles at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: width === 1920 ? 1080 : 900 });
@@ -116,8 +116,8 @@ for (const [width, title, thesis] of [
 }
 
 for (const size of [
-  { width: 1920, height: 1080, sheet: 1680, held: [808, 454], race: [536, 302] },
-  { width: 1440, height: 900, sheet: 1382.4, held: [648, 364], race: [428, 241] },
+  { width: 1920, height: 1080, sheet: 1680, held: [725.3, 408], race: [536, 302] },
+  { width: 1440, height: 900, sheet: 1382.4, held: [544, 306], race: [428, 241] },
 ]) {
   for (const kind of ["held", "race"] as const) {
     test(`D11 2.4/2.8: ${kind} sheet and frames match reference dimensions at ${size.width}`, async ({ page }) => {
@@ -144,9 +144,9 @@ for (const theme of ["dark", "light"]) {
     const input = page.getByRole("textbox", { name: "Reason (optional)" });
     await input.fill("The shared change is ready.");
     await expect(input).toHaveValue("The shared change is ready.");
-    await expect(input).toHaveCSS("color", theme === "dark" ? "rgb(234, 242, 244)" : "rgb(14, 29, 38)");
-    await expect(input).toHaveCSS("background-color", theme === "dark" ? "rgb(28, 51, 66)" : "rgb(232, 238, 236)");
-    await expect(input).toHaveCSS("border-top-color", theme === "dark" ? "rgb(124, 152, 168)" : "rgb(95, 114, 125)");
+    await expect(input).toHaveCSS("color", theme === "dark" ? "rgb(242, 242, 238)" : "rgb(18, 18, 18)");
+    await expect(input).toHaveCSS("background-color", theme === "dark" ? "rgb(26, 29, 35)" : "rgb(235, 230, 220)");
+    await expect(input).toHaveCSS("border-top-color", theme === "dark" ? "rgb(138, 143, 153)" : "rgb(107, 102, 92)");
   });
 }
 

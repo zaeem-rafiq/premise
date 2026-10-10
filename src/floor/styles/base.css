@@ -48,8 +48,8 @@
   --strip-h: 112px;
   --replay-h: 48px;
   --replay-chapters-h: 48px;
-  --body-gap: 24px;
-  --body-pad: 20px;
+  --body-gap: 16px;
+  --body-pad: 16px;
 }
 
 /* Dark theme (6.3): ink on night. */
@@ -96,9 +96,9 @@
 /* Type scale (6.2): laptop first; `data-size="stage"` is the stage size. */
 :root {
   --size-display: 120px;
-  --size-counter: 64px;
+  --size-counter: 56px;
   --size-title: 32px;
-  --size-intent: 19px;
+  --size-intent: 24px;
   --size-status: 18px;
   --size-body: 16px;
   --size-small: 14px;
@@ -107,7 +107,7 @@
   --size-display: 168px;
   --size-counter: 84px;
   --size-title: 40px;
-  --size-intent: 24px;
+  --size-intent: 30px;
   --size-status: 22px;
   --size-body: 20px;
   --size-small: 16px;
@@ -122,8 +122,8 @@
     --strip-h: 136px;
     --replay-h: 56px;
     --replay-chapters-h: 52px;
-    --body-gap: 32px;
-    --body-pad: 28px;
+    --body-gap: 24px;
+    --body-pad: 24px;
   }
 }
 

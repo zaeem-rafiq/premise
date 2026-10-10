@@ -57,8 +57,19 @@ async function box(locator: Locator): Promise<{ x: number; y: number; width: num
 }
 
 const SIZES = [
-  { name: "stage", w: 1920, h: 1080, poolW: 1152, frameH: 648, railW: 696, header: 64, strip: 72, banner: 40, pad: 24 },
-  { name: "laptop", w: 1440, h: 900, poolW: 832, frameH: 468, railW: 560, header: 56, strip: 60, banner: 36, pad: 16 },
+  {
+    name: "stage",
+    w: 1920,
+    h: 1080,
+    poolW: 1152,
+    frameH: 648,
+    railW: 696,
+    header: 88,
+    strip: 136,
+    banner: 40,
+    pad: 24,
+  },
+  { name: "laptop", w: 1440, h: 900, poolW: 832, frameH: 468, railW: 560, header: 72, strip: 112, banner: 36, pad: 16 },
 ] as const;
 
 /** 2.1 as amended on 2026-10-09: the Replay bar is two rows, the transport row (56, laptop 48)
@@ -78,7 +89,7 @@ function replayFrame(size: (typeof SIZES)[number]): { width: number; height: num
 
 // 2.1/LY1: the pool frame is 16:9; over a live stream it has the pool column's full width, and
 // in the recording it is what LY1 leaves under the REPLAY banner and the two-row Replay bar
-// (stage 1145x644, laptop 832x468). The pool column uses the body's full height.
+// below the masthead and the number band (2026-10-10). The pool column uses the body's full height.
 for (const size of SIZES) {
   const frame = replayFrame(size);
   test(`the pool frame is ${Math.round(frame.width)}x${frame.height} at ${size.name} in Replay (2.1/LY1)`, async ({
@@ -96,15 +107,15 @@ for (const size of SIZES) {
     const body = await box(page.locator(".pf-body"));
     expect(Math.abs(body.width - frame.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(body.height - frame.height)).toBeLessThanOrEqual(1);
-    // LY1: a frame narrower than the pool area is centred in it.
+    // LY1 (2026-10-10): a frame narrower than the pool area sits flush left under its caption bar.
     const area = await box(page.locator(".pool-area"));
-    expect(Math.abs(body.x + body.width / 2 - (area.x + area.width / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(body.x - area.x)).toBeLessThanOrEqual(1);
 
     // The rail takes its 2.1 width and the strip its height.
     const rail = await box(page.locator(".rail"));
     expect(Math.abs(rail.width - size.railW)).toBeLessThanOrEqual(1);
     const strip = await box(page.locator(".strip"));
-    expect(Math.abs(strip.height - (size.name === "stage" ? 72 : 60))).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - size.strip)).toBeLessThanOrEqual(1);
 
     // The pool column uses the height it has: the stage fills the column's own box, the
     // tiles region keeps at least its one guaranteed row under it (LY1).

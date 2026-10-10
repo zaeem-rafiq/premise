@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { attempts, headsup, serveReview } from "./review-fixtures.ts";
 
 for (const size of [
-  { width: 1920, height: 1080, intent: 24, status: 22 },
-  { width: 1440, height: 900, intent: 19, status: 18 },
+  { width: 1920, height: 1080, intent: 30, status: 22 },
+  { width: 1440, height: 900, intent: 24, status: 18 },
 ]) {
   for (const theme of ["dark", "light"]) {
     test(`D4 / VD15, 6.2: compact Intent and Status roles at ${size.width} ${theme}`, async ({ page }, info) => {

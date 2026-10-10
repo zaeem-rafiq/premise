@@ -30,8 +30,8 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
     // 2.1: header 1920x64, strip 72, each banner 40, and (as amended on 2026-10-09) the
     // Replay bar 1920x108: the transport row (56) above the chapter row (52).
     expect(Math.abs(header.width - 1920)).toBeLessThanOrEqual(1);
-    expect(Math.abs(header.height - 64)).toBeLessThanOrEqual(1);
-    expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
+    expect(Math.abs(header.height - 88)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - 136)).toBeLessThanOrEqual(1);
     expect(Math.abs(banner.height - 40)).toBeLessThanOrEqual(1);
     expect(Math.abs(replayBar.width - 1920)).toBeLessThanOrEqual(1);
     expect(Math.abs(replayBar.height - 108)).toBeLessThanOrEqual(1);
@@ -63,12 +63,13 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
         caption: pick(".pf-caption"),
       };
     });
-    // 6.2 stage: counter 40, small 16, intent 24 (banner words, the name), body 20.
-    expect(sizes.counter).toBe(40);
+    // 6.2 stage (2026-10-10): counter 84 (strip values, the masthead name), small 16 (strip
+    // labels, command buttons), intent 30 (banner words).
+    expect(sizes.counter).toBe(84);
     expect(sizes.stripLabel).toBe(16);
-    expect(sizes.bannerWord).toBe(24);
-    expect(sizes.appName).toBe(24);
-    expect(sizes.button).toBe(20);
+    expect(sizes.bannerWord).toBe(30);
+    expect(sizes.appName).toBe(84);
+    expect(sizes.button).toBe(16);
     // VD15: the frame caption is read from the back of a room - 22 or larger.
     expect(sizes.caption ?? 0).toBeGreaterThanOrEqual(22);
   });
@@ -140,7 +141,7 @@ test.describe("defect regressions", () => {
     await expect(page.locator(".strip-cell", { hasText: "Green line" })).toContainText("not running in this build");
     await expect(page.locator(".strip-cell", { hasText: "Spend" })).toContainText("not reported yet");
     const strip = await box(page.locator(".strip"));
-    expect(Math.abs(strip.height - 60)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - 112)).toBeLessThanOrEqual(1);
     // The sentences draw at status size, not counter size.
     const fontSize = await page
       .locator(".strip-cell", { hasText: "Spend" })
@@ -193,7 +194,7 @@ test.describe("defect regressions", () => {
     const tops = cells.map((c) => c.labelTop);
     expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
     const strip = await box(page.locator(".strip"));
-    expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - 136)).toBeLessThanOrEqual(1);
   });
 
   test("the run clock is never underlined, and a page that just opened underlines no counter (CO29)", async ({

@@ -107,6 +107,20 @@ describe("start-up and ticking (HO1, HO2, HO4, HO7)", () => {
     expect(frame.lastStats()?.tick).toBe(7);
   });
 
+  it("AC11/HO4: a page that starts paused draws the pool once and does not tick", async () => {
+    const { frame } = await startLive("paused-start", { fish: creatureJs("fish") }, "?paused=1");
+    const ctx = frame.canvas.ctx;
+    frame.frame(FRAME_MS); // first frame only stamps lastFrameAt
+    frame.frame(FRAME_MS);
+    const drawn = ctx.ops.length;
+    expect(drawn).toBeGreaterThan(0); // the picture, not an empty canvas
+    frame.frame(FRAME_MS);
+    frame.frame(FRAME_MS);
+    expect(ctx.ops.length).toBe(drawn); // drawn once, then still
+    frame.advance(STATS_EVERY_MS);
+    expect(frame.lastStats()).toMatchObject({ tick: 0, paused: true });
+  });
+
   it("HO4: a pause message freezes ticks and a hidden frame does not run", async () => {
     const { frame } = await startLive("pause", { fish: creatureJs("fish") });
     frame.frame(FRAME_MS);

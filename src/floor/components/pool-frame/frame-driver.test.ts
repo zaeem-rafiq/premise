@@ -381,18 +381,15 @@ describe("the self-test badge's probe (CO25a, NP8)", () => {
 });
 
 describe("pause on a load in flight (AC11, 6.4)", () => {
-  it("pausing while the page still loads restarts the load with the paused parameter", () => {
+  it("pausing while the page still loads keeps that load and posts the pause at its first stats", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: null });
     expect(h.loads).toEqual([`/pool/${POOL}/main/?seed=${HOST_SEED}`]);
     h.driver.setUserPaused(true);
-    expect(h.loads).toEqual([
-      `/pool/${POOL}/main/?seed=${HOST_SEED}`,
-      `/pool/${POOL}/main/?seed=${HOST_SEED}&paused=1`,
-    ]);
-    // the parameter already announced the pause — the first stats posts nothing more
+    expect(h.loads).toEqual([`/pool/${POOL}/main/?seed=${HOST_SEED}`]); // no second load
+    expect(h.ofType("pause")).toHaveLength(0); // nobody to tell yet
     h.driver.onStats(stats("c-seed"));
-    expect(h.ofType("pause")).toHaveLength(0);
+    expect(h.ofType("pause")).toHaveLength(1);
   });
 
   it("a stall watch is never armed while paused, but arms again on resume", () => {

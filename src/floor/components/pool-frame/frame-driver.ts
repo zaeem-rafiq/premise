@@ -318,12 +318,10 @@ export class FrameDriver {
   }
 
   /** Pause arrives by `postMessage` on a live frame and by the `paused` page parameter on a
-   * load (6.4, AC11): a load already in flight is restarted so its page comes up paused. */
+   * load (6.4, AC11). A pause while a load is in flight waits for that page's first `stats`,
+   * which posts it (`onStats` -> `syncPausePost`): restarting the load cost the viewer a second
+   * load of "Loading the pool…" (seen on `test`, 2026-10-10, about 12 s). */
   private syncPause(): void {
-    if (this.phase === "loading" && this.base !== "" && this.effectivePaused()) {
-      this.loadNow(this.base);
-      return;
-    }
     this.syncPausePost();
     this.armStall();
   }

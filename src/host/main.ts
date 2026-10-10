@@ -353,6 +353,7 @@ export async function runHost(env: HostEnv, landed: Landed): Promise<void> {
         for (const [kind, mod] of nextModules) kinds[kind] = mod;
         try {
           pool = main.adoptPool(pool, kinds, arrived);
+          needsDraw = true;
         } catch {
           /* adoptPool throwing keeps the old pool; the swap still reports */
         }
@@ -473,6 +474,11 @@ export async function runHost(env: HostEnv, landed: Landed): Promise<void> {
     }
   };
 
+  /** A pool made or adopted since the last draw: a paused or hidden page still draws it once, so a
+   * frame paused before its first tick shows the pool instead of an empty canvas (AC11; seen on
+   * `test`, 2026-10-10). Pool time does not move for it. */
+  let needsDraw = true;
+
   /** HO4: fixed step, at most HOST_MAX_CATCH_UP ticks per frame, then one draw. */
   let lastFrameAt: number | null = null;
   let acc = 0;
@@ -488,6 +494,10 @@ export async function runHost(env: HostEnv, landed: Landed): Promise<void> {
     if (dead || broken || !pool || paused || env.hidden()) {
       acc = 0;
       wasIdle = true;
+      if (needsDraw && pool && !dead && !env.hidden()) {
+        needsDraw = false;
+        drawFrame();
+      }
       return;
     }
     acc += wasIdle ? 0 : elapsed; // a paused or hidden span is not banked — pool time stands still
@@ -503,6 +513,7 @@ export async function runHost(env: HostEnv, landed: Landed): Promise<void> {
       broken = true; // shared code threw: stop ticking, keep reporting the frozen tick
       return;
     }
+    needsDraw = false;
     drawFrame();
   };
 

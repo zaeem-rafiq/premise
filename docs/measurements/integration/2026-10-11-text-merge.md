@@ -34,8 +34,8 @@ after the live check below.
   (`src/core/trunk/registry.ts`, `sets.ts`). The Worker already passes `FEATURES` to the engine
   (`trunk-do.ts`), so no Worker file changed.
 - **The page**: Compare view (`compare.tsx`) shows `plain.conflicts.merged` and its tooltip while the
-  switch is on, `plain.conflicts` "(approximated)" while it is off. `limitsList` drops "approximated" from
-  line 5 and "text merge" from line 9 while the switch is on.
+  switch is on, `plain.conflicts` "(approximated)" while it is off. `limitsList` gives line 5 its second form
+  while the switch is on, and names "text merge" in line 15 while it is off.
 
 ## The check before building
 
@@ -60,7 +60,33 @@ hero's four changes touch four different files. So nothing is valid only while t
 
 ## Suites
 
-RESULTS_PLACEHOLDER
+After `git merge origin/main` (outside agents over MCP had landed; both switches are kept), on
+`feat/text-merge` at `afe1520`, switch off (the committed state):
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `npm run check` | 0 | 2,662 passed, 1 expected failure. Run in a clone holding only this branch (see below). |
+| `npm run test:workerd` | 0 | 259 passed, 3 skipped |
+| `npm run test:cases` | 0 | 106 passed |
+| `CASES=required npm run test:cases` | 0 | 106 passed |
+| `npx vitest run --project integration` | 0 | 716 passed (the 128-agent `session-hit-rate` load test failed once with "socket closed" while other sessions loaded the Mac, then passed alone and in the full rerun) |
+| `PREMISE_E2E_PORT=4404 npm run test:e2e` | 0 | 355 passed |
+| `npm run check:submission` | 0 | README and the three texts pass |
+| `node scripts/ops/rules-coverage.ts` | 0 | 303 required ids, 0 uncovered; every PM3a test title names PM3a |
+
+Baseline before any change (main at `9176a2a`): check 2,608 passed and 1 expected failure, workerd 249, cases
+106, integration 716, browser 354.
+
+With the switch turned on locally (before the merge, not committed): check 2,642 passed, cases 106,
+integration 716, browser 354; workerd passed after the test fix below; `check:submission` fails until the
+README's two Limits lines are changed (step 5 of the live check).
+
+`npm run check` in this working copy exits 1 only at `check:secrets`, which scans every ref: after
+`git fetch`, the copy holds `origin/feat/green-line`, whose commits `0c6ce14` and `4b41f56` carry a made-up
+`art_v1_…` value in `src/core/trunk/green.test.ts` (the GR7 redaction test). This branch does not contain
+those commits; a clone of `feat/text-merge` alone scans clean ("630 commits scanned, nothing found") and
+`npm run check` exits 0 there. The green-line session should add that value to
+`scripts/ops/secrets-allow.json` before its branch merges.
 
 ## How close the merge is to Git
 
@@ -70,12 +96,13 @@ which were not copied, so the two can group lines differently. Measured with `gi
 cases (the script is the committed generated test, scaled up in a scratch run):
 
 - Source-code lines (the tide pool's and the plain-merge module's own lines, 20 to 60 lines per file,
-  one to four edits per side): FUZZ_CODE_PLACEHOLDER
+  one to four edits per side): 0 disagreements in 9,000 cases (three runs of 3,000).
 - An adversarial set of tiny files over a five-line alphabet, where nearly every diff is ambiguous:
-  FUZZ_TINY_PLACEHOLDER
+  18 disagreements in 12,000 cases (0.15%), in both directions: some cases git merges and PM3a
+  reports, others the reverse.
 
 Practical effect: in an ambiguous case the right pool may show a conflict where git would have merged, or
-the reverse. The count shown under Compare view can then differ from git's by one change.
+the reverse. The count shown under Compare view can then differ from git's.
 
 ## Choices where the specification was silent
 
@@ -92,15 +119,16 @@ the reverse. The count shown under Compare view can then differ from git's by on
 6. **Files outside the brief's path list** that the switch needed: `src/core/trunk/plain.ts` (the brief's
    `plain-apply.*` does not exist; this is the file that builds the plain commit), `registry.ts` and
    `sets.ts` (the pool flag), `src/floor/components/compare/compare.tsx` (the copy switch),
-   `src/protocol/protocol.test.ts` and `src/config/floor-json.test.ts` (FJ1's key count and the limits
-   forms), and two Floor tests' `Features` literals.
+   `src/config/limits.ts` and `README.md` (the limits lines), `src/protocol/protocol.test.ts` and
+   `src/config/floor-json.test.ts` (FJ1's key count and the limits forms), `src/worker/mcp/mcp.test.ts`
+   (MC4 read the old line 9), `test/workerd/landing/push-table.test.ts` (the wait fixed below), and two
+   Floor tests' `Features` literals.
 
 ## The lead's live check (costs nothing: no model call)
 
 1. Set `text_merge: true` in `src/config/features.ts`, then `npm run build` and `npm run deploy:test`.
-2. Play the canned hero, order 1, on a fresh `tidepool` pool on `test` (the scripted rehearsal or
-   `npm run rehearse:hero`). Scripted agents make no model calls, so the run costs only Worker and
-   Artifacts requests.
+2. Play the canned hero cast, order 1, on a fresh `tidepool` pool on `test`, as the scripted rehearsal
+   does. Scripted agents make no model calls, so the run costs only Worker and Artifacts requests.
 3. Open Compare view. Expect: the right pool shows the crab that never comes out, and the line reads
    "Text conflicts in the plain merge: 0" with no "(approximated)"; its tooltip names git merge-file.
 4. Check the tree. Fetch the pool's `plain` repository at the commit of the last `plain.updated`, and the

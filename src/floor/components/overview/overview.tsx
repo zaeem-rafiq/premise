@@ -60,7 +60,11 @@ export function Overview(props: OverviewProps) {
   const shown = flying.slice(0, OVERVIEW_CARDS);
   const facts = props.cells
     .filter((cell) => cell.id !== "strip.landed" && cell.id !== "strip.goarounds")
-    .map((cell) => [cell.label, cell.value, cell.sub].filter((part) => part !== undefined && part !== "").join(" "));
+    .map((cell) =>
+      cell.sub === undefined || cell.sub === ""
+        ? `${cell.label} ${cell.value}`
+        : `${cell.label} ${cell.value} — ${cell.sub}`,
+    );
 
   return (
     <section className="overview" aria-label={text("overview.label")}>

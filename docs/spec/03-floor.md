@@ -440,7 +440,7 @@ The Overview tells the run the way a product page would: one hero, one sentence,
 | Hero | The main pool's live frame (3.5), rounded, with its caption bar, Pause and Compare. |
 | In flight | `overview.inflight`, then at most 3 attempts in flight, newest event first: status shape and word (5.3), intent, model and elapsed time. A card with an open decision opens its card sheet; any other opens the Floor view. `overview.more` opens the Floor view. |
 | Input | The intent box (3.1) with its rules, drawn as one pill. |
-| Facts line | Every other strip cell (3.8) as "label value sub", joined by " · ", so the run clock, the real-agent limit and its reason (FL4), the waiting count, the green line and the spend stay on screen. |
+| Facts line | Every other strip cell (3.8) as "label value", followed by " — sub" when the cell has a sub-line, joined by " · ", so the run clock, the real-agent limit and its reason (FL4), the waiting count, the green line and the spend stay on screen. |
 
 ### 2.10 Always visible
 

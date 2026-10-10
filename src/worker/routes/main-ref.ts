@@ -14,29 +14,48 @@ import { artifactsTokenSource } from "../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../adapters/pusher/pusher.ts";
 import { runPush } from "../trunk/push-runner.ts";
 import type { Env } from "../env.ts";
+import { poolRepoName } from "../repos.ts";
 
 const MAIN_REF = "refs/heads/main";
 
-export type MainRefDeps = { tokenSource: TokenSource; pusher: Pusher };
+/** `headOf` answers the commit the repository's `HEAD` names (the binding's `log` from `HEAD`). */
+export type MainRefDeps = {
+  tokenSource: TokenSource;
+  pusher: Pusher;
+  headOf: (pool: string) => Promise<string | null>;
+};
 
 export function mainRefDeps(env: Env): MainRefDeps {
-  return { tokenSource: artifactsTokenSource(env.POOLS), pusher: receivePackPusher() };
+  return {
+    tokenSource: artifactsTokenSource(env.POOLS),
+    pusher: receivePackPusher(),
+    headOf: async (pool) => {
+      const repo = await (env.POOLS as Artifacts).get(poolRepoName(pool));
+      try {
+        return (await repo.log({ ref: "HEAD", limit: 1 }))[0]?.hash ?? null;
+      } finally {
+        repo[Symbol.dispose]();
+      }
+    },
+  };
 }
 
-/** Points `main` at the head of `branch` in the pool's repository, unless it already is there. */
+/** Points `main` at the imported head in the pool's repository, unless `main` is already there.
+ * The head is the named branch's commit, or the commit `HEAD` names: the binding reported a
+ * default branch of `main` for a repository whose only branch is `master` (hukkin/tomli on `test`). */
 export async function ensureMainRef(deps: MainRefDeps, pool: string, branch: string): Promise<void> {
-  if (branch === "main") return;
   const branchRef = `refs/heads/${branch}`;
   const target = await deps.tokenSource.writeTarget(pool);
   const refs = await deps.pusher.readRefs({
     remote: target.remote,
     token: target.token,
-    refs: [branchRef, MAIN_REF],
+    refs: [MAIN_REF, branchRef],
     signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
   });
-  const head = refs[branchRef] ?? null;
-  if (head === null) throw new Error(`the imported branch ${branch} is not in the repository`);
   const main = refs[MAIN_REF] ?? null;
+  if (main !== null && branch === "main") return;
+  const head = refs[branchRef] ?? (await deps.headOf(pool));
+  if (head === null) throw new Error(`the imported branch ${branch} is not in the repository`);
   if (main === head) return;
   const outcome = await runPush(
     { pool_id: pool, updates: [{ ref: MAIN_REF, old: main ?? ZERO_OID, new: head }], pack: buildPack([]) },

@@ -29,7 +29,8 @@ function fakes(
     },
     readRefs: async (input) => Object.fromEntries(input.refs.map((r) => [r, refs[r] ?? null])),
   };
-  return { deps: { tokenSource, pusher }, pushes };
+  const headOf = async () => refs.HEAD ?? null;
+  return { deps: { tokenSource, pusher, headOf }, pushes };
 }
 
 describe("ensureMainRef (06-repos IR2a)", () => {
@@ -52,9 +53,15 @@ describe("ensureMainRef (06-repos IR2a)", () => {
   });
 
   it("IR2a: does nothing for a pool imported from main", async () => {
-    const { deps, pushes } = fakes({});
+    const { deps, pushes } = fakes({ "refs/heads/main": HEAD, HEAD });
     await ensureMainRef(deps, "p", "main");
     expect(pushes).toEqual([]);
+  });
+
+  it("IR2a: takes the head from HEAD when the reported branch main does not exist (a master-only repository)", async () => {
+    const { deps, pushes } = fakes({ "refs/heads/master": HEAD, HEAD });
+    await ensureMainRef(deps, "py-pool", "main");
+    expect(pushes[0]?.updates).toEqual([{ ref: "refs/heads/main", old: ZERO_OID, new: HEAD }]);
   });
 
   it("IR2a: fails when the push is refused or the branch is missing", async () => {

@@ -201,7 +201,7 @@ Two reference sizes. **Stage size** is 1920×1080 with large type. **Laptop size
 | Region | Stage size | Laptop size | Content |
 | --- | --- | --- | --- |
 | Header | 1920×88 | 1440×72 | The masthead: name and pool name, view switch, Needs-you badge, kill switch, owner lock. |
-| Strip | 1920×136 | 1440×112 | The number band: run clock and six counters (3.8). |
+| Strip | 1920×136 (Replay 92) | 1440×112 (Replay 76) | The number band: run clock and six counters (3.8). In Replay it is short, so the pool frame gets the height. |
 | Banners | 1920×40 each | 1440×36 each | Zero or more, stacked, in the fixed order of 3.18. |
 | Body | the rest | the rest | The view. Padding 24 (laptop 16). |
 | Pool area (Floor view) | 1152 wide | 832 wide | Caption bar 40, pool frame 16:9 at full width (1152×648; laptop 832×468), file tiles in the rest. In Replay at stage size the REPLAY banner (40) and the Replay bar (108) leave the pool area 748 high, so LY1 shrinks the frame to 1145×644; each further banner takes its 40 from the frame's height. At laptop size the taller masthead and number band (2026-10-10) leave the frame shorter than 468, so LY1 shrinks it there too. |
@@ -547,6 +547,7 @@ One light per premise. The light's state is `PremiseView.light`. Shape and colou
 A premise with `edit` true has a short bar under its light (`light.flag.edit`).
 
 - **CO14 (order and count).** Lights are ordered: `changed`, `blind_spot`, `confirm`, `checking`, then `holds` in the order recorded. A collapsed attempt card shows at most `LIGHTS_MAX` lights, then `light.more`. Lights that are not `holds` are never hidden behind the count.
+- **CO14a (holds counted).** When a collapsed attempt card has more than 3 `holds` lights (counting those behind `light.more`), it draws none of them: it draws the other lights, then one small circle in the `holds` colour with `light.holds_count`. The expanded card and the card sheet still list every premise. (Owner's design decision of 2026-10-10: show the exceptions, count the rest.)
 - **CO15 (size).** A light is 28 across on an attempt card at stage size, 20 in a compact attempt card, 16 in a list.
 - **CO16 (name).** Hover, focus or tap on a light shows `keyLabel` (5.2), the word, and the flags (`light.flag.read`, `light.flag.edit`, `light.flag.derived`). The accessible name is the same sentence (6.5).
 - **CO17.** The expanded list has one row per premise: light, `keyLabel`, word, flags, the newest judgment sentence (5.6), and the link `who.open`.
@@ -653,6 +654,8 @@ Shown only in Compare view, beside the live pool frame, with the same sandbox an
 | live | otherwise | the frame, the badges and the list of CO25 |
 
 ### 3.7 File tiles
+
+When every file of a directory has the tier `held`, the directory's label carries the one `tile.held` tag and its files carry none (owner's design decision of 2026-10-10). The root's label is not a directory: its files keep their own tags.
 
 Inputs: `files`.
 
@@ -898,6 +901,8 @@ Header button: `owner.visitor` (locked) or `owner.unlocked`. The dialog has one 
 - **CO46.** In Replay the header shows `owner.replay` and the dialog cannot open.
 
 ### 3.18 Kill switch, spend indicator and banners
+
+From 1100 wide, the banners share one row side by side instead of stacking; each keeps its own colour, stripe or dotted edge (VD4) and its sentence ends in an ellipsis when the row is short (owner's design decision of 2026-10-10).
 
 Inputs: `limits`, `pool`, `green`, `undo`, `ViewState.connection`.
 
@@ -1373,6 +1378,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `light.flag.edit` | this change edits it | | |
 | `light.flag.derived` | the new code uses it | | |
 | `light.more` | +{n} | | |
+| `light.holds_count` | {n} hold | circle | `holds` |
 | `light.tip` | {keyLabel}: {light word}. {flags, joined by ", "}. | | |
 | `light.blind_spot.tip` | The new code uses {keyLabel}, and the agent never read it. | | |
 
@@ -2104,7 +2110,7 @@ The page looks like a poster at night: ink rules on a dark ground, numbers set l
 - **VD2 (signals).** The five light shapes (circle, diamond, triangle, ring, half circle) are the identity of the product. They are used for premises and for status only, at every size, in both themes. No other icon set is used; the few other marks (cross, tick, two bars, reader ring, writer square) are drawn in the same weight.
 - **VD3 (above and below the water).** The rail holds what is in flight. The pool area holds what is on `main`. A change crosses from the rail to the pool only on `landing.landed`. One vertical ink rule separates the two regions; the pool frame is an ink-edged plate.
 - **VD4 (labels that cannot be missed).** SYNTHETIC uses its own hue and a diagonal stripe that nothing else uses. REPLAY uses the inverse band and a dotted edge that nothing else uses.
-- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal), square corners (radius 0), two rule widths: 2 (`--rule`, in the `text` colour) between regions, around sheets and on command buttons; 1 between rows. 3 for focus and for a heads-up panel's edge. A faint 40-wide column grid lies behind the page.
+- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal), square corners (radius 0), two rule widths: 2 (`--rule`, in the `text` colour) between regions and around sheets; 1 between rows and around buttons. No rules between the strip's counters: space separates them. 3 for focus and for a heads-up panel's edge. A faint 40-wide column grid lies behind the page. Capitals only for labels, banner words and status words; buttons and tabs are in sentence case (owner's design decision of 2026-10-10: one thing shouts at a time).
 
 ### 6.2 Type
 
@@ -2115,7 +2121,7 @@ The page looks like a poster at night: ink rules on a dark ground, numbers set l
 | Role | Stage size | Laptop size | Used for |
 | --- | --- | --- | --- |
 | Display | 168 | 120 | The four large Swarm numbers (serif) |
-| Counter | 84 | 56 | Strip values and the masthead name (serif); from 1100 to 1599 wide the strip values follow the window (3.9vw, at least 40) |
+| Counter | 84 | 56 | The two hero numbers, Landed and Go-arounds, and the masthead name (serif); from 1100 to 1599 wide they follow the window (3.9vw, at least 40). The other strip values, and every strip value in Replay, are at Title size. |
 | Title | 40 | 32 | Sheet titles, card titles in the sheet, headings (serif) |
 | Intent | 30 | 24 | Intent text on attempt cards (serif), the pool frame's caption (serif italic), banner words, the thesis line |
 | Status | 22 | 18 | Status words, heads-up before and after (code face) |
@@ -2159,7 +2165,7 @@ Easing `cubic-bezier(0.2, 0.8, 0.2, 1)` for everything. "Reduced" is what happen
 
 | What | Motion | Reduced |
 | --- | --- | --- |
-| A change lands | The attempt card shows "Landed" for 1.2 s, shrinks to a chip and travels to the edge of the pool frame (720 ms). The frame's edge glows in `accent` for 1.2 s. | The attempt card shows "Landed" for 2 s and leaves without moving. The frame gets a static `accent` outline for 2 s. |
+| A change lands | The attempt card shows "Landed" for 1.2 s, shrinks to a chip and travels to the edge of the pool frame (720 ms). The frame's edge glows in `accent` with a soft halo that fades over 1.2 s, and the Landed value glows once in `holds`. | The attempt card shows "Landed" for 2 s and leaves without moving. The frame gets a static `accent` outline for 2 s. |
 | A light changes | Cross-fade 200 ms, then one ring that grows and fades (600 ms). | Changes at once. A 2-wide outline for 1.5 s. |
 | An attempt card joins or leaves the top group | Slides to its place (240 ms). | Moves at once. |
 | A sheet or the drawer opens or closes | Fade and a 16 rise (240 ms). | Appears at once. |

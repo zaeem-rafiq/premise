@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { text } from "../../../copy/strings.ts";
 import { keyShort } from "../../../copy/names.ts";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
-import { tileCells, tileKeepsExtension, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
+import { dirOfPath, tileCells, tileKeepsExtension, tileMarks, tileName, type TileCell } from "./tiles-plan.ts";
 import { adoptCss } from "../../styles/adopt.ts";
 
 /** How long a landed change glows and a removed file keeps its tile (6.4, 3.7). */
@@ -182,6 +182,19 @@ export function FileTiles(props: FileTilesProps) {
 
   const empty = Object.keys(state.files).length === 0;
 
+  // 3.7 (2026-10-10): when every file of a directory is `held`, the directory's label says so
+  // once and its files carry no tag of their own.
+  const heldDirs = new Set<string>();
+  {
+    const allHeld = new Map<string, boolean>();
+    for (const file of Object.values(state.files)) {
+      const dir = dirOfPath(file.path);
+      allHeld.set(dir, (allHeld.get(dir) ?? true) && file.tier === "held");
+    }
+    // The root's label names a place, not a folder: its files keep their own tags.
+    for (const [dir, held] of allHeld) if (held && dir !== "") heldDirs.add(dir);
+  }
+
   const renderCell = (cell: TileCell, i: number): ReactNode => {
     if (cell.kind === "gap") return <div key={`gap-${i}`} className="tile-gap" aria-hidden />;
     if (cell.kind === "label") {
@@ -189,11 +202,18 @@ export function FileTiles(props: FileTilesProps) {
       return (
         <div key={`label-${cell.dir}`} className="tile tile-label">
           <span className="tile-name">{cell.dir === "" ? keyShort("listing", "/") : cell.dir}</span>
-          {marks.readers > 0 && (
-            <span className="tile-marks">
-              {Array.from({ length: marks.readers }, (_, k) => (
-                <span key={k} className="tile-mark tile-mark-r" />
-              ))}
+          {(marks.readers > 0 || heldDirs.has(cell.dir)) && (
+            <span className="tile-foot">
+              <span className="tile-marks">
+                {Array.from({ length: marks.readers }, (_, k) => (
+                  <span key={k} className="tile-mark tile-mark-r" />
+                ))}
+              </span>
+              {heldDirs.has(cell.dir) && (
+                <span className="tile-tag tile-tag-held" title={text("tile.held.tip")}>
+                  {text("tile.held")}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -227,7 +247,7 @@ export function FileTiles(props: FileTilesProps) {
             ))}
             {marks.more > 0 && <span className="tile-more-marks">{text("tile.more_marks", { n: marks.more })}</span>}
           </span>
-          {file.tier === "held" && !removed && (
+          {file.tier === "held" && !removed && !heldDirs.has(dirOfPath(file.path)) && (
             <span className="tile-tag tile-tag-held" title={text("tile.held.tip")}>
               {text("tile.held")}
             </span>

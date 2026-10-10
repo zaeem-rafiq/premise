@@ -114,6 +114,21 @@
   margin-right: 2px;
 }
 
+.attempt-card__holds {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--size-small, 14px);
+  color: var(--muted, #a8bcc6);
+  white-space: nowrap;
+}
+
+.attempt-card__holds-dot {
+  width: 12px;
+  height: 12px;
+  color: var(--holds, #5bd68f);
+}
+
 .attempt-card__more {
   font-size: var(--size-small, 14px);
   color: var(--muted, #a8bcc6);

@@ -66,10 +66,23 @@ const SIZES = [
     railW: 696,
     header: 88,
     strip: 136,
+    replayStrip: 92,
     banner: 40,
     pad: 24,
   },
-  { name: "laptop", w: 1440, h: 900, poolW: 832, frameH: 468, railW: 560, header: 72, strip: 112, banner: 36, pad: 16 },
+  {
+    name: "laptop",
+    w: 1440,
+    h: 900,
+    poolW: 832,
+    frameH: 468,
+    railW: 560,
+    header: 72,
+    strip: 112,
+    replayStrip: 76,
+    banner: 36,
+    pad: 16,
+  },
 ] as const;
 
 /** 2.1 as amended on 2026-10-09: the Replay bar is two rows, the transport row (56, laptop 48)
@@ -82,7 +95,8 @@ const REPLAY_BAR = { stage: { transport: 56, chapters: 52 }, laptop: { transport
  * when its full width would leave the tiles less than that row. */
 function replayFrame(size: (typeof SIZES)[number]): { width: number; height: number } {
   const bar = REPLAY_BAR[size.name].transport + REPLAY_BAR[size.name].chapters;
-  const area = size.h - size.header - size.strip - size.banner - bar - 2 * size.pad;
+  // 2.7 (2026-10-10): in Replay the number band is short (stage 92, laptop 76).
+  const area = size.h - size.header - size.replayStrip - size.banner - bar - 2 * size.pad;
   // LY1 (2026-10-10): the tiles keep one row (64) at laptop size and two rows (112) at stage size.
   const tilesMin = size.name === "stage" ? 112 : 64;
   const height = Math.min(size.frameH, area - 40 - tilesMin);
@@ -117,7 +131,7 @@ for (const size of SIZES) {
     const rail = await box(page.locator(".rail"));
     expect(Math.abs(rail.width - size.railW)).toBeLessThanOrEqual(1);
     const strip = await box(page.locator(".strip"));
-    expect(Math.abs(strip.height - size.strip)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strip.height - size.replayStrip)).toBeLessThanOrEqual(1);
 
     // The pool column uses the height it has: the stage fills the column's own box, the
     // tiles region keeps at least its one guaranteed row under it (LY1).

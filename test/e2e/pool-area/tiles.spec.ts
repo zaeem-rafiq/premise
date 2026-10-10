@@ -173,7 +173,8 @@ test.describe("the file tiles (3.7)", () => {
     }
     // The held path carries tile.held; the listing premise marks the creatures/ label;
     // fish.js carries a_T's reader ring and writer square.
-    await expect(cells.filter({ hasText: "policy" })).toContainText("Held");
+    // 3.7 (2026-10-10): a directory whose files are all held says Held once, on its label.
+    await expect(page.locator(`${TILES} .tile-label`, { hasText: ".premise/" })).toContainText("Held");
     await expect(page.locator(`${TILES} .tile-label`, { hasText: "creatures/" }).locator(".tile-mark-r")).toHaveCount(
       1,
     );

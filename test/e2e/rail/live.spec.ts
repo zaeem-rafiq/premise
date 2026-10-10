@@ -194,7 +194,7 @@ test.describe("the attempt card over a live stream", () => {
     await expect(card.getByText("On main as landing 1.")).toBeVisible();
   });
 
-  test("CO14: non-holds lights are never hidden behind light.more", async ({ page }) => {
+  test("CO14/CO14a: non-holds lights are never hidden; more than 3 holds become one count", async ({ page }) => {
     const frames: Frame[] = [POOL_STATE, INTENT, OPENED, state(4, "opened", "working")];
     // changed + confirm + checking, then 13 holds: 16 lights for a LIGHTS_MAX of 14.
     frames.push(recorded(5, "fish.js#c"), judged(6, "fish.js#c", "repair"));
@@ -203,9 +203,11 @@ test.describe("the attempt card over a live stream", () => {
     for (let index = 0; index < 13; index += 1) frames.push(recorded(11 + index, `f.js#h${index}`));
     await serveStream(page, frames);
     await page.goto(`/p/${POOL}`);
-    const lights = page.locator('.attempt-card[data-attempt-id="a_1"] .light');
-    await expect(lights).toHaveCount(14);
-    await expect(page.locator(".attempt-card__more")).toHaveText("+2");
+    // CO14a: 13 holds (11 drawable, 2 behind the cap) are one count; the three exceptions stay drawn.
+    const lights = page.locator('.attempt-card[data-attempt-id="a_1"] .attempt-card__lights .light');
+    await expect(lights).toHaveCount(3);
+    await expect(page.locator(".attempt-card__holds")).toHaveText("13 hold");
+    await expect(page.locator(".attempt-card__more")).toHaveCount(0);
     // Entity keys read "{name} in {file}" (keyLabel, 03 5.2); the words are the 5.3 table's.
     for (const name of ["c in fish.js: Changed.", "k in fish.js: Needs a confirm.", "s in fish.js: Being checked."]) {
       await expect(page.locator(`.light[aria-label^="${name}"]`)).toHaveCount(1);

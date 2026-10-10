@@ -31,7 +31,8 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
     // Replay bar 1920x108: the transport row (56) above the chapter row (52).
     expect(Math.abs(header.width - 1920)).toBeLessThanOrEqual(1);
     expect(Math.abs(header.height - 88)).toBeLessThanOrEqual(1);
-    expect(Math.abs(strip.height - 136)).toBeLessThanOrEqual(1);
+    // 2.7 (2026-10-10): in Replay the number band is 92 at stage.
+    expect(Math.abs(strip.height - 92)).toBeLessThanOrEqual(1);
     expect(Math.abs(banner.height - 40)).toBeLessThanOrEqual(1);
     expect(Math.abs(replayBar.width - 1920)).toBeLessThanOrEqual(1);
     expect(Math.abs(replayBar.height - 108)).toBeLessThanOrEqual(1);
@@ -63,9 +64,10 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
         caption: pick(".pf-caption"),
       };
     });
-    // 6.2 stage (2026-10-10): counter 84 (strip values, the masthead name), small 16 (strip
-    // labels, command buttons), intent 30 (banner words).
-    expect(sizes.counter).toBe(84);
+    // 6.2 stage (2026-10-10): counter 84 (Landed and Go-arounds live, the masthead name); in
+    // Replay every strip value reads at Title (40); small 16 (strip labels, command buttons),
+    // intent 30 (banner words).
+    expect(sizes.counter).toBe(40);
     expect(sizes.stripLabel).toBe(16);
     expect(sizes.bannerWord).toBe(30);
     expect(sizes.appName).toBe(84);

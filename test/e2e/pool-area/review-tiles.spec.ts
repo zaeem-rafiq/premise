@@ -75,7 +75,8 @@ for (const [size, width, height] of [
   for (const theme of ["dark", "light"] as const) {
     test(`D21 VD11/5.3/6.3: Held uses the waiting-for-owner colour at ${size} ${theme}`, async ({ page }) => {
       await openTiles(page, width, height, theme);
-      const held = page.locator('.tile[title="world/energy.js"] .tile-tag');
+      // 3.7 (2026-10-10): every file of world/ is held, so its label carries the one tag.
+      const held = page.locator(".tile-label", { hasText: "world/" }).locator(".tile-tag");
       const expected = theme === "dark" ? "rgb(255, 200, 87)" : "rgb(138, 90, 0)";
       await expect(held).toHaveText("Held");
       await expect(held).toHaveCSS("color", expected);

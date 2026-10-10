@@ -7,6 +7,7 @@
 //
 // The calls (each typed in `src/protocol/internal.ts`): `POST /internal/reserve` (SE6),
 // `POST /internal/settle` (SE6a), `POST /internal/release` (the attempt's agent slot),
+// `POST /internal/claim` (07-mcp MC20: an outside attempt's slot, with no model call),
 // `POST /internal/may-start` (SE8), `POST /internal/register-pool` (EV2a — the pool's first
 // `limits` event is owed at once), `POST /internal/kill` and the owner route's `POST /api/kill`
 // (SE10-SE12), `GET /killed` (SE10, the swarm launcher's check). `/internal/state` and
@@ -29,6 +30,7 @@ import { apply, initialState, nextWakeup } from "../../core/gate/index.ts";
 import type {
   GateAnswer,
   GateCall,
+  GateClaimRequest,
   GateEffect,
   GateMayStartRequest,
   GateRegisterPoolRequest,
@@ -91,6 +93,11 @@ function asSettle(body: unknown): GateSettleRequest | null {
 function asRelease(body: unknown): GateReleaseRequest | null {
   if (!isRecord(body) || typeof body.attempt_id !== "string") return null;
   return { attempt_id: body.attempt_id };
+}
+
+function asClaim(body: unknown): GateClaimRequest | null {
+  if (!isRecord(body) || typeof body.attempt_id !== "string" || typeof body.pool !== "string") return null;
+  return { attempt_id: body.attempt_id, pool: body.pool };
 }
 
 function asRegisterPool(body: unknown): GateRegisterPoolRequest | null {
@@ -204,6 +211,10 @@ export class ModelGate extends DurableObject<Env> {
       case "/internal/release": {
         const request = asRelease(body);
         return { call: request === null ? null : { call: "release", request }, invalid: request === null };
+      }
+      case "/internal/claim": {
+        const request = asClaim(body);
+        return { call: request === null ? null : { call: "claim", request }, invalid: request === null };
       }
       case "/internal/register-pool": {
         const request = asRegisterPool(body);

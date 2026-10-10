@@ -1,0 +1,23 @@
+{
+  "measured_at": "2026-10-10T04:40:33.942Z",
+  "result": {
+    "stamp": "mv1woibj-kvsy",
+    "fork": {
+      "place": "pools",
+      "ms": 7176,
+      "error": null,
+      "polls": 1
+    },
+    "create": {
+      "ok": true,
+      "ready_ms": 2299,
+      "token_ms": 71,
+      "error": null
+    },
+    "cleanup": {
+      "pools/probe-src-mv1woibj-kvsy": true,
+      "pools/probe-fork-mv1woibj-kvsy": true,
+      "attempts/probe-a-mv1woibj-kvsy": true
+    }
+  }
+}

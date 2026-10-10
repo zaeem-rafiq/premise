@@ -112,6 +112,15 @@ export const APP_ROUTES: readonly Route[] = [
   },
 ];
 
+/** The rows `07-mcp.md` section 6 adds to 13.6 (outside agents over MCP): the token route and the
+ * MCP endpoint. Kept apart from `ROUTES`, which is the table of 13.6 as it stands. */
+export const MCP_ROUTES: readonly Route[] = [
+  { method: "POST", paths: ["/api/pools/{pool}/mcp-tokens"], role: "owner", answeredBy: "worker" },
+  { method: "POST", paths: ["/mcp/{pool}"], role: "anyone", answeredBy: "worker" },
+  { method: "GET", paths: ["/mcp/{pool}"], role: "anyone", answeredBy: "worker" },
+  { method: "DELETE", paths: ["/mcp/{pool}"], role: "anyone", answeredBy: "worker" },
+];
+
 // ---- Request and response bodies the routes carry ----
 
 /** `POST /api/session` (SE2): the unlock. */

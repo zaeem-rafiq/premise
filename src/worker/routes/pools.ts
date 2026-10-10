@@ -20,8 +20,9 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
-/** Pool names: a Durable Object name and an Artifacts repo name both take them — lowercase, short. */
-const POOL_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
+/** Pool names: a Durable Object name and an Artifacts repo name both take them — lowercase, short.
+ * PL1's pattern; the MCP token route checks it too (07-mcp MC5). */
+export const POOL_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 type RepoSource = { url: string; branch?: string };
 

@@ -160,6 +160,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "attempt.tag.reopened": { text: "Reopened by {cause: undo, the green line, the owner}" },
   "attempt.same_agent": { text: "Same agent, same conversation." },
   "attempt.tag.right_of_way": { text: "Right of way" },
+  "attempt.tag.mcp": { text: "Over MCP" },
   "attempt.model_changed": {
     text: "A different model is continuing this work. The model that started it was not available.",
   },
@@ -766,13 +767,16 @@ export const SHORTCUT_ROWS: ReadonlyArray<{ key: string; does: string }> = [
  * The labels of the seven boxes of the `about.how` diagram (03 5.12) for this build's features. The
  * diagram carries no other text.
  */
-export function aboutHowBoxes(features: Pick<Features, "green" | "clef" | "attempt_repos">): readonly string[] {
+export function aboutHowBoxes(
+  features: Pick<Features, "green" | "clef" | "attempt_repos"> & Partial<Pick<Features, "mcp">>,
+): readonly string[] {
   // 5.12: a box names a part only when the build has it.
   const green = features.green !== "none";
   return [
     "Worker: this page, the API, and the app server that serves a pool's files by commit",
     "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
-    "Agent (one Durable Object per attempt): the model's tool loop and its whole conversation",
+    "Agent (one Durable Object per attempt): the model's tool loop and its whole conversation" +
+      (features.mcp === true ? ", or the calls of an outside agent over MCP" : ""),
     "Floor (one Durable Object per pool): the event stream this page draws",
     green ? "Workflows: the green line and the Swarm" : "Workflows: the Swarm",
     features.clef ? "Workers AI: the coding models, and Clef for judgments" : "Workers AI: the coding models",
@@ -781,7 +785,8 @@ export function aboutHowBoxes(features: Pick<Features, "green" | "clef" | "attem
   ];
 }
 
-/** The seven boxes of 5.12 for a build that has every part (the table's text). */
+/** The seven boxes of 5.12 as the table writes them: every part the table names (outside agents
+ * over MCP add to box 3 by an amendment of the text below the table, 07-mcp MC24). */
 export const ABOUT_HOW_BOXES: readonly string[] = aboutHowBoxes({ green: "full", clef: true, attempt_repos: true });
 
 /**

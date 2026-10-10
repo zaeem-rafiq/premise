@@ -64,11 +64,12 @@ function specRelated(): string {
 function specLimits(): string[] {
   const content = /The limits list is one file[\s\S]*?Content:\s*\n([\s\S]*?)\n\n/.exec(floor);
   if (content === null) throw new Error("the limits list of 5.12 was not found");
-  const names: Record<"held" | "race" | "undo" | "attempt_repos", string> = {
+  const names: Record<"held" | "race" | "undo" | "attempt_repos" | "mcp", string> = {
     held: "the held card with previews",
     race: "comparing attempts",
     undo: "Undo",
     attempt_repos: "attempt repositories",
+    mcp: "outside agents over MCP",
   };
   const off = (Object.keys(names) as Array<keyof typeof names>).filter((key) => FEATURES[key] === false);
   const lines: string[] = [];
@@ -87,8 +88,13 @@ function specLimits(): string[] {
       if (off.length === 0) continue; // left out when none is off
       line = line.replace("{the names of the features that are off}", off.map((key) => names[key]).join(", "));
     }
-    // The parenthetical notes of lines 7 and 15 are the conditions, not part of the shown line.
-    line = line.replace(/ \(Or:.*\)$/, "").replace(/ \(Left out.*\)$/, "");
+    // Line 16 is shown only while its feature is on (07-mcp).
+    if (line.endsWith("(Only when `features.mcp` is true.)") && !FEATURES.mcp) continue;
+    // The parenthetical notes of lines 7, 15 and 16 are the conditions, not part of the shown line.
+    line = line
+      .replace(/ \(Or:.*\)$/, "")
+      .replace(/ \(Left out.*\)$/, "")
+      .replace(/ \(Only when .*\)$/, "");
     // 5.12: a number in a line is written with a comma every three places.
     const n = (value: number) => value.toLocaleString("en-US");
     lines.push(
@@ -257,9 +263,9 @@ describe("floorJson() (03-floor 4.5)", () => {
     });
   });
 
-  it("features carries the six keys of Features (FJ1) and no other", () => {
+  it("features carries the seven keys of Features (FJ1, with 07-mcp's mcp) and no other", () => {
     expect(Object.keys(json.features).sort()).toEqual(
-      ["attempt_repos", "clef", "green", "held", "race", "undo"].sort(),
+      ["attempt_repos", "clef", "green", "held", "mcp", "race", "undo"].sort(),
     );
   });
 });

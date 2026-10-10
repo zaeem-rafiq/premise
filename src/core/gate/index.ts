@@ -9,7 +9,7 @@
 import type { ModelPlan } from "../../protocol/ports.ts";
 import { limitsDue, registerPool } from "./limits.ts";
 import { setKilled } from "./kill.ts";
-import { mayStart, release } from "./rate.ts";
+import { claim, mayStart, release } from "./rate.ts";
 import { reserve, settle, sweep } from "./reserve.ts";
 import { initialState, type GateState } from "./state.ts";
 import type { GateAnswer, GateCall, GateEffect, GateResult, PriceTable } from "./types.ts";
@@ -17,7 +17,7 @@ import type { GateAnswer, GateCall, GateEffect, GateResult, PriceTable } from ".
 export { initialState } from "./state.ts";
 export type { GateState, Reservation, Bucket, PoolEntry } from "./state.ts";
 export { reservedTotal, realAgents, isAgentModel, RESERVATION_TTL_MS, SLOT_RETRY_MS } from "./state.ts";
-export { take, usedLastMinute, mayStart, release, bucketRate } from "./rate.ts";
+export { take, usedLastMinute, mayStart, release, claim, bucketRate } from "./rate.ts";
 export { reserve, settle, sweep, amountOf } from "./reserve.ts";
 export { setKilled } from "./kill.ts";
 export { registerPool, broadcast, spendChanged, limitsDue, flushLimits, limitsBody } from "./limits.ts";
@@ -33,6 +33,8 @@ export type {
   GateSettleRequest,
   GateSettleResponse,
   GateReleaseRequest,
+  GateClaimRequest,
+  GateClaimResponse,
   GateReleaseResponse,
   GateRegisterPoolRequest,
   GateRegisterPoolResponse,
@@ -72,6 +74,10 @@ export function apply(state: GateState, call: GateCall, now: number, plan: Model
     }
     case "release": {
       const { answer } = release(next, call.request);
+      return { state: next, answer, effects: [] };
+    }
+    case "claim": {
+      const { answer } = claim(next, call.request, plan);
       return { state: next, answer, effects: [] };
     }
     case "register-pool": {

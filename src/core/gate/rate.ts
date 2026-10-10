@@ -4,7 +4,14 @@
 
 import type { ModelPlan } from "../../protocol/ports.ts";
 import { realAgents, SLOT_RETRY_MS, type Bucket, type GateState } from "./state.ts";
-import type { GateMayStartRequest, GateMayStartResponse, GateReleaseRequest, GateReleaseResponse } from "./types.ts";
+import type {
+  GateClaimRequest,
+  GateClaimResponse,
+  GateMayStartRequest,
+  GateMayStartResponse,
+  GateReleaseRequest,
+  GateReleaseResponse,
+} from "./types.ts";
 
 const MINUTE_MS = 60_000;
 
@@ -72,6 +79,17 @@ export function mayStart(state: GateState, req: GateMayStartRequest, plan: Model
     return { ok: true, real_agents: count, max_real_agents: plan.max_real_agents };
   }
   return { ok: false, retry_after_ms: SLOT_RETRY_MS, real_agents: count, max_real_agents: plan.max_real_agents };
+}
+
+/** 07-mcp MC20: an outside attempt takes an agent slot without a model call. The kill switch
+ * refuses first (SE10); a slot the attempt already holds is answered ok; otherwise a full gate
+ * answers the same wait `reserve` would (MG5). No money is reserved and no bucket token is spent. */
+export function claim(state: GateState, req: GateClaimRequest, plan: ModelPlan): { answer: GateClaimResponse } {
+  if (state.killed) return { answer: { ok: false, refused: "killed" } };
+  if (state.slots[req.attempt_id] !== undefined) return { answer: { ok: true } };
+  if (realAgents(state) >= plan.max_real_agents) return { answer: { ok: false, retry_after_ms: SLOT_RETRY_MS } };
+  state.slots[req.attempt_id] = { pool: req.pool };
+  return { answer: { ok: true } };
 }
 
 /** MG5: an Agent releases its slot when its loop goes to waiting or ends. Idempotent. */

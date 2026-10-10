@@ -41,6 +41,17 @@ export type AttemptCardProps = {
 };
 
 /** The status shape of 03 5.3. Decorative: the word beside it carries the state (VD10, AX7). */
+/** CO14a: a collapsed card shows its holds one by one only while there are at most this many;
+ * above it they become one quiet count, and only the lights that need attention stay drawn. */
+const HOLDS_DRAWN_MAX = 3;
+
+/** The lights a collapsed card draws, the holds it counts instead, and what stays behind `+n`. */
+function lightStrip(lights: readonly LightView[], more: number): { shown: LightView[]; holds: number; more: number } {
+  const holds = lights.filter((light) => light.light === "holds").length + more;
+  if (holds <= HOLDS_DRAWN_MAX) return { shown: [...lights], holds: 0, more };
+  return { shown: lights.filter((light) => light.light !== "holds"), holds, more: 0 };
+}
+
 function StatusGlyph({ shape }: { shape: StatusShape }) {
   return (
     <svg
@@ -155,6 +166,7 @@ export function AttemptCard({
   onStop,
 }: AttemptCardProps) {
   const model = cardModel(state, attempt, clock, visitor);
+  const strip = lightStrip(model.lights, model.lightsMore);
   const [expanded, setExpanded] = useState(false);
   // A touched panel stays in the owner's chosen state, even when the global automatic
   // window advances. Manual opens do not count against the CO11 cap.
@@ -228,12 +240,18 @@ export function AttemptCard({
         {model.relies && (
           <span className="attempt-card__lights">
             <span className="attempt-card__relies">{text("attempt.relies")}</span>
-            {model.lights.map((light: LightView) => (
+            {strip.shown.map((light: LightView) => (
               <PremiseLight key={light.id} light={light} />
             ))}
-            {model.lightsMore > 0 && (
-              <span className="attempt-card__more">{text("light.more", { n: model.lightsMore })}</span>
+            {strip.holds > 0 && (
+              <span className="attempt-card__holds">
+                <svg className="attempt-card__holds-dot" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="8" fill="currentColor" />
+                </svg>
+                {text("light.holds_count", { n: strip.holds })}
+              </span>
             )}
+            {strip.more > 0 && <span className="attempt-card__more">{text("light.more", { n: strip.more })}</span>}
           </span>
         )}
         {compact &&

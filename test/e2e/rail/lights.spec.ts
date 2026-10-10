@@ -96,6 +96,13 @@ test.describe("AC14: a light is changed at the landing, holds at the resolving s
     await expect(strip.locator('.light--changed[aria-label*="ENERGY_MAX"]')).toBeVisible();
     await expect(strip.locator(".light--changed")).toHaveCount(0, { timeout: 15_000 });
     // The `refs:` premise's label is "the list of code that uses ENERGY_MAX in world/energy.js".
-    await expect(strip.locator('.light--holds[aria-label*="the list of code that uses ENERGY_MAX"]')).toBeVisible();
+    // CO14a: a_S now holds more than 3 premises, so the strip counts them; the expanded card's
+    // relies-on list still names this one.
+    await expect(card.locator(".attempt-card__holds")).toBeVisible();
+    if ((await card.getAttribute("aria-expanded")) !== "true") await card.click();
+    await expect(card).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      card.locator('.light--list.light--holds[aria-label*="the list of code that uses ENERGY_MAX"]'),
+    ).toBeVisible();
   });
 });

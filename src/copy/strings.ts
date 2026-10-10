@@ -58,6 +58,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "light.flag.edit": { text: "this change edits it" },
   "light.flag.derived": { text: "the new code uses it" },
   "light.more": { text: "+{n}" },
+  "light.holds_count": { text: "{n} hold" },
   "light.tip": { text: '{keyLabel}: {light word}. {flags, joined by ", "}.' },
   "light.blind_spot.tip": {
     text: "The new code uses {keyLabel}, and the agent never read it.",

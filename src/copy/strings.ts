@@ -771,10 +771,13 @@ export function aboutHowBoxes(features: Pick<Features, "green" | "clef" | "attem
   const green = features.green !== "none";
   return [
     "Worker: this page, the API, and the app server that serves a pool's files by commit",
-    "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
+    green
+      ? "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main and the green line"
+      : "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
     "Agent (one Durable Object per attempt): the model's tool loop and its whole conversation",
     "Floor (one Durable Object per pool): the event stream this page draws",
-    green ? "Workflows: the green line and the Swarm" : "Workflows: the Swarm",
+    // 5.12 (amended 2026-10-10): the green line runs on Trunk's `green` timer, not in a Workflow.
+    "Workflows: the Swarm",
     features.clef ? "Workers AI: the coding models, and Clef for judgments" : "Workers AI: the coding models",
     (green ? "Artifacts: main, the green line, and the notes" : "Artifacts: main and the notes") +
       (features.attempt_repos ? "; one repository per attempt for its conversation" : ""),

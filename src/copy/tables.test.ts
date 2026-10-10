@@ -562,7 +562,11 @@ describe("5.12 About", () => {
   // 5.12 (amended 2026-10-07): a box names a part only when the build has it.
   it("5.12: with the green line, Clef and attempt repositories off, boxes 5 to 7 name none of them", () => {
     const boxes = aboutHowBoxes({ green: "none", clef: false, attempt_repos: false });
-    expect(boxes.slice(0, 4)).toEqual(ABOUT_HOW_BOXES.slice(0, 4));
+    expect(boxes[0]).toBe(ABOUT_HOW_BOXES[0]);
+    expect(boxes[1]).toBe(
+      "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main",
+    );
+    expect(boxes.slice(2, 4)).toEqual(ABOUT_HOW_BOXES.slice(2, 4));
     expect(boxes.slice(4)).toEqual([
       "Workflows: the Swarm",
       "Workers AI: the coding models",
@@ -571,8 +575,11 @@ describe("5.12 About", () => {
   });
 
   it("5.12: each part is named exactly when its feature is on", () => {
+    expect(aboutHowBoxes({ green: "static", clef: false, attempt_repos: true })[1]).toBe(
+      "Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main and the green line",
+    );
     expect(aboutHowBoxes({ green: "static", clef: false, attempt_repos: true }).slice(4)).toEqual([
-      "Workflows: the green line and the Swarm",
+      "Workflows: the Swarm",
       "Workers AI: the coding models",
       "Artifacts: main, the green line, and the notes; one repository per attempt for its conversation",
     ]);

@@ -2029,14 +2029,14 @@ Risk lines on the held card (from `Card.risk`, each a whole percent, or "not ava
 | Box | Label |
 | --- | --- |
 | 1 | Worker: this page, the API, and the app server that serves a pool's files by commit |
-| 2 | Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main |
+| 2 | Trunk (one Durable Object per pool): serves every read, records premises, checks them, and is the only writer of main and the green line |
 | 3 | Agent (one Durable Object per attempt): the model's tool loop and its whole conversation |
 | 4 | Floor (one Durable Object per pool): the event stream this page draws |
-| 5 | Workflows: the green line and the Swarm |
+| 5 | Workflows: the Swarm |
 | 6 | Workers AI: the coding models, and Clef for judgments |
 | 7 | Artifacts: main, the green line, and the notes; one repository per attempt for its conversation |
 
-A box names a part only when the build has it: box 5 reads "Workflows: the Swarm" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off).
+A box names a part only when the build has it: box 2 ends "is the only writer of main" when `features.green` is `"none"`; box 6 leaves out ", and Clef for judgments" when `features.clef` is false; box 7 reads "Artifacts: main and the notes" in place of "Artifacts: main, the green line, and the notes" when `features.green` is `"none"`, and leaves out "; one repository per attempt for its conversation" when `features.attempt_repos` is false (amended 2026-10-07: the fixed diagram named parts that the limits list of the same sheet says are off). Box 5 names the Swarm only (amended 2026-10-10 by the owner's decision to build the extensions: the green line runs on Trunk's `green` timer, `01-core.md` 3.3 and GR1, and Trunk moves its ref, GR2; no Workflow is part of it).
 
 The limits list is one file in the repository, shown here and in the README from the same source. A line whose condition is false for the build is left out. Content:
 

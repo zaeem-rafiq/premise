@@ -252,7 +252,10 @@ function liveRow(state: FloorState, attempt: AttemptView): boolean {
  */
 export function line4Of(state: FloorState, attempt: AttemptView, clock: number, visitor: boolean): LineView {
   const quiet = quietFor(attempt, clock);
-  if (quiet >= SLOW_NOTICE_MS) {
+  // FR1 speaks of a model call: a scripted agent calls no model, and an outside agent's client
+  // over MCP is not retried by Premise (07-mcp MC21), so neither shows `attempt.slow`.
+  const callsModel = attempt.agent !== "synthetic" && attempt.model?.startsWith("mcp/") !== true;
+  if (callsModel && quiet >= SLOW_NOTICE_MS) {
     return {
       text: text("attempt.slow", { seconds: Math.floor(quiet / 1_000) }),
       warning: true,

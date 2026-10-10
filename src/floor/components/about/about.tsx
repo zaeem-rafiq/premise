@@ -70,7 +70,9 @@ export function AboutSheet({
           <section>
             <h3>{t("about.run")}</h3>
             <p>
-              {t("about.run.real", { max: floor.pool.max_real_agents, models: models.join(", ") || t("strip.dash") })}
+              {models.length > 0
+                ? t("about.run.real", { max: floor.pool.max_real_agents, models: models.join(", ") })
+                : t("about.run.real.none", { max: floor.pool.max_real_agents })}
             </p>
             <p>{t("about.run.landed", { n: [floor.counters.landed_changes, floor.counters.go_arounds] })}</p>
             <p>{t("about.run.repair", { duration: [percentile(0.5), percentile(0.9)] })}</p>

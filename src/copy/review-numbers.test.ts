@@ -52,6 +52,9 @@ describe("D27 CP5 and 5.2: counted copy", () => {
       "Real agent in the main pool: 1 at most. The limit is the model rate.",
     );
     expect(text("about.run.real", { max: 1, models: "model-a" })).toBe("Real agent: at most 1 at once, on model-a.");
+    expect(text("about.run.real.none", { max: 6 })).toBe(
+      "Real agents: at most 6 at once. No model has been called yet.",
+    );
     for (const agents of [1, 2]) {
       const pools = 1;
       expect(text("swarm.shape", { pools, agents })).toBe(

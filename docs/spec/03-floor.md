@@ -951,7 +951,7 @@ Hover or focus on the cell lists each model's use (`spend.model_line`).
 | Tray | one row per open card that can be answered, oldest first | empty: absent |
 | Tabs | `rail.tab.working`, `rail.tab.landed`, `rail.tab.stopped` with counts | empty texts `rail.empty.*` |
 | Landed tab | one row per landing, newest first: number, kind, change name, time; undo rows (3.12) | opens the Why card |
-| About sheet | three columns: `about.how` (a fixed diagram), `about.run` (counts from the stream: real agents at most, models used, landings, go-arounds, repair time, scripted agents, spend; for attempt repositories `about.forks`, or `about.forks_unknown` before the first `attempt.repo` event, or `about.forks_off` when `features.attempt_repos` is false; `about.trunk_errors` when the count is above 0), `about.limits` (the limits list) and `about.related` | the limits list is built from the same file as the README's limits section |
+| About sheet | three columns: `about.how` (a fixed diagram), `about.run` (counts from the stream: real agents at most, models used (`about.run.real`, or `about.run.real.none` while no model has been called; amended 2026-10-10), landings, go-arounds, repair time, scripted agents, spend; for attempt repositories `about.forks`, or `about.forks_unknown` before the first `attempt.repo` event, or `about.forks_off` when `features.attempt_repos` is false; `about.trunk_errors` when the count is above 0), `about.limits` (the limits list) and `about.related` | the limits list is built from the same file as the README's limits section |
 | Toasts | one sentence, bottom left, for `TOAST_MS`; at most 3 | every toast is also sent to the screen-reader log |
 | Shortcut list | key `?` | 6.6 |
 | Unknown pool | the stream of the pool named in the address answers 404 | `pool.missing` and the link `pool.to_default` (7, row FR30) |
@@ -1717,6 +1717,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `about.how` | How it runs |
 | `about.run` | In this run |
 | `about.run.real` | Real agents: at most {max} at once, on {models}. (for 1: Real agent: at most {max} at once, on {models}.) |
+| `about.run.real.none` | Real agents: at most {max} at once. No model has been called yet. (for 1: Real agent: at most {max} at once. No model has been called yet.) |
 | `about.run.landed` | Landed changes: {n}. Go-arounds: {n}. |
 | `about.run.repair` | Repair time with real agents: median {duration}, p90 {duration}. |
 | `about.run.synthetic` | Scripted agents (SYNTHETIC): {n}. They make no model calls. (for 1: Scripted agent (SYNTHETIC): {n}. It makes no model calls.) |
@@ -2230,7 +2231,7 @@ The owner must be able to tell, from the page alone, what happened, whether to w
 
 | # | Failure | Trigger | The page shows | By itself | The owner can |
 | --- | --- | --- | --- | --- | --- |
-| FR1 | The model is slow | `quietFor(attempt) >= QUIET_NOTICE_MS` | The activity line counts seconds: "Thinking · 14 s". From `SLOW_NOTICE_MS` it is in the `confirm` colour and reads `attempt.slow`. | The Agent retries the model call up to `MODEL_RETRIES` times, then stops (`01-core.md` AG2, AG3). | Wait, or stop the agent (`attempt.stop`). Other attempt cards keep going. |
+| FR1 | The model is slow | `quietFor(attempt) >= QUIET_NOTICE_MS`, for an attempt whose agent calls a model: not a scripted agent (it calls none) and not an outside agent over MCP (its client is not retried; MC21 stops a silent one). Amended 2026-10-10: a held scripted agent read "The model has not answered". | The activity line counts seconds: "Thinking · 14 s". From `SLOW_NOTICE_MS` it is in the `confirm` colour and reads `attempt.slow`. | The Agent retries the model call up to `MODEL_RETRIES` times, then stops (`01-core.md` AG2, AG3). | Wait, or stop the agent (`attempt.stop`). Other attempt cards keep going. |
 | FR2 | A tool step failed | `attempt.step.ok` is false | The activity line with the reason of 5.5. | The agent tries another way. Each try uses its budget. | Nothing. |
 | FR3 | The checks sent a change back | `submit.result.status = rejected` | The submit sentence of 5.7 on the attempt card, in the `confirm` colour. It is not a go-around and the count does not rise. | The agent fixes its work and submits again. | Nothing. |
 | FR4 | An attempt stopped | `attempt.state` to `stopped` with reason `model_error`, `tool_timeout`, `stalled`, `timeout`, `budget`, `spend_cap`, `killed` or `lost` | The attempt card moves to the Stopped tab with the stop sentence of 5.8. The Stopped tab count rises. Toast with the same sentence. | Nothing. | Send the request again from the Stopped attempt card: the button `attempt.again` fills the intent box. |

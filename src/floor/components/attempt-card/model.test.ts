@@ -435,6 +435,13 @@ describe("03-floor 7, rows FR1–FR3: the error overlay of line 4", () => {
     });
   });
 
+  it("FR1: a scripted agent or an outside agent over MCP never reads attempt.slow (it calls no model Premise retries)", () => {
+    for (const extra of [{ agent: "synthetic" }, { model: "mcp/claude-code" }] as const) {
+      const attempt = attemptView({ state: "working", last_event_ts: 2_000, ...extra });
+      expect(line4Of(stateWith(attempt), attempt, 60_000, false).text).not.toContain("The model has not answered");
+    }
+  });
+
   it("FR2: a failed step shows the activity line with its reason, in the warning colour", () => {
     const attempt = attemptView({
       state: "working",

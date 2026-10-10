@@ -598,6 +598,11 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     one: "Real agent: at most {max} at once, on {models}.",
     oneCount: "max",
   },
+  "about.run.real.none": {
+    text: "Real agents: at most {max} at once. No model has been called yet.",
+    one: "Real agent: at most {max} at once. No model has been called yet.",
+    oneCount: "max",
+  },
   "about.run.landed": { text: "Landed changes: {n}. Go-arounds: {n}." },
   "about.run.repair": {
     text: "Repair time with real agents: median {duration}, p90 {duration}.",

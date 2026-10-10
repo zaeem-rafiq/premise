@@ -68,15 +68,26 @@ export type PoolFrameProps = {
  * values so the frame still reads on its own. */
 export const FRAME_CSS = `
 .pf { position: relative; display: flex; flex-direction: column; min-width: 0; }
-.pf-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+.pf-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0;
   font-size: var(--size-body, 16px); color: var(--text, #eaf2f4); }
 .pf-caption-text { color: var(--muted, #a8bcc6); }
-.pf-chip { border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
+.pf-chip { font-size: var(--size-small, 14px);
+  border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   padding: 4px 8px; color: var(--muted, #a8bcc6); }
+/* 2.1/2.8: from laptop width up the caption bar is one row. The caption keeps a readable start,
+ * then a chip gives way; both end in an ellipsis and carry their whole sentence as a tooltip.
+ * Below 1100 (2.9) the bar may wrap, as the narrow layout lets every region grow. */
+@media (min-width: 1100px) {
+  .pf-caption { flex-wrap: nowrap; }
+  .pf-caption-text { flex: 0 1 auto; min-width: 14em; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; }
+  .pf-chip { flex: 0 1 auto; min-width: 5.5em; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; }
+}
 .pf-chip-landing { color: var(--confirm, #ffc857); }
 .pf-chip-stalled { color: var(--changed, #ff7a6b); }
 .pf-spacer { flex: 1; }
-.pf-btn { min-width: 44px; min-height: 44px; padding: 8px 12px;
+.pf-btn { flex: none; min-width: 44px; min-height: 44px; padding: 8px 12px;
   border: var(--border, 1px) solid var(--control, #7c98a8); border-radius: var(--radius, 8px);
   background: transparent; color: var(--text, #eaf2f4); font: inherit;
   font-weight: 600; cursor: pointer; }
@@ -331,10 +342,16 @@ export function PoolFrame(props: PoolFrameProps) {
   return (
     <div className="pf" data-frame={name} ref={rootRef}>
       <div className="pf-caption">
-        <span className="pf-caption-text">{text(caption.id, caption.vars)}</span>
+        <span className="pf-caption-text" title={text(caption.id, caption.vars)}>
+          {text(caption.id, caption.vars)}
+        </span>
         {pending > 0 && <span className="pf-chip pf-chip-landing">{text("frame.landing", { n: pending })}</span>}
         {poolStopped && <span className="pf-chip">{text("frame.pool_paused")}</span>}
-        {paused && <span className="pf-chip">{text("frame.paused")}</span>}
+        {paused && (
+          <span className="pf-chip" title={text("frame.paused")}>
+            {text("frame.paused")}
+          </span>
+        )}
         {stalled !== null && phase !== "stalled" && (
           <span className="pf-chip pf-chip-stalled">{text(stalled.id, stalled.vars)}</span>
         )}

@@ -1031,6 +1031,9 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
     await end(b, true);
   }
 
+  // Read before beat 10: from there on the page plays the Replay, whose strip shows the recording's spend.
+  const spendAfter = await stripValue("Spend");
+
   // ===== Beat 10: lock (visitor), Play the Replay =====
   {
     const b = await begin(10);
@@ -1089,7 +1092,6 @@ test("rehearsal: the beat sheet with the canned cast", async ({ page }, testInfo
   }
 
   // ===== The record =====
-  const spendAfter = await service.getJson("/floor.json").then(() => stripValue("Spend"));
   const all = await refresh().catch(() => events);
   const total = Math.round(clock());
   const summary = {

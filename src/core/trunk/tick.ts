@@ -47,6 +47,7 @@ import { triageOutcome } from "../classify/triage.ts";
 import { policyTier, submitIdOf, changedPaths } from "./submit.ts";
 import type { HeadsUpCause } from "./landing.ts";
 import { buildsPlain } from "./plain.ts";
+import { armGreen } from "./green.ts";
 import { metaGet } from "./schema.ts";
 
 import { planUndo } from "../undo/plan.ts";
@@ -930,6 +931,8 @@ export function pushOk(pool: Pool): void {
   if (buildsPlain(pool)) {
     pool.sql.exec("INSERT OR REPLACE INTO timers (kind, key, due_at) VALUES ('plain', '', ?)", pool.now());
   }
+  // GR1: the green line verifies off the landing path too — the `green` timer carries it.
+  armGreen(pool);
   pool.outbox.pushed_at = pool.now();
   pool.outbox.state = "pushed";
   pool.outbox = null;

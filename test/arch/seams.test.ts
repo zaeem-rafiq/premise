@@ -107,6 +107,10 @@ describe("the seams and wiring modules of 04-build-plan 3.2", () => {
     expect([...engineTable().entries.keys()].sort()).toEqual(
       [
         // IR3: the import job's slices commit through `import_step` on the `rebuild` timer.
+        // 11.5: the `green` timer's entry names the next commit to verify, `green_done` applies
+        // the verification's answer (`green.verified`, `green.advanced`).
+        "green",
+        "green_done",
         "import_step",
         "open_attempt",
         "open_intent",

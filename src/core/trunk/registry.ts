@@ -31,6 +31,7 @@ import { canChooseRace, createIntent, raceCostDone, refreshRaceCandidates } from
 import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse } from "../../protocol/internal.ts";
 import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
+import { greenDone, greenStart, type GreenStart } from "./green.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, openCard, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
@@ -56,7 +57,7 @@ export type PoolOptions = {
   switches?: { CLEF_TRIAGE?: "on" | "off" };
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
-  features?: { held?: boolean };
+  features?: { held?: boolean; green?: "none" | "static" | "full" };
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -249,6 +250,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
   // FJ1: `features.held` comes from the build (the caller passes FEATURES.held); a pool created
   // under a direct engine call keeps that default, but an explicit false always wins.
   pool.featuresHeld = opts.features?.held ?? pool.meta.get("features_held") === "1";
+  // FJ1/GR5: the build's `features.green`; a direct engine call without it runs no green line.
+  pool.featuresGreen = opts.features?.green ?? "none";
   // LG1: an imported pool (`app` "", 06-repos IR2/IR8) works in IMPORT_LANGUAGES; the tide
   // pool and any other seeded pool keep 2.1's set.
   pool.languages = pool.meta.get("app") === "" ? IMPORT_LANGUAGES : TIDEPOOL_LANGUAGES;
@@ -448,6 +451,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     killed: opts.killed === true,
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
+    featuresGreen: opts.features?.green ?? "none",
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     savedMeta: new Map(),
     // `openPool` re-derives this from `meta.app` once the store is read; a fresh map starts
@@ -1572,6 +1576,16 @@ export class Trunk {
   /** PM6's `plain_done`: the pushed commit is `main` of `<pool>-plain`; emits `plain.updated`. */
   plainDone(input: { commit: string; remote: string }): Record<string, unknown> {
     return wrapCall(this.pool, () => plainDone(this.pool, input));
+  }
+
+  /** 11.5's `green` timer: the next commit to verify, or `idle` (GR1, GR1a). */
+  green(): GreenStart {
+    return wrapCall(this.pool, () => greenStart(this.pool));
+  }
+
+  /** The answer of one green-line run (GR2 to GR4): `green.verified`, and on a pass `green.advanced`. */
+  greenDone(input: Parameters<typeof greenDone>[1]): Record<string, unknown> {
+    return wrapCall(this.pool, () => greenDone(this.pool, input));
   }
 
   restart(args: { remote_main: "old" | "new" | "other"; remote_notes?: "old" | "new" | "other" }): string {

@@ -130,7 +130,8 @@ export type StripCell = {
 
 import { STRINGS, text } from "../../copy/strings.ts";
 import { fill } from "../../copy/fill.ts";
-import { money, clock as clockText, duration } from "../../copy/format.ts";
+import { money, clock as clockText, duration, landingLabel } from "../../copy/format.ts";
+import { greenCheckLabel } from "../../copy/checks.ts";
 import { modelName } from "../../copy/names.ts";
 
 /** The `alt` form of a copy id (5.11), or its `text` when it has none. */
@@ -419,17 +420,18 @@ export function bannerList(
   if (greenRed(state)) {
     const last = state.green.last!;
     const revert = Object.values(state.undo).find((entry) => entry.cause === "revert");
-    const failed = last.failed.map((check) => check.name).join(", ");
+    // 5.7: a failed check is shown by its label, never by its name; {landing} is a landing label.
+    const failed = last.failed.map((check) => greenCheckLabel(check.name, check.code)).join(", ");
     rows.push({
       id: "banner.green_red",
       word: bannerWord("banner.green_red"),
       sentence:
         revert === undefined
-          ? altText("banner.green_red", { landing: last.seq, "failed checks": failed })
+          ? altText("banner.green_red", { landing: landingLabel(last.seq), "failed checks": failed })
           : text("banner.green_red", {
-              landing: last.seq,
+              landing: landingLabel(last.seq),
               "failed checks": failed,
-              landings: revert.reverted.map((seq) => `#${seq}`).join(", "),
+              landings: revert.reverted.map(landingLabel).join(", "),
             }),
       tone: "confirm",
     });

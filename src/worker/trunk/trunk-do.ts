@@ -26,6 +26,7 @@ import { applyShellSchema, metaAll, metaGet, metaSet, pendingEvents, sqlOf, time
 import { runRebuildJob } from "./rebuild-job.ts";
 import { runImportJob } from "./import-job.ts";
 import { runPlainJob } from "./plain-runner.ts";
+import { runGreenJob } from "./wiring/green.ts";
 import { runPreviewJob } from "./preview-runner.ts";
 import { runRaceCostJob } from "./race-cost-runner.ts";
 import { poolRepoName } from "../repos.ts";
@@ -661,6 +662,22 @@ export class Trunk extends DurableObject<Env> {
           async (name, input) => {
             const r = await this.#callEngineEntry(name, input, now);
             if ("error" in r) throw new Error(`plain apply ${name} failed`);
+            return r.result;
+          },
+          undefined,
+          now,
+        );
+        await this.#postCommit();
+      },
+      // GR1: a verification never blocks a landing — its failures leave `trunk.error` and a
+      // retry inside the job, and a throw is re-armed by the alarm's catch (AL2).
+      green: async (now) => {
+        await runGreenJob(
+          this.env,
+          this.ctx,
+          async (name, input) => {
+            const r = await this.#callEngineEntry(name, input, now);
+            if ("error" in r) throw new Error(`green apply ${name} failed`);
             return r.result;
           },
           undefined,

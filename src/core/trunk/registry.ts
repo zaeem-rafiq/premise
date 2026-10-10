@@ -67,7 +67,7 @@ export type PoolOptions = {
   switches?: { CLEF_TRIAGE?: "on" | "off"; CLEF_RISK?: "on" | "off" };
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
-  features?: { held?: boolean; green?: "none" | "static" | "full" };
+  features?: { held?: boolean; green?: "none" | "static" | "full"; text_merge?: boolean };
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -465,6 +465,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     syncTriage: opts.syncTriage ?? null,
     featuresHeld: opts.features?.held === true,
     featuresGreen: opts.features?.green ?? "none",
+    featuresTextMerge: opts.features?.text_merge === true,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     savedMeta: new Map(),
     // `openPool` re-derives this from `meta.app` once the store is read; a fresh map starts

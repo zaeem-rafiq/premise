@@ -304,6 +304,7 @@ export type Pool = {
   syncTriage: SyncTriage | null; // the pool's synchronous triage port (S6a): ScriptedTriage
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   featuresGreen: "none" | "static" | "full"; // features.green (FJ1, GR5): which green line runs
+  featuresTextMerge: boolean; // features.text_merge (FJ1): the plain-merge pool merges three ways (PM3a)
   meta: Map<string, string>;
   /** Values loaded or committed by the last call; updated only after the transaction commits. */
   savedMeta: Map<string, string>;

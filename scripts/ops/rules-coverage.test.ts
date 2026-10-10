@@ -12,6 +12,7 @@ const ENABLED: Features = {
   clef: true,
   attempt_repos: true,
   mcp: true,
+  text_merge: true,
 };
 import {
   acceptanceCheckIds,

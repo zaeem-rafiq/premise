@@ -120,11 +120,12 @@ describe("the protocol module's fixed sets (plan 2.1, acceptance item 3)", () =>
     expect([...CARD_OPTIONS]).toEqual(spec);
   });
 
-  it("FEATURE_KEYS holds the 7 keys of Features (FJ1, with the mcp key 07-mcp added)", () => {
+  // FJ1: six keys, `mcp` (07-mcp) and `text_merge` (PM3a), both added 2026-10-10.
+  it("FEATURE_KEYS holds the 8 keys of Features (FJ1)", () => {
     const block = /type Features = \{([\s\S]*?)\};/.exec(core);
     if (block === null) throw new Error("type Features not found");
     const keys = [...(block[1] ?? "").matchAll(/^\s*(\w+):/gm)].map((m) => m[1] ?? "");
-    expect(keys).toHaveLength(7);
+    expect(keys).toHaveLength(8);
     expect([...FEATURE_KEYS]).toEqual(keys);
   });
 });

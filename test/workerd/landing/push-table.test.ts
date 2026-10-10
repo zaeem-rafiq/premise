@@ -155,7 +155,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
     worker.setGitFault(() => ({ action: "forward" }));
     await worker.runAlarm(POOL, FAR());
-    await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed"), 30_000);
+    // The landing's batch (1): the seed's batch 0 was pushed before the fault, so any
+    // `batch.pushed` would end the wait before the retry ran.
+    await waitFor(
+      async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed" && e.batch_id === 1),
+      30_000,
+    );
 
     // LP6: the retry sent the same stored pack bytes and only the notes command.
     const list = pushes(POOL);
@@ -175,7 +180,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
     worker.setGitFault(() => ({ action: "forward" }));
     await worker.runAlarm(POOL, FAR());
-    await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed"), 30_000);
+    // The landing's batch (1): the seed's batch 0 was pushed before the fault, so any
+    // `batch.pushed` would end the wait before the retry ran.
+    await waitFor(
+      async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed" && e.batch_id === 1),
+      30_000,
+    );
 
     const list = pushes(POOL);
     expect(list[list.length - 1]!.commands?.map((c) => c.ref)).toEqual([MAIN_REF]);
@@ -193,7 +203,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
     worker.setGitFault(() => ({ action: "forward" }));
     await worker.runAlarm(POOL, FAR());
-    await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed"), 30_000);
+    // The landing's batch (1): the seed's batch 0 was pushed before the fault, so any
+    // `batch.pushed` would end the wait before the retry ran.
+    await waitFor(
+      async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed" && e.batch_id === 1),
+      30_000,
+    );
 
     // LP6: the retry's commands are the whole batch and its pack is the stored bytes, not a rebuild.
     const list = pushes(POOL);
@@ -279,7 +294,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
     worker.setGitFault(() => ({ action: "forward" }));
     await worker.runAlarm(POOL, FAR());
-    await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed"), 30_000);
+    // The landing's batch (1): the seed's batch 0 was pushed before the fault, so any
+    // `batch.pushed` would end the wait before the retry ran.
+    await waitFor(
+      async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed" && e.batch_id === 1),
+      30_000,
+    );
     const landing = (await worker.events(POOL)).find((e) => e.type === "landing.landed") as { commit: string };
     expect(worker.refs(POOL).main).toBe(landing.commit);
   }, 90_000);
@@ -314,7 +334,12 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
 
     worker.setGitFault(() => ({ action: "forward" }));
     await worker.runAlarm(POOL, FAR());
-    await waitFor(async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed"), 30_000);
+    // The landing's batch (1): the seed's batch 0 was pushed before the fault, so any
+    // `batch.pushed` would end the wait before the retry ran.
+    await waitFor(
+      async () => (await worker.events(POOL)).some((e) => e.type === "batch.pushed" && e.batch_id === 1),
+      30_000,
+    );
   }, 90_000);
 
   it("the seed batch too: a dropped answer after the seed's main applied still marks it pushed", async () => {

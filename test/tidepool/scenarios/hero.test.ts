@@ -3,7 +3,10 @@
 // `tidepool-auto` (the Appendix A rows A3 to A7, A9, A10, A11 and A12). Expected values come
 // from section 7 and Appendix A, never from the implementation (BP1).
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createScratchRepo } from "../../support/git.ts";
 import { SwarmSim, tidepoolAutoFiles, tidepoolFiles, type AgentHandle } from "../../integration/collide/harness.ts";
 import { conduct } from "./conduct.ts";
 
@@ -560,6 +563,55 @@ describe("the self-test verdicts of the hero trees (A3, A4, A5)", () => {
       const crab = crabStatsOf(files, makeReseed(), 3600);
       expect(crab.hidden_share).toBe(1);
       expect(crab.mean_speed).toBe(0);
+    },
+  );
+});
+
+// PM3a (01-core.md 11.7, added 2026-10-10): the hero's landing order 1 played through the real
+// engine, then the plain-merge pool built with `features.text_merge` on. 7.8 says every replay of
+// order 1 succeeds and names the tree; a three-way merge must agree, since the four changes touch
+// four different files. The tree id is checked against `git write-tree` of 7.8's files.
+describe("the plain-merge pool of 7.8 with features.text_merge (PM3a)", () => {
+  it(
+    "PM3a: hero order 1 through the engine: no text conflict, 7.8's tree, the same tree as PM3",
+    { timeout: 60_000 },
+    () => {
+      const s = sim("tidepool");
+      const { conductor } = conduct(s, 1, "tidepool");
+      expect(conductor.done).toBe(true);
+      const off = s.trunk.plain();
+      if (off.state !== "build") throw new Error(`expected a plain build, got ${off.state}`);
+      s.trunk.pool.meta.delete("plain_pending"); // build again from scratch with the switch on
+      s.trunk.pool.featuresTextMerge = true;
+      const on = s.trunk.plain();
+      if (on.state !== "build") throw new Error(`expected a plain build, got ${on.state}`);
+      expect(on.skipped).toEqual([]); // 7.8: the text-conflict count is 0
+      expect(on.through_seq).toBe(off.through_seq);
+      expect(on.tree).toBe(off.tree);
+      // 7.8's tree: ENERGY_MAX = 1, `crab.energy < 30`, `drain(shrimp, 5)` — from the files of `main`
+      // with the two creature lines put back to their old-scale values.
+      const expected = new Map(s.files());
+      expected.set(
+        "creatures/crab.js",
+        expected.get("creatures/crab.js")!.replace("crab.energy < 0.3", "crab.energy < 30"),
+      );
+      expected.set(
+        "creatures/shrimp.js",
+        expected.get("creatures/shrimp.js")!.replace("drain(shrimp, 0.05)", "drain(shrimp, 5)"),
+      );
+      expect(expected.get("world/energy.js")).toContain("export const ENERGY_MAX = 1;");
+      const repo = createScratchRepo("premise-hero-pm3a-");
+      try {
+        for (const [path, content] of expected) {
+          const full = join(repo.directory, path);
+          mkdirSync(dirname(full), { recursive: true });
+          writeFileSync(full, content);
+        }
+        repo.git("add", "-A");
+        expect(on.tree).toBe(repo.git("write-tree"));
+      } finally {
+        repo.remove();
+      }
     },
   );
 });

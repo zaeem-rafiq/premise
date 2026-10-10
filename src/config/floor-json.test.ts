@@ -65,12 +65,13 @@ function specRelated(): string {
 function specLimits(): string[] {
   const content = /The limits list is one file[\s\S]*?Content:\s*\n([\s\S]*?)\n\n/.exec(floor);
   if (content === null) throw new Error("the limits list of 5.12 was not found");
-  const names: Record<"held" | "race" | "undo" | "attempt_repos" | "mcp", string> = {
+  const names: Record<"held" | "race" | "undo" | "attempt_repos" | "mcp" | "text_merge", string> = {
     held: "the held card with previews",
     race: "comparing attempts",
     undo: "Undo",
     attempt_repos: "attempt repositories",
     mcp: "outside agents over MCP",
+    text_merge: "text merge",
   };
   const off = (Object.keys(names) as Array<keyof typeof names>).filter((key) => FEATURES[key] === false);
   const lines: string[] = [];
@@ -89,6 +90,10 @@ function specLimits(): string[] {
       if (off.length === 0) continue; // left out when none is off
       line = line.replace("{the names of the features that are off}", off.map((key) => names[key]).join(", "));
     }
+    // Line 5 (PM3a, added 2026-10-10): its other form while `features.text_merge` is on.
+    const textMergeForm = / \(Or, while `features\.text_merge` is on: (.*)\)$/.exec(line);
+    if (textMergeForm !== null)
+      line = FEATURES.text_merge ? (textMergeForm[1] ?? "") : line.slice(0, textMergeForm.index);
     // Line 17 is shown only while its feature is on (07-mcp).
     if (line.endsWith("(Only when `features.mcp` is true.)") && !FEATURES.mcp) continue;
     // The parenthetical notes of lines 7, 16 and 17 are the conditions, not part of the shown line.
@@ -279,9 +284,9 @@ describe("floorJson() (03-floor 4.5)", () => {
     });
   });
 
-  it("features carries the seven keys of Features (FJ1, with 07-mcp's mcp) and no other", () => {
+  it("features carries the eight keys of Features (FJ1, with 07-mcp's mcp and PM3a's text_merge) and no other", () => {
     expect(Object.keys(json.features).sort()).toEqual(
-      ["attempt_repos", "clef", "green", "held", "mcp", "race", "undo"].sort(),
+      ["attempt_repos", "clef", "green", "held", "mcp", "race", "text_merge", "undo"].sort(),
     );
   });
 });

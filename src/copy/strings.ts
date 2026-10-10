@@ -269,6 +269,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "plain.conflicts.tip": {
     text: "A change that the plain merge could not apply is left out of the right pool and counted here. The count is approximated: Trunk replays each change's edits in order, which is not a full three-way merge.",
   },
+  "plain.conflicts.merged": { text: "Text conflicts in the plain merge: {n}" },
+  "plain.conflicts.merged.tip": {
+    text: "A change that plain git could not merge is left out of the right pool and counted here. Trunk merges each file from three versions, line by line, as git merge-file does. The three are where the agent started, the plain-merge pool, and the agent's own version.",
+  },
   "plain.same": { text: "No change has gone around yet." },
   "plain.loading": { text: "Building the plain-merge pool…" },
   "plain.behind": { text: "This pool is {n} landings behind.", one: "This pool is {n} landing behind." },

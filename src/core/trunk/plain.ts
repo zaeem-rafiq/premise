@@ -9,6 +9,7 @@ import { replayPlainMerge, type PlainLanding } from "../plain/plain.ts";
 import { makeCommit, type GitObject } from "../git/objects.ts";
 import { makeTreeFromFiles } from "../git/tree-files.ts";
 import { buildPack } from "../git/pack.ts";
+import { blobBytes, text as fromUtf8 } from "../sync/bytes.ts";
 import { emitPoolState, event, metaWrite } from "./events.ts";
 import { metaSet } from "./schema.ts";
 import type { Landing, Op, Pool } from "./sets.ts";
@@ -66,7 +67,8 @@ function undoesOf(pool: Pool, l: Landing): number[] {
 }
 
 /** One landing as `replayPlainMerge` needs it (PM1): `ops_first` when the attempt's revision
- * has a row, the landed operations otherwise; undo/revert carry the seqs they reverted. */
+ * has a row, the landed operations otherwise; undo/revert carry the seqs they reverted. An
+ * `ops_first` landing carries its attempt's `opened_seq`, PM3a's fork point. */
 function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
   if (l.kind === "change") {
     if (l.attempt_id !== null) {
@@ -84,6 +86,7 @@ function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
           ops: JSON.parse(String(row.ops)) as Op[],
           opsFirst: true,
           submitted: Number(row.submitted) === 1,
+          forkSeq: pool.attempts.get(l.attempt_id)?.opened_seq ?? l.seq - 1,
         };
       }
     }
@@ -92,13 +95,46 @@ function plainLandingOf(pool: Pool, l: Landing): PlainLanding {
   return { seq: l.seq, kind: l.kind, ops: [], opsFirst: false, submitted: false, undoes: undoesOf(pool, l) };
 }
 
-/** The replay over the seed tree (PM1: "start from the seed" — the head at seq 0). */
+/** The replay over the seed tree (PM1: "start from the seed" — the head at seq 0). With
+ * `features.text_merge` on, PM3a reads the pool's own history, one file map per seq at most. */
 function replayThrough(pool: Pool, throughSeq: number) {
   const landings = pool.landings
     .filter((l) => l.pushed_at !== null && l.seq <= throughSeq)
     .sort((a, b) => a.seq - b.seq)
     .map((l) => plainLandingOf(pool, l));
-  return replayPlainMerge(pool.fileMapAt(0), landings);
+  if (!pool.featuresTextMerge) return replayPlainMerge(pool.fileMapAt(0), landings);
+  const history = poolHistory(pool);
+  return replayPlainMerge(history(0), landings, { textMerge: { history } });
+}
+
+/** PM3a's `history(seq)`: `main` after landing `seq`, built forward from the seed one landing at a
+ * time and kept for the build, so a build reads each landed blob once (not once per seq). */
+function poolHistory(pool: Pool): (seq: number) => ReadonlyMap<string, string> {
+  const landed = [...pool.landings].sort((a, b) => a.seq - b.seq);
+  const maps: Map<string, string>[] = [new Map(pool.fileMapAt(0))];
+  let next = 0; // index into `landed` of the first landing not yet applied
+  return (seq) => {
+    while (next < landed.length && landed[next]!.seq <= seq) {
+      const l = landed[next++]!;
+      const files = new Map(maps[maps.length - 1]!);
+      for (const [path, fo] of l.files) {
+        if (fo.new_oid === "absent") {
+          files.delete(path);
+          continue;
+        }
+        const row = pool.sql.exec("SELECT content FROM blobs WHERE oid = ?", fo.new_oid).toArray()[0];
+        if (row !== undefined) files.set(path, fromUtf8(blobBytes(row.content)));
+      }
+      maps[l.seq] = files;
+      maps.length = Math.max(maps.length, l.seq + 1);
+    }
+    // The newest map at or before `seq` (seqs are dense; a gap holds the map before it).
+    for (let s = Math.min(seq, maps.length - 1); s >= 0; s--) {
+      const files = maps[s];
+      if (files !== undefined) return files;
+    }
+    return maps[0]!;
+  };
 }
 
 /** The deterministic objects a pending spec stands for: replayed files' tree + the commit. */

@@ -7,12 +7,15 @@ import type { Features } from "../protocol/floor-json.ts";
 
 /** The names line 16 uses for a switched-off feature (03-floor 5.12). Green and Clef have their own
  * lines (7 and 8) and are never in it. */
-export const FEATURE_OFF_NAMES: Readonly<Record<"held" | "race" | "undo" | "attempt_repos" | "mcp", string>> = {
+export const FEATURE_OFF_NAMES: Readonly<
+  Record<"held" | "race" | "undo" | "attempt_repos" | "mcp" | "text_merge", string>
+> = {
   held: "the held card with previews",
   race: "comparing attempts",
   undo: "Undo",
   attempt_repos: "attempt repositories",
   mcp: "outside agents over MCP",
+  text_merge: "text merge",
 };
 
 /** Line 7's `{runtime sentence}` by `features.green`. */
@@ -35,13 +38,15 @@ export function limitsList(features: Features): string[] {
     `One Trunk serves one pool. Agents read and write files of at most ${thousands(MAX_FILE_BYTES)} bytes. A repository with more than ${thousands(IMPORT_MAX_ENTRIES)} entries or ${thousands(IMPORT_MAX_TEXT_BYTES)} bytes of text is not imported, and a larger file in an imported repository is kept but cannot be read.`,
     `Real agents are limited by the Workers AI rate limits. This build runs at most ${MAX_REAL_AGENTS} at once.`,
     "Numbers in the Swarm view come from scripted agents. They make no model calls.",
-    "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
+    features.text_merge
+      ? "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product. Each change is merged as git merges a file from three versions, and the version its agent started from is taken from the pool's history."
+      : "The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product, and its count of text conflicts is approximated.",
     "A premise across two pools is not built.",
     features.green === "none"
       ? "The green line is not in this build."
       : `The green line checks ${GREEN_SENTENCE[features.green]}.`,
     `Clef judgments are ${features.clef ? "on" : "off"} in this build.`,
-    "Not built: text merge, audience input.",
+    "Not built: audience input.",
     "References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.",
     // Line 11: the blind spot of LG4 (06-repos.md), references by name.
     "In Python and Go, references are found by name and can be wrong both ways. Every Python or Go file an agent reads from is also watched as a whole, so any change to it asks the agent to confirm.",

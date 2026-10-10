@@ -88,14 +88,14 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - A premise across two pools is not built.
 - The green line is not in this build.
 - Clef judgments are off in this build.
-- Not built: text merge, audience input.
+- Not built: audience input.
 - References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.
 - In Python and Go, references are found by name and can be wrong both ways. Every Python or Go file an agent reads from is also watched as a whole, so any change to it asks the agent to confirm.
 - A number written with no reference to the shared quantity is not caught by rule. If its agent read the quantity, Clef judges it, or the agent takes one confirm turn. If it did not, only the self-test could notice, and that test checks the pool's health, not what a creature was asked to do.
 - Premise shows an agent every piece of code that uses what it changes. It does not prove that the agent adapted all of it.
 - A sweep is recognised from the edits an agent makes, not from the words of the request.
 - After a rebuild from Artifacts, open cards close and agents in flight register again. Landed history is rebuilt in full.
-- Switched off in this build: attempt repositories, outside agents over MCP.
+- Switched off in this build: attempt repositories, outside agents over MCP, text merge.
 
 ## This deployment
 

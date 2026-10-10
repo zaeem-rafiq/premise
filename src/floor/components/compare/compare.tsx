@@ -1,6 +1,7 @@
 // The Compare view of docs/spec/03-floor.md 2.3 and 3.6: the live `main` frame beside the
 // plain-merge frame, both on one seed (CO24a), each with its self-test badge under it
-// (CO25a), then the CO25 list — what differs, the tree-equality line, the approximated count,
+// (CO25a), then the CO25 list — what differs, the tree-equality line, the count of text conflicts
+// ("approximated" only while `features.text_merge` is off, PM3a),
 // Back and the thesis. The list comes only from the stream (compare-plan.ts), never from what
 // the frames draw.
 //
@@ -9,7 +10,7 @@
 // host gives no `onBack`, the Back button dispatches the same key the shell binds to
 // view-compare (`c` of 6.6) — the view closes by the spec's own route.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useState } from "react";
 import type { FloorState } from "../../../protocol/reducer/index.ts";
 import type { CopyVars } from "../../../copy/fill.ts";
 import { text } from "../../../copy/strings.ts";
@@ -18,6 +19,7 @@ import type { FrameStats } from "../pool-frame/frame-driver.ts";
 import { PlainFrame } from "../plain-frame/plain-frame.tsx";
 import { conflictCount, diffLines, plainSameAsLanded } from "./compare-plan.ts";
 import { adoptCss } from "../../styles/adopt.ts";
+import { ShellContext } from "../../app/context.ts";
 
 export type CompareProps = {
   /** The main pool id — the `{pool}` of every `/pool/{pool}/…` address of both frames. */
@@ -97,6 +99,9 @@ export function Compare(props: CompareProps) {
   const lines = useMemo(() => diffLines(state), [state]);
   const sameAsLanded = useMemo(() => plainSameAsLanded(state), [state]);
   const conflicts = conflictCount(state);
+  // CO25 item 4: a three-way merge's count (PM3a) is not approximated. No shell (a bare render)
+  // reads as the build default, off.
+  const merged = useContext(ShellContext)?.settings.features.text_merge === true;
 
   // CO25a: the self-test probe goes out "when both frames have reported stats, and after
   // every swap while Compare view is open". Until both have spoken, each badge reads
@@ -168,8 +173,11 @@ export function Compare(props: CompareProps) {
         {sameAsLanded && <p className="cmp-note cmp-no-diff">{text("plain.no_difference")}</p>}
         <div className="cmp-diff-tail">
           {conflicts !== null && (
-            <p className="cmp-note cmp-conflicts" title={text("plain.conflicts.tip")}>
-              {text("plain.conflicts", { n: conflicts })}
+            <p
+              className="cmp-note cmp-conflicts"
+              title={text(merged ? "plain.conflicts.merged.tip" : "plain.conflicts.tip")}
+            >
+              {text(merged ? "plain.conflicts.merged" : "plain.conflicts", { n: conflicts })}
             </p>
           )}
           <button type="button" className="cmp-back" onClick={() => closeCompare(onBack)}>

@@ -18,4 +18,5 @@ export const FEATURES: Features = {
   clef: false,
   attempt_repos: false,
   mcp: false,
+  text_merge: false,
 };

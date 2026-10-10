@@ -11,7 +11,7 @@ import { PUBLIC_RATE_PER_MIN } from "../protocol/constants.ts";
 import { serveFloorAsset } from "./security/floor-page.ts";
 import { clientAddress, publicReads } from "./security/rate-limit.ts";
 import { credentialKind, originOkFor } from "./security/session.ts";
-import { APP_ROUTES, ROUTES, type Route } from "../protocol/routes.ts";
+import { APP_ROUTES, MCP_ROUTES, ROUTES, type Route } from "../protocol/routes.ts";
 import { wire as wireTrunk } from "./routes/wiring.ts";
 import { wire as wireSwarm } from "./routes/swarm.ts";
 import { wire as wireFloor } from "./floor/wiring.ts";
@@ -60,8 +60,9 @@ const ROUTE_TABLE = routeTable();
 // ---- Route matching ----
 
 /** The last row of `ROUTES` is the pool-files row: the app server's routes of `APP_ROUTES` live under
- * `/pool/`, so the specific templates of both tables are tried first and the catch-all last. */
-const MATCH_ORDER: readonly Route[] = [...ROUTES.slice(0, -1), ...APP_ROUTES, ...ROUTES.slice(-1)];
+ * `/pool/`, so the specific templates of both tables are tried first and the catch-all last. The
+ * MCP rows of 07-mcp section 6 share no path with either. */
+const MATCH_ORDER: readonly Route[] = [...ROUTES.slice(0, -1), ...APP_ROUTES, ...MCP_ROUTES, ...ROUTES.slice(-1)];
 
 /** One template segment: `{name}` matches one non-empty segment part (also inside a segment, as in
  * `~host.{build}.js`). */
@@ -171,9 +172,17 @@ function dispatch(
 /** A scaffold probe: the Worker runs. It is not a route of 01-core 13.6. */
 const HEALTH_PATH = "/api/health";
 
-/** Paths that the API (01-core 13.6) and the app server (02-tidepool 4.2) answer. Never static files. */
+/** Paths that the API (01-core 13.6), the app server (02-tidepool 4.2) and the MCP endpoint
+ * (07-mcp MC1) answer. Never static files. */
 function isWorkerPath(pathname: string): boolean {
-  return pathname === "/api" || pathname.startsWith("/api/") || pathname === "/pool" || pathname.startsWith("/pool/");
+  return (
+    pathname === "/api" ||
+    pathname.startsWith("/api/") ||
+    pathname === "/pool" ||
+    pathname.startsWith("/pool/") ||
+    pathname === "/mcp" ||
+    pathname.startsWith("/mcp/")
+  );
 }
 
 function routeRequest(request: Request, env: Env): Response | Promise<Response> {

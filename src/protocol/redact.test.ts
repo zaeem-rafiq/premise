@@ -34,6 +34,14 @@ describe("redact() (SE5a)", () => {
     expect(redactMatch("a plain error message")).toBeNull();
   });
 
+  it("MC8: removes an MCP token (`pmcp1_<base64url>.<64 hex>`) and names its family", () => {
+    // The shape of 07-mcp MC6, written by hand: a base64url body, a dot, 64 lowercase hex characters.
+    const token = `pmcp1_eyJwIjoidGlkZXBvb2wifQ.${"0123456789abcdef".repeat(4)}`;
+    expect(redact(`initialize with ${token} from claude-code`)).toBe(`initialize with ${REDACTED} from claude-code`);
+    expect(redactMatch(`{"token":"${token}"}`)).toBe("mcp_token");
+    expect(redactMatch("pmcp1_ without a signature")).toBeNull();
+  });
+
   it("removes every occurrence, not only the first", () => {
     const token = "art_v2_abcdef0123456789";
     expect(redact(`${token} and ${token}`)).toBe(`${REDACTED} and ${REDACTED}`);

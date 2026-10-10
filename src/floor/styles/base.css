@@ -456,12 +456,11 @@ a {
   line-height: 0.8;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  animation: counter-flash 1s var(--ease);
 }
-/* CO29 underlines a counter that changes. The run clock is not one of the six counters
- * (3.8) and changes every second, so it is never underlined. */
-.strip-cell[data-cell="strip.clock"] .strip-value {
-  animation: none;
+/* CO29 underlines a counter that changes (strip.tsx `flashUntil` decides which). The run clock
+ * is not one of the six counters (3.8), and a value arriving in place of the dash is not a change. */
+.strip-value--flash {
+  animation: counter-flash 1s var(--ease);
 }
 /* A sentence is not a counter (3.8): status size, wraps within the fixed cell. */
 .strip-value--text {

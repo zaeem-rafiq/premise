@@ -196,9 +196,12 @@ test.describe("defect regressions", () => {
     expect(Math.abs(strip.height - 72)).toBeLessThanOrEqual(1);
   });
 
-  test("the run clock is never underlined; a counter is (CO29)", async ({ page }) => {
+  test("the run clock is never underlined, and a page that just opened underlines no counter (CO29)", async ({
+    page,
+  }) => {
     // The defect: the clock changes every second, so the 1 s underline of CO29 never
     // left it. CO29 is for counters, and 3.8 names the strip "run clock and six counters".
+    // A counter's first value replaces the dash: that is not a change (strip.test.ts covers one).
     await serveStream(page, [poolState(1), intentCreated(2), attemptOpened(3)]);
     await page.goto(`/p/testpool`);
     const motion = (label: string) =>
@@ -208,7 +211,7 @@ test.describe("defect regressions", () => {
         .evaluate((el) => getComputedStyle(el).animationName);
     await expect(page.locator(".strip-cell", { hasText: "Landed" }).locator(".strip-value")).toHaveText("0");
     expect(await motion("Run clock")).toBe("none");
-    expect(await motion("Landed")).toBe("counter-flash");
+    expect(await motion("Landed")).toBe("none");
   });
 });
 

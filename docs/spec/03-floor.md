@@ -2130,19 +2130,19 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 
 ### 6.1 The language
 
-The page looks like a poster at night: ink rules on a dark ground, numbers set like headlines, and plain words in spaced capitals. The light theme is the same poster on paper. (Owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions"; set in one family, the system face, since the owner's "all five" of 2026-10-11.)
+The page speaks the Overview's language in every view (owner's request of 2026-10-11, "do 1 to 3"): glass panels with soft edges and rounded corners, pill controls in sentence case, one system face, numbers set like headlines, and depth instead of rules. The light theme is the same page on paper. (It grew from the owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions".)
 
 - **VD1 (still unless something happened).** Nothing moves by itself except the pool app and the slow "working" pulse. Every other movement is caused by one event and ends within 720 ms.
 - **VD2 (signals).** The five light shapes (circle, diamond, triangle, ring, half circle) are the identity of the product. They are used for premises and for status only, at every size, in both themes. No other icon set is used; the few other marks (cross, tick, two bars, reader ring, writer square) are drawn in the same weight.
 - **VD3 (above and below the water).** The rail holds what is in flight. The pool area holds what is on `main`. A change crosses from the rail to the pool only on `landing.landed`. One vertical ink rule separates the two regions; the pool frame is an ink-edged plate.
 - **VD4 (labels that cannot be missed).** SYNTHETIC uses its own hue and a diagonal stripe that nothing else uses. REPLAY uses the inverse band and a dotted edge that nothing else uses.
-- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal), square corners (radius 0), two rule widths: 2 (`--rule`, in the `text` colour) between regions and around sheets; 1 between rows and around buttons. No rules between the strip's counters: space separates them. 3 for focus and for a heads-up panel's edge. A faint 40-wide column grid lies behind the page. Capitals only for labels, banner words and status words; buttons and tabs are in sentence case (owner's design decision of 2026-10-10: one thing shouts at a time).
+- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal). Corners: 12 for controls and fields (`--radius`), 20 for panels and the pool frame (`--radius-panel`), 24 for sheets, pills (fully round) for buttons, the view switch and the tabs. Edges are 1-wide hairlines in `--glass-edge`; panels fill with `--glass`; sheets and the pool frame cast a soft shadow (`--shade`). 2 (`--rule`) only between two banners on one row; 3 for focus and for a heads-up panel's edge. Capitals only for labels, banner words and section labels; buttons, tabs and status words are in sentence case (owner's design decision of 2026-10-10: one thing shouts at a time).
 
 ### 6.2 Type
 
 - **VD6.** Every text, number and title uses the system interface typeface: `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` (SF Pro on a Mac), so the Overview and the Floor view read as one product. Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. No font file is fetched.
 - **VD7.** Numbers use tabular figures (`font-variant-numeric: tabular-nums`).
-- **VD8.** Numbers, titles, intent text and the masthead name are set at weight 600 to 700 with tight letter spacing (−0.02 to −0.035em). Text is weight 400; status words, labels and buttons 600 to 800. Capitals with letter spacing 0.06 to 0.1em for banner words, section labels and status words. No italics.
+- **VD8.** Numbers, titles, intent text and the masthead name are set at weight 600 to 700 with tight letter spacing (−0.02 to −0.035em). Text is weight 400; status words, labels and buttons 600 to 800. Capitals with letter spacing 0.06 to 0.1em for banner words and strip labels only. No italics.
 
 | Role | Stage size | Laptop size | Used for |
 | --- | --- | --- | --- |

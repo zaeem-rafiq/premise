@@ -15,7 +15,8 @@
   --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: var(--font-text);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --radius: 0px;
+  --radius: 12px;
+  --radius-panel: 20px;
   --border: 1px;
   --rule: 2px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -48,7 +49,10 @@
   --synthetic: #d7a6ff;
   --focus: #ffe08a;
   --on-fill: #0c0d10;
-  --grid: rgb(255 255 255 / 0.028);
+  --glass: rgb(255 255 255 / 0.055);
+  --glass-edge: rgb(255 255 255 / 0.1);
+  --shade: rgb(0 0 0 / 0.45);
+  --depth: rgb(0 12 28 / 0.35);
 }
 
 /* Light theme (6.3): ink on paper. */
@@ -68,7 +72,10 @@
   --synthetic: #6a3bb0;
   --focus: #1b3fa0;
   --on-fill: #ffffff;
-  --grid: rgb(0 0 0 / 0.035);
+  --glass: rgb(255 255 255 / 0.55);
+  --glass-edge: rgb(0 0 0 / 0.08);
+  --shade: rgb(60 50 30 / 0.16);
+  --depth: rgb(0 12 28 / 0.14);
 }
 
 /* Type scale (6.2): laptop first; `data-size="stage"` is the stage size. */

@@ -295,8 +295,8 @@
   background:
     radial-gradient(90% 60% at 30% -10%, rgb(255 255 255 / 0.16), transparent 60%),
     radial-gradient(70% 50% at 80% -5%, rgb(255 255 255 / 0.08), transparent 55%),
-    linear-gradient(to bottom, transparent 55%, rgb(0 18 36 / 0.28));
+    linear-gradient(to bottom, transparent 55%, var(--depth));
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.18),
-    inset 0 0 90px rgb(0 12 28 / 0.45);
+    inset 0 0 90px var(--depth);
 }

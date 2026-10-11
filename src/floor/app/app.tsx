@@ -123,6 +123,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   // Reduced motion starts the pool frames paused (6.4, AC11).
   const [framesPaused, setFramesPaused] = useState(reducedMotion);
   const [startDismissed, setStartDismissed] = useState(false);
+  // RY23 (amended 2026-10-11): after Lock the start card is offered even on a busy pool (beat 10).
+  const [justLocked, setJustLocked] = useState(false);
   const [replayIndex, setReplayIndex] = useState<RecordingIndex | null>(null);
   const [replayMenuOpen, setReplayMenuOpen] = useState(false);
 
@@ -537,7 +539,11 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             onDone={(next) => {
               setOwner(next);
               closeSheet();
-              if (!next) toast(shell.t("owner.locked_toast"));
+              if (!next) {
+                setJustLocked(true);
+                setStartDismissed(false);
+                toast(shell.t("owner.locked_toast"));
+              } else setJustLocked(false);
             }}
             onClose={closeSheet}
           />
@@ -697,7 +703,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             onOpenWhy={table.entries.has("sheet.why") ? (seq) => openSheet({ kind: "why", seq }) : undefined}
             onFloor={() => setView("floor")}
             replayOffer={
-              showStartCard(owner, replay, quietPool(floor, clock), startDismissed)
+              showStartCard(owner, replay, quietPool(floor, clock), startDismissed, justLocked)
                 ? {
                     label: shell.t("start.play", { duration: defaultRecordingDuration() }),
                     onPlay: openDefaultRecording,
@@ -740,7 +746,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                 }
                 onTileWhy={table.entries.has("sheet.why") ? (_path, seq) => openSheet({ kind: "why", seq }) : undefined}
               />
-              {showStartCard(owner, replay, quietPool(floor, clock), startDismissed) && (
+              {showStartCard(owner, replay, quietPool(floor, clock), startDismissed, justLocked) && (
                 <div className="start-overlay">
                   <div className="start-card" role="group" aria-label={shell.t("start.title")}>
                     <h3>{shell.t("start.title")}</h3>

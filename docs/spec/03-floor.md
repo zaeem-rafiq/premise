@@ -2451,7 +2451,7 @@ Any one of these. None needs a key, an account or a tool.
 2. Open the public address. Press "Replay" in the header. Choose a recording.
 3. Open the public address followed by `/replay/hero`. The recording loads and plays.
 
-- **RY23.** The start card is shown to a visitor in live mode on a quiet pool: no attempt is in flight and no landing arrived in the last 60 s. It leaves when the visitor chooses either button, and it never covers the rail.
+- **RY23.** The start card is shown to a visitor in live mode on a quiet pool: no attempt is in flight and no landing arrived in the last 60 s. It is also shown, quiet or not, right after the owner taps Lock in this page (beat 10), until it is dismissed or the page is unlocked again (amended 2026-10-11: in every real-agent rehearsal agents were still finishing at beat 10). It leaves when the visitor chooses either button, and it never covers the rail.
 - **RY24.** The run instructions in the README and in the submission form give way 3 as one line.
 - **RY25.** A browser test runs way 1 and way 3 with no cookies against a deployment whose owner key is not set, and checks that the recording plays to the end with no request other than those of RY1.
 

@@ -12,6 +12,7 @@ export const SUBMIT_CHECK_LABELS: Readonly<Record<string, string>> = {
   parse: "The code parses",
   imports_resolve: "Every import points at something",
   globals_allowed: "Only allowed globals are used",
+  colours_known: "Every colour is one the pen knows",
   derived: "What the change uses and affects is recorded",
   premises_hold: "Everything it relied on is still true",
 };
@@ -57,6 +58,7 @@ export const SUBMIT_ERROR_SENTENCES: Readonly<Record<string, string>> = {
   parse: "the code does not parse",
   imports_resolve: "an import points at nothing, or at something outside the pool",
   globals_allowed: "it uses something the policy does not allow",
+  colours_known: "it names a colour the pen does not know",
 };
 
 /** The error sentence of a failed check: any other name is `the check "{label}" failed`. */

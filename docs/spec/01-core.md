@@ -1130,7 +1130,7 @@ type SubmitResult =
   | { status: "stopped"; reason: string };
 type Check = { name: string; ok: boolean; detail?: string };
 type SubmitError = "empty_change" | "parse_error" | "import_unresolved" | "banned_global"
-                 | "banned_import" | "too_large";
+                 | "banned_import" | "too_large" | "unknown_colour";
 ```
 
 Trunk runs these steps in order and stops at the first that produces a status:
@@ -1145,6 +1145,7 @@ Trunk runs these steps in order and stops at the first that produces a status:
 | CK4 | `parse`: every resulting module parses. | `rejected: parse_error` |
 | CK5 | `imports_resolve`: in the resulting tree, every import and re-export in a touched file, and every import of a touched file from any other file, resolves (6.2). Bare and URL specifiers fail with `banned_import`. | `rejected: import_unresolved` |
 | CK6 | `globals_allowed`: every free global name used by an added or altered entity is in the policy's allow list (10.1). | `rejected: banned_global` |
+| CK6b | `colours_known` (added 2026-10-11): in a pool whose `pen.js` exports a `PALETTE`, no string literal in a touched module names a colour outside it: a CSS colour name, or a shade prefix (`light`, `dark`, `pale`, …) on a colour word. Such a name fails PN2 at run time, which only the self-test sees (S4b); the page drops the call. The error's detail names the path, the names and the palette. | `rejected: unknown_colour` |
 | CK7 | Derived premises are synchronized again (D1, D1b, D2); the late sweep check runs (L1); blind spots (6.4) create one heads-up of result `confirm`. | continues to CK8 |
 | CK8 | `premises_hold`: no premise has status `pending_confirm` or `pending_repair`, and no heads-up of result `confirm` or `repair` is unresolved. (A premise in `pending_triage` does not fail this step; it makes the final status `submitted`.) | `needs_confirm`, or `go_around` if any unresolved heads-up has result `repair` |
 | CK9 | `policy` (10.2): the tier of the touched paths under the policy at head. | `held` when the tier is `held` |

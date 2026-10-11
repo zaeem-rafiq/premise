@@ -17,6 +17,7 @@ import { updateRaceSubmit } from "./race.ts";
 import { ref, syncPremises } from "./premises.ts";
 import type { PremiseRef } from "../../protocol/premise.ts";
 import { MAX_POOL_BYTES, MAX_POOL_FILES } from "../../protocol/constants.ts";
+import { paletteOf, unknownColours } from "./colours.ts";
 
 export type SubmitInner =
   { ok: true; result: object; premises: PremiseRef[] } | { ok: false; error: ToolError; premises: PremiseRef[] };
@@ -214,6 +215,23 @@ export function submitCall(
       }
     }
     okCheck("globals_allowed");
+
+    // CK6b — colours_known: a touched module names no colour outside the pen's palette (PN2).
+    const palette = paletteOf(head.get("pen.js"));
+    if (palette !== null) {
+      for (const path of changed) {
+        const source = rep.files.get(path);
+        if (path === "pen.js" || !path.endsWith(".js") || source === undefined) continue;
+        const names = unknownColours(source, palette);
+        if (names.length > 0) {
+          return result({
+            status: "rejected",
+            errors: [{ code: "unknown_colour", detail: { path, names, palette } }],
+          });
+        }
+      }
+      okCheck("colours_known");
+    }
   }
 
   // CK7 — derived premises again (D1/D1b/D2), late sweep (L1), blind spots (6.4).

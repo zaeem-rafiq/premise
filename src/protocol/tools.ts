@@ -138,6 +138,7 @@ export const SUBMIT_ERRORS = [
   "banned_global",
   "banned_import",
   "too_large",
+  "unknown_colour",
 ] as const;
 
 export type SubmitError = (typeof SUBMIT_ERRORS)[number];

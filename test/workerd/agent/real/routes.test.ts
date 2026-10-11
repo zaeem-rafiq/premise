@@ -55,7 +55,7 @@ function bearer(body: unknown): RequestInit {
 const JELLYFISH_JS = `import { bounce } from "../world/bounds.js";
 import { step, wander } from "../world/movement.js";
 
-const BODY = "cyan";
+const BODY = "teal";
 
 export function spawn() {
   return { vy: 1 };

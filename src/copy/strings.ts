@@ -664,6 +664,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
     text: "{n} scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
     one: "1 scripted agent · it makes no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
   },
+  "banner.synthetic.swarm.idle": {
+    word: "SYNTHETIC",
+    text: "Scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
+  },
   "banner.replay": {
     word: "REPLAY",
     text: 'Recorded {date} · "{title}" · nothing here changes a pool',

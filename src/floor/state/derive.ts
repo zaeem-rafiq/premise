@@ -338,7 +338,13 @@ export function bannerList(
   const bannerCount = opts.view === "swarm" && ran ? state.swarm!.agents : syntheticCount;
 
   if (opts.view === "swarm" || opts.replay.synthetic || state.pool.synthetic) {
-    const id = opts.view === "swarm" ? "banner.synthetic.swarm" : "banner.synthetic";
+    // CO44: before any run Swarm view keeps the banner but names no count.
+    const idle = opts.view === "swarm" && !ran && syntheticCount === 0;
+    const id = idle
+      ? "banner.synthetic.swarm.idle"
+      : opts.view === "swarm"
+        ? "banner.synthetic.swarm"
+        : "banner.synthetic";
     rows.push({
       id,
       word: bannerWord(id),

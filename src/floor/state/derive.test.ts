@@ -294,6 +294,26 @@ describe("3.18 banners", () => {
     expect(rows[0]!.word).toBe("SYNTHETIC");
   });
 
+  // CO44: the banner is there in Swarm view before any run too, without a count of 0 agents
+  // (found on `production`, 2026-10-11: "0 scripted agents · they make no model calls…").
+  it("CO44: Swarm view before any run shows banner.synthetic.swarm.idle, with no count", () => {
+    const state = emptyFloorState();
+    const rows = bannerList(state, 0, { ...LIVE, view: "swarm" });
+    expect(rows[0]!.id).toBe("banner.synthetic.swarm.idle");
+    expect(rows[0]!.word).toBe("SYNTHETIC");
+    expect(rows[0]!.sentence).toBe(
+      "Scripted agents · they make no model calls · same tools, premises and landing path · shared rules land without a tap in this pool",
+    );
+  });
+
+  it("CO44: Swarm view during a run names the run's agents", () => {
+    const state = emptyFloorState();
+    state.swarm = { running: true, agents: 1024, collision_dial: 0, pools: ["s"], ever_ran: true };
+    const rows = bannerList(state, 0, { ...LIVE, view: "swarm" });
+    expect(rows[0]!.id).toBe("banner.synthetic.swarm");
+    expect(rows[0]!.sentence).toContain("1,024 scripted agents");
+  });
+
   it("Replay always sits under banner.replay, first after synthetic (RY3)", () => {
     const state = emptyFloorState();
     const rows = bannerList(state, 0, {

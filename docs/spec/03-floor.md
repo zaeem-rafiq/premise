@@ -1895,6 +1895,7 @@ Checks of a submit (`Check.name`, `01-core.md` 4.9):
 | `imports_resolve` | Every import points at something |
 | `globals_allowed` | Only allowed globals are used |
 | `colours_known` | Every colour is one the pen knows |
+| `selftest` | The pool's self-test passes with the change |
 | `premises_hold` | Everything it relied on is still true |
 | `policy` | Policy: {detail} |
 | any other | {name} |
@@ -1919,6 +1920,7 @@ The event `submit.result` carries the checks, not the error codes of the tool re
 | `imports_resolve` | an import points at nothing, or at something outside the pool |
 | `globals_allowed` | it uses something the policy does not allow |
 | `colours_known` | it names a colour the pen does not know |
+| `selftest` | the pool's self-test fails with it |
 | any other | the check "{label}" failed |
 
 Checks of the green line and of the in-page self-test. The names and codes are the fixed list of `01-core.md` GR8. They are shown in banner 8, on the Why card of a revert, in a revert heads-up and under a self-test badge. A failed check is shown by its label; a kind name that comes with it is shown as text in brackets.

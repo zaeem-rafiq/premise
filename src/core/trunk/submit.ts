@@ -18,6 +18,7 @@ import { ref, syncPremises } from "./premises.ts";
 import type { PremiseRef } from "../../protocol/premise.ts";
 import { MAX_POOL_BYTES, MAX_POOL_FILES } from "../../protocol/constants.ts";
 import { paletteOf, unknownColours } from "./colours.ts";
+import { selftestApplies, selftestKey } from "./selftest.ts";
 
 export type SubmitInner =
   { ok: true; result: object; premises: PremiseRef[] } | { ok: false; error: ToolError; premises: PremiseRef[] };
@@ -231,6 +232,26 @@ export function submitCall(
         }
       }
       okCheck("colours_known");
+    }
+
+    // CK6c — selftest: with features.green "full", the pool's self-test ran on this very tree in
+    // the Worker before this call (selftest.ts); a failure that head does not have (GR3d) sends the
+    // change back. No verdict for this tree — a time-out, an error, head moved — is "skipped":
+    // the verifier being unavailable never blocks a landing.
+    if (selftestApplies(pool)) {
+      const verdict = pool.selftest;
+      const key = selftestKey(pool.meta.get("head_commit") ?? "", rep.files, changed);
+      if (verdict === null || verdict.key !== key || verdict.failed === null) {
+        okCheck("selftest", "skipped");
+      } else if (verdict.failed.length > 0) {
+        checks.push({ name: "selftest", ok: false });
+        return result({
+          status: "rejected",
+          errors: [{ code: "selftest_failed", detail: { failed: verdict.failed } }],
+        });
+      } else {
+        okCheck("selftest");
+      }
     }
   }
 

@@ -47,6 +47,9 @@ import {
 } from "./triage-runner.ts";
 import { initParsers, parse as parseSyntax } from "../parsers/tree-sitter.ts";
 import { setSyntaxParser } from "../../core/entities/syntax.ts";
+import { selftestCandidate, type SelftestVerdict } from "../../core/trunk/selftest.ts";
+import type { IsolateLoader } from "../adapters/verifier/isolate.ts";
+import { isolateSelftestRun, SubmitSelftest } from "./selftest-submit.ts";
 
 /** The context the shell's own entries get: storage, identity and the request they serve. */
 export type EntryContext = {
@@ -344,6 +347,7 @@ export class Trunk extends DurableObject<Env> {
     name: string,
     input: unknown,
     now?: number,
+    selftest?: SelftestVerdict | null,
   ): Promise<{ result: unknown } | { error: Response }> {
     const entry = this.#engine.entries.get(name);
     if (entry === undefined) return { error: notBuilt() };
@@ -358,16 +362,47 @@ export class Trunk extends DurableObject<Env> {
       // of synthetic attempts (TR8). Real attempts never use it.
       // A driven `now` (the alarm's `?now=` hook) is the engine clock for the call, so a test
       // drives time-dependent rules — RW1's lapse — without sleeping (LP5a's convention).
-      const result = this.#sql.run(
-        name,
-        { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES, switches: this.#switches() },
-        (trunk) => entry(input, trunk),
-      );
+      const result = this.#sql.run(name, { ...this.#engineOptions(now), selftest }, (trunk) => entry(input, trunk));
       this.#deliverEvents();
       return { result };
     } catch {
       recordTrunkError(this.ctx, `entry:${name}`, "engine_error");
       return { error: json({ error: { code: "internal_error" } }, 500) };
+    }
+  }
+
+  /** The options of every engine call: the clock, scripted triage, the build's features, the switches. */
+  #engineOptions(now?: number) {
+    return { now: () => now ?? Date.now(), syncTriage: ScriptedTriage, features: FEATURES, switches: this.#switches() };
+  }
+
+  /** CK6c's runs of this object (selftest-submit.ts): made on the first submit that needs one. */
+  #submitSelftest: SubmitSelftest | null = null;
+
+  /**
+   * CK6c: before the `tool` entry serves a `submit` under features.green "full", the pool's
+   * self-test runs on the tree the submit would land, and the verdict rides the engine call. No
+   * `LOADER` binding, the variable `SUBMIT_SELFTEST` "off", no candidate (selftest.ts), or any
+   * failure here gives no verdict: the engine then records the check as skipped and the submit
+   * proceeds.
+   */
+  async #selftestVerdict(input: unknown): Promise<SelftestVerdict | null> {
+    if (FEATURES.green !== "full" || (input as { tool?: unknown } | null)?.tool !== "submit") return null;
+    // The binding of wrangler.jsonc (absent in a deployment without it) and the optional switch
+    // (absent means on): read through their own types, as the green line reads `LOADER`.
+    const env = this.env as unknown as { LOADER?: IsolateLoader; SUBMIT_SELFTEST?: string };
+    const loader = env.LOADER;
+    if (loader === undefined || env.SUBMIT_SELFTEST === "off" || metaGet(this.#sql, "pool_id") === null) return null;
+    try {
+      const candidate = this.#sql.run("selftest_candidate", this.#engineOptions(), (trunk) =>
+        selftestCandidate(trunk.pool, input),
+      );
+      if (candidate === null) return null;
+      this.#submitSelftest ??= new SubmitSelftest(isolateSelftestRun(loader));
+      return await this.#submitSelftest.verdict(candidate);
+    } catch (cause) {
+      console.error("submit selftest failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");
+      return null;
     }
   }
 
@@ -604,7 +639,8 @@ export class Trunk extends DurableObject<Env> {
   async #runEntry(name: string, input: unknown, path: string, query: URLSearchParams): Promise<Response> {
     this.#served.set(name, (this.#served.get(name) ?? 0) + 1);
     if (this.#engine.entries.has(name)) {
-      const r = await this.#callEngineEntry(name, input);
+      const selftest = name === "tool" ? await this.#selftestVerdict(input) : null;
+      const r = await this.#callEngineEntry(name, input, undefined, selftest);
       if ("error" in r) return r.error;
       const { response: raw, status, effects } = normalizeResult(r.result);
       // IR9 to IR11: an imported pool's prompt context rides the open-attempt answer, so the

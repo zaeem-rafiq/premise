@@ -4,7 +4,12 @@
 // `../isolate.ts`.
 
 import { GREEN_LOG_MAX_CHARS } from "../../../../protocol/constants.ts";
-import { GREEN_RUNTIME_CHECKS, type SelftestCode, type VerifyResult } from "../../../../protocol/green.ts";
+import {
+  GREEN_RUNTIME_CHECKS,
+  SELFTEST_CODES,
+  type SelftestCode,
+  type VerifyResult,
+} from "../../../../protocol/green.ts";
 
 /** The module names the harness adds next to the pool's files. `~` never starts a pool path. */
 export const ENTRY_MODULE = "~selftest-entry.js";
@@ -82,7 +87,12 @@ type Mapped = Pick<VerifyResult, "ok" | "checks" | "log">;
 /** One run's mapped result plus its findings: `name|kind` for each failure of the verdict's
  * `failed` list (kind "" for a check of the whole pool), or `selftest_ran|<code>` when no verdict
  * was had. The findings are compared with the green commit's (GR3d) and never leave the harness. */
-export type Run = Mapped & { findings: Set<string> };
+export type Run = Mapped & {
+  findings: Set<string>;
+  /** The isolate gave no answer at all: the time-out, or a load or call that threw (`../isolate.ts`).
+   * The pre-landing self-test of a submit fails open on such a run (01-core CK6c). */
+  unanswered?: true;
+};
 
 /** ST4: no usable verdict. The single check `selftest_ran` with its code; the reason goes to `log`. */
 export function failClosed(code: SelftestCode, reason: string): Run {
@@ -179,4 +189,31 @@ export function againstGreen(head: Run, green: Run): Mapped {
       : { name: c.name, ok: false, code: `${c.name}:failed` },
   );
   return { ok: false, checks, log: `${head.log}${note}`.slice(0, GREEN_LOG_MAX_CHARS) };
+}
+
+/** One failure of a submit's pre-landing self-test (01-core CK6c): a name and code of GR8, and the
+ * creature kind when the candidate tree has `creatures/<kind>.js` (the agent's own file name). */
+export type FreshFailure = { name: string; code: string; kind?: string };
+
+/** CK6c with GR3d: the failures of a submit's candidate run that head's run does not have, in a
+ * fixed order. Only names and codes of GR8 leave the harness (GR7): a name the fixed list does not
+ * know is dropped, and a kind is kept only when it names a creature file of the candidate tree.
+ * Null when either run gave no answer: the submit then proceeds (fail open). */
+export function freshFailures(candidate: Run, head: Run, paths: Iterable<string>): FreshFailure[] | null {
+  if (candidate.unanswered === true || head.unanswered === true) return null;
+  const kinds = new Set(creatureKinds(paths).map((k) => k.kind));
+  const out: FreshFailure[] = [];
+  for (const finding of [...candidate.findings].sort()) {
+    if (head.findings.has(finding)) continue;
+    const bar = finding.indexOf("|");
+    const name = finding.slice(0, bar);
+    const rest = finding.slice(bar + 1);
+    if (name === "selftest_ran") {
+      if ((SELFTEST_CODES as readonly string[]).includes(rest)) out.push({ name, code: rest });
+      continue;
+    }
+    if (!(INVARIANTS as readonly string[]).includes(name)) continue;
+    out.push({ name, code: `${name}:failed`, ...(kinds.has(rest) ? { kind: rest } : {}) });
+  }
+  return out;
 }

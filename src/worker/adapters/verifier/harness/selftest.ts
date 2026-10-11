@@ -79,9 +79,15 @@ export function isolateModules(files: ReadonlyMap<string, string>): Record<strin
 
 type Mapped = Pick<VerifyResult, "ok" | "checks" | "log">;
 
+/** One run's mapped result plus its findings: `name|kind` for each failure of the verdict's
+ * `failed` list (kind "" for a check of the whole pool), or `selftest_ran|<code>` when no verdict
+ * was had. The findings are compared with the green commit's (GR3d) and never leave the harness. */
+export type Run = Mapped & { findings: Set<string> };
+
 /** ST4: no usable verdict. The single check `selftest_ran` with its code; the reason goes to `log`. */
-export function failClosed(code: SelftestCode, reason: string): Mapped {
+export function failClosed(code: SelftestCode, reason: string): Run {
   return {
+    findings: new Set([`selftest_ran|${code}`]),
     ok: false,
     checks: [{ name: "selftest_ran", ok: false, code }],
     log: `selftest_ran: ${code}: ${reason}`.slice(0, GREEN_LOG_MAX_CHARS),
@@ -114,7 +120,7 @@ function asVerdict(value: unknown): Verdict | null {
 /** The body the entry module answered, mapped by GR8 (5.4's table): `selftest_ran`, then the twelve
  * checks in order with a code only on a failed one. `detail`, `failed` and `rest_share` go to
  * `log` only (GR7). */
-export function mapAnswer(body: string): Mapped {
+export function mapAnswer(body: string): Run {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
@@ -136,5 +142,41 @@ export function mapAnswer(body: string): Mapped {
     }
   }
   const log = JSON.stringify({ failed: verdict.failed ?? [], rest_share: verdict.rest_share ?? {}, details });
-  return { ok: verdict.ok, checks, log: log.slice(0, GREEN_LOG_MAX_CHARS) };
+  const findings = new Set<string>();
+  for (const f of Array.isArray(verdict.failed) ? verdict.failed : []) {
+    const item = (typeof f === "object" && f !== null ? f : {}) as { name?: unknown; kind?: unknown };
+    if (typeof item.name === "string") findings.add(`${item.name}|${typeof item.kind === "string" ? item.kind : ""}`);
+  }
+  // A verdict whose `failed` list names nothing still counts each failed check once.
+  for (const c of verdict.checks) {
+    if (!c.ok && ![...findings].some((f) => f.startsWith(`${c.name}|`))) findings.add(`${c.name}|`);
+  }
+  return { ok: verdict.ok, checks, log: log.slice(0, GREEN_LOG_MAX_CHARS), findings };
+}
+
+/** GR3d: the head's run judged against the green commit's run. A finding counts only when the
+ * green commit does not have it (the same rule as GR5a's for the static checks), so a landing is
+ * never blamed for a fault its base already had — after a switch from the static runtime, or after
+ * a red that was not taken back. */
+export function againstGreen(head: Run, green: Run): Mapped {
+  const fresh = [...head.findings].filter((f) => !green.findings.has(f));
+  const shared = [...head.findings].filter((f) => green.findings.has(f)).sort();
+  const note = shared.length === 0 ? "" : `\nalso at the green commit, not counted: ${shared.join(", ")}`;
+  if (fresh.length === 0) {
+    const checks: VerifyResult["checks"] =
+      head.findings.has("selftest_ran|harness_error") ||
+      head.findings.has("selftest_ran|no_verdict") ||
+      head.findings.has("selftest_ran|bad_verdict")
+        ? [{ name: "selftest_ran", ok: true }]
+        : head.checks.map((c) => ({ name: c.name, ok: true }));
+    return { ok: true, checks, log: `${head.log}${note}`.slice(0, GREEN_LOG_MAX_CHARS) };
+  }
+  if (fresh.some((f) => f.startsWith("selftest_ran|"))) return { ok: false, checks: head.checks, log: head.log };
+  const failing = new Set(fresh.map((f) => f.slice(0, f.indexOf("|"))));
+  const checks: VerifyResult["checks"] = head.checks.map((c) =>
+    c.name === "selftest_ran" || !failing.has(c.name)
+      ? { name: c.name, ok: true }
+      : { name: c.name, ok: false, code: `${c.name}:failed` },
+  );
+  return { ok: false, checks, log: `${head.log}${note}`.slice(0, GREEN_LOG_MAX_CHARS) };
 }

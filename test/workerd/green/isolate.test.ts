@@ -119,6 +119,50 @@ describe("the isolate runtime in local workerd (S4a, 02-tidepool 5.4)", () => {
   });
 });
 
+describe("GR3d: a failure the green commit already has is not the landing's (production pool check-1011)", () => {
+  // A creature with a rejected pen call (PN2: a colour that is not a colour): pen_rules fails on it.
+  const badPen = (name: string) =>
+    seedTree()
+      .get("creatures/snail.js")!
+      .replace('const BODY = "sand";', 'const BODY = "not-a-colour";')
+      .replace(/snail/g, name);
+  const verifyAgainst = (files: Map<string, string>, greenFiles: Map<string, string>) =>
+    isolateVerifier({ seq: 2, commit: "h".repeat(40), files, greenFiles, loader }).verify({
+      pool_id: "p",
+      seq: 2,
+      commit: "h".repeat(40),
+    });
+
+  it("the base fails pen_rules alone; a clean landing on it passes against the green commit", async () => {
+    const base = seedTree();
+    base.set("creatures/jelly.js", badPen("jelly"));
+    expect((await verify(base)).checks).toContainEqual({ name: "pen_rules", ok: false, code: "pen_rules:failed" });
+
+    const head = new Map(base);
+    head.set("creatures/lily.js", seedTree().get("creatures/turtle.js")!);
+    const result = await verifyAgainst(head, base);
+    expect(result.ok).toBe(true);
+    expect(result.checks).toEqual(GREEN_RUNTIME_CHECKS.map((name) => ({ name, ok: true })));
+    expect(result.log).toContain("also at the green commit, not counted: pen_rules|jelly");
+  }, 60_000);
+
+  it("a landing that adds its own pen_rules failure on such a base still fails", async () => {
+    const base = seedTree();
+    base.set("creatures/jelly.js", badPen("jelly"));
+    const head = new Map(base);
+    head.set("creatures/lily.js", badPen("lily"));
+    const result = await verifyAgainst(head, base);
+    expect(result.ok).toBe(false);
+    expect(result.checks.filter((c) => !c.ok)).toEqual([{ name: "pen_rules", ok: false, code: "pen_rules:failed" }]);
+  }, 60_000);
+
+  it("a revert back to the green commit's own tree passes", async () => {
+    const base = seedTree();
+    base.set("creatures/jelly.js", badPen("jelly"));
+    expect((await verifyAgainst(new Map(base), base)).ok).toBe(true);
+  }, 60_000);
+});
+
 describe("GR6: the verifier's isolate has no binding and no outbound network (2.15 item 3)", () => {
   // A test creature that tries both: it reads every binding it was given and calls the network.
   const PROBE_CREATURE = `export function spawn() { return {}; }

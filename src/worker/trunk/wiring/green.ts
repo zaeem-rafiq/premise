@@ -129,7 +129,13 @@ async function runGreenJobInner(
   const verifier =
     deps?.verifier?.(start) ??
     (FEATURES.green === "full" && !start.imported && loader !== undefined
-      ? isolateVerifier({ seq: start.seq, commit: start.commit, files: new Map(start.files), loader })
+      ? isolateVerifier({
+          seq: start.seq,
+          commit: start.commit,
+          files: new Map(start.files),
+          greenFiles: new Map(start.green_files),
+          loader,
+        })
       : undefined) ??
     staticVerifier({
       seq: start.seq,

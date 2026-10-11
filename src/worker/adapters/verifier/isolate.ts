@@ -7,7 +7,15 @@
 import { GREEN_CPU_MS, SELFTEST_TIMEOUT_MS } from "../../../protocol/constants.ts";
 import type { VerifyResult } from "../../../protocol/green.ts";
 import type { Verifier } from "../../../protocol/ports.ts";
-import { ENTRY_MODULE, failClosed, isolateModules, mapAnswer, SELFTEST_PATH } from "./harness/selftest.ts";
+import {
+  againstGreen,
+  ENTRY_MODULE,
+  failClosed,
+  isolateModules,
+  mapAnswer,
+  SELFTEST_PATH,
+  type Run,
+} from "./harness/selftest.ts";
 
 /** The compatibility date of the loaded isolate: the Worker's own (wrangler.jsonc). */
 const COMPATIBILITY_DATE = "2026-10-01";
@@ -32,6 +40,8 @@ export type IsolateInput = {
   commit: string;
   /** The commit's files (path -> content), as Trunk recorded them for its landing (GR5a, S7). */
   files: ReadonlyMap<string, string>;
+  /** The green commit's files (GR3d): a failed head is judged against them. Absent, it is not. */
+  greenFiles?: ReadonlyMap<string, string>;
   /** The Worker Loader binding (`LOADER`). */
   loader: IsolateLoader;
   cpuMs?: number;
@@ -55,7 +65,7 @@ function reason(cause: unknown): string {
 }
 
 /** One run of the self-test in a fresh isolate, mapped to the checks of GR8. */
-export async function runInIsolate(input: IsolateInput): Promise<Pick<VerifyResult, "ok" | "checks" | "log">> {
+export async function runInIsolate(input: IsolateInput): Promise<Run> {
   if (!input.files.has(SELFTEST_PATH)) return failClosed("harness_error", `${SELFTEST_PATH} is missing`);
   const timeoutMs = input.timeoutMs ?? SELFTEST_TIMEOUT_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -93,8 +103,22 @@ export function isolateVerifier(input: IsolateInput, now: () => number = Date.no
         throw new Error("the isolate verifier holds the files of another commit");
       }
       const started = now();
-      const result = await runInIsolate(input);
-      return { seq: input.seq, commit: input.commit, runtime: "isolate", duration_ms: now() - started, ...result };
+      const head = await runInIsolate(input);
+      let result: Pick<VerifyResult, "ok" | "checks" | "log"> = head;
+      // GR3d: a failure is the landings' only when the green commit does not have it too.
+      if (!head.ok && input.greenFiles !== undefined) {
+        result = againstGreen(head, await runInIsolate({ ...input, files: input.greenFiles }));
+      }
+      const { ok, checks, log } = result;
+      return {
+        seq: input.seq,
+        commit: input.commit,
+        runtime: "isolate",
+        duration_ms: now() - started,
+        ok,
+        checks,
+        log,
+      };
     },
   };
 }

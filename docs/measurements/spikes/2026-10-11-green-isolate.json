@@ -1,0 +1,59 @@
+{
+  "measured_at": "2026-10-11T14:39:56.652Z",
+  "green_cpu_ms": 5000,
+  "selftest_timeout_ms": 10000,
+  "seed": {
+    "runs": 50,
+    "ok": 50,
+    "no_verdict": 0,
+    "late": 0,
+    "failed_checks": [],
+    "ms_p50": 22,
+    "ms_p90": 638,
+    "ms_max": 1752
+  },
+  "max_kinds": {
+    "creature_files": 64,
+    "runs": 1,
+    "ok": 1,
+    "no_verdict": 0,
+    "late": 0,
+    "failed_checks": [],
+    "ms_p50": 11,
+    "ms_p90": 11,
+    "ms_max": 11
+  },
+  "lower_cpu_ms": {
+    "50": {
+      "runs": 3,
+      "ok": 3,
+      "no_verdict": 0,
+      "late": 0,
+      "failed_checks": [],
+      "ms_p50": 11,
+      "ms_p90": 12,
+      "ms_max": 12
+    },
+    "200": {
+      "runs": 3,
+      "ok": 3,
+      "no_verdict": 0,
+      "late": 0,
+      "failed_checks": [],
+      "ms_p50": 10,
+      "ms_p90": 12,
+      "ms_max": 12
+    },
+    "1000": {
+      "runs": 3,
+      "ok": 3,
+      "no_verdict": 0,
+      "late": 0,
+      "failed_checks": [],
+      "ms_p50": 11,
+      "ms_p90": 13,
+      "ms_max": 13
+    }
+  },
+  "item4_pass": true
+}

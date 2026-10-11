@@ -1,0 +1,25 @@
+/* The landing moment of 03-floor 6.4: the travelling chip and the ring on the pool's water. */
+
+.landing-chip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--holds) 30%, transparent);
+  border: 2px solid var(--holds);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--holds) 55%, transparent);
+  transform-origin: center;
+}
+
+.landing-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 140%;
+  aspect-ratio: 1;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--holds) 80%, transparent);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--holds) 40%, transparent);
+}

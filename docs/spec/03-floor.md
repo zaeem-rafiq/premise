@@ -2191,7 +2191,7 @@ Easing `cubic-bezier(0.2, 0.8, 0.2, 1)` for everything. "Reduced" is what happen
 
 | What | Motion | Reduced |
 | --- | --- | --- |
-| A change lands | The attempt card shows "Landed" for 1.2 s, shrinks to a chip and travels to the edge of the pool frame (720 ms). The frame's edge glows in `accent` with a soft halo that fades over 1.2 s, and the Landed value glows once in `holds`. | The attempt card shows "Landed" for 2 s and leaves without moving. The frame gets a static `accent` outline for 2 s. |
+| A change lands | The attempt card shows "Landed" for 1.2 s, shrinks to a chip and travels to the edge of the pool frame (720 ms). The frame's edge glows in `accent` with a soft halo that fades over 1.2 s, one ring in `holds` crosses the frame's water (720 ms), and the Landed value glows once in `holds`. Landings that arrive with the page's first events, or more than 2 at once (a seek, a reconnect), do not travel. | The attempt card shows "Landed" for 2 s and leaves without moving. The frame gets a static `accent` outline for 2 s. |
 | A light changes | Cross-fade 200 ms, then one ring that grows and fades (600 ms). | Changes at once. A 2-wide outline for 1.5 s. |
 | An attempt card joins or leaves the top group | Slides to its place (240 ms). | Moves at once. |
 | A sheet or the drawer opens or closes | Fade and a 16 rise (240 ms). | Appears at once. |

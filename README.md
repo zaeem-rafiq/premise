@@ -90,7 +90,7 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - Numbers in the Swarm view come from scripted agents. They make no model calls.
 - The plain-merge pool is constructed by Trunk from the same changes. It is a comparison, not a second product. Each change is merged as git merges a file from three versions, and the version its agent started from is taken from the pool's history.
 - A premise across two pools is not built.
-- The green line checks every landing by running the pool's self-test in a sandboxed isolate.
+- The green line checks every landing with static checks only.
 - Clef judgments are off in this build.
 - Not built: audience input.
 - References are direct. Code that depends on a shared value only through another function it calls holds no premise on that value. A package import or a tsconfig path alias is external and gives no premise.

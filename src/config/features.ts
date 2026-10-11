@@ -14,7 +14,7 @@ export const FEATURES: Features = {
   held: true,
   race: true,
   undo: true,
-  green: "full",
+  green: "static",
   clef: false,
   attempt_repos: true,
   mcp: true,

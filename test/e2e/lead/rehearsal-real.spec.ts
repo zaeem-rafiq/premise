@@ -463,9 +463,17 @@ test("rehearsal 2: the beat sheet with real agents", async ({ page }, testInfo) 
     });
   });
   await check("Play the Replay", async () => {
+    // The start card shows only on a quiet pool (RY23); with an attempt still in flight the Replay
+    // view's own play button is the way in.
     const play = page.getByRole("button", { name: /^Play the Replay/ }).first();
-    await expect(play).toBeVisible({ timeout: 120_000 });
-    await play.click();
+    if (await play.isVisible({ timeout: 60_000 }).catch(() => false)) await play.click();
+    else {
+      cur!.notes.push(
+        "The pool was not quiet (an attempt was still in flight), so the Replay was opened from the Replay view.",
+      );
+      await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Replay" }).click();
+      await page.getByRole("button", { name: /^Play/ }).first().click({ timeout: 30_000 });
+    }
     await expect(page.locator(".banner[data-tone='replay']")).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(3000);
     await shot("replay");

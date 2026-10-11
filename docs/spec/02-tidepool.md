@@ -1912,6 +1912,7 @@ Pool constants are exported by the pool's files and listed in section 2. Platfor
 | `HIGHLIGHT_COLOUR` | `#ffd23f` | The palette's yellow. One constant, so the Floor's visual direction can change it in one place. |
 | `APP_FILE_RATE_PER_MIN` | 1,200 | Version-pinned file requests per client address, cache misses only (SE21). The same constant as in 01-core Appendix C. |
 | `SELFTEST_TIMEOUT_MS` | 10,000 | The whole harness: loading the modules and both runs. |
+| `SUBMIT_SELFTEST_TIMEOUT_MS` | 6,000 | The run at submit (`01-core.md` CK6c), below `TOOL_TIMEOUT_MS`; a slower run fails open. Measured: `docs/measurements/spikes/2026-10-11-green-isolate.json` (added 2026-10-11). |
 
 `PLAIN_PROBE_DELAY_MS` was removed in the reconciliation: a frame on `plain` is probed on `plain.updated` (4.6). Constants of `01-core.md` that this file uses keep their values there: `DEFAULT_GLOBALS`, `FLOOR_KEEP_LANDINGS`, `GREEN_CPU_MS`, `GREEN_LOG_MAX_CHARS`, `MAX_PATHS`, `RACE_SIZE`, `PUBLIC_RATE_PER_MIN`.
 

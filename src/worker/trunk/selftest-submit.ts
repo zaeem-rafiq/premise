@@ -8,13 +8,14 @@
 import type { SelftestCandidate, SelftestVerdict } from "../../core/trunk/selftest.ts";
 import { freshFailures, type Run } from "../adapters/verifier/harness/selftest.ts";
 import { runInIsolate, type IsolateLoader } from "../adapters/verifier/isolate.ts";
+import { SUBMIT_SELFTEST_TIMEOUT_MS } from "../../protocol/constants.ts";
 
 /** One self-test run over a tree. */
 export type SelftestRun = (files: ReadonlyMap<string, string>) => Promise<Run>;
 
 /** The run of the isolate runtime over the Worker Loader binding (`LOADER`). */
 export function isolateSelftestRun(loader: IsolateLoader): SelftestRun {
-  return (files) => runInIsolate({ seq: 0, commit: "", files, loader });
+  return (files) => runInIsolate({ seq: 0, commit: "", files, loader, timeoutMs: SUBMIT_SELFTEST_TIMEOUT_MS });
 }
 
 /** CK6c for one Trunk object: head's run cached per head commit, and one run per candidate tree

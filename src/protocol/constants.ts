@@ -149,6 +149,10 @@ export const HIGHLIGHT_RADIUS = 34;
 export const HIGHLIGHT_WIDTH = 3;
 export const HIGHLIGHT_COLOUR = "#ffd23f";
 export const SELFTEST_TIMEOUT_MS = 10_000;
+/** CK6c's isolate run at submit, below TOOL_TIMEOUT_MS so the submit answers before the Agent's
+ * tool call times out. Measured (BP8): docs/measurements/spikes/2026-10-11-green-isolate.json,
+ * 50 runs of the seed, max 1,752 ms; a slower run fails open. */
+export const SUBMIT_SELFTEST_TIMEOUT_MS = 6_000;
 
 // ---- 03-floor Appendix A ----
 

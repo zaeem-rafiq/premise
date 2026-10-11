@@ -67,11 +67,11 @@ for (const theme of ["dark", "light"]) {
       await openCard(page, kind, theme);
       await expect(page.locator(".card-sheet")).toHaveCSS(
         "background-color",
-        theme === "light" ? "rgb(247, 243, 236)" : "rgb(16, 18, 22)",
+        theme === "light" ? "rgb(245, 245, 247)" : "rgb(29, 29, 31)",
       );
       await expect(page.locator(".card-sheet__title")).toHaveCSS(
         "color",
-        theme === "light" ? "rgb(18, 18, 18)" : "rgb(242, 242, 238)",
+        theme === "light" ? "rgb(29, 29, 31)" : "rgb(245, 245, 247)",
       );
     });
   }
@@ -144,9 +144,9 @@ for (const theme of ["dark", "light"]) {
     const input = page.getByRole("textbox", { name: "Reason (optional)" });
     await input.fill("The shared change is ready.");
     await expect(input).toHaveValue("The shared change is ready.");
-    await expect(input).toHaveCSS("color", theme === "dark" ? "rgb(242, 242, 238)" : "rgb(18, 18, 18)");
-    await expect(input).toHaveCSS("background-color", theme === "dark" ? "rgb(26, 29, 35)" : "rgb(235, 230, 220)");
-    await expect(input).toHaveCSS("border-top-color", theme === "dark" ? "rgb(138, 143, 153)" : "rgb(107, 102, 92)");
+    await expect(input).toHaveCSS("color", theme === "dark" ? "rgb(245, 245, 247)" : "rgb(29, 29, 31)");
+    await expect(input).toHaveCSS("background-color", theme === "dark" ? "rgb(44, 44, 46)" : "rgb(235, 235, 240)");
+    await expect(input).toHaveCSS("border-top-color", theme === "dark" ? "rgb(142, 142, 147)" : "rgb(110, 110, 115)");
   });
 }
 

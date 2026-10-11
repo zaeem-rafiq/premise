@@ -551,11 +551,11 @@ One light per premise. The light's state is `PremiseView.light`. Shape and colou
 
 | Light | Shape | Colour token | Word | When |
 | --- | --- | --- | --- | --- |
-| `holds` | filled circle | `holds` | `light.holds` | The premise holds. |
-| `changed` | filled diamond | `changed` | `light.changed` | Newest judgment is `repair` and its heads-up is not resolved. |
-| `confirm` | filled triangle | `confirm` | `light.confirm` | Newest judgment is `confirm` (not a blind spot) and its heads-up is not resolved. |
+| `holds` | filled circle | `#30D158` | 6.89 | `#17703A` | 5.18 |
+| `changed` | filled diamond | `#FF6961` | 4.94 | `#C4141F` | 5.10 |
+| `confirm` | filled triangle | `#FFD60A` | 9.87 | `#875800` | 5.16 |
 | `blind_spot` | ring (hollow circle) | `confirm` | `light.blind_spot` | Newest judgment is rule `B1` and its heads-up is not resolved. |
-| `checking` | half-filled circle | `checking` | `light.checking` | Newest judgment is of class `triage` with no result yet. Its heads-up item has result `pending`. |
+| `checking` | half-filled circle | `#64D2FF` | 8.10 | `#0B5FA0` | 5.60 |
 
 A premise with `edit` true has a short bar under its light (`light.flag.edit`).
 
@@ -2130,26 +2130,26 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 
 ### 6.1 The language
 
-The page speaks the Overview's language in every view (owner's request of 2026-10-11, "do 1 to 3"): glass panels with soft edges and rounded corners, pill controls in sentence case, one system face, numbers set like headlines, and depth instead of rules. The light theme is the same page on paper. (It grew from the owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions".)
+The page follows apple.com's dark product pages, measured on 2026-10-11 (MacBook Pro, Vision Pro, Xcode): a black page, #1d1d1f panels with no edges, the system face at weight 600 for headlines and 400 for text, sentence case, one blue for actions (`--action` #0071e3 with white text, `accent` for links), the system colours for signals, and nothing that glows or outlines. The light theme is the same page in white and #f5f5f7. (Owner's requests of 2026-10-11: "do 1 to 3", then a disciplined pass against real references.)
 
 - **VD1 (still unless something happened).** Nothing moves by itself except the pool app and the slow "working" pulse. Every other movement is caused by one event and ends within 720 ms.
 - **VD2 (signals).** The five light shapes (circle, diamond, triangle, ring, half circle) are the identity of the product. They are used for premises and for status only, at every size, in both themes. No other icon set is used; the few other marks (cross, tick, two bars, reader ring, writer square) are drawn in the same weight.
 - **VD3 (above and below the water).** The rail holds what is in flight. The pool area holds what is on `main`. A change crosses from the rail to the pool only on `landing.landed`. One vertical ink rule separates the two regions; the pool frame is an ink-edged plate.
 - **VD4 (labels that cannot be missed).** SYNTHETIC uses its own hue and a diagonal stripe that nothing else uses. REPLAY uses the inverse band and a dotted edge that nothing else uses.
-- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal). Corners: 12 for controls and fields (`--radius`), 20 for panels and the pool frame (`--radius-panel`), 24 for sheets, pills (fully round) for buttons, the view switch and the tabs. Edges are 1-wide hairlines in `--glass-edge`; panels fill with `--glass`; sheets and the pool frame cast a soft shadow (`--shade`). 2 (`--rule`) only between two banners on one row; 3 for focus and for a heads-up panel's edge. Capitals only for labels, banner words and section labels; buttons, tabs and status words are in sentence case (owner's design decision of 2026-10-10: one thing shouts at a time).
+- **VD5 (few sizes).** Seven type sizes, four weights of emphasis (text, muted, strong, signal). Corners: 12 for controls and fields (`--radius`), 14 for cards inside a panel, 18 for panels, sheets and the pool frame (`--radius-panel`), pills for buttons. Panels are filled (`surface`, then `raised` inside them) and have no edge; the header and the strip close with one hairline (`--hairline`); sheets cast a soft shadow (`--shade`). 2 (`--rule`) only between two banners on one row; 3 for focus and for a heads-up panel's edge. Capitals only for banner words; labels, buttons, tabs and status words are in sentence case (owner's design decision of 2026-10-10: one thing shouts at a time).
 
 ### 6.2 Type
 
 - **VD6.** Every text, number and title uses the system interface typeface: `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` (SF Pro on a Mac), so the Overview and the Floor view read as one product. Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. No font file is fetched.
 - **VD7.** Numbers use tabular figures (`font-variant-numeric: tabular-nums`).
-- **VD8.** Numbers, titles, intent text and the masthead name are set at weight 600 to 700 with tight letter spacing (−0.02 to −0.035em). Text is weight 400; status words, labels and buttons 600 to 800. Capitals with letter spacing 0.06 to 0.1em for banner words and strip labels only. No italics.
+- **VD8.** Numbers, titles, intent text and the masthead name are set at weight 600 to 700 with tight letter spacing (−0.02 to −0.035em). Text is weight 400; status words, labels and buttons 600 to 800. Capitals with letter spacing 0.08em for banner words only. No italics.
 
 | Role | Stage size | Laptop size | Used for |
 | --- | --- | --- | --- |
 | Display | 168 | 120 | The four large Swarm numbers |
 | Counter | 84 | 56 | The two hero numbers, Landed and Go-arounds; from 1100 to 1599 wide they follow the window (3.9vw, at least 40). The other strip values, and every strip value in Replay, are at Title size. |
-| Title | 40 | 32 | Sheet titles, card titles in the sheet, headings, the masthead name |
-| Intent | 30 | 24 | Intent text on attempt cards, the pool frame's caption, banner words, the thesis line |
+| Title | 40 | 32 | Sheet titles, card titles in the sheet, headings |
+| Intent | 30 | 24 | Intent text on attempt cards, the pool frame's caption, banner words, the thesis line, the masthead name |
 | Status | 22 | 18 | Status words, heads-up before and after (code face) |
 | Body | 20 | 16 | Sentences, labels, links |
 | Small | 16 | 14 | Strip labels, tags, tile names, command buttons (capitals), the git drawer (code face) |
@@ -2164,21 +2164,21 @@ Dark is the default for the video. Light is for bright rooms. The page follows t
 
 | Token | Use | Dark | Lowest contrast | Light | Lowest contrast |
 | --- | --- | --- | --- | --- | --- |
-| `bg` | Page and pool area | `#0C0D10` | | `#F1ECE2` | |
-| `surface` | Rail, attempt cards, sheets | `#101216` | | `#F7F3EC` | |
-| `raised` | Panels inside attempt cards, tiles | `#1A1D23` | | `#EBE6DC` | |
-| `line` | Dividers between rows (decoration only) | `#2E323B` | n/a | `#CFC7B8` | n/a |
-| `control` | Borders of fields, disabled buttons | `#8A8F99` | 5.20 | `#6B665C` | 4.59 |
-| `text` | Text, and the 2-wide ink rules | `#F2F2EE` | 15.04 | `#121212` | 15.06 |
-| `muted` | Secondary text | `#9EA3AC` | 6.66 | `#57534B` | 6.15 |
-| `accent` | Primary button, links, the active view number, working pulse, writer marks, landing glow | `#FF5A1F` | 5.41 | `#B83A08` | 4.63 |
+| `bg` | Page and pool area | `#000000` |  | `#FFFFFF` |  |
+| `surface` | Rail, attempt cards, sheets | `#1D1D1F` |  | `#F5F5F7` |  |
+| `raised` | Panels inside attempt cards, tiles | `#2C2C2E` |  | `#EBEBF0` |  |
+| `line` | Dividers between rows (decoration only) | `#38383A` | n/a | `#D2D2D7` | n/a |
+| `control` | Borders of fields, disabled buttons | `#8E8E93` | 4.27 | `#6E6E73` | 4.27 |
+| `text` | Text, and the 2-wide ink rules | `#F5F5F7` | 12.80 | `#1D1D1F` | 14.16 |
+| `muted` | Secondary text | `#A1A1A6` | 5.42 | `#5F5F64` | 5.34 |
+| `accent` | Links, the working pulse, writer marks, the landing outline (the primary button uses `--action`, #0071E3 with white text, 4.70) | `#2997FF` | 4.62 | `#0062C4` | 4.99 |
 | `holds` | Holds, landed, green line | `#5BD68F` | 9.21 | `#17733A` | 4.76 |
 | `changed` | Changed, stopped, failure banners | `#FF7A6B` | 6.63 | `#B8281C` | 5.03 |
 | `confirm` | Needs a confirm, waiting for the owner, warning banners | `#FFC857` | 10.97 | `#8A5A00` | 4.77 |
 | `checking` | Being checked | `#9DB8FF` | 8.63 | `#2450C0` | 5.66 |
-| `synthetic` | SYNTHETIC only | `#D7A6FF` | 8.67 | `#6A3BB0` | 5.89 |
-| `focus` | Focus ring | `#FFE08A` | 13.09 | `#1B3FA0` | 7.45 |
-| `on-fill` | Text on a filled signal colour or on `accent` | `#0C0D10` | 6.23 (on `accent`) | `#FFFFFF` | 5.76 (on `accent`) |
+| `synthetic` | SYNTHETIC only | `#DA8FFF` | 6.21 | `#8944AB` | 5.08 |
+| `focus` | Focus ring | `#2997FF` | 4.62 | `#0062C4` | 4.99 |
+| `on-fill` | Text on a filled signal colour or on `accent` | `#000000` | 6.96 (on `accent`) | `#FFFFFF` | 5.93 (on `accent`) |
 
 - **VD9.** A unit test computes these ratios from the token values and fails below: 7 for `text`; 4.5 for every other token used for text; 3 for `control`, `focus` and every signal colour used for a shape.
 - **VD10.** No state is carried by colour alone. Each has a shape and a word (3.3, 5.3). Changed characters in a diff have an underline as well as a background.

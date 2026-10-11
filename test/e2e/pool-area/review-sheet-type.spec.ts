@@ -34,8 +34,8 @@ for (const size of [
   { name: "laptop", width: 1440, height: 900, small: "14px" },
 ] as const) {
   for (const theme of [
-    { name: "dark", muted: "rgb(158, 163, 172)" },
-    { name: "light", muted: "rgb(87, 83, 75)" },
+    { name: "dark", muted: "rgb(161, 161, 166)" },
+    { name: "light", muted: "rgb(95, 95, 100)" },
   ] as const) {
     test(`D38 / VD6, 6.2, 6.3: sheet labels and git code use page tokens (${size.name}, ${theme.name})`, async ({
       page,

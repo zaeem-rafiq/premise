@@ -1,23 +1,23 @@
-/* The page layer of the Floor's visual direction (03-floor 6.1, as amended on 2026-10-11): the
- * Overview's language across every view. Glass panels with soft edges and rounded corners, pill
- * controls in sentence case, one system face, and depth instead of rules. It changes how things
- * look, never what they say or do. Every selector starts at `.floor`, so it outranks the
- * components' own single-class rules, including the sheets they adopt at run time. (The file keeps
- * its first name, poster.css, so the imports and the spec's references stay put.) */
+/* The page layer of the Floor's visual direction (03-floor 6.1, as amended on 2026-10-11),
+ * measured on apple.com's dark product pages: a black page, #1d1d1f panels with no edges, one
+ * system face at Apple's weights, sentence case, one blue for actions, and nothing that glows or
+ * outlines. It changes how things look, never what they say or do. Every selector starts at
+ * `.floor`, so it outranks the components' own single-class rules, including the sheets they
+ * adopt at run time. (The file keeps its first name, poster.css, so imports and references stay.) */
 
 /* ---- The page ---- */
 .floor {
-  background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--checking) 6%, var(--bg)), var(--bg) 60%);
+  background: var(--bg);
 }
 
-/* ---- Type: one family; headings tight and strong; section labels quiet ---- */
+/* ---- Type: one family at Apple's weights; sentence case everywhere but banner words ---- */
 .floor h1,
 .floor h2,
 .floor .sheet-title,
 .floor .start-card h3 {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   line-height: 1.1;
 }
 .floor h2 {
@@ -32,8 +32,9 @@
   color: var(--muted);
 }
 
-/* ---- Controls: pills in sentence case. Rows, tiles, lights, tabs and the view switch are buttons
- * too, but they are not commands: `:where` leaves them to their own rules below. ---- */
+/* ---- Controls: pills without edges. A command is a filled pill; the primary one is Apple's
+ * blue. Rows, tiles, lights, tabs and the view switch are buttons too, but not commands: `:where`
+ * leaves them to their own rules below. ---- */
 .floor
   button:where(
     :not(
@@ -54,25 +55,24 @@
   ),
 .floor .pf-btn {
   border-radius: 999px;
-  border: var(--border) solid var(--glass-edge);
-  background: var(--glass);
+  border: none;
+  background: var(--raised);
+  color: var(--text);
   text-transform: none;
   letter-spacing: 0;
   font-size: var(--size-small);
-  font-weight: 600;
+  font-weight: 400;
 }
 .floor button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-fill);
+  background: var(--action);
+  color: var(--on-action);
 }
 .floor button.danger {
   background: var(--changed);
-  border-color: var(--changed);
   color: var(--on-fill);
 }
 .floor button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 .floor .tile,
 .floor .tiles-toggle,
@@ -95,61 +95,78 @@
   border-color: transparent;
   background: transparent;
 }
+.floor .attempt-card__open {
+  color: var(--accent);
+  text-decoration: none;
+}
 .floor input[type="range"] {
-  accent-color: var(--accent);
+  accent-color: var(--action);
 }
 
-/* ---- Header: a quiet bar with a hairline; the view switch is one segmented control ---- */
+/* ---- Header: Apple's local nav - the product name, quiet links, a hairline, translucent ---- */
 .floor .header {
-  background: transparent;
-  border-bottom: var(--border) solid var(--glass-edge);
-  gap: 24px;
+  background: var(--veil);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: var(--border) solid var(--hairline);
+  gap: 28px;
   padding: 0 24px;
 }
 .floor .header-name {
-  gap: 14px;
-  align-items: center;
+  gap: 12px;
+  align-items: baseline;
 }
 .floor .app-name {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--size-title);
+  font-weight: 600;
+  font-size: var(--size-intent);
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.01em;
   text-transform: none;
 }
 .floor .pool-name {
   font-family: var(--font-text);
-  font-weight: 500;
+  font-size: var(--size-small);
+  font-weight: 400;
   color: var(--muted);
 }
 .floor .view-switch {
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--glass);
-  border: var(--border) solid var(--glass-edge);
+  gap: 4px;
 }
 .floor .nav-item {
-  min-height: 38px;
-  padding: 0 16px;
+  padding: 0 10px;
   border: none;
-  border-radius: 999px;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
   font-size: var(--size-small);
-  font-weight: 500;
+  font-weight: 400;
+}
+.floor .nav-item:hover {
+  color: var(--text);
 }
 .floor .nav-item[aria-current="page"] {
-  background: color-mix(in srgb, var(--text) 14%, transparent);
   color: var(--text);
-  font-weight: 650;
+  font-weight: 400;
   text-decoration: none;
+  box-shadow: inset 0 -1px 0 var(--text);
 }
+/* Signals stay small: the badge is a neutral pill whose dot carries the `confirm` colour, so yellow
+ * never fills an area (one accent plus semantic dots, 6.3). */
 .floor .needs-badge {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 600;
+}
+.floor .needs-badge::before,
+.floor .tray-row::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
   background: var(--confirm);
-  border-color: var(--confirm);
-  color: var(--on-fill);
+  display: inline-block;
 }
 .floor .header button {
   font-size: var(--size-small);
@@ -158,8 +175,8 @@
 /* ---- Banners: full-width bands; SYNTHETIC keeps its stripe and REPLAY its dotted edge (VD4).
  * From 1100 wide two bands share one row (3.18). ---- */
 .floor .banner-word {
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 @media (min-width: 1100px) {
   .floor .banners {
@@ -175,11 +192,11 @@
 }
 
 /* ---- The strip: the number band. Landed and Go-arounds are the hero numbers (6.2); the other
- * values read at Title size; a hairline closes the band. ---- */
+ * values read at Title size; labels are quiet sentence-case captions. ---- */
 .floor .strip {
   gap: 0;
   background: transparent;
-  border-bottom: var(--border) solid var(--glass-edge);
+  border-bottom: var(--border) solid var(--hairline);
 }
 .floor .strip-cell {
   background: transparent;
@@ -187,8 +204,9 @@
   justify-content: flex-start;
 }
 .floor .strip-label {
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .floor .strip .strip-main {
   font-size: var(--size-small);
@@ -204,10 +222,10 @@
 }
 .floor .strip-value {
   font-family: var(--font-display);
-  font-weight: 650;
+  font-weight: 600;
   font-size: var(--size-counter);
-  line-height: 0.9;
-  letter-spacing: -0.03em;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
 }
 .floor
   .strip-cell:not([data-cell="strip.landed"]):not([data-cell="strip.goarounds"])
@@ -231,6 +249,9 @@
   height: 4px;
   border-radius: 2px;
 }
+.floor .strip-bar-fill {
+  background: var(--action);
+}
 /* 2.7: in Replay the band is short and every value reads at Title size, so the pool gets the room. */
 .floor[data-mode="replay"] {
   --strip-h: 76px;
@@ -240,7 +261,7 @@
   line-height: 1;
 }
 
-/* ---- The pool area: the frame as a rounded hero under a still layer of light ---- */
+/* ---- The pool area: the frame as a plain rounded picture ---- */
 .floor .pf-caption-text {
   font-family: var(--font-display);
   font-weight: 600;
@@ -248,52 +269,36 @@
   color: var(--text);
 }
 .floor .pf-chip {
+  border: none;
   border-radius: 999px;
+  background: var(--raised);
 }
 .floor .pf-body {
   border: none;
   border-radius: var(--radius-panel);
-  box-shadow:
-    0 0 0 var(--border) var(--glass-edge),
-    0 24px 60px var(--shade);
-}
-/* Light from above and depth below; it moves nothing (VD1) and takes no taps. */
-.floor .pf-body::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    radial-gradient(90% 60% at 30% -10%, rgb(255 255 255 / 0.14), transparent 60%),
-    linear-gradient(to bottom, transparent 60%, var(--depth));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
 }
 .floor .pf-body--framefocus {
   border-radius: var(--radius-panel);
 }
 .floor .pf-selftest {
+  border: none;
   border-radius: 10px;
+  background: var(--surface);
 }
 /* A height-bound pool frame sits flush left under its caption. */
 .floor .pool-area[data-tight="true"] .pf-body {
   margin-inline: 0 auto;
 }
-/* 6.4: a landing glows the frame's edge in the accent and settles. */
+/* 6.4: a landing outlines the frame in the accent for a moment. */
 .floor .pf-body.pf-glow {
   animation: page-landing 1.2s var(--ease);
 }
 @keyframes page-landing {
   0% {
-    box-shadow:
-      0 0 0 3px var(--accent),
-      0 0 56px 4px color-mix(in srgb, var(--accent) 70%, transparent);
+    box-shadow: 0 0 0 3px var(--accent);
   }
   100% {
-    box-shadow:
-      0 0 0 3px transparent,
-      0 24px 60px var(--shade);
+    box-shadow: 0 0 0 3px transparent;
   }
 }
 
@@ -311,18 +316,18 @@
   border-radius: 6px;
 }
 
-/* ---- The rail: one glass panel ---- */
+/* ---- The rail: one #1d1d1f panel ---- */
 .floor .rail {
-  background: var(--glass);
-  border: var(--border) solid var(--glass-edge);
+  background: var(--surface);
+  border: none;
   border-radius: var(--radius-panel);
-  padding: 14px;
+  padding: 16px;
 }
 .floor .intent-box {
-  padding: 12px 14px;
-  border: var(--border) solid var(--glass-edge);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  padding: 12px 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--raised);
 }
 .floor .intent-field {
   background: transparent;
@@ -343,77 +348,83 @@
 .floor .tray-row {
   border: none;
   border-radius: 14px;
-  background: var(--confirm);
-  color: var(--on-fill);
+  background: var(--raised);
+  color: var(--text);
   padding: 8px 8px 8px 16px;
 }
 .floor .tray-row button {
-  border-color: transparent;
-  background: rgb(0 0 0 / 0.12);
-  color: var(--on-fill);
+  background: var(--action);
+  color: var(--on-action);
 }
-/* The tabs: a segmented control. */
+/* The tabs: Apple's segmented control. */
 .floor .tabs {
   margin-top: 12px;
-  padding: 3px;
+  padding: 2px;
   gap: 2px;
-  border: var(--border) solid var(--glass-edge);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  border: none;
+  border-radius: 9px;
+  background: var(--raised);
 }
 .floor .tab {
   min-height: 36px;
   border: none;
-  border-radius: 999px;
+  border-radius: 7px;
   font-size: var(--size-small);
-  color: var(--muted);
+  color: var(--text);
 }
 .floor .tab[aria-selected="true"] {
-  box-shadow: none;
-  background: color-mix(in srgb, var(--text) 14%, transparent);
-  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  background: var(--segment-on);
+  font-weight: 600;
 }
 .floor .rail-list {
   padding: 12px 0 0;
   gap: 10px;
 }
 
-/* Attempt cards: glass cards, like the Overview's. */
+/* Attempt cards: #2c2c2e tiles on the panel, no edges. */
 .floor .attempt-card {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
-  border: var(--border) solid var(--glass-edge);
-  border-radius: 18px;
+  background: var(--raised);
+  border: none;
+  border-radius: 14px;
   padding: 14px 16px;
 }
 .floor .attempt-card__tag {
+  border: none;
   border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 .floor .attempt-card__intent {
   font-family: var(--font-display);
-  font-weight: 650;
+  font-weight: 600;
   font-size: var(--size-intent);
-  letter-spacing: -0.015em;
-  line-height: 1.15;
+  letter-spacing: -0.01em;
+  line-height: 1.16;
 }
 .floor .attempt-card__status {
   font-size: var(--size-status);
-  font-weight: 650;
+  font-weight: 600;
 }
 .floor .attempt-card__glyph {
   width: 16px;
   height: 16px;
 }
+.floor .attempt-card__relies {
+  text-transform: none;
+  letter-spacing: 0;
+}
 /* The holds count reads as a quiet sentence, not as a status word. */
 .floor .attempt-card__holds {
-  font-weight: 500;
+  font-weight: 400;
 }
 .floor .race-group {
-  border-radius: 18px;
-  border-color: var(--glass-edge);
+  border: none;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 .floor .landed-row {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
-  border: var(--border) solid var(--glass-edge);
+  background: var(--raised);
+  border: none;
   border-radius: 14px;
 }
 .floor .landed-seq {
@@ -426,31 +437,35 @@
   font-weight: 600;
 }
 
-/* ---- Sheets: rounded glass plates with depth. The Why sheet, Who relies and the git drawer dock
- * to the right edge (2.5), so only their left corners round. ---- */
+/* ---- Sheets: #1d1d1f plates over a dimmed page. The Why sheet, Who relies and the git drawer
+ * dock to the right edge (2.5), so only their left corners round. ---- */
 .floor .sheet,
 .floor .card-sheet,
 .floor .start-card {
-  border: var(--border) solid var(--glass-edge);
-  border-radius: 24px;
+  border: none;
+  border-radius: var(--radius-panel);
   background: var(--surface);
-  box-shadow: 0 30px 80px var(--shade);
+  box-shadow: 0 24px 64px var(--shade);
 }
 .floor .sheet.why-sheet,
 .floor .sheet.who-sheet,
 .floor .git-drawer {
-  border-radius: 24px 0 0 24px;
+  border: none;
+  border-radius: var(--radius-panel) 0 0 var(--radius-panel);
 }
 .floor .toast {
-  border: var(--border) solid var(--glass-edge);
+  border: none;
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--raised);
 }
 .floor .strip-tip {
+  border: none;
   border-radius: 12px;
+  background: var(--raised);
 }
 .floor .card-sheet .sheet-frame__body {
-  border-radius: 16px;
+  border: none;
+  border-radius: 14px;
 }
 
 /* ---- Swarm ---- */
@@ -470,9 +485,6 @@
  * header and the banners stay (FL4). ---- */
 .floor[data-view="overview"] .strip {
   display: none;
-}
-.floor[data-view="overview"] .header {
-  border-bottom-color: transparent;
 }
 .floor .floor-overview {
   display: block;
@@ -530,13 +542,12 @@
 /* ---- The narrow layout (2.9): one column; the strip may take two rows ---- */
 @media (max-width: 1099px) {
   .floor .rail {
-    border: none;
     background: transparent;
     padding: 0;
   }
   .floor .strip-cell {
     padding: 6px 10px;
-    border-bottom: var(--border) solid var(--glass-edge);
+    border-bottom: var(--border) solid var(--hairline);
   }
   /* The run clock is eight figures: its cell takes the width they need. */
   .floor .strip-cell[data-cell="strip.clock"] {
@@ -569,10 +580,10 @@
 }
 @keyframes page-landed {
   0% {
-    text-shadow: 0 0 24px var(--holds);
+    color: var(--holds);
   }
   100% {
-    text-shadow: 0 0 0 transparent;
+    color: inherit;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -583,4 +594,43 @@
   .floor .strip-cell[data-cell="strip.landed"] .strip-value--flash {
     animation: counter-flash 1s var(--ease);
   }
+}
+
+/* The Replay scrubber: a quiet track and a white knob, as Apple's players draw it. */
+.floor input[type="range"].replay-track {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.floor input[type="range"].replay-track::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--raised);
+}
+.floor input[type="range"].replay-track::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--raised);
+}
+.floor input[type="range"].replay-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 1px 4px var(--shade);
+}
+.floor input[type="range"].replay-track::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+}
+.floor input[type="range"].replay-track::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--action);
 }

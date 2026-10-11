@@ -77,7 +77,7 @@ for (const [size, width, height] of [
       await openTiles(page, width, height, theme);
       // 3.7 (2026-10-10): every file of world/ is held, so its label carries the one tag.
       const held = page.locator(".tile-label", { hasText: "world/" }).locator(".tile-tag");
-      const expected = theme === "dark" ? "rgb(255, 200, 87)" : "rgb(138, 90, 0)";
+      const expected = theme === "dark" ? "rgb(255, 214, 10)" : "rgb(135, 88, 0)";
       await expect(held).toHaveText("Held");
       await expect(held).toHaveCSS("color", expected);
       await expect(held).toHaveCSS("border-top-color", expected);

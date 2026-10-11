@@ -1,5 +1,5 @@
-// The engine half of the green line (01-core 11.5): GR1, GR1a, GR2, GR3 (with GR3b's part-14a
-// end), GR4 and GR8 on a real Trunk over node:sqlite. The verifier is not run here: each test
+// The engine half of the green line (01-core 11.5): GR1, GR1a, GR2, GR3 (GR3b's part-14a end and
+// part 14b's take-back), GR4 and GR8 on a real Trunk over node:sqlite. The verifier is not run here: each test
 // hands `greenDone` the result a run would produce, and checks what the engine does with it.
 
 import { DatabaseSync } from "node:sqlite";
@@ -26,7 +26,7 @@ const FAIL = [
   { name: "policy_invariants", ok: true },
 ];
 
-function fixture(green: "none" | "static" = "static") {
+function fixture(green: "none" | "static" | "full" = "static") {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
   const sql: Sql = {
@@ -88,8 +88,26 @@ function fixture(green: "none" | "static" = "static") {
     duration_ms: 3,
     log: checks.every((c) => c.ok) ? "" : "parse: creatures/x.js",
   });
-  return { trunk, clock, land, timer, events, result };
+  const reopen = () => Trunk.open(sql, { now: () => clock.now, features: { green } });
+  const headsUps = (attempt: string): Array<Record<string, unknown>> =>
+    (db.prepare("SELECT body FROM heads_ups WHERE attempt_id = ? ORDER BY hn").all(attempt) as Array<{ body: string }>).map(
+      (r) => JSON.parse(r.body) as Record<string, unknown>,
+    );
+  return { trunk, clock, land, timer, events, result, reopen, headsUps, db };
 }
+
+/** A self-test result of the isolate runtime (02-tidepool 5.4's mapping, GR8): `selftest_ran`, then
+ * the twelve invariants, with `not_exhausted` failed, as in 5.4's example. */
+const ISOLATE_FAIL: VerifyResult["checks"] = [
+  { name: "selftest_ran", ok: true },
+  ...["files", "no_errors", "in_bounds", "energy_range", "population"].map((name) => ({ name, ok: true })),
+  { name: "not_exhausted", ok: false, code: "not_exhausted:failed" },
+  ...["state_is_data", "pen_rules", "visible", "within_reach", "draw_is_pure", "deterministic"].map((name) => ({
+    name,
+    ok: true,
+  })),
+];
+const LOG_TEXT = "crab: resting 100% of the time";
 
 describe("the green line's engine half (01-core 11.5)", () => {
   it("GR1: batch.pushed arms the green timer, and a run verifies the newest landing on main (GR1a)", () => {
@@ -263,5 +281,143 @@ describe("the green line's engine half (01-core 11.5)", () => {
     land("A", "a.js");
     expect(timer()).toBeNull();
     expect(trunk.green()).toEqual({ state: "idle" });
+  });
+});
+
+describe("part 14b: a confirmed red takes the range back (01-core GR3, GR3a, GR7, GR8)", () => {
+  const isolate = (seq: number, commit: string): VerifyResult => ({
+    seq,
+    commit,
+    ok: false,
+    runtime: "isolate",
+    checks: ISOLATE_FAIL,
+    duration_ms: 40,
+    log: JSON.stringify({ details: { not_exhausted: LOG_TEXT } }),
+  });
+
+  it("GR3: the first failed run queues nothing; the second queues one revert of every landing in (green_seq, s]", () => {
+    const { trunk, clock, land, events } = fixture("full");
+    land("A", "a.js");
+    const b = land("B", "b.js");
+    trunk.green();
+    expect(trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 1, result: isolate(2, b.commit_oid) })).toMatchObject({
+      applied: "rerun",
+    });
+    // A first failed run changes nothing else: no request, no plan, no landing.
+    expect(trunk.pool.undoQueue).toEqual([]);
+    expect(events("undo.planned")).toEqual([]);
+
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    expect(trunk.green()).toMatchObject({ state: "verify", seq: 2, run: 2 });
+    expect(trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 2, result: isolate(2, b.commit_oid) })).toMatchObject({
+      applied: "red",
+    });
+    expect(events("green.verified").map((e) => [e.ok, e.confirmed])).toEqual([
+      [false, false],
+      [false, true],
+    ]);
+    expect(events("undo.planned")).toEqual([
+      expect.objectContaining({ cause: "revert", target_seq: 1, reverted: [1, 2], reopened: ["A", "B"] }),
+    ]);
+    expect(trunk.pool.undoQueue).toHaveLength(1);
+  });
+
+  it("GR3: the revert lands as one commit of kind revert in the next tick and reopens every attempt in R", () => {
+    const { trunk, clock, land, events, reopen, headsUps } = fixture("full");
+    const a = land("A", "a.js");
+    const b = land("B", "b.js");
+    trunk.green();
+    trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 1, result: isolate(2, b.commit_oid) });
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    trunk.green();
+    trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 2, result: isolate(2, b.commit_oid) });
+
+    // The request survives a restart of Trunk with its range and its checks (GR3a: fixed when queued).
+    const again = reopen();
+    again.tick();
+    const revert = again.pool.landings.at(-1)!;
+    expect(revert).toMatchObject({ seq: 3, kind: "revert" });
+    expect(again.pool.landings.filter((l) => l.kind === "revert")).toHaveLength(1);
+    expect(again.pool.files.has("a.js")).toBe(false);
+    expect(again.pool.files.has("b.js")).toBe(false);
+    expect(events("landing.accepted").at(-1)).toMatchObject({ seq: 3, kind: "revert", request_id: "green-revert-2" });
+    expect(again.pool.landings.filter((l) => l.undone_by === 3).map((l) => l.seq)).toEqual([a.seq, b.seq]);
+    for (const id of ["A", "B"]) {
+      expect(again.pool.attempts.get(id)).toMatchObject({ state: "going_around", revision: 2 });
+      expect(events("attempt.reopened")).toContainEqual(expect.objectContaining({ attempt_id: id, cause: "revert" }));
+      const h = headsUps(id).at(-1)!;
+      expect(h).toMatchObject({ result: "repair", cause: { type: "revert" } });
+      // GR8: the check item carries the name and the fixed code only.
+      expect(h.items).toContainEqual(
+        expect.objectContaining({
+          premise: { kind: "check", key: "not_exhausted" },
+          diff: { kind: "check", check: "not_exhausted", code: "not_exhausted:failed" },
+        }),
+      );
+    }
+  });
+
+  it("GR7: the log's free text reaches no event and no heads-up", () => {
+    const { trunk, clock, land, db } = fixture("full");
+    land("A", "a.js");
+    const b = land("B", "b.js");
+    trunk.green();
+    trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 1, result: isolate(2, b.commit_oid) });
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    trunk.green();
+    trunk.greenDone({ seq: 2, commit: b.commit_oid, run: 2, result: isolate(2, b.commit_oid) });
+    trunk.tick();
+    const bodies = [
+      ...(db.prepare("SELECT body FROM events_out").all() as Array<{ body: string }>),
+      ...(db.prepare("SELECT body FROM heads_ups").all() as Array<{ body: string }>),
+    ].map((r) => r.body);
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies) expect(body).not.toContain("resting 100%");
+  });
+
+  it("GR3a: an attempt at MAX_REVISIONS is not reopened by a revert; it stops with revert_limit and a card", () => {
+    const { trunk, clock, land, events } = fixture("full");
+    const a = land("A", "a.js");
+    trunk.pool.attempts.get("A")!.revision = 3;
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 1, result: isolate(1, a.commit_oid) });
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 2, result: isolate(1, a.commit_oid) });
+    trunk.tick();
+    expect(trunk.pool.landings.at(-1)).toMatchObject({ kind: "revert" });
+    expect(trunk.pool.attempts.get("A")).toMatchObject({ state: "stopped", stop_reason: "revert_limit" });
+    expect(events("card.opened")).toContainEqual(
+      expect.objectContaining({ card: expect.objectContaining({ reason: "revert_limit", attempt_ids: ["A"] }) }),
+    );
+  });
+
+  it("GR3b: the same confirmed red under the static runtime queues nothing", () => {
+    const { trunk, clock, land, events } = fixture("static");
+    const a = land("A", "a.js");
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 1, result: isolate(1, a.commit_oid) });
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 2, result: isolate(1, a.commit_oid) });
+    expect(trunk.pool.undoQueue).toEqual([]);
+    expect(events("undo.planned")).toEqual([]);
+  });
+
+  it("GR3 then GR2: the revert commit is verified next and, when it passes, the green line advances to it", () => {
+    const { trunk, clock, land, events, result } = fixture("full");
+    const a = land("A", "a.js");
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 1, result: isolate(1, a.commit_oid) });
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    trunk.green();
+    trunk.greenDone({ seq: 1, commit: a.commit_oid, run: 2, result: isolate(1, a.commit_oid) });
+    trunk.tick();
+    trunk.pushOk();
+    const revert = trunk.pool.landings.at(-1)!;
+    clock.now += GREEN_MIN_INTERVAL_MS;
+    expect(trunk.green()).toMatchObject({ state: "verify", seq: revert.seq, run: 1 });
+    trunk.greenDone({ seq: revert.seq, commit: revert.commit_oid, run: 1, result: result(revert.seq, revert.commit_oid, PASS) });
+    expect(events("green.advanced").at(-1)).toMatchObject({ seq: revert.seq, commit: revert.commit_oid });
   });
 });

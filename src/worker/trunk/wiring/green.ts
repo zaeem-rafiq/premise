@@ -1,7 +1,8 @@
 // The green line's worker half (01-core 11.5): the `green` timer's work, wired into Trunk's alarm
 // like the plain-merge job. One run asks the engine's `green` entry for the next commit (GR1,
-// GR1a), verifies it off the landing path with the build's runtime (GR5; stage 1 is `static`,
-// GR5a), moves `refs/heads/green` by compare-and-swap when it passed (GR2, GR2a), and hands the
+// GR1a), verifies it off the landing path with the build's runtime (GR5: the isolate's self-test
+// when `features.green` is "full", S4a; the static checks of GR5a otherwise and for an imported
+// pool, which has no self-test), moves `refs/heads/green` by compare-and-swap when it passed (GR2, GR2a), and hands the
 // answer to `green_done` (GR3, GR4). A run that cannot read or cannot move the ref emits nothing
 // and is retried on the push backoff with a `trunk.error` of a fixed code (SE5b, BP7). No remote
 // call happens inside a transaction (AL4); a verification never blocks or slows a landing.
@@ -17,6 +18,8 @@ import type { Env } from "../../env.ts";
 import { artifactsTokenSource } from "../../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../../adapters/pusher/pusher.ts";
 import { staticVerifier } from "../../adapters/verifier/static.ts";
+import { isolateVerifier } from "../../adapters/verifier/isolate.ts";
+import { FEATURES } from "../../../config/features.ts";
 import { recordTrunkError } from "../after-commit.ts";
 import { runPush } from "../push-runner.ts";
 import type { PushDeps } from "../push.ts";
@@ -121,8 +124,12 @@ async function runGreenJobInner(
   const start = (await apply("green", {})) as GreenStart;
   if (start.state !== "verify") return;
 
+  const loader = (env as { LOADER?: WorkerLoader }).LOADER;
   const verifier =
     deps?.verifier?.(start) ??
+    (FEATURES.green === "full" && !start.imported && loader !== undefined
+      ? isolateVerifier({ seq: start.seq, commit: start.commit, files: new Map(start.files), loader })
+      : undefined) ??
     staticVerifier({
       seq: start.seq,
       commit: start.commit,

@@ -84,6 +84,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   },
   "overview.inflight": { text: "In flight" },
   "overview.inflight.none": { text: "Nothing is in flight." },
+  "overview.latest": { text: "Latest landings" },
   "overview.more": { text: "Every attempt and detail is in the Floor view." },
   "nav.replay": { text: "Replay" },
   "nav.about": { text: "About" },

@@ -13,6 +13,7 @@ import { PoolFrame } from "../pool-frame/pool-frame.tsx";
 import { IntentBox } from "../intent-box/intent-box.tsx";
 import { StatusGlyph } from "../attempt-card/attempt-card.tsx";
 import { cardModel } from "../attempt-card/model.ts";
+import { LandedRow } from "../rail/rail.tsx";
 
 /** 2.11: at most this many cards in flight; the rest are one tap away in the Floor view. */
 const OVERVIEW_CARDS = 3;
@@ -32,6 +33,8 @@ export type OverviewProps = {
   onCompare?: () => void;
   onTapped?: (path: string) => void;
   onOpenCard: (cardId: string) => void;
+  /** Opens the Why card of a landing (3.9). */
+  onOpenWhy?: (seq: number) => void;
   onFloor: () => void;
   /** RY23: on a quiet pool a visitor is offered the recording (the start card's action). */
   replayOffer?: { label: string; onPlay: () => void };
@@ -58,6 +61,11 @@ export function Overview(props: OverviewProps) {
     .filter(inFlight)
     .sort((a, b) => b.last_event_ts - a.last_event_ts);
   const shown = flying.slice(0, OVERVIEW_CARDS);
+  // 2.11: on a quiet pool the column shows the newest landings instead of an empty list.
+  const latest = floor.landed_order
+    .map((seq) => floor.landings[seq])
+    .filter((landing) => landing !== undefined)
+    .slice(0, OVERVIEW_CARDS);
   const facts = props.cells
     .filter((cell) => cell.id !== "strip.landed" && cell.id !== "strip.goarounds")
     .map((cell) =>
@@ -96,8 +104,18 @@ export function Overview(props: OverviewProps) {
       </div>
 
       <aside className="overview__side" aria-label={text("overview.inflight")}>
-        <h2 className="overview__side-title">{text("overview.inflight")}</h2>
-        {shown.length === 0 && <p className="overview__empty">{text("overview.inflight.none")}</p>}
+        <h2 className="overview__side-title">
+          {text(shown.length === 0 && latest.length > 0 ? "overview.latest" : "overview.inflight")}
+        </h2>
+        {shown.length === 0 && latest.length === 0 && (
+          <p className="overview__empty">{text("overview.inflight.none")}</p>
+        )}
+        {shown.length === 0 &&
+          latest.map((landing) => (
+            <div key={landing.seq} className="overview__landing">
+              <LandedRow landing={landing} floor={floor} onOpenWhy={props.onOpenWhy} />
+            </div>
+          ))}
         {shown.map((attempt) => {
           const model = cardModel(floor, attempt, props.clock, props.visitor);
           const open = model.cardId;

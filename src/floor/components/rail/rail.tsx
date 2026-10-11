@@ -352,7 +352,7 @@ function attemptName(attempt: AttemptView, floor: FloorState): string {
   });
 }
 
-function LandedRow({
+export function LandedRow({
   landing,
   floor,
   onOpenWhy,

@@ -1415,6 +1415,7 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `overview.waiting` | {n} waiting behind another change. Every landing is one ordinary commit on main. |
 | `overview.inflight` | In flight |
 | `overview.inflight.none` | Nothing is in flight. |
+| `overview.latest` | Latest landings |
 | `overview.more` | Every attempt and detail is in the Floor view. |
 | `nav.replay` | Replay |
 | `nav.about` | About |
@@ -2129,7 +2130,7 @@ Sent to the polite live region, or to the assertive one where 4.3 says urgent (6
 
 ### 6.1 The language
 
-The page looks like a poster at night: ink rules on a dark ground, numbers set like headlines, and plain words in spaced capitals. The light theme is the same poster on paper. (Owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions".)
+The page looks like a poster at night: ink rules on a dark ground, numbers set like headlines, and plain words in spaced capitals. The light theme is the same poster on paper. (Owner's choice of 2026-10-10, direction "E dark" of the Figma file "Premise Floor: visual directions"; set in one family, the system face, since the owner's "all five" of 2026-10-11.)
 
 - **VD1 (still unless something happened).** Nothing moves by itself except the pool app and the slow "working" pulse. Every other movement is caused by one event and ends within 720 ms.
 - **VD2 (signals).** The five light shapes (circle, diamond, triangle, ring, half circle) are the identity of the product. They are used for premises and for status only, at every size, in both themes. No other icon set is used; the few other marks (cross, tick, two bars, reader ring, writer square) are drawn in the same weight.
@@ -2139,16 +2140,16 @@ The page looks like a poster at night: ink rules on a dark ground, numbers set l
 
 ### 6.2 Type
 
-- **VD6.** Numbers, titles, intent text and the masthead name use Instrument Serif. Interface text uses Archivo (variable weight). Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. Both typefaces are under the SIL Open Font License 1.1 (owner's approval of 2026-10-10); their files and licences are bundled in `src/floor/styles/fonts/`, so no font is fetched from another host. Each face falls back to the system stack (`font-display: swap`).
+- **VD6.** Every text, number and title uses the system interface typeface: `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` (SF Pro on a Mac), so the Overview and the Floor view read as one product. Code, ids and diffs use `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`. No font file is fetched.
 - **VD7.** Numbers use tabular figures (`font-variant-numeric: tabular-nums`).
-- **VD8.** Serif text is set at weight 400 with tight letter spacing. Archivo is weight 400 for text and 600 to 800 for status words, labels and buttons. Capitals with letter spacing 0.06 to 0.1em for banner words, section labels, tabs, status words and command buttons. Italic only for the pool frame's caption.
+- **VD8.** Numbers, titles, intent text and the masthead name are set at weight 600 to 700 with tight letter spacing (−0.02 to −0.035em). Text is weight 400; status words, labels and buttons 600 to 800. Capitals with letter spacing 0.06 to 0.1em for banner words, section labels and status words. No italics.
 
 | Role | Stage size | Laptop size | Used for |
 | --- | --- | --- | --- |
-| Display | 168 | 120 | The four large Swarm numbers (serif) |
-| Counter | 84 | 56 | The two hero numbers, Landed and Go-arounds, and the masthead name (serif); from 1100 to 1599 wide they follow the window (3.9vw, at least 40). The other strip values, and every strip value in Replay, are at Title size. |
-| Title | 40 | 32 | Sheet titles, card titles in the sheet, headings (serif) |
-| Intent | 30 | 24 | Intent text on attempt cards (serif), the pool frame's caption (serif italic), banner words, the thesis line |
+| Display | 168 | 120 | The four large Swarm numbers |
+| Counter | 84 | 56 | The two hero numbers, Landed and Go-arounds; from 1100 to 1599 wide they follow the window (3.9vw, at least 40). The other strip values, and every strip value in Replay, are at Title size. |
+| Title | 40 | 32 | Sheet titles, card titles in the sheet, headings, the masthead name |
+| Intent | 30 | 24 | Intent text on attempt cards, the pool frame's caption, banner words, the thesis line |
 | Status | 22 | 18 | Status words, heads-up before and after (code face) |
 | Body | 20 | 16 | Sentences, labels, links |
 | Small | 16 | 14 | Strip labels, tags, tile names, command buttons (capitals), the git drawer (code face) |

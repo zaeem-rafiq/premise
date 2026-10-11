@@ -11,6 +11,16 @@
       "bytes": 256867,
       "synthetic": true,
       "recorded_at": "2026-10-11T08:47:28.819Z"
+    },
+    {
+      "id": "swarm",
+      "file": "/replay/swarm.ndjson",
+      "title": "The Swarm: 256 scripted agents, collision dial 25%",
+      "duration_ms": 288736,
+      "events": 3473,
+      "bytes": 1693584,
+      "synthetic": true,
+      "recorded_at": "2026-10-11T09:30:04.511Z"
     }
   ]
 }

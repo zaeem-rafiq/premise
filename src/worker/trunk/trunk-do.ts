@@ -15,6 +15,9 @@ import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
 import { FEATURES } from "../../config/features.ts";
 import { PUSH_BACKOFF_BASE_MS } from "../../protocol/constants.ts";
+
+/** How long one Floor delivery may run before another may start beside it (#deliverEvents). */
+const EVENTS_STALE_MS = 10_000;
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
@@ -371,13 +374,52 @@ export class Trunk extends DurableObject<Env> {
   /** Hand committed rows to the Floor immediately (EV3), without making the push await
    * confirmation (9.4 step 6). Every delivery retains EV2's epoch and gap checks. Independent
    * sends are intentional: a held confirmation must not hold a newer entry's events. */
+  #eventsRun: Promise<void> | null = null;
+  #eventsAgain = false;
+  #eventsEpoch = "";
+  #eventsStarted = 0;
+  #eventsToken: object | null = null;
+
+  /**
+   * EV2/EV3: one delivery to the Floor at a time. A request calls this up to three times and every
+   * call used to start its own delivery of every pending row, so under load the Floor received the
+   * same rows many times over and Trunk's requests queued behind it (the final soak on `test`,
+   * 2026-10-11: agent `sync` calls waited 9 to 27 s). A call while a delivery runs asks for one
+   * more round when it ends, so no committed event waits for a later request.
+   */
   #deliverEvents(): void {
-    const delivery = deliverEvents(this.env, this.ctx)
-      .catch(() => recordTrunkError(this.ctx, "events", "transport"))
-      // An asynchronous delivery can install a retry after its request/alarm already ended.
-      .then(() => this.#arm())
-      .catch(() => recordTrunkError(this.ctx, "events", "alarm_failed"));
-    this.ctx.waitUntil(delivery);
+    this.#eventsAgain = true;
+    // A run that hangs (a Floor that never answers) or that a rebuild left on an older epoch (RB5)
+    // must not hold back the new epoch's events: after EVENTS_STALE_MS, or on a new epoch, a fresh
+    // run starts beside it. The old run's rows are confirmed by epoch, so it cannot undo the new one.
+    const epoch = metaGet(this.#sql, "epoch") ?? "1";
+    if (this.#eventsRun !== null && epoch === this.#eventsEpoch && Date.now() - this.#eventsStarted < EVENTS_STALE_MS) {
+      return;
+    }
+    this.#eventsEpoch = epoch;
+    this.#eventsStarted = Date.now();
+    const token = {};
+    this.#eventsToken = token;
+    const run = (async () => {
+      try {
+        while (this.#eventsAgain) {
+          this.#eventsAgain = false;
+          try {
+            await deliverEvents(this.env, this.ctx);
+          } catch {
+            recordTrunkError(this.ctx, "events", "transport");
+          }
+        }
+        // An asynchronous delivery can install a retry after its request/alarm already ended.
+        await this.#arm();
+      } catch {
+        recordTrunkError(this.ctx, "events", "alarm_failed");
+      } finally {
+        if (this.#eventsToken === token) this.#eventsRun = null;
+      }
+    })();
+    this.#eventsRun = run;
+    this.ctx.waitUntil(run);
   }
 
   /**
@@ -720,8 +762,10 @@ export class Trunk extends DurableObject<Env> {
         const now = url.searchParams.get("now");
         const at = now === null ? undefined : Number(now);
         await this.#runAlarm(at !== undefined && Number.isFinite(at) ? at : undefined);
-        // The test path waits for a green run the alarm started, so a test sees its result.
+        // The test path waits for a green run and an event delivery the alarm started, so a test
+        // sees their results.
         await this.#greenRun;
+        await this.#eventsRun;
         return json({ ok: true });
       }
       if (pathname === "/internal/swarm-hold" || pathname === "/internal/swarm-held") {

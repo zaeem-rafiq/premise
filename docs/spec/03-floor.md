@@ -864,10 +864,11 @@ Shows (2.6): the SYNTHETIC banner; four large numbers (`swarm.lps` with a small 
 - **CO43.** Repair latency is not shown on the wall. The line `swarm.repair_note` says it is measured with real agents only (`01-core.md` 14.7).
 - **CO44.** The SYNTHETIC banner is present whenever this view is open, running or not, with the sentence `banner.synthetic.swarm`. It is also present in every other view of a synthetic pool (FL4).
 - **CO44a (the requests).** The controls send `SwarmRequest` (`01-core.md` SWR1) for the Swarm pool. Start sends the whole `SwarmConfig`: `agents` and `collision_dial` from the controls, the other fields from `swarm_defaults` of `/floor.json`. Moving the dial during a run sends `{ pool, running: true, collision_dial, request_id }`. Stop sends `{ pool, running: false, request_id }`. The page shows the dial and the agent count of the newest `swarm.state`, not of its own request (CO48).
+- **CO44b (the run's shape, amended 2026-10-11).** `swarm.shape` fills `{pools}` with 1: a run is the Swarm pool's alone (`01-core.md` SWR1, instance `run-<pool>`). The `pools` field of `swarm.state` lists the registered pools the state is delivered to (EV2a), not the pools a run uses.
 
 | State | When | Shows |
 | --- | --- | --- |
-| empty | no `swarm.state` yet | `swarm.empty`, controls (owner) |
+| empty | no `swarm.state` yet, or only states that never ran (`running` and `ever_ran` false: a canned cast started through `/api/swarm` on another pool leaves one; amended 2026-10-11) | `swarm.empty`, controls (owner) with their defaults |
 | loading | `swarm.running` and no synthetic attempt yet | `swarm.starting` |
 | loading | a start or stop request is in flight | the controls disabled; the start button reads `swarm.starting` with the requested `agents`, the stop button `swarm.stopping` (FL10, amended 2026-10-07) |
 | live | `swarm.running` | live numbers and wall |

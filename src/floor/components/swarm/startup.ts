@@ -1,6 +1,13 @@
 import type { PoolEvent } from "../../../protocol/events.ts";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 
+/** 3.15 "empty": the Swarm state the view shows. A `swarm.state` that never ran (not running and
+ * `ever_ran` false) is not a Swarm run: a canned cast started through /api/swarm on another pool
+ * leaves one, and the view then still says `swarm.empty` and keeps its own default controls. */
+export function shownSwarm(swarm: FloorState["swarm"]): FloorState["swarm"] {
+  return swarm !== null && (swarm.running || swarm.ever_ran) ? swarm : null;
+}
+
 /** FR24: each running transition starts a fresh wait, even when older attempts remain. */
 export class SwarmStartup {
   running = false;

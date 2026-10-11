@@ -181,7 +181,7 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
   test("FL10: while Start is in flight it reads Starting {n} scripted agents… and is disabled", async ({ page }) => {
     let release: (() => void) | undefined;
     const held = new Promise<void>((resolve) => (release = resolve));
-    await serveStream(page, [poolState(1), swarmState(2, { running: false })]);
+    await serveStream(page, [poolState(1), swarmState(2), swarmState(3, { running: false })]);
     await serveSession(page, true);
     await page.route("**/api/swarm", async (route) => {
       await held;
@@ -202,8 +202,9 @@ test.describe("CO44a/CO48: the owner controls send SwarmRequest and follow swarm
     page,
   }) => {
     const posts: Frame[] = [];
-    // A stopped run: the controls adopt its agent count and dial (CO48), and Start is offered.
-    await serveStream(page, [poolState(1), swarmState(2, { running: false })]);
+    // A run that ran and stopped (a swarm.state that never ran is swarm.empty, 3.15): the controls
+    // adopt its agent count and dial (CO48), and Start is offered.
+    await serveStream(page, [poolState(1), swarmState(2), swarmState(3, { running: false })]);
     await serveSession(page, true);
     await page.route("**/api/swarm", async (route) => {
       const request = route.request();

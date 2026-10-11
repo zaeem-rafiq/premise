@@ -66,3 +66,47 @@ it("CP5 5.2: other counts keep the plural and the thousands comma", () => {
   expect(html).toContain("Real agents in the main pool: 12 at most. The limit is the model rate.");
   expect(html).toContain("Last push: 1 push, 37 changes");
 });
+
+function ownerHtml(swarm: ReturnType<typeof emptyFloorState>["swarm"], ts = 5_000): string {
+  const floor = emptyFloorState();
+  floor.ts = ts;
+  floor.swarm = swarm;
+  return renderToString(
+    createElement(
+      ShellContext.Provider,
+      { value: makeShell(settings, true, false) },
+      createElement(SwarmView, { floor, owner: true, pool: "swarm", clock: ts }),
+    ),
+  );
+}
+
+// 3.15 "ended": `swarm.final` names the time of day of the last numbers (5.4). Found on `test`,
+// 2026-10-11: the view threw "no value for placeholder {time of day}" after a run stopped.
+it("3.15 ended: a stopped run says when its last numbers were measured", () => {
+  const ts = new Date(2026, 9, 11, 4, 5, 6).getTime();
+  const html = ownerHtml({ running: false, agents: 64, collision_dial: 0, pools: ["swarm"], ever_ran: true }, ts);
+  expect(html).toContain("The run has ended. These are its last measured numbers, at 04:05:06.");
+});
+
+// 3.15 "empty": a swarm.state that never ran is not a Swarm run. A canned cast started through
+// /api/swarm on another pool leaves one (agents 1, running false, ever_ran false; found on
+// `production`, 2026-10-11), and PS7 needs `swarm.empty` before the take.
+it("3.15 empty: a swarm.state that never ran shows swarm.empty and the default controls", () => {
+  const html = ownerHtml({ running: false, agents: 1, collision_dial: 0, pools: ["a", "b", "swarm"], ever_ran: false });
+  expect(html).toContain("No Swarm run yet. A run uses scripted agents and makes no model calls.");
+  expect(html).not.toContain("This run:");
+  expect(html).toMatch(/checked="" value="64"/);
+  expect(html).not.toContain("swarm-agent-count");
+});
+
+// CO44b: the shape line names the run's one pool, not every pool the state was delivered to.
+it("CO44b: a run on the Swarm pool reads as one pool and one Trunk", () => {
+  const html = ownerHtml({
+    running: true,
+    agents: 1024,
+    collision_dial: 0,
+    pools: ["a", "b", "swarm"],
+    ever_ran: true,
+  });
+  expect(html).toContain("This run: 1 pool, 1 Trunk, 1,024 scripted agents.");
+});

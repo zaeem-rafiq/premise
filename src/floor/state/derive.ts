@@ -333,7 +333,9 @@ export function bannerList(
   const syntheticCount = Object.values(state.attempts).filter((a) => a.agent === "synthetic").length;
   // CO48: in Swarm view the count names what the newest swarm.state runs, not the wall cells —
   // a summary_only pool's stream need not hold one attempt per agent before they open.
-  const bannerCount = opts.view === "swarm" ? (state.swarm?.agents ?? syntheticCount) : syntheticCount;
+  // A swarm.state that never ran (a canned cast's) names no run (3.15 "empty").
+  const ran = state.swarm !== null && (state.swarm.running || state.swarm.ever_ran);
+  const bannerCount = opts.view === "swarm" && ran ? state.swarm!.agents : syntheticCount;
 
   if (opts.view === "swarm" || opts.replay.synthetic || state.pool.synthetic) {
     const id = opts.view === "swarm" ? "banner.synthetic.swarm" : "banner.synthetic";

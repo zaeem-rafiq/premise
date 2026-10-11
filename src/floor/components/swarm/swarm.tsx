@@ -8,12 +8,12 @@
 import { useContext, useEffect, useState } from "react";
 import type { FloorState } from "../../../protocol/reducer/state.ts";
 import { ShellContext } from "../../app/context.ts";
-import { count } from "../../../copy/format.ts";
+import { count, timeOfDay } from "../../../copy/format.ts";
 import { errorSentence } from "../../../copy/errors.ts";
 import { SwarmNumbers, share } from "./metrics.tsx";
 import { SwarmWall } from "./wall.tsx";
 
-import { swarmDidNotStart, swarmRequestAcknowledged } from "./startup.ts";
+import { shownSwarm, swarmDidNotStart, swarmRequestAcknowledged } from "./startup.ts";
 
 export function SwarmView({
   floor,
@@ -47,7 +47,7 @@ export function SwarmView({
   const [agents, setAgents] = useState(64);
   const [dial, setDial] = useState(0);
 
-  const swarm = floor.swarm;
+  const swarm = shownSwarm(floor.swarm);
 
   useEffect(() => {
     if (swarmRequestAcknowledged(pending, answered, requestedRun, swarmRun, swarm?.running)) setPending(null);
@@ -113,9 +113,7 @@ export function SwarmView({
       ) : (
         <>
           {!swarm.running && swarm.ever_ran && (
-            <p className="swarm-final">
-              {t("swarm.final", { "time of day": new Date(floor.ts).toISOString().slice(11, 19) })}
-            </p>
+            <p className="swarm-final">{t("swarm.final", { time: timeOfDay(floor.ts) })}</p>
           )}
           {swarm.running && waitingSince !== null && (
             <p className="swarm-final">
@@ -186,7 +184,9 @@ export function SwarmView({
       )}
       <p className="swarm-real-limit">{t("swarm.real_limit", { max: mainPool.max_real_agents })}</p>
       {swarm !== null && (
-        <p className="swarm-shape">{t("swarm.shape", { pools: swarm.pools.length, agents: swarm.agents })}</p>
+        // CO44b: a run is one pool's (SWR1: `run-<pool>`); `swarm.state.pools` lists where the
+        // state is delivered (every registered pool, EV2a), not where agents run.
+        <p className="swarm-shape">{t("swarm.shape", { pools: 1, agents: swarm.agents })}</p>
       )}
       <p className="swarm-repair">{t("swarm.repair_note")}</p>
     </div>

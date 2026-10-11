@@ -124,9 +124,11 @@ test("D31 2.6 CO42 CO42a: four metric cells, named rates, chart, choices and dia
   await page.setViewportSize({ width: 1440, height: 900 });
   await separateStreams(page, [
     poolState(1, { synthetic: true }),
-    { ...running(2), running: false },
-    metrics(3, { landings_per_second: 4.25, escape_rate: 0.5 }),
-    metrics(4, { landings_per_second: 5.5 }),
+    // A run that ran and stopped: a swarm.state that never ran shows swarm.empty (3.15).
+    running(2),
+    { ...running(3), running: false },
+    metrics(4, { landings_per_second: 4.25, escape_rate: 0.5 }),
+    metrics(5, { landings_per_second: 5.5 }),
   ]);
   await serveSession(page, true);
   await page.goto(`/p/${POOL}`);

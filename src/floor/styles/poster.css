@@ -14,7 +14,7 @@
 .floor .sheet-title,
 .floor .start-card h3 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.05;
 }
@@ -58,10 +58,10 @@
 }
 .floor .app-name {
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: var(--size-counter);
+  font-weight: 700;
+  font-size: var(--size-title);
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   text-transform: none;
 }
 .floor .pool-name {
@@ -146,7 +146,7 @@
 }
 .floor .strip-value {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 650;
   font-size: var(--size-counter);
   line-height: 0.9;
   letter-spacing: -0.03em;
@@ -178,7 +178,7 @@
 /* The pool frame: an ink-edged plate, square. */
 .floor .pf-caption-text {
   font-family: var(--font-display);
-  font-style: italic;
+  font-weight: 600;
   font-size: var(--size-intent);
   color: var(--text);
 }
@@ -372,7 +372,7 @@
 .floor h1,
 .floor h2 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.1;
 }
@@ -423,7 +423,7 @@
 }
 @media (max-width: 1099px) {
   .floor .strip-value:not(.strip-value--text) {
-    font-size: min(var(--size-counter), 6.5vw);
+    font-size: min(var(--size-counter), 5.6vw);
   }
 }
 
@@ -568,7 +568,7 @@
   .floor
     .strip-cell:not([data-cell="strip.landed"]):not([data-cell="strip.goarounds"])
     .strip-value:not(.strip-value--text) {
-    font-size: min(var(--size-title), 6.5vw);
+    font-size: min(var(--size-title), 5.6vw);
   }
 }
 
@@ -583,4 +583,20 @@
 .floor .floor-overview {
   display: block;
   padding: 0;
+}
+@media (max-width: 1099px) {
+  /* The run clock is eight figures: its cell takes the width they need. */
+  .floor .strip-cell[data-cell="strip.clock"] {
+    flex-basis: auto;
+  }
+}
+@media (max-width: 1099px) {
+  /* 2.9: the strip may take two rows; a sentence value wraps inside its cell. */
+  .floor .strip .strip-main,
+  .floor .strip .strip-value--text {
+    white-space: normal;
+  }
+  .floor .strip .strip-value--text {
+    font-size: var(--size-small);
+  }
 }

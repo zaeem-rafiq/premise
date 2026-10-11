@@ -693,6 +693,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                 : undefined
             }
             onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
+            onOpenWhy={table.entries.has("sheet.why") ? (seq) => openSheet({ kind: "why", seq }) : undefined}
             onFloor={() => setView("floor")}
             replayOffer={
               showStartCard(owner, replay, quietPool(floor, clock), startDismissed)

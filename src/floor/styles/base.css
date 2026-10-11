@@ -1,6 +1,6 @@
-/* The Floor's visual direction (03-floor 6): "Poster at night". Plain CSS and custom
- * properties. Two bundled typefaces under the SIL Open Font License (VD6): Instrument Serif for
- * the numbers and titles, Archivo for the interface; code keeps the system monospace stack.
+/* The Floor's visual direction (03-floor 6): "Poster at night", set in one family. Plain CSS
+ * and custom properties. Text, numbers and titles use the system interface face (VD6: SF Pro on
+ * a Mac), so the Floor and the Overview read as one product; code keeps the system monospace.
  * Tabular figures (VD7). Dark is the default theme; `data-theme="light"` switches to the paper
  * version. `data-size="stage"` is the larger reading size (VD19, key Z); without a saved choice
  * it follows the window width - stage at 1600 and above (2.1). The poster layer itself (rules,
@@ -11,31 +11,9 @@
  * fixed (2.1): header 88/72, banners 40/36 each, the strip 136/112, the Replay bar 108/96 (its
  * transport row 56/48 and its chapter row 52/48). */
 
-@font-face {
-  font-family: "Archivo";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("./fonts/archivo-latin-wght-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Instrument Serif";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Instrument Serif";
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./fonts/instrument-serif-latin-400-italic.woff2") format("woff2");
-}
-
 :root {
-  --font-text: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+  --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-text);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --radius: 0px;
   --border: 1px;

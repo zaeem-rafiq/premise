@@ -64,13 +64,13 @@ test.describe("AC12 / 2.1: the stage layout at 1920x1080", () => {
         caption: pick(".pf-caption"),
       };
     });
-    // 6.2 stage (2026-10-10): counter 84 (Landed and Go-arounds live, the masthead name); in
+    // 6.2 stage (2026-10-10): counter 84 (Landed and Go-arounds live); title 40 (the masthead name); in
     // Replay every strip value reads at Title (40); small 16 (strip labels, command buttons),
     // intent 30 (banner words).
     expect(sizes.counter).toBe(40);
     expect(sizes.stripLabel).toBe(16);
     expect(sizes.bannerWord).toBe(30);
-    expect(sizes.appName).toBe(84);
+    expect(sizes.appName).toBe(40);
     expect(sizes.button).toBe(16);
     // VD15: the frame caption is read from the back of a room - 22 or larger.
     expect(sizes.caption ?? 0).toBeGreaterThanOrEqual(22);

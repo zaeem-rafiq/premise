@@ -217,6 +217,8 @@ export type UndoRequest = {
   state: "queued" | "landed" | "refused";
   requested_by: string | null;
   reverted?: number[];
+  /** GR3: the failing checks of a `revert` (names and codes of GR8 only), for its heads-ups. */
+  checks?: Array<{ name: string; code: string }>;
 };
 
 export type IntentRec = {

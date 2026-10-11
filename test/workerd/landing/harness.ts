@@ -476,6 +476,8 @@ export async function startLandingWorker(options: {
                 workflowExports: { SwarmWorkflow: { name: "premise-swarm" } },
               }
             : {}),
+          // wrangler.jsonc's Worker Loader binding: the green line's isolate runtime (S4a).
+          workerLoaders: { LOADER: {} },
           serviceBindings: {
             POOLS: { name: "fake-artifacts" },
             ...(options.modelUrl === undefined ? {} : { AI: { name: "fake-ai", entrypoint: "AiBinding" } }),

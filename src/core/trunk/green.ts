@@ -8,7 +8,9 @@ import { GREEN_LOG_MAX_CHARS, GREEN_MIN_INTERVAL_MS, GREEN_TIMEOUT_MS } from "..
 import { GREEN_CHECK_NAMES, SELFTEST_CODES, type VerifyResult } from "../../protocol/green.ts";
 import { redact } from "../../protocol/redact.ts";
 import { emitPoolState, event, metaWrite } from "./events.ts";
-import type { Pool } from "./sets.ts";
+import { scheduleTick } from "./intents.ts";
+import type { Pool, UndoRequest } from "./sets.ts";
+import { planUndo } from "../undo/plan.ts";
 
 /** `meta.green_inflight`: the one verification in flight (GR1). `run` is 2 for GR3's second run. */
 type Inflight = { seq: number; commit: string; run: 1 | 2; started_at: number };
@@ -62,9 +64,49 @@ function earliestStart(pool: Pool): number {
   return Number.isFinite(started) && started > 0 ? Math.max(pool.now(), started + GREEN_MIN_INTERVAL_MS) : pool.now();
 }
 
-/** Whether this build runs a green line the engine can drive (stage 1: the static runtime). */
+/** Whether this build runs a green line: the static runtime (part 14a) or the isolate (14b). */
 export function runsGreen(pool: Pool): boolean {
-  return pool.featuresGreen === "static";
+  return pool.featuresGreen === "static" || pool.featuresGreen === "full";
+}
+
+/** GR3 (part 14b): a confirmed red queues one request of cause `revert` for every live landing of
+ * kind `change` in `(green_seq, s]`, planned like an undo with *R* starting from that range. It
+ * lands as one commit of kind `revert` in the next tick and reopens every attempt in *R* with a
+ * heads-up whose `check` items carry only the failing names and codes (GR8). */
+function queueRevert(pool: Pool, seq: number, checks: VerifyResult["checks"]): void {
+  const greenSeq = Number(pool.meta.get("green_seq") ?? "0");
+  const range = pool.landings
+    .filter((l) => l.kind === "change" && l.undone_by === null && l.seq > greenSeq && l.seq <= seq)
+    .map((l) => l.seq)
+    .sort((a, b) => a - b);
+  if (range.length === 0) return;
+  // A take-back already queued owns these landings until the next tick (as UN5's confirm).
+  if (pool.undoQueue.some((q) => (q.reverted ?? [q.target_seq]).some((s) => range.includes(s)))) return;
+  const plan = planUndo(pool, range[0]!, pool.files, range);
+  const request: UndoRequest = {
+    request_id: `green-revert-${seq}`,
+    target_seq: range[0]!,
+    cause: "revert",
+    state: "queued",
+    requested_by: "green",
+    reverted: plan.reverted,
+    checks: checks.filter((c) => !c.ok).map((c) => ({ name: c.name, code: c.code ?? "" })),
+  };
+  pool.undoQueue.push(request);
+  pool.undoLog.set(request.request_id, request);
+  pool.dirtyUndo.add(request.request_id);
+  scheduleTick(pool);
+  event(pool, "undo.planned", {
+    request_id: request.request_id,
+    cause: "revert",
+    target_seq: request.target_seq,
+    reverted: plan.reverted,
+    reopened: plan.reverted.flatMap((s) => {
+      const id = pool.landings.find((l) => l.seq === s)?.attempt_id;
+      return id == null ? [] : [id];
+    }),
+    kept_readers: plan.kept,
+  });
 }
 
 /** The landing a run would verify (GR1a): the newest one confirmed on `main`. */
@@ -226,8 +268,10 @@ export function greenDone(
     // GR3: a first failed run changes nothing else; the same commit is run once more.
     metaWrite(pool, RERUN, JSON.stringify({ seq: input.seq, commit: input.commit }));
   } else {
-    // GR3b: confirmed. Part 14a queues no revert; the next landing is verified when it comes.
+    // GR3: confirmed. The isolate build (part 14b) takes the range back; the static build queues
+    // no revert (GR3b). Either way the next landing is verified when it comes.
     metaWrite(pool, RERUN, null);
+    if (pool.featuresGreen === "full") queueRevert(pool, input.seq, result.checks);
   }
   rearm(pool);
   return { ok: true, applied: result.ok ? "advanced" : confirmed ? "red" : "rerun" };

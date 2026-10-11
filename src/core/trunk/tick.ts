@@ -556,7 +556,15 @@ export function tick(pool: Pool): void {
         setIntentState(pool, a.intent_id, "undone");
       } else {
         reopen(pool, a, x, running, u.cause);
-        reopened.push({ a, plan, x, cause: u.cause, undoSeq: seq, head: running });
+        reopened.push({
+          a,
+          plan,
+          x,
+          cause: u.cause,
+          undoSeq: seq,
+          head: running,
+          ...(u.checks === undefined ? {} : { checks: u.checks }),
+        });
       }
       pool.dirtyAttempts.add(a.id);
     }

@@ -18,6 +18,8 @@ export type Reopened = {
   cause: "undo" | "revert";
   undoSeq: number;
   head: FileMap;
+  /** GR3: a revert's failing checks (GR8 names and codes), one `check` item each. */
+  checks?: Array<{ name: string; code: string }>;
 };
 
 export function reopen(pool: Pool, a: Attempt, landing: Landing, head: FileMap, cause: "undo" | "revert"): void {
@@ -59,6 +61,23 @@ export function repairReopened(
   causeSeq: CauseSeq,
 ): void {
   const items: ReturnType<typeof hItem>[] = [];
+  // GR3, GR8: a revert's heads-up names the failing checks by name and fixed code, never by text.
+  for (const c of r.cause === "revert" ? (r.checks ?? []) : []) {
+    items.push({
+      item: {
+        premise: { kind: "check", key: c.name },
+        rule: "GR3",
+        result: "repair",
+        reason: "green_failed",
+        old_hash: "",
+        new_hash: "",
+        cause_seq: r.undoSeq,
+        diff: { kind: "check", check: c.name, code: c.code },
+        uses: [],
+      },
+      trace: { kind: "check", key: c.name, rule: "GR3", result: "repair" },
+    });
+  }
   for (const p of r.a.premises.values()) {
     const cur = keyHash(head, p.kind, p.key, pool.languages);
     const dep = r.plan.depKeys.get(r.x.seq)?.has(`${p.kind}|${p.key}`) === true;

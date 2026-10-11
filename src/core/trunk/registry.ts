@@ -81,9 +81,11 @@ const DEFAULT_K: Pool["K"] = {
 };
 
 // Older stores used the requester string directly; new rows also freeze the confirmed set.
-function parseUndoDetail(raw: string): { requested_by: string | null; reverted?: number[] } {
+type UndoDetail = { requested_by: string | null; reverted?: number[]; checks?: UndoRequest["checks"] };
+
+function parseUndoDetail(raw: string): UndoDetail {
   try {
-    return JSON.parse(raw) as { requested_by: string | null; reverted?: number[] };
+    return JSON.parse(raw) as UndoDetail;
   } catch {
     return { requested_by: raw };
   }
@@ -439,6 +441,8 @@ export function openPool(sql: Sql, opts: PoolOptions = {}): Pool {
       requested_by: row.detail === null ? null : parseUndoDetail(str(row.detail)).requested_by,
       reverted: row.detail === null ? undefined : parseUndoDetail(str(row.detail)).reverted,
     };
+    const checks = row.detail === null ? undefined : parseUndoDetail(str(row.detail)).checks;
+    if (checks !== undefined) u.checks = checks;
     pool.undoLog.set(u.request_id, u);
     if (u.state === "queued") pool.undoQueue.push(u);
   }
@@ -1413,7 +1417,11 @@ export function persist(pool: Pool): void {
         u.target_seq,
         u.cause,
         u.state,
-        JSON.stringify({ requested_by: u.requested_by, reverted: u.reverted }),
+        JSON.stringify({
+          requested_by: u.requested_by,
+          reverted: u.reverted,
+          ...(u.checks === undefined ? {} : { checks: u.checks }),
+        }),
       );
     }
   }

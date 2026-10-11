@@ -226,9 +226,12 @@
   align-items: center;
   gap: 10px;
 }
+/* One line tall, growing to three for a long pre-written request or a narrow screen; browsers without
+   field-sizing keep the one line and scroll. */
 .overview .overview__ask .intent-field {
-  min-height: 0;
+  min-height: 44px;
   height: 44px;
+  max-height: 110px;
   resize: none;
   padding: 11px 0;
   border: none;
@@ -237,12 +240,73 @@
   font-size: 17px;
   letter-spacing: -0.02em;
 }
+/* The owner's pill holds the field and the two send buttons. The pre-written requests and the starter
+   set sit on one quiet line under it, and a note (sending, waiting, an error) under that. The pill's
+   surface is drawn behind the first grid row only, so a second line never stretches the pill. */
+.overview .overview__ask .intent-box:has(.intent-row) {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 10px;
+  padding: 0;
+  background: transparent;
+}
+.overview .overview__ask .intent-box:has(.intent-row)::before {
+  content: "";
+  grid-area: 1 / 1 / 2 / -1;
+  align-self: stretch;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.overview .overview__ask .intent-box:has(.intent-row) .intent-field {
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  padding-left: 24px;
+}
+@supports (field-sizing: content) {
+  .overview .overview__ask .intent-field {
+    height: auto;
+    field-sizing: content;
+  }
+}
 .overview .overview__ask .intent-row {
-  margin-top: 0;
-  flex: none;
+  display: contents;
 }
 .overview .overview__ask .intent-count {
   display: none;
+}
+.overview .overview__ask .intent-actions {
+  grid-area: 1 / 2;
+  justify-self: end;
+  margin: 0;
+  padding: 6px 6px 6px 0;
+  flex-wrap: nowrap;
+}
+.overview .overview__ask .intent-prewritten {
+  grid-row: 2;
+  grid-column: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 999px;
+  padding: 0 16px;
+  background: var(--surface);
+  font-family: inherit;
+}
+.overview .overview__ask .intent-starter {
+  grid-row: 2;
+  grid-column: 2;
+}
+.overview .overview__ask .intent-box:has(.intent-row) > .intent-note,
+.overview .overview__ask .intent-box:has(.intent-row) > .intent-error {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0 24px;
+  text-align: center;
 }
 .overview .overview__ask .intent-box button {
   border-radius: 999px;

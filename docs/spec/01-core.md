@@ -1032,6 +1032,8 @@ Not recursive. A missing directory returns an empty list. Premise: `listing:<dir
 
 `path` is optional (default `/`); it is a directory key or a file path. A directory scope is recursive (2.6).
 
+A scope is read the way a model means it (amended 2026-10-11, after a live sweep agent spent its budget on `invalid_path`): a leading `./` or `/` is dropped; trailing path segments that contain `*` are a pattern over their directory (`creatures/*.js` is `creatures/`); `""`, `.`, `*` and `*.js` are `/`; and a name with no `/` that is not a file but has files below it is that directory (`creatures` is `creatures/`). Any other bad scope answers `invalid_path` with a sentence that names the accepted forms.
+
 ```json
 {
   "query": "drain(",

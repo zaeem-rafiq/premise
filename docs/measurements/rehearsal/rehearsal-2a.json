@@ -1,0 +1,251 @@
+{
+  "v": 1,
+  "run": "2",
+  "driven_by": "test/e2e/lead/rehearsal-real.spec.ts, real Workers AI agents (owner delegated run 2)",
+  "deployment_host": "premise.rk3469.workers.dev",
+  "pool": "rehearsal2",
+  "recorded_at": "2026-10-11T19:34:09.762Z",
+  "total_s": 1893,
+  "landings": 11,
+  "headsups": 21,
+  "take_backs": 1,
+  "beats_failed": [
+    1,
+    3,
+    5
+  ],
+  "beats": [
+    {
+      "beat": 1,
+      "title": "Starter set and the crab race",
+      "start_s": 4,
+      "end_s": 636,
+      "checks": [
+        {
+          "name": "press \"Send the starter set (6)\"",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "type the crab request, press \"Race 3\"",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "a starter creature lands by itself",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the three crab attempts reach \"Waiting for you\"",
+          "ok": false,
+          "note": "timed out waiting for race 3 of 3 ready"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 2,
+      "title": "Shared rule and Who relies",
+      "start_s": 636,
+      "end_s": 639,
+      "checks": [
+        {
+          "name": "type the shared-rule request, press Send",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "tile energy, ENERGY_MAX, Who relies: In flight lists the crabs",
+          "ok": true,
+          "note": "Who relies on ENERGY_MAX in world/energy.js Close In flight (3) crab (gpt-oss-120b) Waiting for you (the new code uses it) crab (kimi-k2.7-code) Waiting for you (the agent read it, the new code uses it) crab (glm-5.3-flash) Waiting for you "
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 3,
+      "title": "Held card, Land, heads-up and go-around",
+      "start_s": 639,
+      "end_s": 1259,
+      "checks": [
+        {
+          "name": "the shared rule waits on its held card",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "open the card; it names the crab attempts; tap Land",
+          "ok": true,
+          "note": "Landing this sends 3 changes back to their agents: crab (glm-5.3-flash), crab (kimi-k2.7-code), crab (gpt-oss-120b). | 3 changes in flight have a premise on what it changes: crab (glm-5.3-flash), crab (gpt-oss-120b), crab (kimi-k2.7-code). | 3 landed changes rely on what it changes."
+        },
+        {
+          "name": "the shared rule lands",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the crabs get a heads-up and go around",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the crabs return to \"Waiting for you\"",
+          "ok": false,
+          "note": "timed out waiting for race ready again"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 4,
+      "title": "Race sheet and Compare view",
+      "start_s": 1259,
+      "end_s": 1280,
+      "checks": [
+        {
+          "name": "open the race card, tap \"Choose this one\"",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the chosen crab lands",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Compare view (key C)",
+          "ok": true,
+          "note": "What differs starfish: its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work. sea-urchin: its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work. octopus: its agent was sent back in the middle of its work. The plain-m"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 5,
+      "title": "The second catch: the sweep and the late creature",
+      "start_s": 1280,
+      "end_s": 1817,
+      "checks": [
+        {
+          "name": "the shrimp has landed (BS7)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "send the sweep request",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the sweep waits on its card",
+          "ok": false,
+          "note": "timed out waiting for sweep card"
+        },
+        {
+          "name": "send the late creature (the squid)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the squid lands by itself",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 6,
+      "title": "Why card and Show the git",
+      "start_s": 1817,
+      "end_s": 1818,
+      "checks": [
+        {
+          "name": "Why card of the crab (from its landed row)",
+          "ok": true,
+          "note": "Why is this here? crab (kimi-k2.7-code) · landing 7 · 14:23:38 Close Who asked owner: \"a crab that hides in its shell when its energy drops below 30\" Who wrote it A real agent on kimi-k2.7-code. What it relied on the file GUIDE.md (the agent read it) Who relies on this the list of files in creatures"
+        },
+        {
+          "name": "Show the git",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 7,
+      "title": "Causal Undo",
+      "start_s": 1818,
+      "end_s": 1831,
+      "checks": [
+        {
+          "name": "Why card of the shared-rule change, Undo",
+          "ok": true,
+          "note": "Undo landing 6: \"make energy a fraction from 0 to 1\"? Close This also takes back 2 later changes that were built on it: landing 7 crab (kimi-k2.7-code), landing 8 squid. Their agents reopen and adapt. Keep it Undo it"
+        },
+        {
+          "name": "tap \"Undo it\"; a later change reopens",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the reopened change adapts and lands again",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 8,
+      "title": "Swarm view (no Start: the Swarm pool stays empty for the take, PS7)",
+      "start_s": 1831,
+      "end_s": 1832,
+      "checks": [
+        {
+          "name": "Swarm view opens with its controls",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": [
+        "Start not pressed: PS7 needs the production Swarm pool empty before the take."
+      ]
+    },
+    {
+      "beat": 9,
+      "title": "About",
+      "start_s": 1832,
+      "end_s": 1833,
+      "checks": [
+        {
+          "name": "About opens",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "beat": 10,
+      "title": "Lock and play the Replay",
+      "start_s": 1833,
+      "end_s": 1893,
+      "checks": [
+        {
+          "name": "Owner, then Lock",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Play the Replay",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "notes": []
+    }
+  ]
+}

@@ -165,16 +165,39 @@ function toolInner(pool: Pool, a: Attempt, req: ToolRequest): InnerOut {
   }
   if (toolName === "search") {
     if (typeof args.query !== "string") return e("invalid_args", "query required");
-    const scope = typeof args.path === "string" ? args.path : undefined;
+    let scope = typeof args.path === "string" ? searchScope(args.path) : undefined;
+    // A directory named without its "/" ("creatures") is that directory, not a missing file.
+    if (scope !== undefined && !scope.endsWith("/") && !pool.files.has(scope)) {
+      const dir = `${scope}/`;
+      if ([...pool.files.keys()].some((p) => p.startsWith(dir))) scope = dir;
+    }
+    const bad = `bad scope: give a directory that ends with "/" (for example "creatures/"), one file path, or leave path out; patterns are not supported`;
     if (scope !== undefined && scope !== "/" && !scope.endsWith("/") && !validPath(scope))
-      return e("invalid_path", "bad scope");
+      return e("invalid_path", bad);
     if (scope !== undefined && scope.endsWith("/") && scope !== "/" && !validPath(scope.slice(0, -1)))
-      return e("invalid_path", "bad scope");
+      return e("invalid_path", bad);
     return toolSearch(pool, a, { query: args.query, path: scope });
   }
   if (toolName === "write") return toolWrite(pool, a, args);
   if (toolName === "replace") return toolReplace(pool, a, args);
   return submitCall(pool, a, args as { summary?: string; acknowledge?: number[]; statement?: string }, req.ack);
+}
+
+/** 4.6 `search`'s scope as a model writes it, read the way it meant (amended 2026-10-11): a leading
+ * "./" or "/" is dropped, a trailing glob ("creatures/*", "creatures/**", "creatures/*.js") names
+ * its directory, and "" or "." is the whole codebase. Found live: a sweep agent spent its whole
+ * budget alternating such scopes with `invalid_path` and never edited a creature. */
+export function searchScope(raw: string): string {
+  let s = raw.trim();
+  while (s.startsWith("./")) s = s.slice(2);
+  if (s.length > 1) while (s.startsWith("/")) s = s.slice(1);
+  // Trailing segments with a "*" are a pattern over their directory.
+  const parts = s.split("/");
+  let cut = parts.length;
+  while (cut > 0 && parts[cut - 1]!.includes("*")) cut -= 1;
+  if (cut < parts.length) s = cut === 0 ? "/" : `${parts.slice(0, cut).join("/")}/`;
+  if (s === "" || s === ".") s = "/";
+  return s;
 }
 
 /** The limits of 4.2 that a new operation can exceed. */

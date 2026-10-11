@@ -193,7 +193,28 @@ export function againstGreen(head: Run, green: Run): Mapped {
 
 /** One failure of a submit's pre-landing self-test (01-core CK6c): a name and code of GR8, and the
  * creature kind when the candidate tree has `creatures/<kind>.js` (the agent's own file name). */
-export type FreshFailure = { name: string; code: string; kind?: string };
+export type FreshFailure = { name: string; code: string; kind?: string; means?: string };
+
+/** What each failed check means, for the agent that must repair it: fixed sentences from the
+ * table of 02-tidepool 5.2 (and PN1/PN2 for the pen), never text from the run itself (GR7). */
+export const SELFTEST_MEANS: Readonly<Record<string, string>> = {
+  files: "a creature module lacks spawn, update or draw as exported functions",
+  no_errors:
+    "the creature threw an error, or produced a non-finite place or speed or a NaN energy, when spawn, update or draw ran",
+  in_bounds: "a creature left the water (use bounds.js: keepInside or bounce)",
+  energy_range: "a creature's energy went below 0, above ENERGY_MAX, or was not a number",
+  population: "the number of creatures differs from what spawning expects: do not add or remove creatures yourself",
+  not_exhausted: "the creatures rested (energy 0) for more than a quarter of their ticks: spend less energy or eat",
+  state_is_data:
+    "the world is not plain JSON data after the run: keep only numbers, strings, booleans, arrays and plain objects in creature state",
+  pen_rules:
+    "a pen call was rejected: more than 40 shapes in one draw, a non-finite argument, a bad poly, or a colour that is not a PALETTE name in pen.js or a #rrggbb hex",
+  visible: "the creature drew nothing, or something smaller than 16 wide and tall",
+  draw_is_pure: "draw changed the world or the creature: move and change state only in update, never in draw",
+  deterministic:
+    "two runs from the same seed ended differently: keep no state at the top level of the module, only in each creature",
+  selftest_ran: "the self-test could not run the pool's code at all",
+};
 
 /** CK6c with GR3d: the failures of a submit's candidate run that head's run does not have, in a
  * fixed order. Only names and codes of GR8 leave the harness (GR7): a name the fixed list does not
@@ -209,11 +230,12 @@ export function freshFailures(candidate: Run, head: Run, paths: Iterable<string>
     const name = finding.slice(0, bar);
     const rest = finding.slice(bar + 1);
     if (name === "selftest_ran") {
-      if ((SELFTEST_CODES as readonly string[]).includes(rest)) out.push({ name, code: rest });
+      if ((SELFTEST_CODES as readonly string[]).includes(rest))
+        out.push({ name, code: rest, means: SELFTEST_MEANS[name] });
       continue;
     }
     if (!(INVARIANTS as readonly string[]).includes(name)) continue;
-    out.push({ name, code: `${name}:failed`, ...(kinds.has(rest) ? { kind: rest } : {}) });
+    out.push({ name, code: `${name}:failed`, ...(kinds.has(rest) ? { kind: rest } : {}), means: SELFTEST_MEANS[name] });
   }
   return out;
 }

@@ -62,7 +62,7 @@ describe("CK6c: the pre-landing self-test of a submit, Worker half", () => {
     const st = new SubmitSelftest(run);
     expect(await st.verdict(candidate("k1", "h1", tree("bad", ["eel"])))).toEqual({
       key: "k1",
-      failed: [{ name: "no_errors", code: "no_errors:failed", kind: "eel" }],
+      failed: [{ name: "no_errors", code: "no_errors:failed", kind: "eel", means: expect.stringContaining("threw") }],
     });
     expect(await st.verdict(candidate("k2", "h1", tree("good", ["eel"])))).toEqual({ key: "k2", failed: [] });
     expect(seen.filter((m) => m === "head:h1")).toHaveLength(1);

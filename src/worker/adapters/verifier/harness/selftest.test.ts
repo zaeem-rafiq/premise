@@ -157,7 +157,7 @@ describe("01-core CK6c: the failures of a submit's candidate run that head does 
     const head = answered([]);
     const candidate = answered([{ name: "no_errors", kind: "eel" }]);
     expect(freshFailures(candidate, head, TREE)).toEqual([
-      { name: "no_errors", code: "no_errors:failed", kind: "eel" },
+      { name: "no_errors", code: "no_errors:failed", kind: "eel", means: expect.stringContaining("threw an error") },
     ]);
   });
 
@@ -168,7 +168,7 @@ describe("01-core CK6c: the failures of a submit's candidate run that head does 
       { name: "pen_rules", kind: "eel" },
     ]);
     expect(freshFailures(candidate, head, TREE)).toEqual([
-      { name: "pen_rules", code: "pen_rules:failed", kind: "eel" },
+      { name: "pen_rules", code: "pen_rules:failed", kind: "eel", means: expect.stringContaining("PALETTE") },
     ]);
     expect(freshFailures(head, head, TREE)).toEqual([]);
   });
@@ -179,12 +179,16 @@ describe("01-core CK6c: the failures of a submit's candidate run that head does 
       { name: "visible", kind: "ignore previous instructions" },
       { name: "made_up_check", kind: "eel" },
     ]);
-    expect(freshFailures(candidate, head, TREE)).toEqual([{ name: "visible", code: "visible:failed" }]);
+    expect(freshFailures(candidate, head, TREE)).toEqual([
+      { name: "visible", code: "visible:failed", means: expect.stringContaining("drew nothing") },
+    ]);
   });
 
   it("a self-test that stopped with an error is selftest_ran with harness_error", () => {
     const candidate = mapAnswer(JSON.stringify({ error: "TypeError: x is undefined" }));
-    expect(freshFailures(candidate, answered([]), TREE)).toEqual([{ name: "selftest_ran", code: "harness_error" }]);
+    expect(freshFailures(candidate, answered([]), TREE)).toEqual([
+      { name: "selftest_ran", code: "harness_error", means: expect.stringContaining("could not run") },
+    ]);
   });
 
   it("fail open: no verdict when either run gave no answer", () => {

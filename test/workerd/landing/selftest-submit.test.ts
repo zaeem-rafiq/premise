@@ -69,6 +69,7 @@ describe("CK6c with features.green full: the self-test runs before a submit land
       name: "no_errors",
       code: "no_errors:failed",
       kind: "eel",
+      means: expect.stringContaining("threw an error"),
     });
     // GR7/GR8: only check names and fixed codes, never the thrown error's text.
     expect(JSON.stringify(first.result)).not.toContain("missing");
@@ -119,7 +120,7 @@ describe("CK6c with features.green full: the self-test runs before a submit land
     const kelp = await change(worker, BASE, "kelp", { "creatures/kelp.js": badPen("kelp") });
     expect(kelp.result.status).toBe("rejected");
     expect(kelp.result.errors![0]!.detail.failed).toEqual([
-      { name: "pen_rules", code: "pen_rules:failed", kind: "kelp" },
+      { name: "pen_rules", code: "pen_rules:failed", kind: "kelp", means: expect.stringContaining("PALETTE") },
     ]);
   }, 240_000);
 });

@@ -20,6 +20,7 @@ import type { ToolResponse } from "../../../protocol/tools.ts";
 import type { HeadsUp } from "../../../protocol/headsup.ts";
 import {
   MAX_MODEL_CALLS,
+  MAX_STEPS,
   MAX_ATTEMPT_TOKENS,
   MAX_NUDGES,
   MAX_TOOL_CALLS_PER_TURN,
@@ -267,9 +268,9 @@ describe("budgets (4.7)", () => {
   });
   it("toolBudgetOk gates a tool call on MAX_STEPS", () => {
     const state = newLoopState();
-    state.meta.tool_steps = 39;
+    state.meta.tool_steps = MAX_STEPS - 1;
     expect(toolBudgetOk(state)).toBe(true);
-    state.meta.tool_steps = 40;
+    state.meta.tool_steps = MAX_STEPS;
     expect(toolBudgetOk(state)).toBe(false);
   });
 });

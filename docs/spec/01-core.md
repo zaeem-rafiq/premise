@@ -2968,8 +2968,8 @@ Values are starting values. *Calibrated* constants MUST be replaced by measured 
 | `MODEL_TIMEOUT_MS` | 60,000 | |
 | `MODEL_RETRIES` | 2 | |
 | `AGENT_WATCHDOG_MS` | 30,000 | AG3: a call in progress with a future deadline is progress |
-| `MAX_STEPS` | 40 | |
-| `MAX_MODEL_CALLS` | 30 | |
+| `MAX_STEPS` | 60 | Raised from 40 on 2026-10-11 with the pre-landing checks (CK6b to CK6d): `docs/measurements/budget/2026-10-11-agent-budget.md`. |
+| `MAX_MODEL_CALLS` | 45 | Raised from 30 on 2026-10-11, the same measurement. |
 | `MAX_ATTEMPT_TOKENS` | 400,000 | calibrated (S5) |
 | `MAX_ATTEMPT_USD` | 1.00 | calibrated (S5); never reset (AG6) |
 | `RESUME_STEPS`, `RESUME_MODEL_CALLS`, `RESUME_TIMEOUT_MS` | 15, 12, 300,000 | allowance after T19 or T21 (AG6) |

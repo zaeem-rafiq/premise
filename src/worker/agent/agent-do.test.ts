@@ -12,6 +12,7 @@ import {
   AGENT_WATCHDOG_MS,
   ATTEMPT_TIMEOUT_MS,
   HEADS_UP_REPUSH_MS,
+  MAX_STEPS,
   TOOL_RETRIES,
   TOOL_TIMEOUT_MS,
   WAIT_BACKOFF_BASE_MS,
@@ -344,9 +345,10 @@ describe("Agent resume budgets", () => {
     const before = await f.inspect();
     expect(before.meta.state).toBe("stopped");
     expect(before.meta.stop_reason).toBe(atLimit ? "budget" : "cancelled");
-    expect(before.meta.tool_steps).toBe(atLimit ? "40" : "1");
-    expect(before.meta.model_calls).toBe(atLimit ? "20" : "1");
-    expect(Number(before.meta.usd_spent)).toBeCloseTo(atLimit ? 0.02 : 0.001, 10);
+    // Reading continuously, every model call asks for two tool steps, so MAX_STEPS is reached first.
+    expect(before.meta.tool_steps).toBe(atLimit ? String(MAX_STEPS) : "1");
+    expect(before.meta.model_calls).toBe(atLimit ? String(MAX_STEPS / 2) : "1");
+    expect(Number(before.meta.usd_spent)).toBeCloseTo(atLimit ? (MAX_STEPS / 2) * 0.001 : 0.001, 10);
 
     // Hold the resume's sync so the snapshot observes acceptance, before any new spend.
     let release!: () => void;
@@ -359,8 +361,8 @@ describe("Agent resume budgets", () => {
     });
     const resumed = await f.inspect();
     // AG6: 15 steps, 12 model calls, and 300,000 ms counted from this resume.
-    expect(resumed.meta.step_limit).toBe(atLimit ? "55" : "16");
-    expect(resumed.meta.model_limit).toBe(atLimit ? "32" : "13");
+    expect(resumed.meta.step_limit).toBe(atLimit ? String(MAX_STEPS + 15) : "16");
+    expect(resumed.meta.model_limit).toBe(atLimit ? String(MAX_STEPS / 2 + 12) : "13");
     expect(resumed.meta.deadline_at).toBe(String(NOW + 60_000 + 300_000));
     expect(resumed.timers).toContainEqual({ kind: "attempt_timeout", key: "main", due_at: NOW + 360_000 });
     for (const key of [
@@ -386,7 +388,7 @@ describe("Agent resume budgets", () => {
     await f.drain();
     const after = await f.inspect();
     expect(after.meta.state).toBe(atLimit ? "stopped" : "validated");
-    expect(after.meta.tool_steps).toBe(atLimit ? "55" : "2");
+    expect(after.meta.tool_steps).toBe(atLimit ? String(MAX_STEPS + 15) : "2");
   });
 });
 

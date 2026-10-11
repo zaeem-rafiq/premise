@@ -1,5 +1,7 @@
-/* The Overview view (03-floor 2.11): one hero, one sentence, quiet everything else. It sets its
- * own type in the system face, the way a product page does, and keeps the page's colour tokens. */
+/* The Overview view (03-floor 2.11): one hero, one sentence, quiet everything else, measured on
+ * apple.com's dark product pages (2026-10-11): a black page, a centred SF headline at 56 with
+ * weight 600, a 21 intro in grey, #1d1d1f panels with no edges, 17 body text, 12 fine print, one
+ * blue for actions. Nothing glows, nothing is outlined, and the pool carries no effect. */
 
 .overview {
   height: 100%;
@@ -12,8 +14,8 @@
     "hero side"
     "ask ask"
     "facts facts";
-  gap: 20px 28px;
-  padding: 20px 40px 16px;
+  gap: 24px 32px;
+  padding: 32px 48px 20px;
   font-family:
     system-ui,
     -apple-system,
@@ -22,7 +24,7 @@
     "Helvetica Neue",
     Arial,
     sans-serif;
-  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--checking) 8%, var(--bg)), var(--bg) 60%);
+  background: var(--bg);
 }
 
 .overview__head {
@@ -32,19 +34,23 @@
 .overview .overview__title {
   margin: 0;
   font-family: inherit;
-  font-size: clamp(32px, 3.6vw, 64px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.05;
+  font-size: clamp(40px, 3.9vw, 64px);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.07;
   color: var(--text);
+  text-wrap: balance;
 }
 .overview .overview__line {
-  margin: 10px 0 0;
-  font-size: var(--size-status);
+  max-width: 680px;
+  margin: 12px auto 0;
+  font-size: clamp(17px, 1.46vw, 21px);
+  font-weight: 400;
+  line-height: 1.38;
   color: var(--muted);
 }
 .overview__play {
-  margin-top: 14px;
+  margin-top: 20px;
 }
 
 .overview__hero {
@@ -55,10 +61,9 @@
   justify-content: center;
 }
 /* The tide pool draws 800 by 500 (02-tidepool bounds): the hero takes that 16:10 shape, so the
- * pool fills it edge to edge with no letterbox bars. */
+ * pool fills it edge to edge with no letterbox bars. The frame takes the room the hero row has,
+ * whatever the headline above it holds. */
 .overview__hero .pf {
-  /* The frame takes the room the hero row has, whatever the headline above it holds: as wide as
-   * the row allows, and no taller than its height less the caption bar. */
   width: min(100cqw, calc((100cqh - 48px) * 16 / 10));
 }
 .overview .overview__hero .pf-caption {
@@ -66,7 +71,7 @@
 }
 .overview .overview__hero .pf-caption-text {
   font-family: inherit;
-  font-style: normal;
+  font-weight: 400;
   font-size: var(--size-small);
   color: var(--muted);
 }
@@ -74,11 +79,18 @@
   flex: none;
   aspect-ratio: 16 / 10;
   border: none;
-  border-radius: 24px;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent),
-    0 40px 100px color-mix(in srgb, var(--checking) 18%, transparent),
-    0 20px 40px rgb(0 0 0 / 0.45);
+  border-radius: 18px;
+  box-shadow: none;
+}
+.overview .overview__hero .pf-body::after {
+  content: none;
+}
+.overview .overview__hero .pf-btn {
+  border: none;
+  border-radius: 999px;
+  background: var(--raised);
+  font-family: inherit;
+  font-weight: 400;
 }
 .overview__noapp {
   align-self: center;
@@ -94,13 +106,13 @@
   gap: 12px;
 }
 .overview .overview__side-title {
-  margin: 0;
+  margin: 0 0 4px;
   font-family: inherit;
-  font-size: var(--size-body);
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
   text-transform: none;
-  color: var(--muted);
+  color: var(--text);
 }
 .overview__empty {
   margin: 0;
@@ -113,12 +125,11 @@
   gap: 6px;
   width: 100%;
   min-height: 44px;
-  padding: 14px 16px;
+  padding: 18px 20px;
   text-align: left;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  backdrop-filter: blur(24px);
+  border: none;
+  border-radius: 18px;
+  background: var(--surface);
   font-family: inherit;
   font-weight: 400;
   color: var(--text);
@@ -153,9 +164,10 @@
   color: var(--muted);
 }
 .overview__intent {
-  font-size: var(--size-body);
+  font-size: 17px;
   font-weight: 600;
-  line-height: 1.25;
+  letter-spacing: -0.02em;
+  line-height: 1.24;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -173,23 +185,43 @@
   border: none;
   background: transparent;
   font-family: inherit;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
   color: var(--accent);
+}
+.overview .overview__more:hover {
+  text-decoration: underline;
+}
+
+/* A quiet pool: the newest landings take the column (2.11), drawn like the cards. */
+.overview .overview__landing .landed-row {
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 18px;
+  background: var(--surface);
+  font-family: inherit;
+}
+.overview .overview__landing .landed-name {
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* The input: one pill. The intent box keeps its behaviour; only its frame changes. */
 .overview__ask {
   grid-area: ask;
   justify-self: center;
-  width: min(820px, 100%);
+  width: min(760px, 100%);
 }
 .overview .overview__ask .intent-box {
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  padding: 6px 6px 6px 22px;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  padding: 6px 6px 6px 24px;
+  border: none;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  backdrop-filter: blur(30px);
+  background: var(--surface);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -202,7 +234,8 @@
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: var(--size-body);
+  font-size: 17px;
+  letter-spacing: -0.02em;
 }
 .overview .overview__ask .intent-row {
   margin-top: 0;
@@ -211,21 +244,31 @@
 .overview .overview__ask .intent-count {
   display: none;
 }
-.overview .overview__ask .intent-note {
-  margin: 0;
-  padding: 11px 0;
-  font-size: var(--size-body);
-}
 .overview .overview__ask .intent-box button {
   border-radius: 999px;
   font-family: inherit;
 }
+/* A visitor's pill holds only the sentence that says why requests are off (FL7, 2.11). */
+.overview .overview__ask .intent-field:disabled {
+  display: none;
+}
+.overview .overview__ask .intent-note {
+  flex: 1;
+  margin: 0;
+  padding: 11px 16px 11px 0;
+  text-align: center;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--muted);
+}
 
+/* Fine print, the way apple.com sets it: 12, grey. */
 .overview__facts {
   grid-area: facts;
   margin: 0;
   text-align: center;
-  font-size: var(--size-small);
+  font-size: 12px;
+  line-height: 1.33;
   color: var(--muted);
 }
 
@@ -239,7 +282,7 @@
       "side"
       "ask"
       "facts";
-    padding: 16px;
+    padding: 24px 16px;
     height: auto;
   }
   .overview__hero {
@@ -248,55 +291,4 @@
   .overview__hero .pf {
     width: 100%;
   }
-}
-
-.overview .overview__hero .pf-btn {
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  font-family: inherit;
-}
-
-/* A quiet pool: the newest landings take the column (2.11), drawn like the cards. */
-.overview .overview__landing .landed-row {
-  width: 100%;
-  min-height: 44px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-  font-family: inherit;
-}
-.overview .overview__landing .landed-name {
-  font-family: inherit;
-  font-size: var(--size-body);
-  font-weight: 600;
-}
-
-/* A visitor's pill holds only the sentence that says why requests are off (FL7, 2.11). */
-.overview .overview__ask .intent-field:disabled {
-  display: none;
-}
-.overview .overview__ask .intent-note {
-  flex: 1;
-  text-align: center;
-  padding: 11px 16px 11px 0;
-}
-
-/* Light from above and depth below: a still glass layer over the pool. It moves nothing (VD1),
- * takes no taps (the frame's own taps open Why cards) and leaves the pool's colours readable. */
-.overview .overview__hero .pf-body::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    radial-gradient(90% 60% at 30% -10%, rgb(255 255 255 / 0.16), transparent 60%),
-    radial-gradient(70% 50% at 80% -5%, rgb(255 255 255 / 0.08), transparent 55%),
-    linear-gradient(to bottom, transparent 55%, rgb(0 18 36 / 0.28));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    inset 0 0 90px rgb(0 12 28 / 0.45);
 }

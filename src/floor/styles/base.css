@@ -15,7 +15,8 @@
   --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: var(--font-text);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --radius: 0px;
+  --radius: 12px;
+  --radius-panel: 18px;
   --border: 1px;
   --rule: 2px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -30,45 +31,57 @@
   --body-pad: 16px;
 }
 
-/* Dark theme (6.3): ink on night. */
+/* Dark theme (6.3): Apple's dark palette - black page, #1d1d1f panels, system colours. */
 :root,
 :root[data-theme="dark"] {
-  --bg: #0c0d10;
-  --surface: #101216;
-  --raised: #1a1d23;
-  --line: #2e323b;
-  --control: #8a8f99;
-  --text: #f2f2ee;
-  --muted: #9ea3ac;
-  --accent: #ff5a1f;
-  --holds: #5bd68f;
-  --changed: #ff7a6b;
-  --confirm: #ffc857;
-  --checking: #9db8ff;
-  --synthetic: #d7a6ff;
-  --focus: #ffe08a;
-  --on-fill: #0c0d10;
-  --grid: rgb(255 255 255 / 0.028);
+  --bg: #000000;
+  --surface: #1d1d1f;
+  --raised: #2c2c2e;
+  --line: #38383a;
+  --control: #8e8e93;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --accent: #2997ff;
+  --holds: #30d158;
+  --changed: #ff6961;
+  --confirm: #ffd60a;
+  --checking: #64d2ff;
+  --synthetic: #da8fff;
+  --focus: #2997ff;
+  --on-fill: #000000;
+  --action: #0071e3;
+  --on-action: #ffffff;
+  --hairline: rgb(255 255 255 / 0.14);
+  --segment-on: #636366;
+  --veil: rgb(0 0 0 / 0.72);
+  --shade: rgb(0 0 0 / 0.5);
+  color-scheme: dark;
 }
 
-/* Light theme (6.3): ink on paper. */
+/* Light theme (6.3): white page, #f5f5f7 panels. */
 :root[data-theme="light"] {
-  --bg: #f1ece2;
-  --surface: #f7f3ec;
-  --raised: #ebe6dc;
-  --line: #cfc7b8;
-  --control: #6b665c;
-  --text: #121212;
-  --muted: #57534b;
-  --accent: #b83a08;
-  --holds: #17733a;
-  --changed: #b8281c;
-  --confirm: #8a5a00;
-  --checking: #2450c0;
-  --synthetic: #6a3bb0;
-  --focus: #1b3fa0;
+  --bg: #ffffff;
+  --surface: #f5f5f7;
+  --raised: #ebebf0;
+  --line: #d2d2d7;
+  --control: #6e6e73;
+  --text: #1d1d1f;
+  --muted: #5f5f64;
+  --accent: #0062c4;
+  --holds: #17703a;
+  --changed: #c4141f;
+  --confirm: #875800;
+  --checking: #0b5fa0;
+  --synthetic: #8944ab;
+  --focus: #0062c4;
   --on-fill: #ffffff;
-  --grid: rgb(0 0 0 / 0.035);
+  --action: #0071e3;
+  --on-action: #ffffff;
+  --hairline: rgb(0 0 0 / 0.1);
+  --segment-on: #ffffff;
+  --veil: rgb(255 255 255 / 0.72);
+  --shade: rgb(0 0 0 / 0.12);
+  color-scheme: light;
 }
 
 /* Type scale (6.2): laptop first; `data-size="stage"` is the stage size. */

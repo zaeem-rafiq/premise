@@ -1,0 +1,622 @@
+{
+  "v": 1,
+  "run": null,
+  "driven_by": "test/e2e/lead/rehearsal.spec.ts, with the canned cast",
+  "deployment_host": "premise-test.rk3469.workers.dev",
+  "pool": "reh-mv44yv8k",
+  "recorded_at": "2026-10-11T18:07:52.483Z",
+  "total_s": 163,
+  "within_10_min": true,
+  "key_r_used": false,
+  "cast": {
+    "hero-j": "a_07NZCRP673AE2TMQ078WBSPY50",
+    "hero-c": "a_0M0H9B180PA2A09F6634NYZ968",
+    "hero-h": "a_7F6QA9XR30W30BBGDPZSDFVZWQ",
+    "hero-s": "a_3682RAZ23HM3HKPGPTE1SXP6RV",
+    "sweep-a": "a_3T3J11XTW90S96MXTS3R838MC8",
+    "sweep-b": "a_2B2KAXZHY9EVDD276S0B2MSWEV"
+  },
+  "events": 518,
+  "landings": 10,
+  "spend_before": "Spend $4.21 of $10.00",
+  "spend_after": "Spend $4.21 of $10.00",
+  "preflight": [
+    {
+      "name": "PS1 landed history",
+      "ok": true,
+      "note": "Landed counter is 0: a fresh pool by design of run 1 (5.5), so PS1's earlier real-agent history is absent."
+    },
+    {
+      "name": "PS2 owner unlocked",
+      "ok": true,
+      "note": "Header shows Owner. The key was not typed."
+    },
+    {
+      "name": "PS3 spend",
+      "ok": true,
+      "note": "Spend $4.21 of $10.00"
+    },
+    {
+      "name": "PS4 no banner",
+      "ok": true,
+      "note": "No banner before any agent starts."
+    },
+    {
+      "name": "PS5 recordings",
+      "ok": true,
+      "note": "GET /replay/index.json answered 200: {\"v\":1,\"default\":\"hero-canned\",\"recordings\":[{\"id\":\"hero-canned\",\"file\":\"/replay/hero-canned.ndjson\",\"title\":\"The beat sheet, scripted agents\",\"duration_ms\":136160,\"events\":518,\"bytes\":256867,\"synthet"
+    },
+    {
+      "name": "PS7 swarm pool",
+      "ok": true,
+      "note": "Swarm pool tidepool-swarm: stream probe answered 200."
+    }
+  ],
+  "beats": [
+    {
+      "beat": 0,
+      "title": "Compare view (cut forward)",
+      "window": "0:00-0:20",
+      "proves": "The plain-merge pool, labelled as constructed. The thesis.",
+      "start_s": 8,
+      "end_s": 12,
+      "start_clock": "–",
+      "end_clock": "–",
+      "status": "substituted",
+      "proves_observed": false,
+      "checks": [
+        {
+          "name": "Compare opens with key C",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "left frame Premise · main",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "right frame labelled plain merge, constructed",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "thesis is the last line",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Back to the Floor",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [
+        "Beat 0 is a cut forward from beat 4 (BS2). Here, before any landing, only the view's controls and labels are checked; the broken crab is observed in beat 4."
+      ],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-00-compare-empty.png"
+      ]
+    },
+    {
+      "beat": 1,
+      "title": "Floor: the pool runs, starter set, crab race",
+      "window": "0:20-1:05",
+      "proves": "Several agents at once on one codebase. Reads observed by the platform. Landing with no queue and no review step. The stated limit on real agents.",
+      "start_s": 12,
+      "end_s": 17,
+      "start_clock": "–",
+      "end_clock": "00:00:04",
+      "status": "substituted",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "starter set button exists and is enabled (not pressed)",
+          "ok": true,
+          "note": "Not pressed: it starts six real Workers AI agents. Left to run 2."
+        },
+        {
+          "name": "pre-written menu lists the requests of the take",
+          "ok": true,
+          "note": "36 pre-written requests listed."
+        },
+        {
+          "name": "crab request typed, Race 3 enabled (not pressed)",
+          "ok": true,
+          "note": "Race 3 would start three real models. Left to run 2; the canned crab (hero-c) plays the crab."
+        },
+        {
+          "name": "canned cast starts (POST /api/swarm)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "SYNTHETIC banner",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "three attempt cards appear",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "strip counts the agents",
+          "ok": true,
+          "note": "Real agents 3 scripted"
+        },
+        {
+          "name": "tiles show reader and writer marks",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "crab card shows lights (relies on)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "jellyfish lands by itself: Landing… then Landed",
+          "ok": true,
+          "note": "Landed counter 1; the frame caption names landing 1."
+        },
+        {
+          "name": "crab and shrimp write their files (op.recorded)",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [
+        "Starter set: not sent (real agents). The canned jellyfish (hero-j, the starter set's A01 text) lands by itself in its place.",
+        "Crab race: not sent (three real models). One canned crab (hero-c, P1a's text) and the canned shrimp (hero-h, P1b's text) stand in; they are held before submit (conductor row 1 of 02-tidepool 7.11) instead of waiting on a race card."
+      ],
+      "deviations": [
+        "The crab cards do not reach \"Waiting for you\" on a race card: the canned crab is one attempt held before submit, so it shows as working until released in beat 3."
+      ],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-01-race-control.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-01-cards-working.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-01-jellyfish-landed.png"
+      ]
+    },
+    {
+      "beat": 2,
+      "title": "Shared rule and Who relies",
+      "window": "1:05-1:35",
+      "proves": "Blog question 1. Who relies.",
+      "start_s": 17,
+      "end_s": 20,
+      "start_clock": "00:00:04",
+      "end_clock": "00:00:07",
+      "status": "substituted",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "shared-rule request typed, Send enabled (not pressed)",
+          "ok": true,
+          "note": "Send would start a real agent. The canned hero-s (R01's text) plays it."
+        },
+        {
+          "name": "hero-s starts and its card reads Working",
+          "ok": true,
+          "note": "Working"
+        },
+        {
+          "name": "tile energy, ENERGY_MAX, Who relies: In flight lists the crab",
+          "ok": true,
+          "note": "Who relies on ENERGY_MAX in world/energy.js Close In flight (3) \"make energy a fraction from…\" Working (the agent read it) shrimp Working (the agent read it) crab Working (the agent read it, the new code uses it) Landed (0)"
+        }
+      ],
+      "substitutions": [
+        "Shared rule: the canned hero-s, started through POST /api/swarm, instead of the typed R01."
+      ],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-02-shared-rule-working.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-02-who-relies.png"
+      ]
+    },
+    {
+      "beat": 3,
+      "title": "Held card, Land, heads-up and go-around",
+      "window": "1:35-2:50",
+      "proves": "A conflict is a broken premise caught when main moves. Held path, one tap, before and after, blast radius. The same agents adapt.",
+      "start_s": 20,
+      "end_s": 32,
+      "start_clock": "00:00:07",
+      "end_clock": "00:00:20",
+      "status": "substituted",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "hero-s waits on a held card",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "tray row: This change touches shared rules. Land it?",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "card sheet names the changes it sends back",
+          "ok": true,
+          "note": "Landing this sends 2 changes back to their agents: crab, shrimp. | 2 changes in flight have a premise on what it changes: crab, shrimp."
+        },
+        {
+          "name": "card sheet shows the pool before and after",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "card frames load (before and after)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "tap Land",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "shared rule lands",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "crab and shrimp get an E2 heads-up (repair)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "crab card: Going around, heads-up with ENERGY_MAX before/after",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "released creatures adapt and land by themselves",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the agent's sentence: the crab hides below 0.3",
+          "ok": true,
+          "note": "Energy is now a fraction from 0 to 1, so the crab hides below 0.3."
+        }
+      ],
+      "substitutions": [
+        "The crab and the shrimp are released by the rehearsal (POST /api/swarm release) after their heads-up, as conductor row 5 of 7.11 does; on the take a race candidate returns to \"Waiting for you\" instead."
+      ],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-03-held-card.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-03-heads-up.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-03-go-around-answered.png"
+      ]
+    },
+    {
+      "beat": 4,
+      "title": "Race sheet and Compare view",
+      "window": "2:50-3:35",
+      "proves": "Compare attempts and decide which ships. The plain-merge pool shows the break.",
+      "start_s": 33,
+      "end_s": 43,
+      "start_clock": "00:00:20",
+      "end_clock": "00:00:30",
+      "status": "substituted",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "Compare view: left Premise · main, right plain merge",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "what differs names the crab's go-around",
+          "ok": true,
+          "note": "What differs crab: its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work. shrimp: its agent was sent back in the middle of its work. The plain-merge pool has its unfinished work. Text conflicts in the plain merge: 0 Back to the Floor Git records only what an"
+        },
+        {
+          "name": "text conflicts line",
+          "ok": true,
+          "note": "Text conflicts in the plain merge: 0"
+        },
+        {
+          "name": "self-test badges: left passes, right fails",
+          "ok": true,
+          "note": "Same changes, merged by plain git Constructed for comparison · through landing 4 Self-test, run in this page: failed · 1 check No kind of creature rests too much of the time (shrimp)"
+        },
+        {
+          "name": "thesis line",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [
+        "Race sheet: not exercised. A race needs three real models (Race 3 was checked enabled in beat 1); \"Choose this one\", \"Not chosen\" and the side-by-side frames are left to run 2."
+      ],
+      "deviations": [
+        "What differs does not say the crab \"went around once after ENERGY_MAX changed\" with \"its first version\": the canned crab was held before submit, so the plain-merge pool has its unfinished work (02-tidepool 7.11 permits this in order 1).",
+        "The conflicts line reads \"Text conflicts in the plain merge: 0\", without \"(approximated)\" as beat 4 has it."
+      ],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-04-compare-after.png"
+      ]
+    },
+    {
+      "beat": 5,
+      "title": "The second catch (sweep and late creature)",
+      "window": "3:35-4:05",
+      "proves": "A query premise gains a match (QT1). A card never approves more than it showed.",
+      "start_s": 43,
+      "end_s": 59,
+      "start_clock": "00:00:30",
+      "end_clock": "00:00:46",
+      "status": "substituted",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "shrimp reads Landed before the sweep starts (BS7)",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "sweep-a starts and waits on its held card",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "sweep card's search light is listed",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "sweep-b (the squid) lands by itself",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "sweep-a: card closed as stale, QT1 heads-up",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "sweep card shows the new match",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "a new card opens; tap Land",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [
+        "P9a and P9b: the canned sweep-a and sweep-b (02-tidepool 9.5) through POST /api/swarm, instead of the pre-written requests (real agents)."
+      ],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-05-sweep-waiting.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-05-sweep-caught.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-05-sweep-second-card.png"
+      ]
+    },
+    {
+      "beat": 6,
+      "title": "Why card and Show the git",
+      "window": "4:05-4:50",
+      "proves": "Blog question 4. The record lives in git notes on Artifacts.",
+      "start_s": 59,
+      "end_s": 81,
+      "start_clock": "00:00:46",
+      "end_clock": "00:01:08",
+      "status": "observed",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "tap the crab in the pool frame",
+          "ok": true,
+          "note": "tapped at (478, 882): crab · landing 3 · 13:08:21"
+        },
+        {
+          "name": "Why card: who asked, in their words",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Why card: what it relied on, the go-around and the agent's sentence",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Why card: checks and how it landed",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Show the git: commit, Change-Id, Intent-Id, note, git commands",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-06-why-crab.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-06-show-the-git.png"
+      ]
+    },
+    {
+      "beat": 7,
+      "title": "Causal Undo",
+      "window": "4:50-5:30",
+      "proves": "Causal Undo. A reopened author keeps its context.",
+      "start_s": 81,
+      "end_s": 91,
+      "start_clock": "00:01:08",
+      "end_clock": "00:01:18",
+      "status": "observed",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "Why card of the shared-rule change",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Undo names the later changes built on it",
+          "ok": true,
+          "note": "Undo landing 2: \"make energy a fraction from 0 to 1\"? Close This also takes back 4 later changes that were built on it: landing 3 crab, landing 4 shrimp, landing 5 squid, landing 6 \"write every energy cost in…\". Their agents reopen and adapt. Keep it Undo it"
+        },
+        {
+          "name": "tap Undo it",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "crab card: Reopened by undo, same agent, same conversation",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "the reopened crab adapts and lands by itself",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [],
+      "deviations": [
+        "After the undo put ENERGY_MAX back to 100, the scripted crab still said \"Energy is now a fraction from 0 to 1, so the crab hides below 0.3.\": the canned cast has one fixed sentence (02-tidepool 7.5). A real agent would describe the reverse change."
+      ],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-07-undo-sheet.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-07-reopened.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-07-crab-relanded.png"
+      ]
+    },
+    {
+      "beat": 8,
+      "title": "Swarm view",
+      "window": "5:30-6:25",
+      "proves": "Measured scale on one Trunk, under the SYNTHETIC banner.",
+      "start_s": 91,
+      "end_s": 92,
+      "start_clock": "00:01:18",
+      "end_clock": "00:01:19",
+      "status": "substituted",
+      "proves_observed": false,
+      "checks": [
+        {
+          "name": "Swarm view opens",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "SYNTHETIC banner names the Swarm pool's rule",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "controls: agents, collisions dial, Start",
+          "ok": true,
+          "note": "Start enabled: true. Not pressed."
+        },
+        {
+          "name": "empty state and the real-agent limit",
+          "ok": true,
+          "note": ""
+        }
+      ],
+      "substitutions": [
+        "Swarm run not started by run 1; controls checked only (swarm pool stream answered 200)."
+      ],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-08-swarm-view.png"
+      ]
+    },
+    {
+      "beat": 9,
+      "title": "About sheet",
+      "window": "6:25-7:05",
+      "proves": "Honest limits. Cloudflare use. No priority claim.",
+      "start_s": 92,
+      "end_s": 92,
+      "start_clock": "00:01:19",
+      "end_clock": "00:01:20",
+      "status": "observed",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "About opens with three columns",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "how it runs names the Cloudflare parts",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "in this run: real, synthetic, constructed, with counts",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "limits list and related work",
+          "ok": true,
+          "note": "Related work present."
+        }
+      ],
+      "substitutions": [],
+      "deviations": [],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-09-about.png"
+      ]
+    },
+    {
+      "beat": 10,
+      "title": "Lock and play the Replay",
+      "window": "7:05-7:30",
+      "proves": "Replay with no credentials. The page is a function of the stream.",
+      "start_s": 92,
+      "end_s": 163,
+      "start_clock": "00:01:20",
+      "end_clock": "–",
+      "status": "observed",
+      "proves_observed": true,
+      "checks": [
+        {
+          "name": "Owner, then Lock",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "start card offers the default recording",
+          "ok": true,
+          "note": ""
+        },
+        {
+          "name": "Play the Replay: the REPLAY banner and the same page",
+          "ok": true,
+          "note": "REPLAY Recorded · \"hero-canned\" · nothing here changes a pool"
+        }
+      ],
+      "substitutions": [],
+      "deviations": [
+        "The default recording on this deployment is `hero-canned`, not `rehearsal` (PS5, RY26): run 2 makes that recording."
+      ],
+      "screenshots": [
+        "test-results/rehearsal/reh-mv44yv8k/beat-10-locked.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-10-start-card.png",
+        "test-results/rehearsal/reh-mv44yv8k/beat-10-replay-playing.png"
+      ]
+    }
+  ],
+  "summary": {
+    "observed": 4,
+    "substituted": 7,
+    "failed": 0
+  }
+}

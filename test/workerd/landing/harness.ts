@@ -416,7 +416,14 @@ export async function startLandingWorker(options: {
   const projectRoot = mkdtempSync(join(tmpdir(), "premise-landing-repos-"));
   // A test's own flags ride an in-memory copy of the module (FJ1, `withFeatures`): no file is
   // written, and the build's shipped flags apply only where a test names none.
-  const features: Partial<Features> = { ...(options.held === true ? { held: true } : {}), ...options.features };
+  // The green line runs its static checks unless a test asks for the isolate: these tests' fixture
+  // files are not creatures that pass the self-test, so "full" (the shipped value) would send them
+  // back at submit (CK6c) or take them back (GR3). Tests of the isolate pass `green: "full"`.
+  const features: Partial<Features> = {
+    green: "static",
+    ...(options.held === true ? { held: true } : {}),
+    ...options.features,
+  };
   let contents = Object.keys(features).length === 0 ? null : withFeatures(readFileSync(BUNDLE, "utf8"), features);
   if (options.floorFaults === true) contents = (contents ?? readFileSync(BUNDLE, "utf8")) + FLOOR_FAULT_CLASS;
   const directories = new Map(

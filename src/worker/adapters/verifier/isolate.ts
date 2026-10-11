@@ -81,15 +81,16 @@ export async function runInIsolate(input: IsolateInput): Promise<Run> {
     const answer = await Promise.race([run, late]);
     if (answer === "late") {
       run.catch(() => undefined); // the isolate is dropped with this request
-      return failClosed("no_verdict", `no verdict within ${timeoutMs} ms`);
+      return { ...failClosed("no_verdict", `no verdict within ${timeoutMs} ms`), unanswered: true };
     }
     return mapAnswer(answer);
   } catch (cause) {
     const text = reason(cause);
     // The CPU limit ends the isolate with an error that names it: no verdict within the limit.
-    return /CPU time limit|exceeded CPU/i.test(text)
+    const run = /CPU time limit|exceeded CPU/i.test(text)
       ? failClosed("no_verdict", text)
       : failClosed("harness_error", text);
+    return { ...run, unanswered: true };
   } finally {
     clearTimeout(timer);
   }

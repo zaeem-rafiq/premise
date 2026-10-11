@@ -42,6 +42,7 @@ import type { RaceCostDone, TrunkCreateIntentRequest, TrunkCreateIntentResponse 
 import type { PreviewBuild, PreviewDoneInput } from "../../protocol/internal.ts";
 import { plainBuild, plainDone, type PlainBuild } from "./plain.ts";
 import { greenDone, greenStart, type GreenStart } from "./green.ts";
+import type { SelftestVerdict } from "./selftest.ts";
 import { buildPack } from "../git/pack.ts";
 import { clearRightOfWay, openAttempt, openCard, type OpenArgs } from "./intents.ts";
 import { RIGHT_OF_WAY_MS } from "../../protocol/constants.ts";
@@ -68,6 +69,8 @@ export type PoolOptions = {
   killed?: boolean; // SE10's kill switch, as the caller last heard it
   syncTriage?: SyncTriage | null; // the SyncTriage port (S6a): ScriptedTriage for synthetic attempts
   features?: { held?: boolean; green?: "none" | "static" | "full"; text_merge?: boolean };
+  /** CK6c: the pre-landing self-test verdict the Worker computed for this call (selftest.ts). */
+  selftest?: SelftestVerdict | null;
   now?: () => number;
   ids?: { next(kind: string): string };
 };
@@ -470,6 +473,7 @@ function emptyPool(sql: Sql, opts: PoolOptions): Pool {
     featuresHeld: opts.features?.held === true,
     featuresGreen: opts.features?.green ?? "none",
     featuresTextMerge: opts.features?.text_merge === true,
+    selftest: opts.selftest ?? null,
     meta: new Map<string, string>([["pool_id", opts.pool_id ?? "pool"]]),
     savedMeta: new Map(),
     // `openPool` re-derives this from `meta.app` once the store is read; a fresh map starts

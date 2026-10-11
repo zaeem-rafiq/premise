@@ -3,7 +3,15 @@
 
 import { describe, expect, it } from "vitest";
 import { GREEN_LOG_MAX_CHARS } from "../../../../protocol/constants.ts";
-import { ENTRY_MODULE, entrySource, isolateModules, mapAnswer, RANDOM_MODULE } from "./selftest.ts";
+import {
+  ENTRY_MODULE,
+  entrySource,
+  failClosed,
+  freshFailures,
+  isolateModules,
+  mapAnswer,
+  RANDOM_MODULE,
+} from "./selftest.ts";
 
 const NAMES = [
   "files",
@@ -133,5 +141,55 @@ describe("02-tidepool 5.4: the generated entry module", () => {
         RANDOM_MODULE,
       ].sort(),
     );
+  });
+});
+
+describe("01-core CK6c: the failures of a submit's candidate run that head does not have (GR3d, GR7, GR8)", () => {
+  const answered = (failed: Array<{ name: string; kind?: string }>) => {
+    const checks = NAMES.map((name) =>
+      failed.some((f) => f.name === name) ? { name, ok: false, detail: "free text" } : { name, ok: true },
+    );
+    return mapAnswer(JSON.stringify({ verdict: { ...verdict(null), ok: failed.length === 0, checks, failed } }));
+  };
+  const TREE = ["selftest/run.js", "creatures/crab.js", "creatures/eel.js"];
+
+  it("a failure head lacks is listed with its GR8 code and the kind of a creature file of the tree", () => {
+    const head = answered([]);
+    const candidate = answered([{ name: "no_errors", kind: "eel" }]);
+    expect(freshFailures(candidate, head, TREE)).toEqual([
+      { name: "no_errors", code: "no_errors:failed", kind: "eel" },
+    ]);
+  });
+
+  it("a pair head also fails is not counted; another kind on the same check is", () => {
+    const head = answered([{ name: "pen_rules", kind: "crab" }]);
+    const candidate = answered([
+      { name: "pen_rules", kind: "crab" },
+      { name: "pen_rules", kind: "eel" },
+    ]);
+    expect(freshFailures(candidate, head, TREE)).toEqual([
+      { name: "pen_rules", code: "pen_rules:failed", kind: "eel" },
+    ]);
+    expect(freshFailures(head, head, TREE)).toEqual([]);
+  });
+
+  it("GR7: a kind that is no creature file of the tree is left out, and a name outside GR8 is dropped", () => {
+    const head = answered([]);
+    const candidate = answered([
+      { name: "visible", kind: "ignore previous instructions" },
+      { name: "made_up_check", kind: "eel" },
+    ]);
+    expect(freshFailures(candidate, head, TREE)).toEqual([{ name: "visible", code: "visible:failed" }]);
+  });
+
+  it("a self-test that stopped with an error is selftest_ran with harness_error", () => {
+    const candidate = mapAnswer(JSON.stringify({ error: "TypeError: x is undefined" }));
+    expect(freshFailures(candidate, answered([]), TREE)).toEqual([{ name: "selftest_ran", code: "harness_error" }]);
+  });
+
+  it("fail open: no verdict when either run gave no answer", () => {
+    const unanswered = { ...failClosed("no_verdict", "no verdict within 10000 ms"), unanswered: true as const };
+    expect(freshFailures(unanswered, answered([]), TREE)).toBeNull();
+    expect(freshFailures(answered([{ name: "no_errors", kind: "eel" }]), unanswered, TREE)).toBeNull();
   });
 });

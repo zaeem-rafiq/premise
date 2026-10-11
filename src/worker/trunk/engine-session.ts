@@ -15,6 +15,8 @@ const RETAINED = new Set([
   "push_ok",
   "push_result",
   "right_of_way",
+  // CK6c's read of the tree a submit would land (core/trunk/selftest.ts): it writes nothing.
+  "selftest_candidate",
   // These entries mutate Pool metadata and persist through wrapCall, just like tools.
   "plain",
   "plain_done",
@@ -276,6 +278,7 @@ export class EngineSession implements Sql {
       trunk.pool.syncTriage = opts.syncTriage ?? null;
       trunk.pool.featuresHeld = opts.features?.held ?? trunk.pool.meta.get("features_held") === "1";
       trunk.pool.featuresGreen = opts.features?.green ?? "none";
+      trunk.pool.selftest = opts.selftest ?? null;
       for (const key of this.#changedMeta) {
         const value = this.#store.exec("SELECT v FROM meta WHERE k = ?", key).toArray()[0]?.v;
         if (value === undefined) {

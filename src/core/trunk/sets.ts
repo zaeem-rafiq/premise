@@ -10,6 +10,7 @@ import type { Sql, SyncTriage } from "../../protocol/ports.ts";
 import type { Operation } from "../../protocol/operations.ts";
 import type { AttemptState } from "../../protocol/attempt.ts";
 import type { Check } from "../../protocol/tools.ts";
+import type { SelftestVerdict } from "./selftest.ts";
 import type { HeadsUp } from "../../protocol/headsup.ts";
 import type { Card, CardKind, CardReason, RiskAnswers } from "../../protocol/cards.ts";
 import type { PremiseKind } from "../../protocol/premise.ts";
@@ -307,6 +308,8 @@ export type Pool = {
   featuresHeld: boolean; // features.held (FJ1): the full held form; false gives HD1's minimal
   featuresGreen: "none" | "static" | "full"; // features.green (FJ1, GR5): which green line runs
   featuresTextMerge: boolean; // features.text_merge (FJ1): the plain-merge pool merges three ways (PM3a)
+  /** CK6c: the Worker's pre-landing self-test verdict for this call's submit, or null (selftest.ts). */
+  selftest: SelftestVerdict | null;
   meta: Map<string, string>;
   /** Values loaded or committed by the last call; updated only after the transaction commits. */
   savedMeta: Map<string, string>;

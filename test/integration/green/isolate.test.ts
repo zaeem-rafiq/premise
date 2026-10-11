@@ -22,6 +22,9 @@ describe("Slice 14 part 14b: the isolate runtime takes back a confirmed red (2.1
     worker = await startLandingWorker({
       ownerKey: KEY,
       features: { green: "full", held: true },
+      // CK6c would send A5 back at submit (its not_exhausted failure is new against the seed), so
+      // the take-back this acceptance proves could not happen; the pre-landing run is switched off.
+      vars: { SUBMIT_SELFTEST: "off" },
       repos: [POOL, `${POOL}-plain`],
     });
   }, 240_000);

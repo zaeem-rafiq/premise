@@ -32,6 +32,7 @@ import { SwarmView } from "../components/swarm/swarm.tsx";
 import { PoolArea } from "../components/pool-frame/pool-area.tsx";
 import { Rail } from "../components/rail/rail.tsx";
 import { Overview } from "../components/overview/overview.tsx";
+import { LandingFlight } from "../components/landing-flight/landing-flight.tsx";
 import { COMPONENTS, type RegistryComponent } from "./bindings.tsx";
 import { ViewBoundary } from "./view-boundary.tsx";
 import { ReplayBar } from "../replay/replay-bar.tsx";
@@ -816,6 +817,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             and usable above them (LY4); on the narrow layout they are full-screen (2.9). */}
         <div className="floor-main">
           {body}
+          {view !== "swarm" && <LandingFlight floor={floor} reducedMotion={reducedMotion} />}
           {sheets}
           <Announcer lines={session.effects.announces} toasts={toasts} />
         </div>

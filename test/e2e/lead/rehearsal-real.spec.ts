@@ -331,15 +331,16 @@ test("rehearsal 2: the beat sheet with real agents", async ({ page }, testInfo) 
     await waitFor("squid landed", landedText(P9B));
   });
   if (sweepCarded) {
-    await check("the sweep gets the QT1 heads-up and a new card; tap Land", async () => {
+    await check("the sweep gets the query heads-up and a new card; tap Land", async () => {
       const sweep = new Set(attemptsOf(events, P9A));
-      await waitFor("QT1 heads-up", (all) =>
+      await waitFor("query heads-up", (all) =>
         all.some(
           (e) =>
             e.type === "headsup.sent" &&
             sweep.has(str(e.attempt_id)) &&
             Array.isArray(e.keys) &&
-            (e.keys as Array<{ rule: string }>).some((k) => k.rule === "QT1"),
+            // QT1 or QT2 (a search gains a match) and QR1 (a new reference) are the same catch (01-core 7.2).
+            (e.keys as Array<{ rule: string }>).some((k) => ["QT1", "QT2", "QR1"].includes(k.rule)),
         ),
       );
       await waitFor("a new sweep card", (all) => openHeldFor(all, P9A) || landedText(P9A)(all));

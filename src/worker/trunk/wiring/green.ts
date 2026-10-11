@@ -18,7 +18,7 @@ import type { Env } from "../../env.ts";
 import { artifactsTokenSource } from "../../adapters/token-source/token-source.ts";
 import { receivePackPusher } from "../../adapters/pusher/pusher.ts";
 import { staticVerifier } from "../../adapters/verifier/static.ts";
-import { isolateVerifier } from "../../adapters/verifier/isolate.ts";
+import { isolateVerifier, type IsolateLoader } from "../../adapters/verifier/isolate.ts";
 import { FEATURES } from "../../../config/features.ts";
 import { recordTrunkError } from "../after-commit.ts";
 import { runPush } from "../push-runner.ts";
@@ -124,7 +124,8 @@ async function runGreenJobInner(
   const start = (await apply("green", {})) as GreenStart;
   if (start.state !== "verify") return;
 
-  const loader = (env as { LOADER?: WorkerLoader }).LOADER;
+  // The binding of wrangler.jsonc (absent in a deployment without it): read through the verifier's own type.
+  const loader = (env as unknown as { LOADER?: IsolateLoader }).LOADER;
   const verifier =
     deps?.verifier?.(start) ??
     (FEATURES.green === "full" && !start.imported && loader !== undefined

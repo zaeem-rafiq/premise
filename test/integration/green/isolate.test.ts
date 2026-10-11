@@ -54,12 +54,25 @@ describe("Slice 14 part 14b: the isolate runtime takes back a confirmed red (2.1
     await waitFor(async () => (await eventsOf(worker, POOL, "green.verified")).length >= 2, 120_000);
     const verified = await eventsOf(worker, POOL, "green.verified");
     expect(verified.slice(0, 2)).toEqual([
-      expect.objectContaining({ seq: landed.seq, commit: landed.commit, ok: false, confirmed: false, runtime: "isolate" }),
-      expect.objectContaining({ seq: landed.seq, commit: landed.commit, ok: false, confirmed: true, runtime: "isolate" }),
+      expect.objectContaining({
+        seq: landed.seq,
+        commit: landed.commit,
+        ok: false,
+        confirmed: false,
+        runtime: "isolate",
+      }),
+      expect.objectContaining({
+        seq: landed.seq,
+        commit: landed.commit,
+        ok: false,
+        confirmed: true,
+        runtime: "isolate",
+      }),
     ]);
     for (const e of verified.slice(0, 2)) {
       expect(e.checks).toContainEqual({ name: "not_exhausted", ok: false, code: "not_exhausted:failed" });
-      for (const c of e.checks as Array<{ name: string }>) expect(GREEN_CHECK_NAMES as readonly string[]).toContain(c.name);
+      for (const c of e.checks as Array<{ name: string }>)
+        expect(GREEN_CHECK_NAMES as readonly string[]).toContain(c.name);
     }
 
     // The take-back: planned after the second run only, then one landing of kind revert.

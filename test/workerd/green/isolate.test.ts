@@ -6,7 +6,13 @@
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GREEN_CHECK_NAMES, GREEN_RUNTIME_CHECKS } from "../../../src/protocol/green.ts";
-import { isolateCode, isolateVerifier, runInIsolate } from "../../../src/worker/adapters/verifier/isolate.ts";
+import {
+  isolateCode,
+  isolateVerifier,
+  runInIsolate,
+  type IsolateCode,
+  type IsolateLoader,
+} from "../../../src/worker/adapters/verifier/isolate.ts";
 import { ENTRY_MODULE } from "../../../src/worker/adapters/verifier/harness/selftest.ts";
 import { a5Tree, seedTree } from "./trees.ts";
 
@@ -27,11 +33,11 @@ const HOST = `export default {
 let miniflare: Miniflare;
 /** The Worker Loader as the verifier sees it, backed by the host's real binding. */
 const loader = {
-  load(code: WorkerLoaderWorkerCode) {
+  load(code: IsolateCode) {
     return {
       getEntrypoint() {
         return {
-          async fetch() {
+          async fetch(_url: string) {
             const response = await miniflare.dispatchFetch("http://host.test/", {
               method: "POST",
               body: JSON.stringify(code),
@@ -44,7 +50,7 @@ const loader = {
       },
     };
   },
-} as unknown as Pick<WorkerLoader, "load">;
+} satisfies IsolateLoader;
 
 beforeAll(async () => {
   miniflare = new Miniflare(
@@ -111,7 +117,6 @@ describe("the isolate runtime in local workerd (S4a, 02-tidepool 5.4)", () => {
     const result = await verify(files);
     expect(result.checks).toEqual([{ name: "selftest_ran", ok: false, code: "harness_error" }]);
   });
-
 });
 
 describe("GR6: the verifier's isolate has no binding and no outbound network (2.15 item 3)", () => {
@@ -162,7 +167,12 @@ export default { async fetch(request, env) { return Response.json(await probe(en
 describe("ST4: a runaway self-test", () => {
   it("ST4: pool code that never returns gives no_verdict within the time limit", async () => {
     const files = seedTree();
-    files.set("creatures/fish.js", files.get("creatures/fish.js")!.replace(/export function update\(([^)]*)\) \{/, "export function update($1) { for (;;) {}"));
+    files.set(
+      "creatures/fish.js",
+      files
+        .get("creatures/fish.js")!
+        .replace(/export function update\(([^)]*)\) \{/, "export function update($1) { for (;;) {}"),
+    );
     expect(files.get("creatures/fish.js")).toContain("for (;;) {}");
     const result = await runInIsolate({ seq: 1, commit: "c", files, loader, timeoutMs: 3_000, cpuMs: 50 });
     expect(result.checks).toEqual([{ name: "selftest_ran", ok: false, code: "no_verdict" }]);

@@ -90,9 +90,9 @@ function fixture(green: "none" | "static" | "full" = "static") {
   });
   const reopen = () => Trunk.open(sql, { now: () => clock.now, features: { green } });
   const headsUps = (attempt: string): Array<Record<string, unknown>> =>
-    (db.prepare("SELECT body FROM heads_ups WHERE attempt_id = ? ORDER BY hn").all(attempt) as Array<{ body: string }>).map(
-      (r) => JSON.parse(r.body) as Record<string, unknown>,
-    );
+    (
+      db.prepare("SELECT body FROM heads_ups WHERE attempt_id = ? ORDER BY hn").all(attempt) as Array<{ body: string }>
+    ).map((r) => JSON.parse(r.body) as Record<string, unknown>);
   return { trunk, clock, land, timer, events, result, reopen, headsUps, db };
 }
 
@@ -417,7 +417,12 @@ describe("part 14b: a confirmed red takes the range back (01-core GR3, GR3a, GR7
     const revert = trunk.pool.landings.at(-1)!;
     clock.now += GREEN_MIN_INTERVAL_MS;
     expect(trunk.green()).toMatchObject({ state: "verify", seq: revert.seq, run: 1 });
-    trunk.greenDone({ seq: revert.seq, commit: revert.commit_oid, run: 1, result: result(revert.seq, revert.commit_oid, PASS) });
+    trunk.greenDone({
+      seq: revert.seq,
+      commit: revert.commit_oid,
+      run: 1,
+      result: result(revert.seq, revert.commit_oid, PASS),
+    });
     expect(events("green.advanced").at(-1)).toMatchObject({ seq: revert.seq, commit: revert.commit_oid });
   });
 });

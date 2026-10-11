@@ -78,7 +78,10 @@ describe("02-tidepool 5.4: the verdict mapped by GR8", () => {
     ["not JSON", "{"],
     ["no verdict", JSON.stringify({})],
     ["a wrong version", JSON.stringify({ verdict: verdict(null, { v: 2 }) })],
-    ["a check out of order", JSON.stringify({ verdict: { ...verdict(null), checks: [...verdict(null).checks].reverse() } })],
+    [
+      "a check out of order",
+      JSON.stringify({ verdict: { ...verdict(null), checks: [...verdict(null).checks].reverse() } }),
+    ],
     ["eleven checks", JSON.stringify({ verdict: { ...verdict(null), checks: verdict(null).checks.slice(1) } })],
     ["ok that contradicts its checks", JSON.stringify({ verdict: { ...verdict("files"), ok: true } })],
   ])("ST4: %s is bad_verdict, the single check selftest_ran", (_label, body) => {

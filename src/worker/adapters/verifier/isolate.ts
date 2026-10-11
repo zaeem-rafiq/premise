@@ -12,19 +12,34 @@ import { ENTRY_MODULE, failClosed, isolateModules, mapAnswer, SELFTEST_PATH } fr
 /** The compatibility date of the loaded isolate: the Worker's own (wrangler.jsonc). */
 const COMPATIBILITY_DATE = "2026-10-01";
 
+/** The code of the one Dynamic Worker, as the Worker Loader binding takes it (S4a, GR6). */
+export type IsolateCode = {
+  compatibilityDate: string;
+  mainModule: string;
+  modules: Record<string, { js: string }>;
+  env: Record<string, never>;
+  globalOutbound: null;
+  limits: { cpuMs: number };
+};
+
+/** The part of the Worker Loader binding (`LOADER`) the verifier uses. */
+export type IsolateLoader = {
+  load(code: IsolateCode): { getEntrypoint(): { fetch(url: string): Promise<Response> } };
+};
+
 export type IsolateInput = {
   seq: number;
   commit: string;
   /** The commit's files (path -> content), as Trunk recorded them for its landing (GR5a, S7). */
   files: ReadonlyMap<string, string>;
   /** The Worker Loader binding (`LOADER`). */
-  loader: Pick<WorkerLoader, "load">;
+  loader: IsolateLoader;
   cpuMs?: number;
   timeoutMs?: number;
 };
 
 /** GR6 and S4a: the code of the one Dynamic Worker. Exported for the test that proves its isolation. */
-export function isolateCode(files: ReadonlyMap<string, string>, cpuMs: number = GREEN_CPU_MS): WorkerLoaderWorkerCode {
+export function isolateCode(files: ReadonlyMap<string, string>, cpuMs: number = GREEN_CPU_MS): IsolateCode {
   return {
     compatibilityDate: COMPATIBILITY_DATE,
     mainModule: ENTRY_MODULE,
@@ -62,7 +77,9 @@ export async function runInIsolate(input: IsolateInput): Promise<Pick<VerifyResu
   } catch (cause) {
     const text = reason(cause);
     // The CPU limit ends the isolate with an error that names it: no verdict within the limit.
-    return /CPU time limit|exceeded CPU/i.test(text) ? failClosed("no_verdict", text) : failClosed("harness_error", text);
+    return /CPU time limit|exceeded CPU/i.test(text)
+      ? failClosed("no_verdict", text)
+      : failClosed("harness_error", text);
   } finally {
     clearTimeout(timer);
   }

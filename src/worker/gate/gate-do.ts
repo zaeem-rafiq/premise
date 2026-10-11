@@ -122,6 +122,9 @@ function asKill(body: unknown): KillRequest | null {
 export class ModelGate extends DurableObject<Env> {
   readonly #sql: Sql;
   readonly #repos: AttemptRepoQueue | null;
+  /** The post-commit passes still to run, oldest first, and the loop draining them (one at a time). */
+  readonly #pendingEffects: Array<{ now: number; effects: readonly GateEffect[] }> = [];
+  #effectsRun: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -186,6 +189,32 @@ export class ModelGate extends DurableObject<Env> {
       if (effect.kind === "pause_pool") await pausePoolForOwner(this.env, effect.pool);
       else if (effect.kind === "resume_pool") await resumePoolForOwner(this.env, effect.pool);
     }
+  }
+
+  /** Queues a post-commit pass and drains the queue in the background, one pass at a time. */
+  #queueEffects(now: number, effects: readonly GateEffect[]): void {
+    this.#pendingEffects.push({ now, effects });
+    if (this.#effectsRun !== null) return;
+    const run = (async () => {
+      try {
+        for (let next = this.#pendingEffects.shift(); next !== undefined; next = this.#pendingEffects.shift()) {
+          try {
+            await this.#runEffects(next.now, next.effects);
+          } catch (cause) {
+            // The outbox keeps every owed row; the alarm retries it.
+            console.error(
+              "gate effects failed",
+              cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown",
+            );
+          }
+        }
+      } finally {
+        this.#effectsRun = null;
+        await this.#arm();
+      }
+    })();
+    this.#effectsRun = run;
+    this.ctx.waitUntil(run);
   }
 
   /** The alarm's work: the sweep (SE6a + the due `limits` flush of SE9), then owed deliveries. */
@@ -277,6 +306,7 @@ export class ModelGate extends DurableObject<Env> {
         // The test path (the task's "drive the alarm through a test path"): the same work the
         // alarm does, at `now` — Date.now() unless the body names a time.
         const at = isRecord(body) && typeof body.now === "number" ? body.now : Date.now();
+        await this.#effectsRun;
         await this.#runAlarm(at);
         return json({ ok: true });
       }
@@ -286,7 +316,11 @@ export class ModelGate extends DurableObject<Env> {
       const now = Date.now();
       if (mapped.call === null) return json({ error: { code: "invalid_args" } }, 400);
       const { answer, effects } = this.#runCall(mapped.call, now);
-      await this.#runEffects(now, effects);
+      // The answer goes back as soon as the call is committed: the owed `limits` rows are already
+      // durable in the outbox (EV2a), so delivering them to every registered pool's Floor must not
+      // hold an agent's reserve or settle. Found on `test` 2026-10-11: with ~240 registered pools
+      // each agent turn waited ~50 s on serial Floor deliveries.
+      this.#queueEffects(now, effects);
       return json(answer);
     } catch (cause) {
       console.error("gate call failed", cause instanceof Error ? `${cause.name}: ${cause.message}` : "unknown");

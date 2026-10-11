@@ -37,6 +37,17 @@ function scheduleRetry(sql: Sql, pool: string, now: number): void {
   sql.transaction(() => outboxPoolSet(sql, pool, tries, at));
 }
 
+/** One Floor that does not answer must not hold the deliveries behind it: it is retried later. */
+const DELIVERY_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("floor delivery timed out")), DELIVERY_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Sends every row a pool's Floor has not confirmed, as `{ source: "gate", epoch, events }` (EV2a).
  * On a confirmed answer the sent rows are deleted in one transaction — a crash between send and
@@ -54,15 +65,17 @@ export async function deliverPool(env: Env, sql: Sql, pool: string): Promise<voi
     let response: Response;
     try {
       if (floor === undefined) throw new Error("no FLOOR binding");
-      response = await floor.get(floor.idFromName(pool)).fetch(FLOOR_EVENTS, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          source: SOURCE,
-          epoch: rows[0]?.epoch ?? 1,
-          events: rows.map((row) => ({ source_n: row.n, event: JSON.parse(row.event) })),
+      response = await withTimeout(
+        floor.get(floor.idFromName(pool)).fetch(FLOOR_EVENTS, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            source: SOURCE,
+            epoch: rows[0]?.epoch ?? 1,
+            events: rows.map((row) => ({ source_n: row.n, event: JSON.parse(row.event) })),
+          }),
         }),
-      });
+      );
     } catch {
       scheduleRetry(sql, pool, Date.now());
       return;

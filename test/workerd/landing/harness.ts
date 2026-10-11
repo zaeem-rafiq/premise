@@ -59,7 +59,7 @@ export class FaultFloor extends Floor {
     if (path === "/__test/floor-fault") {
       if (request.method === "POST") {
         const { mode } = await request.json();
-        if (!["pass", "block", "hold"].includes(mode) || this.held) {
+        if (!["pass", "block", "hold", "hang-gate"].includes(mode) || this.held) {
           return Response.json({ error: "invalid_fault_mode" }, { status: 409 });
         }
         this.faultMode = mode;
@@ -75,7 +75,12 @@ export class FaultFloor extends Floor {
     }
     if (path !== "/internal/events" || request.method !== "POST") return super.fetch(request);
     const body = await request.clone().json();
-    if (body.source !== "trunk" || this.faultMode === "pass") return super.fetch(request);
+    // "hang-gate": the model gate's deliveries to this Floor do not answer until the mode changes.
+    if (body.source === "gate" && this.faultMode === "hang-gate") {
+      while (this.faultMode === "hang-gate") await new Promise((resolve) => setTimeout(resolve, 10));
+      return super.fetch(request);
+    }
+    if (body.source !== "trunk" || this.faultMode === "pass" || this.faultMode === "hang-gate") return super.fetch(request);
     if (this.faultMode === "block") {
       return Response.json({ error: { code: "test_delivery_blocked" } }, { status: 503 });
     }
@@ -397,7 +402,7 @@ export async function startLandingWorker(options: {
   /** The fake model's loopback URL (the real-agent lane's FakeModel): when given, `AI` is bound
    * to the fake-ai worker exactly where a deployment binds Workers AI (06-repos step 1). */
   modelUrl?: string;
-  /** The gate's `SPEND_CAP_USD` — bound only when `modelUrl` is: the real agent's model calls
+  /** The gate's `SPEND_CAP_USD` — bound when `modelUrl` or this is given: the real agent's model calls
    * go through the gate, and an absent cap fails closed (`spend_cap` on every call). */
   spendCapUsd?: string;
   /** Let `sql()` read the objects' storage (Miniflare's `unsafeInspectDurableObjects`). */
@@ -455,7 +460,9 @@ export async function startLandingWorker(options: {
             ...(options.ownerKey === undefined ? {} : { OWNER_KEY: options.ownerKey }),
             // The gate reads its cap fresh on every call: absent means 0, and every model
             // call is refused `spend_cap` (SE7). Bound where the `AI` binding is bound.
-            ...(options.modelUrl === undefined ? {} : { SPEND_CAP_USD: options.spendCapUsd ?? "30" }),
+            ...(options.modelUrl === undefined && options.spendCapUsd === undefined
+              ? {}
+              : { SPEND_CAP_USD: options.spendCapUsd ?? "30" }),
             ...options.vars,
           },
           durableObjects: Object.fromEntries(

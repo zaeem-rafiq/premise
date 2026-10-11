@@ -78,7 +78,7 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - The workhorse model, `gpt-oss-120b`, landed 12 of 12 additive requests and 12 of 12 shared-rule requests in one pass, with a median of 94 s from request to landing: [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
 - Three models each landed at least 11 of 12 additive requests (the race uses all three): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
 - A mark that was missed: after the shared energy rule changed, the shrimp's agent repaired its absolute number in 2 of 5 runs (the plan asked for 4 of 5): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
-- SOAK-NUMBERS-GO-HERE (256 scripted agents on one Trunk, five collision settings): [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
+- 256 scripted agents on one Trunk, at five collision settings: 1.40 to 1.67 landings per second, a median time to land of 1.5 to 5.7 seconds, every attempt ended, one commit and one note per landing, and no pause longer than 2.7 seconds: [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
 - One Trunk did not carry 1,024 or 512 scripted agents, so the Swarm runs 256: [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
 - The longest Trunk engine call in a local 256-agent run with 264 attempts in flight: 802 ms: [`docs/measurements/integration/2026-10-07-trunk-load.md`](docs/measurements/integration/2026-10-07-trunk-load.md).
 

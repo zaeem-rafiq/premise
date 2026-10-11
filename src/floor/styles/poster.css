@@ -634,3 +634,9 @@
   border-radius: 2px;
   background: var(--action);
 }
+
+/* The start card's title is a heading, not a section label. */
+.floor .start-card h3 {
+  font-size: var(--size-title);
+  color: var(--text);
+}

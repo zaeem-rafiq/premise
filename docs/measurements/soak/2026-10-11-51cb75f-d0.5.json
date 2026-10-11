@@ -1,0 +1,124 @@
+{
+  "v": 2,
+  "build": "51cb75f",
+  "recorded_at": "2026-10-11T08:14:42.947Z",
+  "pool": "soak-mv3j5b3j-d0-5",
+  "config": {
+    "seed": 7,
+    "agents": 256,
+    "launch_per_second": 2,
+    "collision_dial": 0.5,
+    "think_ms": [
+      50,
+      400
+    ],
+    "rescale_every_s": 15
+  },
+  "agents": {
+    "launched": 264,
+    "landed": 240,
+    "stopped": {
+      "withdrawn": 14,
+      "contradiction": 4,
+      "budget": 6
+    },
+    "in_flight_at_end": 0
+  },
+  "landings": {
+    "count": 240,
+    "commits_on_main": 240,
+    "notes": 240,
+    "batches": 41,
+    "pushes": 42,
+    "push_retries": 0
+  },
+  "metrics": {
+    "landings_per_second": 1.4302997073845183,
+    "time_to_land_ms": {
+      "p50": 3636,
+      "p99": 7044
+    },
+    "go_around_rate": 0.04583333333333333,
+    "confirm_rate": 0.041666666666666664,
+    "false_abort_rate": 0,
+    "escape_rate": 0,
+    "waiting_behind_max": 3,
+    "push_backlog_max": 11,
+    "longest_gap_ms": 1006,
+    "tick_cpu_ms": {
+      "p50": null,
+      "p99": null
+    },
+    "push_ms": {
+      "p50": 2271,
+      "p99": 3145
+    }
+  },
+  "truth": {
+    "repairs": 13,
+    "repairs_outside_truth": 1,
+    "false_abort_rate": 0.07692307692307693,
+    "escapes": 0
+  },
+  "stream": {
+    "events": 3421,
+    "bytes": 1606608
+  },
+  "checks": [
+    {
+      "name": "all_ended",
+      "ok": true,
+      "detail": "in_flight_at_end=0; stopped_without_reason=0"
+    },
+    {
+      "name": "one_commit_per_landing",
+      "ok": true,
+      "detail": "commits_on_main=240 landings=240 notes=240"
+    },
+    {
+      "name": "oracle",
+      "ok": true,
+      "detail": "escapes=0 over 219 files at head"
+    },
+    {
+      "name": "no_go_around_at_zero",
+      "ok": true,
+      "detail": "dial=0.5 go_around_rate=0.04583333333333333"
+    },
+    {
+      "name": "cosmetic_is_silent",
+      "ok": true,
+      "detail": "no cosmetic-caused heads-up reached another pattern"
+    },
+    {
+      "name": "never_paused",
+      "ok": true,
+      "detail": "no pool.paused"
+    },
+    {
+      "name": "no_stall",
+      "ok": true,
+      "detail": "longest_gap_ms=1006 (limit 10000)"
+    },
+    {
+      "name": "fsck",
+      "ok": true,
+      "detail": "git fsck --strict passed; token issued"
+    },
+    {
+      "name": "rebuildable",
+      "ok": true,
+      "detail": "head_seq 240->240; head tree 394c88469e22ef4a3947d57712429abef537ed79->394c88469e22ef4a3947d57712429abef537ed79"
+    },
+    {
+      "name": "false_abort_reported",
+      "ok": true,
+      "detail": "metrics.false_abort_rate=0; truth.false_abort_rate=0.07692307692307693 (repairs=13, outside=1)"
+    },
+    {
+      "name": "recording_fits",
+      "ok": true,
+      "detail": "replay.ndjson 1606608 bytes of 26214400"
+    }
+  ]
+}

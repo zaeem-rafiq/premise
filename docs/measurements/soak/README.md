@@ -16,6 +16,13 @@ Each file is the `SoakResult` of one run of `npm run soak` against the `test` de
 | `2026-10-07-b2bf784-256-d0.25.json` | 256 | 0.25 | 2 | 247 | 11/11 | none |
 | `2026-10-07-b2bf784-256-d0.5.json` | 256 | 0.5 | 2 | 242 | 11/11 | none |
 | `2026-10-07-b2bf784-256-d1.json` | 256 | 1 | 2 | 227 | 10/11 | `no_stall` (10,481 ms; a fault of the check, see below) |
+| `2026-10-11-35e8f74-d*.json` | 256 | 0 to 1 | 2 | 228 to 256 | 51/55 | `no_stall` at d0, d0.1, d0.25, d0.5 (14.9 to 51.9 s) |
+| `2026-10-11-d038acb-d*.json` | 256 | 0 to 1 | 2 | | 50/55 | `no_stall` at d0.1, d0.25, d0.5; `cosmetic_is_silent` at d0.25 |
+| `2026-10-11-51cb75f-d0.json` | 256 | 0 | 2 | | 11/11 | none (longest gap 2,719 ms) |
+| `2026-10-11-51cb75f-d0.1.json` | 256 | 0.1 | 2 | | 11/11 | none (203 ms; a first run lost its read token to a wrangler error) |
+| `2026-10-11-51cb75f-d0.25.json` | 256 | 0.25 | 2 | | 11/11 | none (497 ms) |
+| `2026-10-11-51cb75f-d0.5.json` | 256 | 0.5 | 2 | | 11/11 | none (1,006 ms) |
+| `2026-10-11-51cb75f-d1.json` | 256 | 1 | 2 | | 11/11 | none (284 ms) |
 
 ## Size of the Swarm (RR9)
 
@@ -34,3 +41,7 @@ One Trunk did not carry 1,024 or 512 scripted agents: push times grew with the p
 Dial 1 failed `no_stall` with 10,481 ms. The cause is the check, not Trunk: the soak ran the stall clock on every event in arrival order, and Trunk's accept at 141.7 s reached the Floor after the Floor's own `metrics` events up to 149.6 s (Trunk's events reached the Floor 1.2 s late at the median, and up to 24 s late while a slow push was in flight). Order across sources says nothing about causality (`01-core.md` EV4). Since `cb41172` the clock runs on Trunk's own events and times; recomputed that way, the longest stall of this run was 4,591 ms. The late delivery itself is a separate defect of the page's freshness, being fixed.
 
 The final soak runs on the frozen build.
+
+## The final soak (2026-10-11)
+
+The first run of the final soak on `35e8f74` failed `no_stall` at four dials: Trunk accepted no landing for up to 52 s. Two causes were found and fixed. (1) The alarm awaited each green-line run (a static verification of the whole tree, then a ref push), so `tick` waited behind it: since `452a663` the run goes beside the alarm. (2) Each Trunk request started up to three concurrent deliveries of every pending event to the Floor, so under load the Floor received the same rows many times and requests queued (a diagnostic build saw agent `sync` calls wait 9 to 27 s): since `51cb75f` there is one delivery at a time. The `b2bf784` build of Oct 7 passed the same dials on the same day (gaps of 665 and 1,333 ms), which ruled out the platform. On `51cb75f` all five dials pass all eleven checks, with the longest gap between 203 and 2,719 ms and landings per second between 1.40 and 1.67.

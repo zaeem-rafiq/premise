@@ -14,6 +14,7 @@ import { engineTable, type EngineTable } from "../../core/trunk/engine.ts";
 import { Trunk as TrunkEngine } from "../../core/trunk/registry.ts";
 import { ScriptedTriage } from "../../swarm/scripted-triage.ts";
 import { FEATURES } from "../../config/features.ts";
+import { PUSH_BACKOFF_BASE_MS } from "../../protocol/constants.ts";
 import type { Sql } from "../../protocol/ports.ts";
 import type { Env } from "../env.ts";
 import { notBuilt } from "../not-built.ts";
@@ -468,6 +469,57 @@ export class Trunk extends DurableObject<Env> {
     this.ctx.waitUntil(run);
   }
 
+  #greenRun: Promise<void> | null = null;
+  #greenAgain = false;
+
+  /**
+   * GR1: the green line never blocks a landing. Its run - a static verification of the whole
+   * tree, then a ref push - takes seconds and grows with the pool, so it runs beside the alarm,
+   * not inside it: the alarm goes on to `tick` and `push`. Awaited inline, it held every landing
+   * for up to 50 s in the final soak on `test` (2026-10-11). One run at a time; a timer that fires
+   * meanwhile asks for one more pass when the run ends. A throw leaves `trunk.error` and puts the
+   * timer back at the push backoff, as the alarm's own catch did (AL2).
+   */
+  #startGreen(now: number): void {
+    this.#greenAgain = true;
+    if (this.#greenRun !== null) return;
+    const run = (async () => {
+      try {
+        let at = now;
+        while (this.#greenAgain) {
+          this.#greenAgain = false;
+          await runGreenJob(
+            this.env,
+            this.ctx,
+            async (name, input) => {
+              const r = await this.#callEngineEntry(name, input, at);
+              if ("error" in r) throw new Error(`green apply ${name} failed`);
+              return r.result;
+            },
+            undefined,
+            at,
+          );
+          await this.#postCommit();
+          at = Date.now();
+        }
+      } catch (cause) {
+        console.error("trunk green run failed", cause instanceof Error ? cause.message.slice(0, 300) : "unknown");
+        this.#sql.transaction(() =>
+          this.#sql.exec(
+            "INSERT OR IGNORE INTO timers (kind, key, due_at) VALUES ('green', '', ?)",
+            Date.now() + PUSH_BACKOFF_BASE_MS,
+          ),
+        );
+        recordTrunkError(this.ctx, "timer:green", "timer_failed");
+      } finally {
+        this.#greenRun = null;
+        await this.#arm();
+      }
+    })();
+    this.#greenRun = run;
+    this.ctx.waitUntil(run);
+  }
+
   /** An engine entry whose failure is a throw (the runner's and the triage timer's calls). */
   async #applyEntry(name: string, input: unknown, now?: number): Promise<unknown> {
     const r = await this.#callEngineEntry(name, input, now);
@@ -668,6 +720,8 @@ export class Trunk extends DurableObject<Env> {
         const now = url.searchParams.get("now");
         const at = now === null ? undefined : Number(now);
         await this.#runAlarm(at !== undefined && Number.isFinite(at) ? at : undefined);
+        // The test path waits for a green run the alarm started, so a test sees its result.
+        await this.#greenRun;
         return json({ ok: true });
       }
       if (pathname === "/internal/swarm-hold" || pathname === "/internal/swarm-held") {
@@ -766,20 +820,7 @@ export class Trunk extends DurableObject<Env> {
       },
       // GR1: a verification never blocks a landing — its failures leave `trunk.error` and a
       // retry inside the job, and a throw is re-armed by the alarm's catch (AL2).
-      green: async (now) => {
-        await runGreenJob(
-          this.env,
-          this.ctx,
-          async (name, input) => {
-            const r = await this.#callEngineEntry(name, input, now);
-            if ("error" in r) throw new Error(`green apply ${name} failed`);
-            return r.result;
-          },
-          undefined,
-          now,
-        );
-        await this.#postCommit();
-      },
+      green: async (now) => this.#startGreen(now),
       // TR6: the `triage` timer closes every question past its deadline, then sends what waits.
       triage: async (now) => {
         // TR6 on start-up: an instance woken by this timer re-asks what an earlier one sent

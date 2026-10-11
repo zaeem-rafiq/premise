@@ -92,14 +92,18 @@ describe("the LP5 table, every row (Slice 3, part 1)", () => {
     expect(swarm.status).toBe(200);
   }
 
-  /** The receive-pack POSTs the Worker sent to `repo`, in order, body included for the LP6
-   * byte-equality check. */
+  /** The landing receive-pack POSTs the Worker sent to `repo`, in order, body included for the
+   * LP6 byte-equality check. The green line's own ref move (GR2a: one `refs/heads/green` command,
+   * an empty pack) runs beside the alarm and can fall between a landing push and its retry; it is
+   * not a row of the LP5 table, so it is left out. */
   function pushes(repo: string): Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }> {
-    return worker
-      .gitRequests()
-      .filter(
-        (r) => r.method === "POST" && r.path.startsWith(`/${repo}/`) && r.path.endsWith("/git-receive-pack"),
-      ) as Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }>;
+    return (
+      worker
+        .gitRequests()
+        .filter(
+          (r) => r.method === "POST" && r.path.startsWith(`/${repo}/`) && r.path.endsWith("/git-receive-pack"),
+        ) as Array<RecordedRequest & { body?: Buffer; commands?: Array<{ ref: string }> }>
+    ).filter((r) => !(r.commands !== undefined && r.commands.every((c) => c.ref === "refs/heads/green")));
   }
 
   /** Fault only `repo`'s receive-pack POSTs, `times` times, then forward. */

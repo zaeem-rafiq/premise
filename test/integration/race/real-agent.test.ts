@@ -1,6 +1,6 @@
 // Slice 12 service acceptance: actual public routes, three real Agent objects,
 // Trunk, Floor, model gate and stock-git remotes. Only provider answers are canned.
-// The Worker runs with race on in memory (`features: { race: true }` of the harness), whatever
+// The Worker runs with race on in memory (`features: { race: true, green: "static" }` of the harness; its canned files are not creatures the isolate self-test would pass), whatever
 // the build ships. No production config or bundle is edited.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -66,7 +66,7 @@ describe("Slice 12 race and choose through real Agents, local workerd and stock 
       ownerKey: KEY,
       repos: [POOL, `${POOL}-plain`],
       modelUrl: model.url,
-      features: { race: true },
+      features: { race: true, green: "static" },
     });
     await createPool(worker, POOL, { seed: "tidepool" });
   }, 180_000);

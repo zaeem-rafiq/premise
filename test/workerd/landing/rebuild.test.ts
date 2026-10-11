@@ -193,6 +193,9 @@ describe("rebuild from Artifacts (01-core 3.6, plan 2.4 item 3) in local workerd
     worker = await startLandingWorker({
       ownerKey: KEY,
       repos: [MAIN, DIVERGED, MISMATCH, EMPTY, NO_NOTES],
+      // These fixtures' files are not creatures that pass the self-test, so the isolate green line
+      // (features.green "full") would take landings back; rebuild is tested with static checks.
+      features: { green: "static" },
     });
   }, 60_000);
   afterAll(async () => {

@@ -56,7 +56,14 @@ function message(ws: WebSocket): Promise<Record<string, unknown>> {
 
 describe("EV2/RB5: rebuilt Trunk resumes its Floor stream in local workerd", () => {
   beforeAll(async () => {
-    worker = await startLandingWorker({ ownerKey: KEY, repos: POOLS, floorFaults: true });
+    // Static green line: the fixtures' files fail the isolate's self-test, and a take-back would
+    // add landings this delivery test does not expect.
+    worker = await startLandingWorker({
+      ownerKey: KEY,
+      repos: POOLS,
+      floorFaults: true,
+      features: { green: "static" },
+    });
   }, 60_000);
   afterAll(async () => worker?.dispose());
 

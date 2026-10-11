@@ -61,7 +61,10 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
   const [, bumpAwaiting] = useState(0);
 
   const state = intentBoxState({ floor, mode, owner, capReached, phase, waited, error });
-  const interactive = state.kind === "live" || state.kind === "error" || state.kind === "waiting";
+  // Until the stream names the pool, a request has no address: found on production 2026-10-11, a
+  // press in the first second posted to `/api/pools//intents` and answered 404.
+  const ready = floor.pool.id !== "";
+  const interactive = ready && (state.kind === "live" || state.kind === "error" || state.kind === "waiting");
 
   // CO8: a draft clears when the `intent.created` of the returned intent_id arrives.
   useEffect(() => {
@@ -131,7 +134,7 @@ export function IntentBox({ floor, mode, owner, capReached, onSend }: IntentBoxP
   }
 
   const canType = state.kind === "live" || state.kind === "error" || state.kind === "waiting";
-  const canSend = state.kind === "live" || state.kind === "error"; // `waiting` leaves the field alone
+  const canSend = ready && (state.kind === "live" || state.kind === "error"); // `waiting` leaves the field alone
   const text = draft;
   const atLimit = text.length >= MAX_INTENT_CHARS;
 

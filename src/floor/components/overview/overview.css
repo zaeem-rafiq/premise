@@ -49,6 +49,7 @@
 
 .overview__hero {
   grid-area: hero;
+  container-type: size;
   min-height: 0;
   display: flex;
   justify-content: center;
@@ -56,7 +57,9 @@
 /* The tide pool draws 800 by 500 (02-tidepool bounds): the hero takes that 16:10 shape, so the
  * pool fills it edge to edge with no letterbox bars. */
 .overview__hero .pf {
-  width: min(100%, calc((100vh - 420px) * 16 / 10));
+  /* The frame takes the room the hero row has, whatever the headline above it holds: as wide as
+   * the row allows, and no taller than its height less the caption bar. */
+  width: min(100cqw, calc((100cqh - 48px) * 16 / 10));
 }
 .overview .overview__hero .pf-caption {
   font-size: var(--size-small);
@@ -68,6 +71,7 @@
   color: var(--muted);
 }
 .overview .overview__hero .pf-body {
+  flex: none;
   aspect-ratio: 16 / 10;
   border: none;
   border-radius: 24px;
@@ -237,6 +241,9 @@
       "facts";
     padding: 16px;
     height: auto;
+  }
+  .overview__hero {
+    container-type: normal;
   }
   .overview__hero .pf {
     width: 100%;

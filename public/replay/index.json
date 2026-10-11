@@ -6,11 +6,11 @@
       "id": "hero-canned",
       "file": "/replay/hero-canned.ndjson",
       "title": "The beat sheet, scripted agents",
-      "duration_ms": 160029,
-      "events": 516,
-      "bytes": 259021,
+      "duration_ms": 136160,
+      "events": 518,
+      "bytes": 256867,
       "synthetic": true,
-      "recorded_at": "2026-10-10T13:42:11.544Z"
+      "recorded_at": "2026-10-11T08:47:28.819Z"
     }
   ]
 }

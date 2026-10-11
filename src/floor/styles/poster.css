@@ -640,3 +640,70 @@
   font-size: var(--size-title);
   color: var(--text);
 }
+
+/* ---- The secondary views in the same language: filled panels, no outlines. Swarm's numbers sit
+ * in #1d1d1f panels with gaps instead of a ruled grid; About's steps are raised panels with a hairline (5.12 draws boxes); Compare's
+ * plain frame is drawn like the pool frame; "Who relies on this" is a blue text link. ---- */
+.floor .swarm-primary {
+  gap: 8px;
+  border: none;
+}
+.floor .swarm-primary .swarm-cell {
+  padding: 14px 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.floor .swarm-agents label {
+  border: none;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: var(--raised);
+}
+.floor .swarm-agents label:has(:checked) {
+  background: var(--segment-on);
+}
+.floor .about-how .about-box {
+  border-color: var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.floor .about-box + .about-box::before {
+  border-left-color: var(--line);
+}
+.floor .plf-body {
+  border: none;
+  border-radius: 18px;
+}
+.floor .plf-chip,
+.floor .plf-selftest {
+  border: none;
+  border-radius: 999px;
+  background: var(--raised);
+}
+.floor .plf-selftest {
+  padding: 4px 12px;
+}
+.floor .cmp-back,
+.floor .plf-btn {
+  border: none;
+  border-radius: 999px;
+  background: var(--raised);
+  font-weight: 400;
+}
+.floor .why-relied__who {
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+.floor .why-relied__who:hover {
+  text-decoration: underline;
+}
+/* A sheet takes focus when it opens so the keys reach it; Tab never lands on the sheet itself, so
+ * its frame draws no ring. Every control inside keeps AX3's ring. */
+.floor [role="dialog"][tabindex="-1"]:focus-visible {
+  outline: none;
+}

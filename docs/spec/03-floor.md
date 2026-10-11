@@ -1895,6 +1895,7 @@ Checks of a submit (`Check.name`, `01-core.md` 4.9):
 | `imports_resolve` | Every import points at something |
 | `globals_allowed` | Only allowed globals are used |
 | `colours_known` | Every colour is one the pen knows |
+| `energy_through_rules` | Energy changes only through the shared rules |
 | `selftest` | The pool's self-test passes with the change |
 | `premises_hold` | Everything it relied on is still true |
 | `policy` | Policy: {detail} |
@@ -1920,6 +1921,7 @@ The event `submit.result` carries the checks, not the error codes of the tool re
 | `imports_resolve` | an import points at nothing, or at something outside the pool |
 | `globals_allowed` | it uses something the policy does not allow |
 | `colours_known` | it names a colour the pen does not know |
+| `energy_through_rules` | it changes energy without the shared rules |
 | `selftest` | the pool's self-test fails with it |
 | any other | the check "{label}" failed |
 

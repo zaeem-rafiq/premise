@@ -13,6 +13,7 @@ export const SUBMIT_CHECK_LABELS: Readonly<Record<string, string>> = {
   imports_resolve: "Every import points at something",
   globals_allowed: "Only allowed globals are used",
   colours_known: "Every colour is one the pen knows",
+  energy_through_rules: "Energy changes only through the shared rules",
   selftest: "The pool's self-test passes with the change",
   derived: "What the change uses and affects is recorded",
   premises_hold: "Everything it relied on is still true",
@@ -60,6 +61,7 @@ export const SUBMIT_ERROR_SENTENCES: Readonly<Record<string, string>> = {
   imports_resolve: "an import points at nothing, or at something outside the pool",
   globals_allowed: "it uses something the policy does not allow",
   colours_known: "it names a colour the pen does not know",
+  energy_through_rules: "it changes energy without the shared rules",
   selftest: "the pool's self-test fails with it",
 };
 

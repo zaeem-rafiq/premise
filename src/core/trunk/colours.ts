@@ -53,3 +53,18 @@ export function unknownColours(source: string, palette: readonly string[]): stri
   }
   return [...found].sort();
 }
+
+/** CK6d (01-core 9.5, added 2026-10-11): a creature changes its energy only through the shared
+ * rules of `world/energy.js` (`drain`, `feed`), so a change to what an amount means reaches it and
+ * a search for `drain(` finds it. Assignments to `.energy` in a creature module (outside the
+ * `energy: …` of `spawn`'s object) are named here, once per line. */
+export function directEnergyWrites(source: string): number[] {
+  const lines: number[] = [];
+  source.split("\n").forEach((line, i) => {
+    const code = line.replace(/\/\/.*$/, "");
+    if (/\.energy\s*(?:[-+*/]?=(?!=)|\+\+|--)/.test(code) || /(?:\+\+|--)\s*[A-Za-z_$][\w$]*\.energy\b/.test(code)) {
+      lines.push(i + 1);
+    }
+  });
+  return lines;
+}

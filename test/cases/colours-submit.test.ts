@@ -19,7 +19,8 @@ function fixture(withPen: boolean) {
     sqlOver(db),
     {
       ".premise/policy.json": '{"v":1,"default":"auto"}',
-      "world/energy.js": "export const ENERGY_MAX = 100;\n",
+      "world/energy.js":
+        "export const ENERGY_MAX = 100;\nexport function drain(creature, amount) {\n  creature.energy = Math.max(0, creature.energy - amount);\n}\n",
       ...(withPen ? { "pen.js": readFileSync("seeds/tidepool/pen.js", "utf8") } : {}),
     },
     { now: () => 1_000, syncTriage: ScriptedTriage, constants: { MAX_BATCH: 1 } },
@@ -64,5 +65,27 @@ describe("CK6b colours_known", () => {
     const r = call("submit", { summary: "a jellyfish" }).result as { status: string; checks: Array<{ name: string }> };
     expect(r.status).toBe("validated");
     expect(r.checks.map((c) => c.name)).not.toContain("colours_known");
+  });
+
+  it("CK6d: a creature that spends energy by hand is rejected with energy_direct; with drain() it passes", () => {
+    const { call } = fixture(true);
+    const squid = (spend: string) =>
+      `import { ENERGY_MAX, drain } from "../world/energy.js";\nexport function update(squid) {\n  ${spend}\n}\n`;
+    call("write", { path: "creatures/squid.js", content: squid("squid.energy -= ENERGY_MAX / 10;") });
+    const rejected = call("submit", { summary: "a squid" }).result as {
+      status: string;
+      errors: Array<{ code: string; detail: { path: string; lines: number[] } }>;
+    };
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.errors[0]!.code).toBe("energy_direct");
+    expect(rejected.errors[0]!.detail).toMatchObject({ path: "creatures/squid.js", lines: [3] });
+
+    call("write", { path: "creatures/squid.js", content: squid("drain(squid, ENERGY_MAX / 10);") });
+    const ok = call("submit", { summary: "a squid" }).result as {
+      status: string;
+      checks: Array<{ name: string; ok: boolean }>;
+    };
+    // It never read drain, so CK7 asks it to confirm that blind spot; CK6d itself has passed.
+    expect(["validated", "needs_confirm"]).toContain(ok.status);
   });
 });

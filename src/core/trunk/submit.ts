@@ -17,7 +17,7 @@ import { updateRaceSubmit } from "./race.ts";
 import { ref, syncPremises } from "./premises.ts";
 import type { PremiseRef } from "../../protocol/premise.ts";
 import { MAX_POOL_BYTES, MAX_POOL_FILES } from "../../protocol/constants.ts";
-import { paletteOf, unknownColours } from "./colours.ts";
+import { directEnergyWrites, paletteOf, unknownColours } from "./colours.ts";
 import { selftestApplies, selftestKey } from "./selftest.ts";
 
 export type SubmitInner =
@@ -232,6 +232,31 @@ export function submitCall(
         }
       }
       okCheck("colours_known");
+    }
+
+    // CK6d — energy_through_rules: a creature changes its energy only with drain() and feed().
+    if (/export\s+function\s+drain\s*\(/.test(head.get("world/energy.js") ?? "")) {
+      for (const path of changed) {
+        const source = rep.files.get(path);
+        if (!path.startsWith("creatures/") || !path.endsWith(".js") || source === undefined) continue;
+        const lines = directEnergyWrites(source);
+        if (lines.length > 0) {
+          return result({
+            status: "rejected",
+            errors: [
+              {
+                code: "energy_direct",
+                detail: {
+                  path,
+                  lines,
+                  fix: "spend energy with drain(creature, amount) and give it with feed(creature, amount) from ../world/energy.js; only spawn sets energy: ENERGY_MAX",
+                },
+              },
+            ],
+          });
+        }
+      }
+      okCheck("energy_through_rules");
     }
 
     // CK6c — selftest: with features.green "full", the pool's self-test ran on this very tree in

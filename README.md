@@ -4,7 +4,7 @@ Git records only what an agent wrote. Premise also records what it read.
 
 A change lands while everything it relied on is still true, and goes back to its still-running agent with the exact diff when something it relied on changes.
 
-Watch a recorded run in the browser, with no account and no key: **https://PUBLIC-ADDRESS/replay/hero**
+Watch a recorded run in the browser, with no account and no key: **https://premise.rk3469.workers.dev/replay/hero**
 
 ## The idea
 
@@ -31,13 +31,13 @@ The page is called the Floor. It shows one codebase, a small simulated rock pool
 
 ## How it is built
 
-One Worker serves the page, the API and each pool's code at any commit. Four Durable Objects, each with SQLite storage, do the work: **Trunk** (one per pool) serves every read, pins premises, checks them in each landing batch in one transaction and is the only writer of `main`; **Agent** (one per attempt) runs the model's tool loop and survives restarts; **Floor** (one per pool) streams events to every open page; **ModelGate** (one per deployment) holds the rate limits, the spend cap and the kill switch. Artifacts holds each pool as a git repository, with `green` marking the newest landing that passed the static checks and a second repository for the plain-merge comparison; each attempt gets its own repository with its transcript, operations and premises; every write is a push that names the old and the new value of each ref. Outside agents can join a pool over MCP. Workflows launch the Swarm. Workers AI runs the models.
+One Worker serves the page, the API and each pool's code at any commit. Four Durable Objects, each with SQLite storage, do the work: **Trunk** (one per pool) serves every read, pins premises, checks them in each landing batch in one transaction and is the only writer of `main`; **Agent** (one per attempt) runs the model's tool loop and survives restarts; **Floor** (one per pool) streams events to every open page; **ModelGate** (one per deployment) holds the rate limits, the spend cap and the kill switch. Artifacts holds each pool as a git repository, with `green` marking the newest landing whose code passed the pool's self-test in a Worker Loader isolate (the same self-test also runs before a change lands) and a second repository for the plain-merge comparison; each attempt gets its own repository with its transcript, operations and premises; every write is a push that names the old and the new value of each ref. Outside agents can join a pool over MCP. Workflows launch the Swarm. Workers AI runs the models.
 
 The specification is in [`docs/spec/`](docs/spec/): [`01-core.md`](docs/spec/01-core.md) holds the rules and the protocol, and [`premise-cases.json`](docs/spec/premise-cases.json) holds 58 cases that the engine must pass.
 
 ## Run it
 
-Watch a recorded run with no account and no key: open https://PUBLIC-ADDRESS/replay/hero
+Watch a recorded run with no account and no key: open https://premise.rk3469.workers.dev/replay/hero
 
 To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and a Cloudflare account on the Workers Paid plan with Artifacts.
 

@@ -1,4 +1,4 @@
-Watch a recorded run with no account and no key: open https://PUBLIC-ADDRESS/replay/hero
+Watch a recorded run with no account and no key: open https://premise.rk3469.workers.dev/replay/hero
 
 To run your own copy you need Node.js 22 (22.18 or later) with npm 10, git, and a Cloudflare account on the Workers Paid plan with Artifacts.
 

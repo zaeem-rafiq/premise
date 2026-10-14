@@ -1,7 +1,17 @@
 {
   "v": 1,
-  "default": "rehearsal",
+  "default": "hero",
   "recordings": [
+    {
+      "id": "hero",
+      "file": "/replay/hero.ndjson",
+      "title": "The beat sheet, real agents",
+      "duration_ms": 381625,
+      "events": 1857,
+      "bytes": 828391,
+      "synthetic": false,
+      "recorded_at": "2026-10-11T20:54:51.297Z"
+    },
     {
       "id": "rehearsal",
       "file": "/replay/rehearsal.ndjson",

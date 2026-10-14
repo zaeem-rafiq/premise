@@ -1,0 +1,1909 @@
+{
+  "v": 1,
+  "about": "The labelled set of calibrate:clef (04-build-plan 2.16 item 2; 01-core S6, RR7). One triage question per case, in the shape of 01-core 7.3. `label` is the truth by 7.3's criteria: dependent = the patch uses a value, unit, range, name, order or behaviour that held under read_then and no longer holds under is_now; independent = the patch behaves as intended under is_now, or does not depend on this code. Labels are written by hand from those criteria, 02-tidepool 10.3 and the vectors, never from a model's answer. `zone: rule` marks a case the engine decides by a rule row before Clef (kept as a probe). Text references: `seed` = seeds/tidepool, `vector` = the pool of docs/spec/premise-cases.json, `run:<model>:<intent>:<run>` = a module of docs/measurements/models/2026-10-06-engine-<model>.json; `replace` applies [old, new] edits; `entity` takes that entity's source (01-core EN7).",
+  "cases": [
+    {
+      "id": "vector-C06",
+      "source": {
+        "kind": "vector",
+        "ref": "C06-read-not-referenced-triage",
+        "attempt": "A"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a crab that hides when its energy is low",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 30;\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The crab never moves (vx 0, vy 0) and its update reads only its energy: no value, unit, range or behaviour of MAX_SPEED is used, so the patch behaves as intended under MAX_SPEED = 3."
+    },
+    {
+      "id": "vector-C31",
+      "source": {
+        "kind": "vector",
+        "ref": "C31-triage-window-new-reference",
+        "attempt": "A"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a crab that hides when its energy is low",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 30;\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The crab never moves (vx 0, vy 0) and its update reads only its energy: no value, unit, range or behaviour of MAX_SPEED is used, so the patch behaves as intended under MAX_SPEED = 3. (C31 is judged with the patch as it was at the landing; the later reference is decided by rule E2.)"
+    },
+    {
+      "id": "vector-C52",
+      "source": {
+        "kind": "vector",
+        "ref": "C52-restart-with-pending-triage",
+        "attempt": "A"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a crab that hides when its energy is low",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nexport function spawn() {\n  return { x: 20, y: 180, vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(crab) {\n  crab.hiding = crab.energy < 30;\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The crab never moves (vx 0, vy 0) and its update reads only its energy: no value, unit, range or behaviour of MAX_SPEED is used, so the patch behaves as intended under MAX_SPEED = 3."
+    },
+    {
+      "id": "vector-C07-A1",
+      "source": {
+        "kind": "vector",
+        "ref": "C07-triage-thresholds",
+        "attempt": "A1"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "an urchin on the floor",
+      "patch": [
+        {
+          "path": "creatures/urchin.js",
+          "after": "export function spawn() {\n  return { x: 150, y: 195, vx: 0, vy: 0, energy: 50 };\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The urchin only spawns, at rest (vx 0, vy 0); nothing in the patch uses MAX_SPEED. The vector's p values (0.9, 0.5, 0.05) script the threshold mapping, not the truth."
+    },
+    {
+      "id": "vector-C07-A2",
+      "source": {
+        "kind": "vector",
+        "ref": "C07-triage-thresholds",
+        "attempt": "A2"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "an anemone on the floor",
+      "patch": [
+        {
+          "path": "creatures/anemone.js",
+          "after": "export function spawn() {\n  return { x: 200, y: 195, vx: 0, vy: 0, energy: 50 };\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The anemone only spawns, at rest (vx 0, vy 0); nothing in the patch uses MAX_SPEED. The vector's p values (0.9, 0.5, 0.05) script the threshold mapping, not the truth."
+    },
+    {
+      "id": "vector-C07-A3",
+      "source": {
+        "kind": "vector",
+        "ref": "C07-triage-thresholds",
+        "attempt": "A3"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a limpet on the floor",
+      "patch": [
+        {
+          "path": "creatures/limpet.js",
+          "after": "export function spawn() {\n  return { x: 250, y: 195, vx: 0, vy: 0, energy: 50 };\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED",
+          "replace": [["MAX_SPEED = 2", "MAX_SPEED = 3"]]
+        },
+        "changed_by_intent": "raise the top speed to 3",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The limpet only spawns, at rest (vx 0, vy 0); nothing in the patch uses MAX_SPEED. The vector's p values (0.9, 0.5, 0.05) script the threshold mapping, not the truth."
+    },
+    {
+      "id": "vector-C12",
+      "source": {
+        "kind": "vector",
+        "ref": "C12-search-gain-not-swept-triage",
+        "attempt": "A"
+      },
+      "row": "QT2",
+      "zone": "triage",
+      "intent": "an urchin on the floor",
+      "patch": [
+        {
+          "path": "creatures/urchin.js",
+          "after": "export function spawn() {\n  return { x: 150, y: 195, vx: 0, vy: 0, energy: 50 };\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "text:creatures/:energy",
+        "read_then": "[\"creatures/fish.js#(import ../world/energy.js)\", \"creatures/fish.js#spawn\", \"creatures/snail.js#(import ../world/energy.js)\", \"creatures/snail.js#spawn\"]",
+        "is_now": "[\"creatures/anemone.js#spawn\", \"creatures/fish.js#(import ../world/energy.js)\", \"creatures/fish.js#spawn\", \"creatures/snail.js#(import ../world/energy.js)\", \"creatures/snail.js#spawn\"]",
+        "changed_by_intent": "an anemone on the floor",
+        "added": [
+          {
+            "key": "creatures/anemone.js#spawn",
+            "source": "export function spawn() {\n  return { x: 200, y: 195, vx: 0, vy: 0, energy: 50 };\n}"
+          }
+        ],
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The urchin is a new file that alters none of the matches of the search; a new anemone with energy changes nothing the urchin uses."
+    },
+    {
+      "id": "vector-C42",
+      "source": {
+        "kind": "vector",
+        "ref": "C42-search-gain-one-of-many-altered",
+        "attempt": "A"
+      },
+      "row": "QT2",
+      "zone": "triage",
+      "intent": "move the fish to the right",
+      "patch": [
+        {
+          "path": "creatures/fish.js",
+          "before": {
+            "from": "vector",
+            "path": "creatures/fish.js"
+          },
+          "after": {
+            "from": "vector",
+            "path": "creatures/fish.js",
+            "replace": [["x: 40, y: 60", "x: 45, y: 60"]]
+          }
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "text:creatures/:energy",
+        "read_then": "[\"creatures/fish.js#(import ../world/energy.js)\", \"creatures/fish.js#spawn\", \"creatures/snail.js#(import ../world/energy.js)\", \"creatures/snail.js#spawn\"]",
+        "is_now": "[\"creatures/anemone.js#spawn\", \"creatures/fish.js#(import ../world/energy.js)\", \"creatures/fish.js#spawn\", \"creatures/snail.js#(import ../world/energy.js)\", \"creatures/snail.js#spawn\"]",
+        "changed_by_intent": "an anemone on the floor",
+        "added": [
+          {
+            "key": "creatures/anemone.js#spawn",
+            "source": "export function spawn() {\n  return { x: 200, y: 195, vx: 0, vy: 0, energy: 50 };\n}"
+          }
+        ],
+        "changed": []
+      },
+      "label": "independent",
+      "why": "Moving the fish's start point does not depend on which creatures mention energy; the patch is not a sweep over the matches, so a gained anemone leaves it correct."
+    },
+    {
+      "id": "vector-C38",
+      "source": {
+        "kind": "vector",
+        "ref": "C38-reader-landed-triage",
+        "attempt": "S"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "an urchin that tires",
+      "patch": [
+        {
+          "path": "creatures/urchin.js",
+          "after": "export function spawn() {\n  return { x: 150, y: 195, vx: 0, vy: 0, energy: 100 };\n}\n\nexport function update(urchin) {\n  urchin.tired = urchin.energy < 30;\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/energy.js#ENERGY_MAX",
+        "read_then": {
+          "from": "vector",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX",
+          "replace": [["ENERGY_MAX = 100", "ENERGY_MAX = 1"]]
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The landed urchin starts at energy 100 and tires below 30: both numbers are points of the 0 to 100 scale it read. With ENERGY_MAX = 1 the start value is out of range and the urchin is always tired (02-tidepool HC3 row; the vector's answer is repair)."
+    },
+    {
+      "id": "vector-C55",
+      "source": {
+        "kind": "vector",
+        "ref": "C55-info-heads-up-does-not-wake-or-close-a-card",
+        "attempt": "S"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "make energy a fraction from 0 to 1",
+      "patch": [
+        {
+          "path": "world/energy.js",
+          "before": {
+            "from": "vector",
+            "path": "world/energy.js"
+          },
+          "after": {
+            "from": "vector",
+            "path": "world/energy.js",
+            "replace": [["ENERGY_MAX = 100", "ENERGY_MAX = 1"]]
+          }
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/energy.js#drain",
+        "read_then": {
+          "from": "vector",
+          "path": "world/energy.js",
+          "entity": "drain"
+        },
+        "is_now": {
+          "from": "vector",
+          "path": "world/energy.js",
+          "entity": "drain",
+          "replace": [["creature.energy - amount", "creature.energy - amount * 2"]]
+        },
+        "changed_by_intent": "creatures tire twice as fast",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The patch changes only the value of ENERGY_MAX. It does not call drain or rely on its rate; drain still takes an amount in the unit of ENERGY_MAX, so the fraction scale is still what the intent wants."
+    },
+    {
+      "id": "pattern-add-energy",
+      "source": {
+        "kind": "spec",
+        "ref": "02-tidepool 10.3: rescale-energy breaks add-energy after its write (a true dependency: yes)"
+      },
+      "row": "E3",
+      "zone": "rule",
+      "intent": "a creature that rests when its energy is low",
+      "patch": [
+        {
+          "path": "creatures/s-add-energy.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\nimport { bounce } from \"../world/bounds.js\";\nimport { step } from \"../world/movement.js\";\n\nconst BODY = \"orange\";\n\nexport function spawn() {\n  return { vx: 1, vy: 0.5, energy: ENERGY_MAX };\n}\n\nexport function update(creature) {\n  if (creature.energy < 30) return;\n  step(creature);\n  bounce(creature);\n}\n\nexport function draw(creature, pen) {\n  pen.fill(BODY);\n  pen.rect(-9, -9, 18, 18, 4);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/energy.js#ENERGY_MAX",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "T-energy with the threshold 30, which is 0.3 x the ENERGY_MAX of 100 it read. Under ENERGY_MAX = 1 energy never reaches 30's side of the scale and the creature never moves. In the engine rule E2 decides this (the module names ENERGY_MAX); kept as a probe of Clef's reading."
+    },
+    {
+      "id": "pattern-add-relative",
+      "source": {
+        "kind": "spec",
+        "ref": "02-tidepool 10.3: rescale-energy breaks add-relative (a true dependency: no, false abort)"
+      },
+      "row": "E3",
+      "zone": "rule",
+      "intent": "a creature that rests when its energy is low",
+      "patch": [
+        {
+          "path": "creatures/s-add-relative.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\nimport { bounce } from \"../world/bounds.js\";\nimport { step } from \"../world/movement.js\";\n\nconst BODY = \"orange\";\n\nexport function spawn() {\n  return { vx: 1, vy: 0.5, energy: ENERGY_MAX };\n}\n\nexport function update(creature) {\n  if (creature.energy < ENERGY_MAX * 0.3) return;\n  step(creature);\n  bounce(creature);\n}\n\nexport function draw(creature, pen) {\n  pen.fill(BODY);\n  pen.rect(-9, -9, 18, 18, 4);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/energy.js#ENERGY_MAX",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "T-relative states the threshold as ENERGY_MAX * 0.3, which is correct on either scale; the spec names this the designed false abort."
+    },
+    {
+      "id": "pattern-reader-F4",
+      "source": {
+        "kind": "spec",
+        "ref": "02-tidepool 10.3: rescale-energy breaks reader in flight (F4, a true dependency: no)"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a teal creature that wanders",
+      "patch": [
+        {
+          "path": "creatures/s-reader.js",
+          "after": "import { bounce } from \"../world/bounds.js\";\nimport { step, wander } from \"../world/movement.js\";\n\nconst BODY = \"teal\";\nconst SPEED = 1.5;\n\nexport function spawn() {\n  return { vx: SPEED, vy: SPEED / 2 };\n}\n\nexport function update(creature) {\n  wander(creature, 0.05);\n  step(creature);\n  bounce(creature);\n}\n\nexport function draw(creature, pen) {\n  pen.fill(BODY);\n  pen.circle(0, 0, 9);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": ["world/energy.js#ENERGY_MAX"]
+      },
+      "label": "independent",
+      "why": "The reader read the whole of world/energy.js and then wrote T-plain, which uses no energy at all."
+    },
+    {
+      "id": "pattern-reader-QR4",
+      "source": {
+        "kind": "spec",
+        "ref": "02-tidepool 10.3: reader lands while rescale-energy is in flight (QR4, a true dependency: no)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a teal creature that wanders",
+      "patch": [
+        {
+          "path": "creatures/s-reader.js",
+          "after": "import { bounce } from \"../world/bounds.js\";\nimport { step, wander } from \"../world/movement.js\";\n\nconst BODY = \"teal\";\nconst SPEED = 1.5;\n\nexport function spawn() {\n  return { vx: SPEED, vy: SPEED / 2 };\n}\n\nexport function update(creature) {\n  wander(creature, 0.05);\n  step(creature);\n  bounce(creature);\n}\n\nexport function draw(creature, pen) {\n  pen.fill(BODY);\n  pen.circle(0, 0, 9);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/energy.js#ENERGY_MAX",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The landed reader's T-plain creature uses no energy; rescaling ENERGY_MAX changes nothing it does."
+    },
+    {
+      "id": "hc3-slug",
+      "source": {
+        "kind": "spec",
+        "ref": "02-tidepool HC3 row: plain numbers, the agent read ENERGY_MAX (E3, order 1)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a sea slug that slows down when its energy is below a quarter",
+      "patch": [
+        {
+          "path": "creatures/slug.js",
+          "after": "import { step, glide } from \"../world/movement.js\";\nimport { keepInside } from \"../world/bounds.js\";\n\nconst BODY = \"plum\";\n\nexport function spawn() {\n  return { vx: 0.6, vy: 0, energy: 100 };\n}\n\nexport function update(slug) {\n  if (slug.energy < 25) glide(slug, 0.5);\n  step(slug);\n  keepInside(slug);\n}\n\nexport function draw(slug, pen) {\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 16, 6);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/energy.js#ENERGY_MAX",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js",
+          "entity": "ENERGY_MAX"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "energy: 100 and the bound 25 are points of the 0 to 100 scale that was read. Under ENERGY_MAX = 1 the slug starts far above full and, once drained, is below 25 for good: it no longer slows at a quarter."
+    },
+    {
+      "id": "skimmer-surface",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R04 (2026-10-06)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a water strider that skates just under the surface",
+      "patch": [
+        {
+          "path": "creatures/strider.js",
+          "after": "import { step } from \"../world/movement.js\";\n\nconst LEGS = \"black\";\n\nexport function spawn() {\n  return { y: 42, vx: 1.2, vy: 0 };\n}\n\nexport function update(strider) {\n  strider.vy = 0;\n  strider.y = 42;\n  step(strider);\n  if (strider.x < 0 || strider.x > 800) strider.vx = -strider.vx;\n}\n\nexport function draw(strider, pen) {\n  pen.stroke(LEGS, 1);\n  pen.line(-8, 0, 8, 0);\n  pen.circle(0, -2, 3);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/bounds.js#SURFACE_Y",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js",
+          "entity": "SURFACE_Y"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js",
+          "entity": "SURFACE_Y"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "y = 42 is 'just under the surface' only while SURFACE_Y is 40. With SURFACE_Y = 80 it is in the sky, and the world pulls the strider down each tick."
+    },
+    {
+      "id": "skimmer-surface-QR4",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R04 (2026-10-06)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a water strider that skates just under the surface",
+      "patch": [
+        {
+          "path": "creatures/strider.js",
+          "after": "import { step } from \"../world/movement.js\";\n\nconst LEGS = \"black\";\n\nexport function spawn() {\n  return { y: 42, vx: 1.2, vy: 0 };\n}\n\nexport function update(strider) {\n  strider.vy = 0;\n  strider.y = 42;\n  step(strider);\n  if (strider.x < 0 || strider.x > 800) strider.vx = -strider.vx;\n}\n\nexport function draw(strider, pen) {\n  pen.stroke(LEGS, 1);\n  pen.line(-8, 0, 8, 0);\n  pen.circle(0, -2, 3);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/bounds.js#SURFACE_Y",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js",
+          "entity": "SURFACE_Y"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js",
+          "entity": "SURFACE_Y"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The landed strider hard-codes y = 42 from SURFACE_Y = 40; the asking attempt moves the surface to 80."
+    },
+    {
+      "id": "lantern-day",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R02 (2026-10-06)"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a lanternfish that glows at night",
+      "patch": [
+        {
+          "path": "creatures/lanternfish.js",
+          "after": "import { step, wander } from \"../world/movement.js\";\nimport { bounce } from \"../world/bounds.js\";\n\nconst BODY = \"navy\";\nconst GLOW = \"aqua\";\n\nexport function spawn() {\n  return { vx: 0.7, vy: 0 };\n}\n\nexport function update(fish) {\n  wander(fish, 0.03);\n  step(fish);\n  bounce(fish);\n}\n\nexport function draw(fish, pen, world) {\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 14, 7);\n  const night = world.tick % 3600 >= 1800;\n  if (night) {\n    pen.fill(GLOW);\n    pen.circle(6, 0, 3);\n  }\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/time.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": ["world/time.js#DAY_TICKS"]
+      },
+      "label": "dependent",
+      "why": "The patch computes night as tick % 3600 >= 1800, the day length it read. With DAY_TICKS = 7200 it glows in the middle of the day and is dark for half of the night."
+    },
+    {
+      "id": "lantern-day-QR4",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R02 (2026-10-06)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a lanternfish that glows at night",
+      "patch": [
+        {
+          "path": "creatures/lanternfish.js",
+          "after": "import { step, wander } from \"../world/movement.js\";\nimport { bounce } from \"../world/bounds.js\";\n\nconst BODY = \"navy\";\nconst GLOW = \"aqua\";\n\nexport function spawn() {\n  return { vx: 0.7, vy: 0 };\n}\n\nexport function update(fish) {\n  wander(fish, 0.03);\n  step(fish);\n  bounce(fish);\n}\n\nexport function draw(fish, pen, world) {\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 14, 7);\n  const night = world.tick % 3600 >= 1800;\n  if (night) {\n    pen.fill(GLOW);\n    pen.circle(6, 0, 3);\n  }\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/time.js#DAY_TICKS",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The landed lanternfish copies the old day length (3600 ticks) into its own night test."
+    },
+    {
+      "id": "squid-isnight",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R09 (2026-10-06)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a firefly squid that lights up at night",
+      "patch": [
+        {
+          "path": "creatures/squid.js",
+          "after": "import { DAY_TICKS } from \"../world/time.js\";\nimport { step, wander } from \"../world/movement.js\";\nimport { bounce } from \"../world/bounds.js\";\n\nconst BODY = \"slateblue\";\nconst LIGHT = \"lime\";\n\nexport function spawn() {\n  return { vx: 0.5, vy: 0 };\n}\n\nexport function update(squid) {\n  wander(squid, 0.05);\n  step(squid);\n  bounce(squid);\n}\n\nexport function draw(squid, pen, world) {\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 10, 16);\n  if ((world.tick % DAY_TICKS) / DAY_TICKS >= 0.5) {\n    pen.fill(LIGHT);\n    pen.circle(0, 6, 3);\n  }\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/time.js#isNight",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js",
+          "entity": "isNight"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R09:1",
+          "path": "world/time.js",
+          "entity": "isNight"
+        },
+        "changed_by_intent": "make the night shorter: only the last third of the day is dark",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The squid restates isNight's old rule (phase >= 0.5) instead of calling it. After R09 night starts at 2/3 of the day, so the squid lights up during the evening while the pool is still day."
+    },
+    {
+      "id": "sailfish-top-speed",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R03 (2026-10-06)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a sailfish that always swims at the top speed",
+      "patch": [
+        {
+          "path": "creatures/sailfish.js",
+          "after": "import { step } from \"../world/movement.js\";\nimport { bounce } from \"../world/bounds.js\";\n\nconst BODY = \"steelblue\";\n\nexport function spawn() {\n  return { vx: 3, vy: 0 };\n}\n\nexport function update(sail) {\n  sail.vx = sail.vx < 0 ? -3 : 3;\n  sail.vy = 0;\n  step(sail);\n  bounce(sail);\n}\n\nexport function draw(sail, pen) {\n  if (sail.vx < 0) pen.flip();\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 22, 6);\n  pen.poly([-4, -6, 6, -16, 10, -6]);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "seed",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R03:1",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "changed_by_intent": "let creatures swim half as fast again at top speed",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The speed 3 is the top speed it read. With MAX_SPEED = 4.5 the sailfish swims at two thirds of the top speed, not at it."
+    },
+    {
+      "id": "sailfish-top-speed-QR4",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R03 (2026-10-06)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a sailfish that always swims at the top speed",
+      "patch": [
+        {
+          "path": "creatures/sailfish.js",
+          "after": "import { step } from \"../world/movement.js\";\nimport { bounce } from \"../world/bounds.js\";\n\nconst BODY = \"steelblue\";\n\nexport function spawn() {\n  return { vx: 3, vy: 0 };\n}\n\nexport function update(sail) {\n  sail.vx = sail.vx < 0 ? -3 : 3;\n  sail.vy = 0;\n  step(sail);\n  bounce(sail);\n}\n\nexport function draw(sail, pen) {\n  if (sail.vx < 0) pen.flip();\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 22, 6);\n  pen.poly([-4, -6, 6, -16, 10, -6]);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "seed",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R03:1",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "changed_by_intent": "let creatures swim half as fast again at top speed",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The landed sailfish hard-codes 3 as 'the top speed'; the asking attempt raises MAX_SPEED to 4.5."
+    },
+    {
+      "id": "gull-food-every",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R05 (2026-10-06)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a diving bird that dives once each time a pellet drops",
+      "patch": [
+        {
+          "path": "creatures/gull.js",
+          "after": "import { step, glide } from \"../world/movement.js\";\nimport { keepInside } from \"../world/bounds.js\";\n\nconst BODY = \"white\";\n\nexport function spawn() {\n  return { y: 45, vx: 1, vy: 0 };\n}\n\nexport function update(gull, world) {\n  if (world.tick % 30 === 0) gull.vy = 3;\n  glide(gull, 0.97);\n  step(gull);\n  keepInside(gull);\n}\n\nexport function draw(gull, pen) {\n  pen.fill(BODY);\n  pen.poly([-10, 0, 0, -4, 10, 0, 0, 2]);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/food.js#FOOD_EVERY",
+        "read_then": {
+          "from": "seed",
+          "path": "world/food.js",
+          "entity": "FOOD_EVERY"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R05:1",
+          "path": "world/food.js",
+          "entity": "FOOD_EVERY"
+        },
+        "changed_by_intent": "drop food twice as often",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The dive every 30 ticks copies FOOD_EVERY = 30. With food every 15 ticks it dives at every second pellet."
+    },
+    {
+      "id": "gull-food-every-QR4",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R05 (2026-10-06)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a diving bird that dives once each time a pellet drops",
+      "patch": [
+        {
+          "path": "creatures/gull.js",
+          "after": "import { step, glide } from \"../world/movement.js\";\nimport { keepInside } from \"../world/bounds.js\";\n\nconst BODY = \"white\";\n\nexport function spawn() {\n  return { y: 45, vx: 1, vy: 0 };\n}\n\nexport function update(gull, world) {\n  if (world.tick % 30 === 0) gull.vy = 3;\n  glide(gull, 0.97);\n  step(gull);\n  keepInside(gull);\n}\n\nexport function draw(gull, pen) {\n  pen.fill(BODY);\n  pen.poly([-10, 0, 0, -4, 10, 0, 0, 2]);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/food.js#FOOD_EVERY",
+        "read_then": {
+          "from": "seed",
+          "path": "world/food.js",
+          "entity": "FOOD_EVERY"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R05:1",
+          "path": "world/food.js",
+          "entity": "FOOD_EVERY"
+        },
+        "changed_by_intent": "drop food twice as often",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The landed bird's 30-tick dive timer is FOOD_EVERY's old value; the asking attempt halves it."
+    },
+    {
+      "id": "clam-rest-bar",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R07 (2026-10-06)"
+      },
+      "row": "E3",
+      "zone": "triage",
+      "intent": "a clam that shows a bar counting down its rest",
+      "patch": [
+        {
+          "path": "creatures/clam.js",
+          "after": "import { ENERGY_MAX } from \"../world/energy.js\";\n\nconst SHELL = \"tan\";\nconst BAR = \"gold\";\n\nexport function spawn() {\n  return { vx: 0, vy: 0, energy: ENERGY_MAX };\n}\n\nexport function update(clam) {\n  clam.vx = 0;\n}\n\nexport function draw(clam, pen) {\n  pen.fill(SHELL);\n  pen.ellipse(0, 0, 14, 8);\n  if (clam.resting > 0) {\n    pen.fill(BAR);\n    pen.rect(-10, 12, (20 * clam.resting) / 300, 3);\n  }\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "entity",
+        "key": "world/energy.js#REST_TICKS",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js",
+          "entity": "REST_TICKS"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R07:1",
+          "path": "world/energy.js",
+          "entity": "REST_TICKS"
+        },
+        "changed_by_intent": "tired creatures should rest for half as long",
+        "changed": []
+      },
+      "label": "dependent",
+      "why": "The bar's length divides by 300, the rest length read from REST_TICKS. With REST_TICKS = 150 the bar starts half full instead of full."
+    },
+    {
+      "id": "grouper-four-pellets",
+      "source": {
+        "kind": "spec",
+        "ref": "hand-written; change = real R08 (2026-10-06)"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a grouper that stops hunting after it has eaten four pellets",
+      "patch": [
+        {
+          "path": "creatures/grouper.js",
+          "after": "import { nearestFood } from \"../world/food.js\";\nimport { step, steer, glide } from \"../world/movement.js\";\nimport { keepInside } from \"../world/bounds.js\";\n\nconst BODY = \"sienna\";\n\nexport function spawn() {\n  return { vx: 0.8, vy: 0, energy: 0 };\n}\n\nexport function update(grouper, world) {\n  const full = grouper.energy >= 4 * 25;\n  const food = full ? null : nearestFood(grouper, world);\n  if (food) steer(grouper, food.x, food.y, 0.15);\n  glide(grouper, 0.97);\n  step(grouper);\n  keepInside(grouper);\n}\n\nexport function draw(grouper, pen) {\n  pen.fill(BODY);\n  pen.ellipse(0, 0, 24, 14);\n}\n"
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/food.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/food.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R08:1",
+          "path": "world/food.js"
+        },
+        "changed_by_intent": "one pellet of food should fill half a creature's energy",
+        "changed": ["world/food.js#FOOD_ENERGY"]
+      },
+      "label": "dependent",
+      "why": "4 * 25 counts four pellets of FOOD_ENERGY = ENERGY_MAX / 4. With a pellet worth half the energy the grouper stops after two pellets."
+    },
+    {
+      "id": "real-glm-A03-R04",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A03 run 1 (creatures/starfish.js); change R04"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a starfish that sits on the sand and slowly turns",
+      "patch": [
+        {
+          "path": "creatures/starfish.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A03:1",
+            "path": "creatures/starfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/bounds.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": ["world/bounds.js#SURFACE_Y"]
+      },
+      "label": "independent",
+      "why": "The starfish sits at FLOOR_Y + 8 and never uses the water line; moving SURFACE_Y leaves it on the sand."
+    },
+    {
+      "id": "real-glm-A03-R05",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A03 run 1 (creatures/starfish.js); change R05"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a starfish that sits on the sand and slowly turns",
+      "patch": [
+        {
+          "path": "creatures/starfish.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A03:1",
+            "path": "creatures/starfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/food.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/food.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R05:1",
+          "path": "world/food.js"
+        },
+        "changed_by_intent": "drop food twice as often",
+        "changed": ["world/food.js#FOOD_EVERY"]
+      },
+      "label": "independent",
+      "why": "The starfish does not eat or look at food; how often food drops does not matter to it."
+    },
+    {
+      "id": "real-glm-A04-R02",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A04 run 1 (creatures/sea-urchin.js); change R02"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a sea urchin on the sand that waves its spines",
+      "patch": [
+        {
+          "path": "creatures/sea-urchin.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A04:1",
+            "path": "creatures/sea-urchin.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/time.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": ["world/time.js#DAY_TICKS"]
+      },
+      "label": "independent",
+      "why": "The spines sway with the creature's age, not with the time of day; a longer day changes nothing."
+    },
+    {
+      "id": "real-glm-A05-R02",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A05 run 1 (creatures/manta-ray.js); change R02"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a manta ray that glides in wide slow circles",
+      "patch": [
+        {
+          "path": "creatures/manta-ray.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A05:1",
+            "path": "creatures/manta-ray.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/time.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": ["world/time.js#DAY_TICKS"]
+      },
+      "label": "independent",
+      "why": "The manta asks isNight for its night lift and otherwise turns by a fixed angle; a longer day keeps both as intended."
+    },
+    {
+      "id": "real-glm-A08-R11",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A08 run 1 (creatures/school-fish.js); change R11"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a school of eight tiny blue fish that stay together",
+      "patch": [
+        {
+          "path": "creatures/school-fish.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A08:1",
+            "path": "creatures/school-fish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/rules.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/rules.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R11:1",
+          "path": "world/rules.js"
+        },
+        "changed_by_intent": "resting creatures should float up to the surface instead of sinking",
+        "changed": ["world/rules.js#tickWorld"]
+      },
+      "label": "independent",
+      "why": "The school fish have no energy, so they never rest; where resting creatures drift does not affect them."
+    },
+    {
+      "id": "real-glm-A09-R03",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A09 run 1 (creatures/eel.js); change R03"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "an eel that goes straight for the nearest food",
+      "patch": [
+        {
+          "path": "creatures/eel.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A09:1",
+            "path": "creatures/eel.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/movement.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/movement.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R03:1",
+          "path": "world/movement.js"
+        },
+        "changed_by_intent": "let creatures swim half as fast again at top speed",
+        "changed": ["world/movement.js#MAX_SPEED"]
+      },
+      "label": "independent",
+      "why": "The eel steers to the nearest food and glides at 0.97; it relies on step's cap only as a ceiling, and a higher cap still takes it straight to the food."
+    },
+    {
+      "id": "real-glm-A12-R04",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A12 run 1 (creatures/cleaner-fish.js); change R04"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a little cleaner fish that follows the turtle around",
+      "patch": [
+        {
+          "path": "creatures/cleaner-fish.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A12:1",
+            "path": "creatures/cleaner-fish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/bounds.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": ["world/bounds.js#SURFACE_Y"]
+      },
+      "label": "independent",
+      "why": "The cleaner fish steers to a spot next to the turtle and keeps inside the water through keepInside; no number of the water line is used."
+    },
+    {
+      "id": "real-glm-P1a3-R03",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json P1a run 3 (creatures/crab.js); change R03"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a crab that hides in its shell when its energy drops below 30",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": {
+            "from": "run:glm-5.3-flash:P1a:3",
+            "path": "creatures/crab.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/movement.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/movement.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R03:1",
+          "path": "world/movement.js"
+        },
+        "changed_by_intent": "let creatures swim half as fast again at top speed",
+        "changed": ["world/movement.js#MAX_SPEED"]
+      },
+      "label": "independent",
+      "why": "The crab's speeds are 1 and below, far under either top speed; hiding depends on energy only."
+    },
+    {
+      "id": "real-glm-P1b4-R07",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json P1b run 4 (creatures/shrimp.js); change R07"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a shrimp that darts every two seconds and spends 5 energy on each dart",
+      "patch": [
+        {
+          "path": "creatures/shrimp.js",
+          "after": {
+            "from": "run:glm-5.3-flash:P1b:4",
+            "path": "creatures/shrimp.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R07:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "tired creatures should rest for half as long",
+        "changed": ["world/energy.js#REST_TICKS"]
+      },
+      "label": "independent",
+      "why": "The shrimp's darts and their cost do not use the rest length; a shorter rest leaves every dart as intended."
+    },
+    {
+      "id": "real-gpt-A01-R04",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A01 run 1 (creatures/jellyfish.js); change R04"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a jellyfish that drifts up and down",
+      "patch": [
+        {
+          "path": "creatures/jellyfish.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A01:1",
+            "path": "creatures/jellyfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/bounds.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": ["world/bounds.js#SURFACE_Y"]
+      },
+      "label": "independent",
+      "why": "The jellyfish bobs with a sine of its age and turns at the edges through bounce; it holds no number of the water line."
+    },
+    {
+      "id": "real-gpt-A02-R09",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A02 run 1 (creatures/seahorse.js); change R09"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a seahorse that bobs up and down",
+      "patch": [
+        {
+          "path": "creatures/seahorse.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A02:1",
+            "path": "creatures/seahorse.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/time.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R09:1",
+          "path": "world/time.js"
+        },
+        "changed_by_intent": "make the night shorter: only the last third of the day is dark",
+        "changed": ["world/time.js#isNight"]
+      },
+      "label": "independent",
+      "why": "The seahorse read world/time.js but uses no time of day; a shorter night changes nothing it does."
+    },
+    {
+      "id": "real-gpt-A07-R02",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A07 run 1 (creatures/anglerfish.js); change R02"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "an anglerfish whose light only shows at night",
+      "patch": [
+        {
+          "path": "creatures/anglerfish.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A07:1",
+            "path": "creatures/anglerfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/time.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": ["world/time.js#DAY_TICKS"]
+      },
+      "label": "independent",
+      "why": "The light asks isNight, so with a longer day it still shows exactly at night."
+    },
+    {
+      "id": "real-gpt-A10-R11",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A10 run 1 (creatures/pufferfish.js); change R11"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a pufferfish that puffs up when another creature comes close",
+      "patch": [
+        {
+          "path": "creatures/pufferfish.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A10:1",
+            "path": "creatures/pufferfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/rules.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/rules.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R11:1",
+          "path": "world/rules.js"
+        },
+        "changed_by_intent": "resting creatures should float up to the surface instead of sinking",
+        "changed": ["world/rules.js#tickWorld"]
+      },
+      "label": "independent",
+      "why": "Puffing up depends on the distance to other creatures; the world moving resting creatures up instead of down is not used by the patch."
+    },
+    {
+      "id": "real-gpt-A11-R06",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A11 run 1 (creatures/lobster.js); change R06"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a lobster that walks along the sand and turns around at the walls",
+      "patch": [
+        {
+          "path": "creatures/lobster.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A11:1",
+            "path": "creatures/lobster.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/bounds.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R06:1",
+          "path": "world/bounds.js"
+        },
+        "changed_by_intent": "the side walls are solid now: nothing swims out one side and back in the other",
+        "changed": ["world/bounds.js#wrap"]
+      },
+      "label": "independent",
+      "why": "The lobster turns at the walls with bounce, not wrap; making wrap bounce as well changes nothing it uses."
+    },
+    {
+      "id": "real-gpt-P1a1-R07",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json P1a run 1 (creatures/crab.js); change R07"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a crab that hides in its shell when its energy drops below 30",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": {
+            "from": "run:gpt-oss-120b:P1a:1",
+            "path": "creatures/crab.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R07:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "tired creatures should rest for half as long",
+        "changed": ["world/energy.js#REST_TICKS"]
+      },
+      "label": "independent",
+      "why": "The crab hides below ENERGY_MAX * 0.3; how long an empty crab rests is not part of its rule."
+    },
+    {
+      "id": "real-kimi-A04-R04",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A04 run 1 (creatures/sea-urchin.js); change R04"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a sea urchin on the sand that waves its spines",
+      "patch": [
+        {
+          "path": "creatures/sea-urchin.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A04:1",
+            "path": "creatures/sea-urchin.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/bounds.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/bounds.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R04:1",
+          "path": "world/bounds.js"
+        },
+        "changed_by_intent": "lower the water line so there is more sky",
+        "changed": ["world/bounds.js#SURFACE_Y"]
+      },
+      "label": "independent",
+      "why": "The urchin sits at FLOOR_Y - 9 and waves with the tick; the water line is not used."
+    },
+    {
+      "id": "real-kimi-A06-R11",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A06 run 1 (creatures/octopus.js); change R11"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "an octopus that is dark at night and bright in the day",
+      "patch": [
+        {
+          "path": "creatures/octopus.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A06:1",
+            "path": "creatures/octopus.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/rules.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/rules.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R11:1",
+          "path": "world/rules.js"
+        },
+        "changed_by_intent": "resting creatures should float up to the surface instead of sinking",
+        "changed": ["world/rules.js#tickWorld"]
+      },
+      "label": "independent",
+      "why": "The octopus has no energy and never rests; it changes colour with isNight."
+    },
+    {
+      "id": "real-kimi-A07-R12",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A07 run 1 (creatures/anglerfish.js); change R12"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "an anglerfish whose light only shows at night",
+      "patch": [
+        {
+          "path": "creatures/anglerfish.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A07:1",
+            "path": "creatures/anglerfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/scene.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/scene.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R12:1",
+          "path": "world/scene.js"
+        },
+        "changed_by_intent": "make the sand darker and the water greener",
+        "changed": ["world/scene.js#drawScene"]
+      },
+      "label": "independent",
+      "why": "New colours of the sand and the water do not change when the lure shows; the lure follows isNight."
+    },
+    {
+      "id": "real-kimi-A07-R01",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A07 run 1 (creatures/anglerfish.js); change R01"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "an anglerfish whose light only shows at night",
+      "patch": [
+        {
+          "path": "creatures/anglerfish.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A07:1",
+            "path": "creatures/anglerfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": ["world/energy.js#ENERGY_MAX"]
+      },
+      "label": "independent",
+      "why": "The anglerfish sets no energy and uses no energy number, so the energy scale does not matter to it."
+    },
+    {
+      "id": "real-kimi-A12-R07",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A12 run 1 (creatures/cleaner-fish.js); change R07"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a little cleaner fish that follows the turtle around",
+      "patch": [
+        {
+          "path": "creatures/cleaner-fish.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A12:1",
+            "path": "creatures/cleaner-fish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R07:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "tired creatures should rest for half as long",
+        "changed": ["world/energy.js#REST_TICKS"]
+      },
+      "label": "independent",
+      "why": "Following the turtle and looking for food when hungry do not use the rest length."
+    },
+    {
+      "id": "real-kimi-P1a5-R08",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json P1a run 5 (creatures/crab.js); change R08"
+      },
+      "row": "F4",
+      "zone": "triage",
+      "intent": "a crab that hides in its shell when its energy drops below 30",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:P1a:5",
+            "path": "creatures/crab.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/food.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/food.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R08:1",
+          "path": "world/food.js"
+        },
+        "changed_by_intent": "one pellet of food should fill half a creature's energy",
+        "changed": ["world/food.js#FOOD_ENERGY"]
+      },
+      "label": "independent",
+      "why": "The crab eats any pellet it reaches; a pellet worth more energy does not change when it hides (ENERGY_MAX / 3)."
+    },
+    {
+      "id": "real-kimi-P1a5-R01",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json P1a run 5 (creatures/crab.js); change R01"
+      },
+      "row": "F4",
+      "zone": "rule",
+      "intent": "a crab that hides in its shell when its energy drops below 30",
+      "patch": [
+        {
+          "path": "creatures/crab.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:P1a:5",
+            "path": "creatures/crab.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": ["world/energy.js#ENERGY_MAX"]
+      },
+      "label": "dependent",
+      "why": "The crab comes out again only above HIDE_BELOW + 10: the 10 is in points of the 0 to 100 scale. With ENERGY_MAX = 1 energy never exceeds 1.33, so a crab that hid once never comes out. The module names ENERGY_MAX, so in the engine rule E2 decides; kept as a probe."
+    },
+    {
+      "id": "real-glm-P1b4-absolute-R01",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine.md: P1b written with the absolute 5 (glm-5.3-flash P1b run 4's module with its first number)"
+      },
+      "row": "F4",
+      "zone": "rule",
+      "intent": "a shrimp that darts every two seconds and spends 5 energy on each dart",
+      "patch": [
+        {
+          "path": "creatures/shrimp.js",
+          "after": {
+            "from": "run:glm-5.3-flash:P1b:4",
+            "path": "creatures/shrimp.js",
+            "replace": [["ENERGY_MAX * 0.05; // 5% of a full energy bar", "5; // 5 energy per dart"]]
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "make energy a fraction from 0 to 1",
+        "changed": ["world/energy.js#ENERGY_MAX"]
+      },
+      "label": "dependent",
+      "why": "Each dart drains the absolute 5, a twentieth of the 0 to 100 scale. With ENERGY_MAX = 1 one dart empties the shrimp; the measurement counts ENERGY_MAX * 0.05 as the correct repair (05-agent PT3)."
+    },
+    {
+      "id": "real-kimi-P1b5-reverse",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json P1b run 5 (creatures/shrimp.js), written for ENERGY_MAX = 1; change = R01 reversed (rescale-energy goes either way, 02-tidepool 10.3)"
+      },
+      "row": "F4",
+      "zone": "rule",
+      "intent": "a shrimp that darts every two seconds and spends 5 energy on each dart",
+      "patch": [
+        {
+          "path": "creatures/shrimp.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:P1b:5",
+            "path": "creatures/shrimp.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "file",
+        "key": "world/energy.js",
+        "read_then": {
+          "from": "run:gpt-oss-120b:R01:1",
+          "path": "world/energy.js"
+        },
+        "is_now": {
+          "from": "seed",
+          "path": "world/energy.js"
+        },
+        "changed_by_intent": "count energy in points from 0 to 100 again",
+        "changed": ["world/energy.js#ENERGY_MAX"]
+      },
+      "label": "dependent",
+      "why": "drain(shrimp, 0.05) is 5% of the scale only while ENERGY_MAX is 1. Back on the 0 to 100 scale a dart costs 0.05 points, not the 5 the intent asks for."
+    },
+    {
+      "id": "real-gpt-P3a3-QR4",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.events.jsonl P3a run 3, premise.judged n 287 (QR4 on refs:creatures/fish.js#update)"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "rescale ENERGY_MAX",
+      "patch": [
+        {
+          "path": "world/energy.js",
+          "before": {
+            "from": "seed",
+            "path": "world/energy.js"
+          },
+          "after": {
+            "from": "seed",
+            "path": "world/energy.js",
+            "replace": [["ENERGY_MAX = 100", "ENERGY_MAX = 1"]]
+          }
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:creatures/fish.js#update",
+        "read_then": {
+          "from": "seed",
+          "path": "creatures/fish.js",
+          "entity": "update"
+        },
+        "is_now": {
+          "from": "seed",
+          "path": "creatures/fish.js",
+          "entity": "update",
+          "replace": [["wrap(fish);", "bounce(fish);"]]
+        },
+        "changed_by_intent": "make every creature that swims out one side and back in the other turn around at the walls instead",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The landed rescale read the fish's update (as a referrer of ENERGY_MAX) and changed only the constant. Whether the fish wraps or bounces at the walls does not change what the rescale relies on."
+    },
+    {
+      "id": "real-gpt-A11-QR4-R03",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-gpt-oss-120b.json A11 run 1 (creatures/lobster.js); change R03"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a lobster that walks along the sand and turns around at the walls",
+      "patch": [
+        {
+          "path": "creatures/lobster.js",
+          "after": {
+            "from": "run:gpt-oss-120b:A11:1",
+            "path": "creatures/lobster.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/movement.js#MAX_SPEED",
+        "read_then": {
+          "from": "seed",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R03:1",
+          "path": "world/movement.js",
+          "entity": "MAX_SPEED"
+        },
+        "changed_by_intent": "let creatures swim half as fast again at top speed",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The landed lobster walks at 1.5, under either top speed; raising MAX_SPEED changes nothing it does."
+    },
+    {
+      "id": "real-glm-A04-QR4-R02",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-glm-5.3-flash.json A04 run 1 (creatures/sea-urchin.js); change R02"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "a sea urchin on the sand that waves its spines",
+      "patch": [
+        {
+          "path": "creatures/sea-urchin.js",
+          "after": {
+            "from": "run:glm-5.3-flash:A04:1",
+            "path": "creatures/sea-urchin.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/time.js#DAY_TICKS",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The landed urchin's spines move with its age; the length of the day is not used."
+    },
+    {
+      "id": "real-kimi-A07-QR4-R02",
+      "source": {
+        "kind": "real",
+        "ref": "2026-10-06-engine-kimi-k2.7-code.json A07 run 1 (creatures/anglerfish.js); change R02"
+      },
+      "row": "QR4",
+      "zone": "triage",
+      "intent": "an anglerfish whose light only shows at night",
+      "patch": [
+        {
+          "path": "creatures/anglerfish.js",
+          "after": {
+            "from": "run:kimi-k2.7-code:A07:1",
+            "path": "creatures/anglerfish.js"
+          }
+        }
+      ],
+      "premise": {
+        "kind": "query",
+        "key": "refs:world/time.js#DAY_TICKS",
+        "read_then": {
+          "from": "seed",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "is_now": {
+          "from": "run:gpt-oss-120b:R02:1",
+          "path": "world/time.js",
+          "entity": "DAY_TICKS"
+        },
+        "changed_by_intent": "make the day twice as long",
+        "changed": []
+      },
+      "label": "independent",
+      "why": "The landed anglerfish asks isNight, so a longer day keeps its light on at night only."
+    }
+  ]
+}

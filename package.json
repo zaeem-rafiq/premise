@@ -36,7 +36,7 @@
     "pool:create": "node scripts/ops/pool-create.ts",
     "measure:models": "node scripts/measure/models.ts",
     "soak": "node scripts/soak/soak.ts",
-    "calibrate:clef": "node scripts/ops/not-built.ts calibrate:clef 'Slice 15'",
+    "calibrate:clef": "node scripts/calibrate/clef.ts",
     "rehearse:hero": "node scripts/rehearse/hero.ts",
     "record:export": "node scripts/recordings/export.ts",
     "cleanup:test": "node scripts/ops/not-built.ts cleanup:test 'Slice 1'",

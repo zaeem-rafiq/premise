@@ -14,6 +14,7 @@ import { IntentBox } from "../intent-box/intent-box.tsx";
 import { StatusGlyph } from "../attempt-card/attempt-card.tsx";
 import { cardModel } from "../attempt-card/model.ts";
 import { LandedRow } from "../rail/rail.tsx";
+import { TryButton } from "../try/try-button.tsx";
 
 /** 2.11: at most this many cards in flight; the rest are one tap away in the Floor view. */
 const OVERVIEW_CARDS = 3;
@@ -38,6 +39,8 @@ export type OverviewProps = {
   onFloor: () => void;
   /** RY23: on a quiet pool a visitor is offered the recording (the start card's action). */
   replayOffer?: { label: string; onPlay: () => void };
+  /** 09-try TY11: a visitor of a live page, while `features.try` is on, may start a try. */
+  onTry?: (path: string) => void;
 };
 
 /** The headline and its second line (2.11), from the counters of 3.8. */
@@ -79,10 +82,15 @@ export function Overview(props: OverviewProps) {
       <header className="overview__head">
         <h1 className="overview__title">{head.title}</h1>
         {head.line !== "" && <p className="overview__line">{head.line}</p>}
-        {props.replayOffer !== undefined && (
-          <button type="button" className="primary overview__play" onClick={props.replayOffer.onPlay}>
-            {props.replayOffer.label}
-          </button>
+        {(props.replayOffer !== undefined || props.onTry !== undefined) && (
+          <div className="overview__actions">
+            {props.replayOffer !== undefined && (
+              <button type="button" className="primary overview__play" onClick={props.replayOffer.onPlay}>
+                {props.replayOffer.label}
+              </button>
+            )}
+            {props.onTry !== undefined && <TryButton onOpen={props.onTry} primary={props.replayOffer === undefined} />}
+          </div>
         )}
       </header>
 

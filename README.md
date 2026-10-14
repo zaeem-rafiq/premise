@@ -6,6 +6,16 @@ A change lands while everything it relied on is still true, and goes back to its
 
 Watch a recorded run in the browser, with no account and no key: **https://premise.rk3469.workers.dev/replay/hero**
 
+![The Floor during the recorded run: a shared energy rule has just landed, and the three crab attempts that relied on it are going around with the exact diff](docs/images/floor-conflict.png)
+
+_The Floor during the recorded run. A shared rule ("make energy a fraction from 0 to 1") has just landed. The three crab attempts, each on a different model, relied on it, so each is going around with the exact diff while its agent keeps running._
+
+![The crab's Why card in the pool where a Claude Code session worked over MCP: who asked, who wrote it, and every read it relied on](docs/images/claude-code-why.png)
+
+_A crab written by a real Claude Code session that joined a production pool over MCP. Its Why card lists every read it relied on, each one a premise. The pool is live at https://premise.rk3469.workers.dev/p/claude-code._
+
+![The Overview of the main pool: the landed changes as one sentence, the live pool and the latest landings](docs/images/overview.png)
+
 ## The idea
 
 Many AI agents now change one codebase at the same time. The usual tools were made for one person per change: a branch keeps the change apart, a pull request asks for review, and a merge queue tests it against the others. All three check the text that was written. None of them knows what the writer relied on, so a change can merge without a conflict, pass the tests and still be wrong, because a value it used changed while it was being written.

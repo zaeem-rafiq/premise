@@ -1,0 +1,1265 @@
+{
+  "v": 1,
+  "recorded_at": "2026-10-14T15:12:35.719Z",
+  "cases": {
+    "total": 54,
+    "dependent": 17,
+    "independent": 37,
+    "by_row": {
+      "E3": 15,
+      "QT2": 2,
+      "QR4": 10,
+      "F4": 27
+    },
+    "by_source": {
+      "vector": 10,
+      "spec": 16,
+      "real": 28
+    },
+    "rule_zone": 5
+  },
+  "starting": {
+    "T_REPAIR": 0.7,
+    "T_CONFIRM": 0.2,
+    "CLEF_TIMEOUT_MS": 2000,
+    "CLEF_MAX_QUESTIONS": 64,
+    "CLEF_INPUT_TOKEN_LIMIT": 60000
+  },
+  "models": {
+    "clef": {
+      "model": "clef",
+      "model_id": "@cf/cloudflare/clef",
+      "answers": [
+        {
+          "id": "vector-C06",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0652,
+          "ms": 545,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C31",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0652,
+          "ms": 303,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C52",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0652,
+          "ms": 391,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C07-A1",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0805,
+          "ms": 272,
+          "tokens_in": 358
+        },
+        {
+          "id": "vector-C07-A2",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0897,
+          "ms": 417,
+          "tokens_in": 358
+        },
+        {
+          "id": "vector-C07-A3",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0713,
+          "ms": 310,
+          "tokens_in": 357
+        },
+        {
+          "id": "vector-C12",
+          "label": "independent",
+          "row": "QT2",
+          "zone": "triage",
+          "p": 0.1908,
+          "ms": 309,
+          "tokens_in": 513
+        },
+        {
+          "id": "vector-C42",
+          "label": "independent",
+          "row": "QT2",
+          "zone": "triage",
+          "p": 0.229,
+          "ms": 364,
+          "tokens_in": 507
+        },
+        {
+          "id": "vector-C38",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.6166,
+          "ms": 235,
+          "tokens_in": 437
+        },
+        {
+          "id": "vector-C55",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.2921,
+          "ms": 430,
+          "tokens_in": 416
+        },
+        {
+          "id": "pattern-add-energy",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "rule",
+          "p": 0.704,
+          "ms": 454,
+          "tokens_in": 616
+        },
+        {
+          "id": "pattern-add-relative",
+          "label": "independent",
+          "row": "E3",
+          "zone": "rule",
+          "p": 0.2443,
+          "ms": 338,
+          "tokens_in": 620
+        },
+        {
+          "id": "pattern-reader-F4",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.0995,
+          "ms": 302,
+          "tokens_in": 1406
+        },
+        {
+          "id": "pattern-reader-QR4",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1111,
+          "ms": 674,
+          "tokens_in": 585
+        },
+        {
+          "id": "hc3-slug",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.7641,
+          "ms": 368,
+          "tokens_in": 586
+        },
+        {
+          "id": "skimmer-surface",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.6238,
+          "ms": 277,
+          "tokens_in": 578
+        },
+        {
+          "id": "skimmer-surface-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.5885,
+          "ms": 421,
+          "tokens_in": 580
+        },
+        {
+          "id": "lantern-day",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.7539,
+          "ms": 452,
+          "tokens_in": 959
+        },
+        {
+          "id": "lantern-day-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.6528,
+          "ms": 421,
+          "tokens_in": 646
+        },
+        {
+          "id": "squid-isnight",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.6244,
+          "ms": 292,
+          "tokens_in": 687
+        },
+        {
+          "id": "sailfish-top-speed",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.3513,
+          "ms": 321,
+          "tokens_in": 607
+        },
+        {
+          "id": "sailfish-top-speed-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.2397,
+          "ms": 403,
+          "tokens_in": 609
+        },
+        {
+          "id": "gull-food-every",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.1967,
+          "ms": 422,
+          "tokens_in": 595
+        },
+        {
+          "id": "gull-food-every-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1728,
+          "ms": 383,
+          "tokens_in": 597
+        },
+        {
+          "id": "clam-rest-bar",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.31,
+          "ms": 480,
+          "tokens_in": 591
+        },
+        {
+          "id": "grouper-four-pellets",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.5307,
+          "ms": 489,
+          "tokens_in": 1749
+        },
+        {
+          "id": "real-glm-A03-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1707,
+          "ms": 443,
+          "tokens_in": 1624
+        },
+        {
+          "id": "real-glm-A03-R05",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.0806,
+          "ms": 443,
+          "tokens_in": 1986
+        },
+        {
+          "id": "real-glm-A04-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1448,
+          "ms": 382,
+          "tokens_in": 1305
+        },
+        {
+          "id": "real-glm-A05-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2699,
+          "ms": 338,
+          "tokens_in": 1428
+        },
+        {
+          "id": "real-glm-A08-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1688,
+          "ms": 515,
+          "tokens_in": 3062
+        },
+        {
+          "id": "real-glm-A09-R03",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.203,
+          "ms": 896,
+          "tokens_in": 1626
+        },
+        {
+          "id": "real-glm-A12-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2085,
+          "ms": 310,
+          "tokens_in": 1823
+        },
+        {
+          "id": "real-glm-P1a3-R03",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2442,
+          "ms": 430,
+          "tokens_in": 1811
+        },
+        {
+          "id": "real-glm-P1b4-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1986,
+          "ms": 372,
+          "tokens_in": 1812
+        },
+        {
+          "id": "real-gpt-A01-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2326,
+          "ms": 428,
+          "tokens_in": 1574
+        },
+        {
+          "id": "real-gpt-A02-R09",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.0766,
+          "ms": 320,
+          "tokens_in": 1053
+        },
+        {
+          "id": "real-gpt-A07-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.3044,
+          "ms": 430,
+          "tokens_in": 1241
+        },
+        {
+          "id": "real-gpt-A10-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2471,
+          "ms": 557,
+          "tokens_in": 3348
+        },
+        {
+          "id": "real-gpt-A11-R06",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.19,
+          "ms": 324,
+          "tokens_in": 1454
+        },
+        {
+          "id": "real-gpt-P1a1-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.262,
+          "ms": 590,
+          "tokens_in": 1605
+        },
+        {
+          "id": "real-kimi-A04-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1846,
+          "ms": 416,
+          "tokens_in": 1410
+        },
+        {
+          "id": "real-kimi-A06-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1078,
+          "ms": 485,
+          "tokens_in": 3001
+        },
+        {
+          "id": "real-kimi-A07-R12",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.0864,
+          "ms": 553,
+          "tokens_in": 1795
+        },
+        {
+          "id": "real-kimi-A07-R01",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.105,
+          "ms": 450,
+          "tokens_in": 1874
+        },
+        {
+          "id": "real-kimi-A12-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1586,
+          "ms": 640,
+          "tokens_in": 1884
+        },
+        {
+          "id": "real-kimi-P1a5-R08",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.308,
+          "ms": 374,
+          "tokens_in": 2815
+        },
+        {
+          "id": "real-kimi-P1a5-R01",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.393,
+          "ms": 556,
+          "tokens_in": 2575
+        },
+        {
+          "id": "real-glm-P1b4-absolute-R01",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.7646,
+          "ms": 741,
+          "tokens_in": 1803
+        },
+        {
+          "id": "real-kimi-P1b5-reverse",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.8448,
+          "ms": 451,
+          "tokens_in": 1744
+        },
+        {
+          "id": "real-gpt-P3a3-QR4",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.214,
+          "ms": 393,
+          "tokens_in": 566
+        },
+        {
+          "id": "real-gpt-A11-QR4-R03",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.2002,
+          "ms": 240,
+          "tokens_in": 707
+        },
+        {
+          "id": "real-glm-A04-QR4-R02",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.0624,
+          "ms": 566,
+          "tokens_in": 992
+        },
+        {
+          "id": "real-kimi-A07-QR4-R02",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1364,
+          "ms": 756,
+          "tokens_in": 1039
+        }
+      ],
+      "latency_ms": {
+        "p50": 421,
+        "p95": 741,
+        "max": 896,
+        "over_timeout": 0
+      },
+      "unavailable": {},
+      "response_shape": {
+        "top": [
+          "answers",
+          "model",
+          "usage"
+        ],
+        "answer": [
+          "noul",
+          "type"
+        ]
+      },
+      "confusion_starting": {
+        "dependent": {
+          "repair": 5,
+          "confirm": 10,
+          "holds": 2,
+          "unavailable": 0
+        },
+        "independent": {
+          "repair": 0,
+          "confirm": 14,
+          "holds": 23,
+          "unavailable": 0
+        }
+      },
+      "confusion_proposed": {
+        "dependent": {
+          "repair": 5,
+          "confirm": 12,
+          "holds": 0,
+          "unavailable": 0
+        },
+        "independent": {
+          "repair": 0,
+          "confirm": 18,
+          "holds": 19,
+          "unavailable": 0
+        }
+      },
+      "rr7": {
+        "thresholds": {
+          "T_REPAIR": 0.7,
+          "T_CONFIRM": 0.171
+        },
+        "dependent_holds": [],
+        "independent_holds": 19,
+        "independent_total": 37,
+        "p95_ms": 741,
+        "accuracy_ok": true,
+        "latency_ok": true,
+        "pass": true,
+        "reasons": []
+      }
+    },
+    "clef-flash": {
+      "model": "clef-flash",
+      "model_id": "@cf/cloudflare/clef-flash",
+      "answers": [
+        {
+          "id": "vector-C06",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0631,
+          "ms": 550,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C31",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0631,
+          "ms": 277,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C52",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0631,
+          "ms": 261,
+          "tokens_in": 425
+        },
+        {
+          "id": "vector-C07-A1",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0496,
+          "ms": 402,
+          "tokens_in": 358
+        },
+        {
+          "id": "vector-C07-A2",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0667,
+          "ms": 396,
+          "tokens_in": 358
+        },
+        {
+          "id": "vector-C07-A3",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.0507,
+          "ms": 484,
+          "tokens_in": 357
+        },
+        {
+          "id": "vector-C12",
+          "label": "independent",
+          "row": "QT2",
+          "zone": "triage",
+          "p": 0.1114,
+          "ms": 276,
+          "tokens_in": 513
+        },
+        {
+          "id": "vector-C42",
+          "label": "independent",
+          "row": "QT2",
+          "zone": "triage",
+          "p": 0.0884,
+          "ms": 458,
+          "tokens_in": 507
+        },
+        {
+          "id": "vector-C38",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.4273,
+          "ms": 410,
+          "tokens_in": 437
+        },
+        {
+          "id": "vector-C55",
+          "label": "independent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.1562,
+          "ms": 285,
+          "tokens_in": 416
+        },
+        {
+          "id": "pattern-add-energy",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "rule",
+          "p": 0.7384,
+          "ms": 381,
+          "tokens_in": 616
+        },
+        {
+          "id": "pattern-add-relative",
+          "label": "independent",
+          "row": "E3",
+          "zone": "rule",
+          "p": 0.5277,
+          "ms": 429,
+          "tokens_in": 620
+        },
+        {
+          "id": "pattern-reader-F4",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.244,
+          "ms": 583,
+          "tokens_in": 1406
+        },
+        {
+          "id": "pattern-reader-QR4",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.0923,
+          "ms": 476,
+          "tokens_in": 585
+        },
+        {
+          "id": "hc3-slug",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.7184,
+          "ms": 452,
+          "tokens_in": 586
+        },
+        {
+          "id": "skimmer-surface",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.4332,
+          "ms": 321,
+          "tokens_in": 578
+        },
+        {
+          "id": "skimmer-surface-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.4567,
+          "ms": 418,
+          "tokens_in": 580
+        },
+        {
+          "id": "lantern-day",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.371,
+          "ms": 403,
+          "tokens_in": 959
+        },
+        {
+          "id": "lantern-day-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.4327,
+          "ms": 300,
+          "tokens_in": 646
+        },
+        {
+          "id": "squid-isnight",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.3496,
+          "ms": 386,
+          "tokens_in": 687
+        },
+        {
+          "id": "sailfish-top-speed",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.2247,
+          "ms": 456,
+          "tokens_in": 607
+        },
+        {
+          "id": "sailfish-top-speed-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1845,
+          "ms": 503,
+          "tokens_in": 609
+        },
+        {
+          "id": "gull-food-every",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.2568,
+          "ms": 580,
+          "tokens_in": 595
+        },
+        {
+          "id": "gull-food-every-QR4",
+          "label": "dependent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.4003,
+          "ms": 1156,
+          "tokens_in": 597
+        },
+        {
+          "id": "clam-rest-bar",
+          "label": "dependent",
+          "row": "E3",
+          "zone": "triage",
+          "p": 0.2999,
+          "ms": 413,
+          "tokens_in": 591
+        },
+        {
+          "id": "grouper-four-pellets",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.4077,
+          "ms": 600,
+          "tokens_in": 1749
+        },
+        {
+          "id": "real-glm-A03-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2536,
+          "ms": 849,
+          "tokens_in": 1624
+        },
+        {
+          "id": "real-glm-A03-R05",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.292,
+          "ms": 598,
+          "tokens_in": 1986
+        },
+        {
+          "id": "real-glm-A04-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1784,
+          "ms": 450,
+          "tokens_in": 1305
+        },
+        {
+          "id": "real-glm-A05-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.412,
+          "ms": 564,
+          "tokens_in": 1428
+        },
+        {
+          "id": "real-glm-A08-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1712,
+          "ms": 906,
+          "tokens_in": 3062
+        },
+        {
+          "id": "real-glm-A09-R03",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2104,
+          "ms": 450,
+          "tokens_in": 1626
+        },
+        {
+          "id": "real-glm-A12-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.3819,
+          "ms": 621,
+          "tokens_in": 1823
+        },
+        {
+          "id": "real-glm-P1a3-R03",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1867,
+          "ms": 686,
+          "tokens_in": 1811
+        },
+        {
+          "id": "real-glm-P1b4-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.4141,
+          "ms": 654,
+          "tokens_in": 1812
+        },
+        {
+          "id": "real-gpt-A01-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.298,
+          "ms": 618,
+          "tokens_in": 1574
+        },
+        {
+          "id": "real-gpt-A02-R09",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.0974,
+          "ms": 614,
+          "tokens_in": 1053
+        },
+        {
+          "id": "real-gpt-A07-R02",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.5303,
+          "ms": 609,
+          "tokens_in": 1241
+        },
+        {
+          "id": "real-gpt-A10-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.155,
+          "ms": 972,
+          "tokens_in": 3348
+        },
+        {
+          "id": "real-gpt-A11-R06",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2878,
+          "ms": 459,
+          "tokens_in": 1454
+        },
+        {
+          "id": "real-gpt-P1a1-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1615,
+          "ms": 596,
+          "tokens_in": 1605
+        },
+        {
+          "id": "real-kimi-A04-R04",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2462,
+          "ms": 511,
+          "tokens_in": 1410
+        },
+        {
+          "id": "real-kimi-A06-R11",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.1723,
+          "ms": 818,
+          "tokens_in": 3001
+        },
+        {
+          "id": "real-kimi-A07-R12",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2342,
+          "ms": 635,
+          "tokens_in": 1795
+        },
+        {
+          "id": "real-kimi-A07-R01",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2051,
+          "ms": 638,
+          "tokens_in": 1874
+        },
+        {
+          "id": "real-kimi-A12-R07",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.2921,
+          "ms": 584,
+          "tokens_in": 1884
+        },
+        {
+          "id": "real-kimi-P1a5-R08",
+          "label": "independent",
+          "row": "F4",
+          "zone": "triage",
+          "p": 0.3344,
+          "ms": 1062,
+          "tokens_in": 2815
+        },
+        {
+          "id": "real-kimi-P1a5-R01",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.5897,
+          "ms": 770,
+          "tokens_in": 2575
+        },
+        {
+          "id": "real-glm-P1b4-absolute-R01",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.4782,
+          "ms": 679,
+          "tokens_in": 1803
+        },
+        {
+          "id": "real-kimi-P1b5-reverse",
+          "label": "dependent",
+          "row": "F4",
+          "zone": "rule",
+          "p": 0.5775,
+          "ms": 576,
+          "tokens_in": 1744
+        },
+        {
+          "id": "real-gpt-P3a3-QR4",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1663,
+          "ms": 270,
+          "tokens_in": 566
+        },
+        {
+          "id": "real-gpt-A11-QR4-R03",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.165,
+          "ms": 452,
+          "tokens_in": 707
+        },
+        {
+          "id": "real-glm-A04-QR4-R02",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1594,
+          "ms": 425,
+          "tokens_in": 992
+        },
+        {
+          "id": "real-kimi-A07-QR4-R02",
+          "label": "independent",
+          "row": "QR4",
+          "zone": "triage",
+          "p": 0.1632,
+          "ms": 555,
+          "tokens_in": 1039
+        }
+      ],
+      "latency_ms": {
+        "p50": 503,
+        "p95": 972,
+        "max": 1156,
+        "over_timeout": 0
+      },
+      "unavailable": {},
+      "response_shape": {
+        "top": [
+          "answers",
+          "model",
+          "usage"
+        ],
+        "answer": [
+          "noul",
+          "type"
+        ]
+      },
+      "confusion_starting": {
+        "dependent": {
+          "repair": 2,
+          "confirm": 14,
+          "holds": 1,
+          "unavailable": 0
+        },
+        "independent": {
+          "repair": 0,
+          "confirm": 16,
+          "holds": 21,
+          "unavailable": 0
+        }
+      },
+      "confusion_proposed": {
+        "dependent": {
+          "repair": 2,
+          "confirm": 15,
+          "holds": 0,
+          "unavailable": 0
+        },
+        "independent": {
+          "repair": 0,
+          "confirm": 17,
+          "holds": 20,
+          "unavailable": 0
+        }
+      },
+      "rr7": {
+        "thresholds": {
+          "T_REPAIR": 0.7,
+          "T_CONFIRM": 0.181
+        },
+        "dependent_holds": [],
+        "independent_holds": 20,
+        "independent_total": 37,
+        "p95_ms": 972,
+        "accuracy_ok": true,
+        "latency_ok": true,
+        "pass": true,
+        "reasons": []
+      }
+    }
+  },
+  "probes": {
+    "clef": {
+      "questions": [
+        {
+          "questions": 64,
+          "answered": 64,
+          "ok": true,
+          "ms": 1602,
+          "error": null
+        },
+        {
+          "questions": 128,
+          "answered": 0,
+          "ok": false,
+          "ms": 621,
+          "error": "rejected"
+        }
+      ],
+      "tokens": [
+        {
+          "state_chars": 16048,
+          "input_tokens": 5775,
+          "ok": true,
+          "truncated": false,
+          "ms": 745,
+          "error": null
+        },
+        {
+          "state_chars": 64045,
+          "input_tokens": 22664,
+          "ok": true,
+          "truncated": false,
+          "ms": 2571,
+          "error": null
+        },
+        {
+          "state_chars": 128048,
+          "input_tokens": 45747,
+          "ok": true,
+          "truncated": false,
+          "ms": 5175,
+          "error": null
+        },
+        {
+          "state_chars": 256049,
+          "input_tokens": null,
+          "ok": false,
+          "truncated": false,
+          "ms": 722,
+          "error": "rejected"
+        }
+      ]
+    },
+    "clef-flash": {
+      "questions": [
+        {
+          "questions": 64,
+          "answered": 64,
+          "ok": true,
+          "ms": 3401,
+          "error": null
+        },
+        {
+          "questions": 128,
+          "answered": 0,
+          "ok": false,
+          "ms": 239,
+          "error": "rejected"
+        }
+      ],
+      "tokens": [
+        {
+          "state_chars": 16048,
+          "input_tokens": 5775,
+          "ok": true,
+          "truncated": false,
+          "ms": 1310,
+          "error": null
+        },
+        {
+          "state_chars": 64045,
+          "input_tokens": 22664,
+          "ok": true,
+          "truncated": false,
+          "ms": 5352,
+          "error": null
+        },
+        {
+          "state_chars": 128048,
+          "input_tokens": null,
+          "ok": false,
+          "truncated": false,
+          "ms": 417,
+          "error": "rejected"
+        }
+      ]
+    }
+  },
+  "verdict": {
+    "decision": "on",
+    "model": "clef",
+    "why": "clef passes RR7 on the labelled set"
+  },
+  "proposed": {
+    "CLEF_TRIAGE": "on",
+    "features_clef": true,
+    "CLEF_TRIAGE_MODEL_ID": "@cf/cloudflare/clef",
+    "CLEF_TRIAGE_MODEL": "clef",
+    "T_REPAIR": 0.7,
+    "T_CONFIRM": 0.171,
+    "CLEF_MAX_QUESTIONS": 64,
+    "CLEF_INPUT_TOKEN_LIMIT": 60000,
+    "CLEF_RISK": "off",
+    "CLEF_CONTRADICTION": "off",
+    "notes": [
+      "CLEF_MAX_QUESTIONS: 64 questions were answered in one request; keep 64.",
+      "CLEF_INPUT_TOKEN_LIMIT: no truncation seen up to 45747 input tokens; keep 60000.",
+      "CLEF_RISK and CLEF_CONTRADICTION stay off: this set calibrates triage only, not T_INTENT_MIN, T_UNRELATED_MAX, T_SHARED_MAX or T_CONTRADICT."
+    ]
+  },
+  "spend": {
+    "calls": 119,
+    "input_tokens": 262501,
+    "usd": 0.041108
+  },
+  "errors": [
+    "@cf/cloudflare/clef: http 422: {\"errors\":[{\"message\":\"AiError: AiError: Request body failed validation: questions: Dictionary should have at most 64 items after validation, not 128 (06d7d273-5365-4a4d-8872-272c5a99d7f9)\",\"code\":3030}],\"success\":false,\"result\":{},\"messages\":[]}",
+    "@cf/cloudflare/clef: http 422: {\"errors\":[{\"message\":\"AiError: AiError: Request requires 91996 tokens; the maximum is 65536 (35b9bed5-026b-4c45-8bfd-052a7d982298)\",\"code\":3030}],\"success\":false,\"result\":{},\"messages\":[]}",
+    "@cf/cloudflare/clef-flash: http 422: {\"errors\":[{\"message\":\"AiError: AiError: Request body failed validation: questions: Dictionary should have at most 64 items after validation, not 128 (336d5ff3-4a3c-4a68-b974-bf9590e48ae7)\",\"code\":3030}],\"success\":false,\"result\":{},\"messages\":[]}",
+    "@cf/cloudflare/clef-flash: http 422: {\"errors\":[{\"message\":\"AiError: AiError: Request requires 45747 tokens; the maximum is 24576 (9d27405f-f41e-4b5c-a456-17df1e78546e)\",\"code\":3030}],\"success\":false,\"result\":{},\"messages\":[]}"
+  ]
+}

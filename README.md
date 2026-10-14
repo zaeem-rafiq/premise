@@ -4,6 +4,8 @@ Git records only what an agent wrote. Premise also records what it read.
 
 A change lands while everything it relied on is still true, and goes back to its still-running agent with the exact diff when something it relied on changes.
 
+Watch the demo video: **https://github.com/zaeem-rafiq/premise/releases/tag/demo-video**
+
 Watch a recorded run in the browser, with no account and no key: **https://premise.rk3469.workers.dev/replay/hero**
 
 Or see it happen live: open **https://premise.rk3469.workers.dev** and press **Try it**. You get your own copy of the tide pool, where scripted agents (no model calls) play the conflict in about a minute: a creature lands, a shared rule changes, and the agents that relied on it get the exact diff and adapt.

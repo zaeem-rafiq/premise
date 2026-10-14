@@ -92,5 +92,5 @@ A visitor taps one button. The Worker creates a new pool from seed `tidepool`, s
 | `TRY_ADDRESS_WINDOW_S` | 600 | One try per client address per this many seconds (TY6) |
 | `TRY_PER_HOUR` | 20 | Tries per hour across the deployment (TY6) |
 | `TRY_TOTAL` | 300 | Tries in total for the deployment (TY6) |
-| `TRY_BEAT_MS` | 2000 | The pause before each conductor row's actions (TY8) |
+| `TRY_BEAT_MS` | 6000 | The pause before each conductor row's actions (TY8) |
 | `TRY_DEADLINE_MS` | 600000 | The longest a try conductor runs (TY9) |

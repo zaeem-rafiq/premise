@@ -6,6 +6,8 @@ A change lands while everything it relied on is still true, and goes back to its
 
 Watch a recorded run in the browser, with no account and no key: **https://premise.rk3469.workers.dev/replay/hero**
 
+Or see it happen live: open **https://premise.rk3469.workers.dev** and press **Try it**. You get your own copy of the tide pool, where scripted agents (no model calls) play the conflict in about a minute: a creature lands, a shared rule changes, and the agents that relied on it get the exact diff and adapt.
+
 ![The Floor during the recorded run: a shared energy rule has just landed, and the three crab attempts that relied on it are going around with the exact diff](docs/images/floor-conflict.png)
 
 _The Floor during the recorded run. A shared rule ("make energy a fraction from 0 to 1") has just landed. The three crab attempts, each on a different model, relied on it, so each is going around with the exact diff while its agent keeps running._

@@ -15,7 +15,7 @@ import { tryConductor } from "../../swarm/try-script.ts";
 import { heldAttempts, launchAgent, launchId, releaseAgent } from "../swarm/launch.ts";
 
 /** TY8: the pause before each row's actions, so a visitor who has just opened the pool sees it. */
-export const TRY_BEAT_MS = 2000;
+export const TRY_BEAT_MS = 6000;
 /** TY9: the longest a try conductor runs. */
 export const TRY_DEADLINE_MS = 600_000;
 /** How long one read step waits for new events before it answers none. */

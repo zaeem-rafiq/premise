@@ -110,3 +110,35 @@ it("CO44b: a run on the Swarm pool reads as one pool and one Trunk", () => {
   });
   expect(html).toContain("This run: 1 pool, 1 Trunk, 1,024 scripted agents.");
 });
+
+// CO42b: after the run, the numbers are the last window that measured it, not the empty ones after.
+it("CO42b: an ended run shows the last window that held landings", () => {
+  const floor = emptyFloorState();
+  floor.ts = 9_000;
+  floor.swarm = { running: false, agents: 256, collision_dial: 0.25, pools: ["swarm"], ever_ran: true };
+  const window = {
+    window_ms: 10_000,
+    time_to_land_ms: { p50: 1_500, p99: 4_000 },
+    go_around_rate: 0.04,
+    waiting_behind: 2,
+    push_backlog: 0,
+    false_abort_rate: null,
+    escape_rate: 0,
+  };
+  floor.metrics_active = { ...window, landings_per_second: 1.6 } as never;
+  floor.metrics = {
+    ...window,
+    landings_per_second: 0,
+    time_to_land_ms: { p50: null, p99: null },
+    go_around_rate: null,
+  } as never;
+  const html = renderToString(
+    createElement(
+      ShellContext.Provider,
+      { value: makeShell(settings, false, false) },
+      createElement(SwarmView, { floor, owner: false, pool: "swarm", clock: 9_000 }),
+    ),
+  );
+  expect(html).toContain("1.60");
+  expect(html).toContain("4%");
+});

@@ -280,7 +280,18 @@ test("rehearsal 2: the beat sheet with real agents", async ({ page }, testInfo) 
     const sheet = page.getByRole("dialog", { name: /attempts? at/ });
     await expect(sheet).toBeVisible();
     await shot("race-sheet");
-    await sheet.getByRole("button", { name: "Choose this one" }).first().click();
+    // Choose a racer that went around after the shared rule changed: its first version is the one
+    // the plain-merge pool keeps, so Compare can show what plain git would have shipped (beat 4).
+    const all = await refresh();
+    const race = [...cards(all).values()].find((c) => c.kind === "race" && c.closed !== true);
+    const ids = (race?.attempt_ids as string[] | undefined) ?? [];
+    const wentAround = ids.findIndex((id) =>
+      all.some((e) => e.type === "headsup.sent" && str(e.attempt_id) === id && e.result === "repair"),
+    );
+    const buttons = sheet.getByRole("button", { name: "Choose this one" });
+    const pick = wentAround >= 0 && wentAround < (await buttons.count()) ? wentAround : 0;
+    await buttons.nth(pick).click();
+    return `chose racer ${pick + 1} of ${ids.length}${wentAround >= 0 ? " (it went around)" : ""}`;
   });
   await check("the chosen crab lands", async () => {
     await waitFor("crab landed", landedText(P1A));

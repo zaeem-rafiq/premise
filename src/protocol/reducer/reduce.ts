@@ -886,6 +886,7 @@ function onGreenAdvanced(state: FloorState, event: Extract<PoolEvent, { type: "g
 
 function onMetrics(state: FloorState, event: Extract<PoolEvent, { type: "metrics" }>): void {
   state.metrics = event;
+  if (event.landings_per_second > 0) state.metrics_active = event;
   state.metrics_history.push({
     ts: event.ts,
     landings_per_second: event.landings_per_second,

@@ -264,6 +264,7 @@ export type FloorState = {
   } | null;
 
   metrics: MetricsEvent | null; // newest `metrics` event
+  metrics_active: MetricsEvent | null; // newest `metrics` event with landings in its window (CO42b)
   metrics_history: Array<{ ts: number; landings_per_second: number; go_around_rate: number | null }>; // last 60 s
 
   swarm: { running: boolean; agents: number; collision_dial: number; pools: string[]; ever_ran: boolean } | null;
@@ -356,6 +357,7 @@ export function emptyFloorState(): FloorState {
     plain: null,
     limits: null,
     metrics: null,
+    metrics_active: null,
     metrics_history: [],
     swarm: null,
     undo: {},

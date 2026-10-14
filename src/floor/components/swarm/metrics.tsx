@@ -11,7 +11,10 @@ export function share(value: number | null | undefined): string {
 
 export function SwarmNumbers({ floor }: { floor: FloorState }) {
   const { t, settings } = useContext(ShellContext)!;
-  const metrics = floor.metrics;
+  // CO42b: after a run has ended the newest window holds no landings; the numbers are the last
+  // window that measured the run (the `swarm.final` line says so).
+  const ended = floor.swarm !== null && !floor.swarm.running && floor.swarm.ever_ran;
+  const metrics = ended && floor.metrics_active != null ? floor.metrics_active : floor.metrics;
   const dash = t("strip.dash");
   const window = metrics === null ? dash : t("swarm.window", { seconds: Math.round(metrics.window_ms / 1000) });
   const history = floor.metrics_history;

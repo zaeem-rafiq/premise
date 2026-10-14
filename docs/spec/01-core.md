@@ -2983,7 +2983,7 @@ Values are starting values. *Calibrated* constants MUST be replaced by measured 
 | `RIGHT_OF_WAY_MS` | 120,000 | |
 | `HEADS_UP_REPUSH_MS` | 5,000 | |
 | `T_REPAIR` | 0.70 | calibrated (S6) |
-| `T_CONFIRM` | 0.20 | calibrated (S6) |
+| `T_CONFIRM` | 0.171 | calibrated (S6): `docs/measurements/calibration/2026-10-14-clef.md` (RR7 passes at 0.171; the starting value was 0.20) |
 | `T_INTENT_MIN` | 0.50 | calibrated (S6) |
 | `T_UNRELATED_MAX` | 0.50 | calibrated (S6) |
 | `T_SHARED_MAX` | 0.50 | calibrated (S6) |

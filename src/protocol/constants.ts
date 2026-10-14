@@ -56,7 +56,7 @@ export const RIGHT_OF_WAY_MS = 120_000;
 export const HEADS_UP_REPUSH_MS = 5_000;
 
 export const T_REPAIR = 0.7;
-export const T_CONFIRM = 0.2;
+export const T_CONFIRM = 0.171;
 export const T_INTENT_MIN = 0.5;
 export const T_UNRELATED_MAX = 0.5;
 export const T_SHARED_MAX = 0.5;

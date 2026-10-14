@@ -8,6 +8,7 @@ import type { AiBinding } from "../../src/worker/adapters/model/workers-ai.ts";
 import type { FetchLike } from "../measure/early/workers-ai-rest.ts";
 import { loadCases } from "./cases.ts";
 import { main, type Calibration, type Io } from "./run.ts";
+import { T_CONFIRM, T_REPAIR } from "../../src/protocol/constants.ts";
 
 const cases = loadCases();
 const byState = new Map(cases.map((c) => [JSON.stringify(triageRequest(c.input).state), c]));
@@ -122,7 +123,7 @@ describe("calibrate:clef offline with a fake model client", () => {
     expect(cal.models.clef!.confusion_starting.dependent.holds).toBe(DEPENDENT);
     expect(cal.models.clef!.rr7.independent_holds).toBe(0);
     expect(cal.verdict.decision).toBe("off");
-    expect(cal.proposed).toMatchObject({ CLEF_TRIAGE: "off", features_clef: false, T_REPAIR: 0.7, T_CONFIRM: 0.2 });
+    expect(cal.proposed).toMatchObject({ CLEF_TRIAGE: "off", features_clef: false, T_REPAIR, T_CONFIRM });
   });
 
   it("RR7 and S6: clef too slow at p95, clef-flash fast and accurate: the fallback is clef-flash", async () => {

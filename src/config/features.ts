@@ -15,7 +15,7 @@ export const FEATURES: Features = {
   race: true,
   undo: true,
   green: "full",
-  clef: false,
+  clef: true,
   attempt_repos: true,
   mcp: true,
   text_merge: true,

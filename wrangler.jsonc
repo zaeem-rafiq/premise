@@ -81,7 +81,7 @@
   // APP_HOST (SE14b) is optional and not set: both the Floor and the app server run on one host.
   "vars": {
     "SPEND_CAP_USD": "28",
-    "CLEF_TRIAGE": "off",
+    "CLEF_TRIAGE": "on",
     "CLEF_RISK": "off",
     "CLEF_CONTRADICTION": "off"
   },
@@ -113,7 +113,7 @@
       ],
       "vars": {
         "SPEND_CAP_USD": "10",
-        "CLEF_TRIAGE": "off",
+        "CLEF_TRIAGE": "on",
         "CLEF_RISK": "off",
         "CLEF_CONTRADICTION": "off"
       }

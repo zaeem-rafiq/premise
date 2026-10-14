@@ -2429,6 +2429,7 @@ The `protocol` module fixes these paths. "Owner" routes are the mutating routes 
     attempt_repos: boolean;              // S3: attempt repositories are provisioned
     mcp: boolean;                        // `07-mcp.md`: outside agents over MCP (added 2026-10-10 by the owner's decision to build the extensions)
     text_merge: boolean;                 // 11.7 PM3a: the plain-merge pool merges each change with a three-way line merge (added 2026-10-10 by the owner's decision to build the extensions)
+    try: boolean;                        // `09-try.md`: a visitor's "Try it" button and `POST /api/try` (added 2026-10-14)
   };
   ```
 

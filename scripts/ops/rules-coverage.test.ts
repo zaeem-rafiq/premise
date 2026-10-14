@@ -13,6 +13,7 @@ const ENABLED: Features = {
   attempt_repos: true,
   mcp: true,
   text_merge: true,
+  try: true,
 };
 import {
   acceptanceCheckIds,

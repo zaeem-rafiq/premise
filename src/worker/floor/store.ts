@@ -7,6 +7,7 @@
 
 import type { PoolEvent } from "../../protocol/events.ts";
 import type { FloorState } from "../../protocol/reducer/index.ts";
+import type { MetricsEvent } from "../../protocol/reducer/state.ts";
 import { emptyFloorState, reduce } from "../../protocol/reducer/index.ts";
 
 /** One part of a stored snapshot is at most 1 MiB (01-core 3.4). */
@@ -155,12 +156,16 @@ export function loadState(sql: SqlStorage): { n: number; state: FloorState } {
   const state = snapshot?.state ?? emptyFloorState();
   // A snapshot written before `metrics_active` existed (CO42b, 2026-10-14) lacks it: fill it once
   // from the stored events up to the snapshot, the value the reducer would have kept.
+  // One indexed row, not the whole stream: parsing every stored event of a long pool reset its
+  // Durable Object on `test` (2026-10-14, "Internal error in Durable Object storage").
   if (state.metrics_active === undefined) {
-    state.metrics_active = null;
-    for (const event of eventsAfter(sql, 0)) {
-      if (event.n > after) break;
-      if (event.type === "metrics" && event.landings_per_second > 0) state.metrics_active = event;
-    }
+    const rows = sql
+      .exec(
+        "SELECT body FROM events WHERE type = 'metrics' AND n <= ? AND json_extract(body, '$.landings_per_second') > 0 ORDER BY n DESC LIMIT 1",
+        after,
+      )
+      .toArray() as Array<{ body: string }>;
+    state.metrics_active = rows[0] === undefined ? null : (JSON.parse(rows[0].body) as MetricsEvent);
   }
   let n = after;
   for (const event of eventsAfter(sql, after)) {

@@ -19,8 +19,32 @@ import { patternById } from "../../swarm/pattern.ts";
 import { heldAttempts, launchAgent, launchId, releaseAgent } from "../swarm/launch.ts";
 import { notBuilt } from "../not-built.ts";
 
-/** The one live run instance per pool — `run-<pool>` (SWR1). */
+/** The first run instance of a pool — `run-<pool>` (SWR1). A Workflow instance id cannot be
+ * used again, even after its instance is deleted, so each later run of the pool gets
+ * `run-<pool>-<time>`, and the pool's Trunk records which id is current (`/internal/swarm-run`). */
 const runInstanceId = (pool: string) => `run-${pool}`;
+
+/** The pool's current run instance id: the one its Trunk recorded, else `run-<pool>`. */
+async function currentRunId(env: Env, pool: string): Promise<string> {
+  try {
+    const response = await env.TRUNK.get(env.TRUNK.idFromName(pool)).fetch("https://trunk/internal/swarm-run");
+    if (response.ok) {
+      const { id } = (await response.json()) as { id?: unknown };
+      if (typeof id === "string" && id !== "") return id;
+    }
+  } catch {
+    /* an unreadable record leaves the first id */
+  }
+  return runInstanceId(pool);
+}
+
+async function recordRunId(env: Env, pool: string, id: string): Promise<void> {
+  await env.TRUNK.get(env.TRUNK.idFromName(pool)).fetch("https://trunk/internal/swarm-run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
 /** A route-asked emission instance — `emit-<request_id>`; `create` refuses its repeat (SWR4). */
 const emitInstanceId = (requestId: string) => `emit-${requestId}`;
 
@@ -140,7 +164,7 @@ async function controlRun(
   if (swarm === undefined) return { outcome: "no_run" };
   let instance: Awaited<ReturnType<NonNullable<Env["SWARM"]>["get"]>>;
   try {
-    instance = await swarm.get(runInstanceId(pool));
+    instance = await swarm.get(await currentRunId(env, pool));
     const status = (await instance.status()).status;
     if (status !== "running" && status !== "waiting" && status !== "queued") return { outcome: "no_run" };
   } catch {
@@ -171,8 +195,9 @@ async function stopRun(env: Env, pool: string, requestId: string): Promise<boole
   return true;
 }
 
-/** Starts `run-<pool>`: the launcher instance of a run request (SWR1). A completed run's instance
- * is deleted first so the id is free; a live one is answered `already` (the launch list is empty). */
+/** Starts the pool's run: the launcher instance of a run request (SWR1). A live run is answered
+ * `already` (the launch list is empty). Otherwise the run gets a fresh instance id — the first
+ * id when no run ever used it, else `run-<pool>-<time>` — and the Trunk records it. */
 async function startRun(
   env: Env,
   pool: string,
@@ -181,15 +206,17 @@ async function startRun(
 ): Promise<"started" | "already" | "no_binding"> {
   const swarm = env.SWARM;
   if (swarm === undefined) return "no_binding";
-  const id = runInstanceId(pool);
+  const current = await currentRunId(env, pool);
+  let used = false;
   try {
-    const existing = await swarm.get(id);
-    const status = (await existing.status()).status;
+    const status = (await (await swarm.get(current)).status()).status;
     if (status === "running" || status === "waiting" || status === "queued") return "already";
-    await existing.delete();
+    used = true;
   } catch {
-    /* no live instance: create is next */
+    /* no instance by that id */
   }
+  const fresh = () => `${runInstanceId(pool)}-${Date.now().toString(36)}`;
+  let id = used ? fresh() : current;
   const params: SwarmRunParams = {
     kind: "run",
     pool,
@@ -204,7 +231,15 @@ async function startRun(
       hold_before_submit: request.hold_before_submit,
     },
   };
-  await swarm.create({ id, params });
+  try {
+    await swarm.create({ id, params });
+  } catch (cause) {
+    // An id whose instance was deleted is still taken (seen on production, 2026-10-14).
+    if (id !== current) throw cause;
+    id = fresh();
+    await swarm.create({ id, params });
+  }
+  await recordRunId(env, pool, id);
   return "started";
 }
 

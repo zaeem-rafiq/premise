@@ -736,6 +736,24 @@ export class Trunk extends DurableObject<Env> {
     return json({ ok: true });
   }
 
+  /** SWR1: the instance id of the pool's current Swarm run, kept in `meta` under `swarm_run`.
+   * `GET /internal/swarm-run` answers `{ id }` (null before any run); `POST` `{ id }` records it. */
+  async #swarmRun(request: Request): Promise<Response> {
+    if (request.method === "GET") return json({ id: metaGet(this.#sql, "swarm_run") });
+    if (request.method !== "POST") return json({ error: { code: "invalid_args" } }, 400);
+    let body: { id?: unknown };
+    try {
+      body = (await request.json()) as { id?: unknown };
+    } catch {
+      return json({ error: { code: "bad_json" } }, 400);
+    }
+    if (typeof body.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(body.id)) {
+      return json({ error: { code: "invalid_args" } }, 400);
+    }
+    metaSet(this.#sql, "swarm_run", body.id);
+    return json({ ok: true });
+  }
+
   /** A timer's engine entry: false when unregistered; entry errors propagate so the alarm can
    * re-schedule with backoff (AL2). The after-commit pipeline runs on success. */
   async #runTimerEntry(kind: string, input: unknown, now?: number): Promise<boolean> {
@@ -807,6 +825,7 @@ export class Trunk extends DurableObject<Env> {
       if (pathname === "/internal/swarm-hold" || pathname === "/internal/swarm-held") {
         return await this.#swarmHold(request, url);
       }
+      if (pathname === "/internal/swarm-run") return await this.#swarmRun(request);
       const input = await this.#readInput(request, url);
       if (input === BAD_JSON) return json({ error: { code: "bad_json" } }, 400);
       if (pathname === "/internal/attempt-repo" || pathname === "/internal/attempt-checkpoint") {

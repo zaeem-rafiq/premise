@@ -49,6 +49,8 @@ class FakeTrunkNamespace {
   readonly opens: Array<{ pool: string; payload: Record<string, unknown> }> = [];
   /** SWR3: the held attempts per pool and pattern, as the real Trunk keeps them in `meta`. */
   readonly held = new Map<string, string[]>();
+  /** SWR1: the current run instance id per pool (`meta.swarm_run`). */
+  readonly runIds = new Map<string, string>();
   idFromName(name: string): string {
     return name;
   }
@@ -74,6 +76,13 @@ class FakeTrunkNamespace {
           const ids = this.held.get(key) ?? [];
           if (!ids.includes(attempt_id)) this.held.set(key, [...ids, attempt_id]);
           return Promise.resolve(Response.json({ ok: true }));
+        }
+        if (path === "/internal/swarm-run") {
+          if (init?.method === "POST") {
+            this.runIds.set(id, (JSON.parse(String(init.body)) as { id: string }).id);
+            return Promise.resolve(Response.json({ ok: true }));
+          }
+          return Promise.resolve(Response.json({ id: this.runIds.get(id) ?? null }));
         }
         if (path === "/internal/swarm-held") {
           const pattern = new URL(String(input)).searchParams.get("pattern") ?? "";
@@ -289,12 +298,18 @@ class FakeRunInstance {
 
 class FakeSwarmWorkflow {
   instances = new Map<string, FakeRunInstance>();
+  /** Ids ever used: Workflows refuse one again even after its instance was deleted. */
+  burned = new Set<string>();
   created: Array<{ id: string; params: Record<string, unknown> }> = [];
   get(id: string): Promise<FakeRunInstance> {
     const instance = this.instances.get(id);
     return instance === undefined ? Promise.reject(new Error("instance.not_found")) : Promise.resolve(instance);
   }
   create(options: { id: string; params: Record<string, unknown> }): Promise<FakeRunInstance> {
+    if (this.burned.has(options.id) || this.instances.has(options.id)) {
+      return Promise.reject(new Error("instance.already_exists"));
+    }
+    this.burned.add(options.id);
     this.created.push(options);
     const instance = new FakeRunInstance();
     this.instances.set(options.id, instance);
@@ -351,5 +366,57 @@ describe("the run's control events reach the deployed engine (SWR1, CO44a)", () 
     expect(await response.json()).toMatchObject({ error: { code: "control_failed" } });
     expect(swarm.created).toEqual([]);
     expect(run.terminated).toBe(0);
+  });
+});
+
+describe("a pool runs Swarm more than once (SWR1)", () => {
+  // Seen on production, 2026-10-14: a second Start answered 500, because the route deleted the
+  // finished `run-<pool>` and created it again, and a Workflow instance id cannot be used twice.
+  function withSwarm(): { env: Env; swarm: FakeSwarmWorkflow; trunk: FakeTrunkNamespace } {
+    const { env, trunk } = fakeEnv();
+    const swarm = new FakeSwarmWorkflow();
+    (env as unknown as { SWARM: FakeSwarmWorkflow }).SWARM = swarm;
+    return { env, swarm, trunk };
+  }
+  /** A run request: a full config and no `patterns` (SWR1, not a canned cast). */
+  const runBody = (pool: string) => {
+    const { patterns: _patterns, ...body } = launchBody({ pool });
+    return body;
+  };
+  const runs = (swarm: FakeSwarmWorkflow) => swarm.created.filter((entry) => entry.id.startsWith("run-"));
+
+  it("a second run after the first finished starts under a new id, and a stop reaches it", async () => {
+    const { env, swarm } = withSwarm();
+    const first = await call(runBody("again"), env);
+    expect(first.status).toBe(200);
+    expect(runs(swarm).map((entry) => entry.id)).toEqual(["run-again"]);
+    swarm.instances.get("run-again")!.status_ = "complete";
+
+    const second = await call(runBody("again"), env);
+    expect(second.status).toBe(200);
+    const ids = runs(swarm).map((entry) => entry.id);
+    expect(ids).toHaveLength(2);
+    expect(ids[1]).toMatch(/^run-again-[0-9a-z]+$/);
+
+    const stop = await call({ pool: "again", running: false, request_id: "again-stop" }, env);
+    expect(stop.status).toBe(200);
+    expect(swarm.instances.get(ids[1]!)!.sent).toEqual([{ type: expect.any(String), payload: { op: "stop" } }]);
+    expect(swarm.instances.get("run-again")!.sent).toEqual([]);
+  });
+
+  it("a pool whose first id was deleted still starts a run", async () => {
+    const { env, swarm } = withSwarm();
+    swarm.burned.add("run-deleted");
+    const response = await call(runBody("deleted"), env);
+    expect(response.status).toBe(200);
+    expect(runs(swarm).map((entry) => entry.id)).toEqual([expect.stringMatching(/^run-deleted-[0-9a-z]+$/)]);
+  });
+
+  it("a run that is still live is answered already, with no second instance", async () => {
+    const { env, swarm } = withSwarm();
+    await call(runBody("live"), env);
+    const again = await call(runBody("live"), env);
+    expect(again.status).toBe(200);
+    expect(runs(swarm)).toHaveLength(1);
   });
 });

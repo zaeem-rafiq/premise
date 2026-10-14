@@ -14,6 +14,9 @@ import type { Env } from "../env.ts";
 import { DEFAULT_POOL, SWARM_POOL } from "../../config/pools.ts";
 import { deliverToPool, swarmSource, type SwarmStateBody } from "./deliver.ts";
 
+/** How many pools one emit delivers to at once. */
+const EMIT_PARALLEL = 16;
+
 export type SwarmPatch = { running?: boolean; agents?: number; collision_dial?: number };
 
 /** The gate's `/internal/state` answer: `state.pools` is the registration set (EV2a/PL1). */
@@ -67,7 +70,20 @@ export async function emitSwarmState(env: Env, patch: SwarmPatch, ts: number): P
     collision_dial: patch.collision_dial ?? current.collision_dial,
     pools,
   };
-  for (const pool of pools) {
-    await deliverToPool(env, pool, body);
-  }
+  // EMIT_PARALLEL pools at a time: one after another, a stop took 52 s with the Try pools of
+  // `test` registered (2026-10-14). Every pool is still tried; any failure fails the step.
+  const failures: unknown[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < pools.length) {
+      const pool = pools[next++]!;
+      try {
+        await deliverToPool(env, pool, body);
+      } catch (cause) {
+        failures.push(cause);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(EMIT_PARALLEL, pools.length) }, worker));
+  if (failures.length > 0) throw failures[0];
 }

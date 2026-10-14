@@ -258,6 +258,8 @@ describe("load failure and stalls (FR20, FR28)", () => {
     expect(h.loads.at(-1)).toBe(`/pool/tidepool/main/?seed=${HOST_SEED}`);
     expect(h.driver.stalledCaption?.id).toBe("frame.stalled.reloaded");
     h.driver.onStats(stats(`c-${C1}`));
+    // FR28 amended: the reloaded frame answers, so the chip leaves (seen on a Try it pool).
+    expect(h.driver.stalledCaption).toBeNull();
     h.fire("stall");
     expect(h.driver.phase).toBe("stalled");
     expect(h.driver.stalledCaption?.id).toBe("frame.stalled");

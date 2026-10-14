@@ -411,17 +411,25 @@ test.describe("the pool frame component", () => {
     await frame!.evaluate(() => {
       (window as never as { __silent: boolean }).__silent = true;
     });
-    // First stall: loaded again on main, captioned frame.stalled.reloaded (FR28's no-green row).
+    // First stall: loaded again on main (FR28's no-green row). frame.stalled.reloaded shows until the
+    // reloaded page sends its first stats, then leaves (FR28 amended 2026-10-14).
     const iframe = page.locator('iframe[title="The live pool, running the code on main"]');
-    await expect(page.locator(".pf-caption")).toContainText("The pool stopped answering and was loaded again.", {
-      timeout: 15_000,
-    });
     await expect(iframe).toHaveAttribute("src", /\/pool\/tidepool\/main\/\?seed=7$/);
-    // The reloaded page answers again; silence it and it stalls a second time → frame.stalled.
-    const frame2 = poolFrame(page);
     await expect
-      .poll(async () => frame2?.evaluate(() => (window as never as { __tick: number }).__tick > 0))
+      .poll(
+        async () =>
+          poolFrame(page)
+            ?.evaluate(() => {
+              const w = window as never as { __tick: number; __silent?: boolean };
+              return w.__silent !== true && w.__tick > 0;
+            })
+            .catch(() => false),
+        { timeout: 15_000 },
+      )
       .toBe(true);
+    const frame2 = poolFrame(page);
+    await expect(page.locator(".pf-caption")).not.toContainText("The pool stopped answering and was loaded again.");
+    // Silence the reloaded page and it stalls a second time → frame.stalled.
     await frame2!.evaluate(() => {
       (window as never as { __silent: boolean }).__silent = true;
     });

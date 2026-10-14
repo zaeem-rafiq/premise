@@ -78,7 +78,7 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "overview.landed": { text: "{n} changes landed.", one: "{n} change landed." },
   "overview.landed.none": { text: "No change has landed yet." },
   "overview.goarounds": { text: "{n} went around." },
-  "overview.waiting.none": { text: "Nobody waited. Every landing is one ordinary commit on main." },
+  "overview.waiting.none": { text: "No change waited in a queue. Every landing is one ordinary commit on main." },
   "overview.waiting": {
     text: "{n} waiting behind another change. Every landing is one ordinary commit on main.",
   },

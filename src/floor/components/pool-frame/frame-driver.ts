@@ -210,6 +210,10 @@ export class FrameDriver {
       this.phase = "live";
       this.sink.cancel("load");
     }
+    // FR28 (amended 2026-10-14): once the frame loaded again on `main` answers, it is healthy, so
+    // `frame.stalled.reloaded` leaves the caption. A frame on `green` keeps its chip: it still
+    // shows the last verified version, not `main`.
+    if (this.stalledCaption?.id === "frame.stalled.reloaded") this.stalledCaption = null;
     this.askSelftest(stats);
     if (this.expecting !== null && stats.version === this.expecting) {
       this.expecting = null;

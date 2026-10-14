@@ -80,6 +80,8 @@ Every number comes from a file under [`docs/measurements/`](docs/measurements/).
 - A mark that was missed: after the shared energy rule changed, the shrimp's agent repaired its absolute number in 2 of 5 runs (the plan asked for 4 of 5): [`docs/measurements/models/2026-10-06-engine.md`](docs/measurements/models/2026-10-06-engine.md).
 - 256 scripted agents on one Trunk, at five collision settings: 1.40 to 1.67 landings per second, a median time to land of 1.5 to 5.7 seconds, every attempt ended, one commit and one note per landing, and no pause longer than 2.7 seconds: [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
 - One Trunk did not carry 1,024 or 512 scripted agents, so the Swarm runs 256: [`docs/measurements/soak/README.md`](docs/measurements/soak/README.md).
+- A real Claude Code session joined a production pool over MCP while a Workers AI agent changed the shared energy rule. It got the heads-up 3 s after the rule landed, wrote its crab against the shared value instead of the number 30, and landed. The pool is live at https://premise.rk3469.workers.dev/p/claude-code: [`docs/measurements/integration/2026-10-14-claude-code-mcp.md`](docs/measurements/integration/2026-10-14-claude-code-mcp.md).
+- Clef, the triage judge, was calibrated on 54 labelled cases before it was switched on: no truly dependent case judged unaffected, p95 latency 741 ms: [`docs/measurements/calibration/2026-10-14-clef.md`](docs/measurements/calibration/2026-10-14-clef.md).
 - The longest Trunk engine call in a local 256-agent run with 264 attempts in flight: 802 ms: [`docs/measurements/integration/2026-10-07-trunk-load.md`](docs/measurements/integration/2026-10-07-trunk-load.md).
 
 ## Limits

@@ -112,7 +112,7 @@ describe("calibrate:clef offline with a fake model client", () => {
     expect(md).toContain("`CLEF_INPUT_TOKEN_LIMIT` | 60000 | 20000");
   });
 
-  it("RR7: a truly dependent case judged holds keeps Clef off, and the thresholds stay at their starting values", async () => {
+  it("RR7: when no threshold separates the classes (dependent cases hold at the starting values, no independent case can hold at the best) Clef stays off and the thresholds keep their starting values", async () => {
     const clock = { t: 0 };
     // Every case answered 0.05: no threshold separates the classes, so nothing may hold.
     const ai = fakeAi(clock, { p: () => 0.05, ms: 200 });

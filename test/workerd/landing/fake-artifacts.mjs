@@ -75,6 +75,12 @@ export default class FakeArtifacts extends WorkerEntrypoint {
   // ALREADY_EXISTS branch of the route cannot be exercised from a fake. An existing repo is
   // idempotent here — the remote is the same either way.
   async create(name) {
+    // Opt-in (AUTO_CREATE): a name no test can know ahead — a try pool's `try-<id>` — gets its
+    // receive-pack-enabled repository on the git server when it is created.
+    if (this.env.AUTO_CREATE === "1") {
+      const made = await fetch(`${this.env.READ_ORIGIN}/create/${name}`, { method: "POST" });
+      if (!made.ok) throw new Error(`create: ${made.status}`);
+    }
     return { remote: `${this.env.GIT_ORIGIN}/${name}`, token: { plaintext: "created-token" } };
   }
   // `get` returns a handle unconditionally for the same reason (NOT_FOUND cannot cross either):

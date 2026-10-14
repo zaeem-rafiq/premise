@@ -5,6 +5,8 @@
 //   outbox       the `limits` events each registered pool is still owed (EV2a): a row leaves
 //                only when the pool's Floor confirmed it, exactly like Trunk's `events_out`
 //   outbox_pool  the per-pool delivery position: tries so far and when the next try is due
+//   try_log      09-try TY6a: one row per visitor's try of the last hour — its time, and the
+//                salted hash of its client address while the address window lasts
 //
 // Statements are static strings — no query is built from input.
 
@@ -24,6 +26,7 @@ export const GATE_SCHEMA = [
     tries    INTEGER NOT NULL DEFAULT 0,
     retry_at INTEGER NOT NULL DEFAULT 0
   ) WITHOUT ROWID`,
+  "CREATE TABLE IF NOT EXISTS try_log (t INTEGER NOT NULL, h TEXT)",
 ] as const;
 
 export function applyGateSchema(sql: Sql): void {
@@ -132,4 +135,23 @@ export function nextRetryAt(sql: Sql, now: number): number | null {
     )
     .toArray()[0];
   return row === undefined || row.at === null ? null : Number(row.at);
+}
+
+// ---- try_log (09-try TY6a) ----
+
+export type TryLogRow = { t: number; h: string | null };
+
+/** TY6a: drops the rows at or before `drop` and erases the hash of the rows at or before `erase`
+ * (`tryCutoffs`), then answers what is left. */
+export function tryLogPrune(sql: Sql, drop: number, erase: number): TryLogRow[] {
+  sql.exec("DELETE FROM try_log WHERE t <= ?", drop);
+  sql.exec("UPDATE try_log SET h = NULL WHERE t <= ? AND h IS NOT NULL", erase);
+  return sql
+    .exec("SELECT t, h FROM try_log ORDER BY t")
+    .toArray()
+    .map((row) => ({ t: Number(row.t), h: row.h === null ? null : String(row.h) }));
+}
+
+export function tryLogAppend(sql: Sql, t: number, h: string): void {
+  sql.exec("INSERT INTO try_log (t, h) VALUES (?, ?)", t, h);
 }

@@ -8,7 +8,8 @@
 // The calls (each typed in `src/protocol/internal.ts`): `POST /internal/reserve` (SE6),
 // `POST /internal/settle` (SE6a), `POST /internal/release` (the attempt's agent slot),
 // `POST /internal/claim` (07-mcp MC20: an outside attempt's slot, with no model call),
-// `POST /internal/may-start` (SE8), `POST /internal/register-pool` (EV2a — the pool's first
+// `POST /internal/may-start` (SE8), `POST /internal/try-record` (09-try TY6: a visitor's try,
+// recorded or refused by its limits), `POST /internal/register-pool` (EV2a — the pool's first
 // `limits` event is owed at once), `POST /internal/kill` and the owner route's `POST /api/kill`
 // (SE10-SE12), `GET /killed` (SE10, the swarm launcher's check). `/internal/state` and
 // `/internal/alarm` are the shell's own test and observability paths, same as Trunk's; the alarm
@@ -49,10 +50,24 @@ import { notBuilt } from "../not-built.ts";
 import { sqlOver } from "../sql-port.ts";
 import { deliverDue, nextRetryAt } from "./deliver.ts";
 import { pausePoolForOwner, resumePoolForOwner } from "./effects.ts";
-import { applyGateSchema, gateMetaGet, gateMetaSet, outboxAll, outboxAppend, outboxPoolAll } from "./store.ts";
+import {
+  applyGateSchema,
+  gateMetaGet,
+  gateMetaSet,
+  outboxAll,
+  outboxAppend,
+  outboxPoolAll,
+  tryLogAppend,
+  tryLogPrune,
+} from "./store.ts";
+import { decideTry, tryCutoffs } from "./try-ledger.ts";
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
+}
+
+function hex(bytes: Uint8Array): string {
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -217,6 +232,38 @@ export class ModelGate extends DurableObject<Env> {
     this.ctx.waitUntil(run);
   }
 
+  /** TY6a: the salt of the address hash, drawn once and never answered. */
+  #trySalt(): string {
+    const stored = gateMetaGet(this.#sql, "try_salt");
+    if (stored !== null) return stored;
+    const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
+    gateMetaSet(this.#sql, "try_salt", salt);
+    return salt;
+  }
+
+  /** TY6: record a visitor's try, or name the limit that refuses it. The address lives only in this
+   * call: the log keeps its salted hash, erased once the address window has passed (TY6a). */
+  async #tryRecord(body: unknown, now: number): Promise<Response> {
+    if (!isRecord(body) || typeof body.address !== "string" || body.address === "") {
+      return json({ error: { code: "invalid_args" } }, 400);
+    }
+    const salt = this.#trySalt();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${salt}|${body.address}`));
+    const hash = hex(new Uint8Array(digest));
+    const decision = this.ctx.storage.transactionSync(() => {
+      const { drop, erase } = tryCutoffs(now);
+      const rows = tryLogPrune(this.#sql, drop, erase);
+      const total = Number(gateMetaGet(this.#sql, "try_total") ?? "0");
+      const answer = decideTry(rows, total, hash, now);
+      if (answer.ok) {
+        tryLogAppend(this.#sql, now, hash);
+        gateMetaSet(this.#sql, "try_total", total + 1);
+      }
+      return answer;
+    });
+    return json(decision);
+  }
+
   /** The alarm's work: the sweep (SE6a + the due `limits` flush of SE9), then owed deliveries. */
   async #runAlarm(now: number): Promise<void> {
     this.#repos?.kick(now);
@@ -302,6 +349,7 @@ export class ModelGate extends DurableObject<Env> {
       if (pathname === "/internal/attempt-repo") {
         return this.#repos === null ? notBuilt() : this.#repos.enqueue(body, Date.now());
       }
+      if (pathname === "/internal/try-record") return await this.#tryRecord(body, Date.now());
       if (pathname === "/internal/alarm") {
         // The test path (the task's "drive the alarm through a test path"): the same work the
         // alarm does, at `now` — Date.now() unless the body names a time.

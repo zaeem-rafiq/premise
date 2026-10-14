@@ -121,6 +121,15 @@ export const MCP_ROUTES: readonly Route[] = [
   { method: "DELETE", paths: ["/mcp/{pool}"], role: "anyone", answeredBy: "worker" },
 ];
 
+/** The row `09-try.md` TY2 adds to 13.6: a visitor's try. Kept apart from `ROUTES`, which is the
+ * table of 13.6 as it stands. */
+export const TRY_ROUTES: readonly Route[] = [
+  { method: "POST", paths: ["/api/try"], role: "anyone", answeredBy: "worker" },
+];
+
+/** `POST /api/try` (TY2): the try pool's name and the page path the visitor opens. */
+export type TryResponse = { pool: string; path: string };
+
 // ---- Request and response bodies the routes carry ----
 
 /** `POST /api/session` (SE2): the unlock. */

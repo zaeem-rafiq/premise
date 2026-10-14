@@ -154,6 +154,8 @@ export type LandingWorker = {
   runAlarm(pool: string, nowMs?: number): Promise<Response>;
   /** The `premise-swarm` workflow instance's status, when `swarm: true` was passed. */
   swarmInstanceStatus(id: string): Promise<string>;
+  /** The `premise-try` workflow instance's status and output, when `tryWorkflow: true` was passed. */
+  tryInstance(id: string): Promise<{ status: string; output?: unknown }>;
   /** A client socket on the pool's Floor stream route (`GET /api/pools/{pool}/stream`, 12.2). */
   stream(pool: string): Promise<WebSocket>;
   /** Re-bind the `TRUNK` namespace to a class that answers 503 to every fetch, then restart the
@@ -258,6 +260,18 @@ async function startReadServer(
         // branch when one rode the URL, else the source's default the clone picked (IR10/IR11).
         const resolved = git(join(projectRoot, target), ["symbolic-ref", "--short", "HEAD"]);
         response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ branch: resolved }));
+        return;
+      }
+      if (kind === "create" && request.method === "POST") {
+        // AUTO_CREATE's stand-in for `create`: the same named, push-enabled repository the
+        // harness makes for `repos`. The name is checked like every pool name (PL1).
+        const target = name ?? "";
+        if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(target)) {
+          response.writeHead(400).end();
+          return;
+        }
+        if (!ok) createNamedRepo(projectRoot, target);
+        response.writeHead(200).end();
         return;
       }
       if (kind === "branch") {
@@ -409,6 +423,11 @@ export async function startLandingWorker(options: {
   inspect?: boolean;
   /** Plain variables of the deployment, as wrangler's `vars` (the Clef switches, 01-core TR10). */
   vars?: Record<string, string>;
+  /** Bind `env.TRY` to the bundle's `TryWorkflow` (09-try TY9) through the local workflows engine. */
+  tryWorkflow?: boolean;
+  /** Make the git repository of every name the fake binding's `create` receives (a try pool's
+   * name is drawn by the Worker, TY3, so no test can list it in `repos`). */
+  autoCreateRepos?: boolean;
 }): Promise<LandingWorker> {
   if (!existsSync(BUNDLE) || !existsSync(join(CLIENT, "index.html"))) {
     throw new Error("dist/ is missing. Run `npm run build` first (`npm run test:workerd` builds the Worker only).");
@@ -484,10 +503,16 @@ export async function startLandingWorker(options: {
                     : { className, useSQLite: true },
             ]),
           ),
-          ...(options.swarm === true
+          ...(options.swarm === true || options.tryWorkflow === true
             ? {
-                workflows: { SWARM: { name: "premise-swarm", className: "SwarmWorkflow" } },
-                workflowExports: { SwarmWorkflow: { name: "premise-swarm" } },
+                workflows: {
+                  ...(options.swarm === true ? { SWARM: { name: "premise-swarm", className: "SwarmWorkflow" } } : {}),
+                  ...(options.tryWorkflow === true ? { TRY: { name: "premise-try", className: "TryWorkflow" } } : {}),
+                },
+                workflowExports: {
+                  ...(options.swarm === true ? { SwarmWorkflow: { name: "premise-swarm" } } : {}),
+                  ...(options.tryWorkflow === true ? { TryWorkflow: { name: "premise-try" } } : {}),
+                },
               }
             : {}),
           // wrangler.jsonc's Worker Loader binding: the green line's isolate runtime (S4a).
@@ -508,7 +533,11 @@ export async function startLandingWorker(options: {
           modules: [{ type: "ESModule", path: FAKE_ARTIFACTS }],
           compatibilityDate: "2026-10-01",
           compatibilityFlags: ["nodejs_compat"],
-          bindings: { GIT_ORIGIN: gitServer.origin, READ_ORIGIN: readServer.origin },
+          bindings: {
+            GIT_ORIGIN: gitServer.origin,
+            READ_ORIGIN: readServer.origin,
+            ...(options.autoCreateRepos === true ? { AUTO_CREATE: "1" } : {}),
+          },
         },
         ...(options.modelUrl === undefined
           ? []
@@ -658,6 +687,14 @@ export async function startLandingWorker(options: {
       const instance = await bindings.SWARM?.get(id);
       if (instance === undefined) throw new Error(`no swarm instance ${id}`);
       return (await instance.status()).status;
+    },
+    tryInstance: async (id) => {
+      const bindings = (await miniflare.getBindings("premise")) as {
+        TRY?: { get(id: string): Promise<{ status(): Promise<{ status: string; output?: unknown }> }> };
+      };
+      const instance = await bindings.TRY?.get(id);
+      if (instance === undefined) throw new Error(`no try instance ${id}`);
+      return await instance.status();
     },
     stream: async (pool) => {
       const response = await object("FLOOR", pool).fetch(`/api/pools/${pool}/stream`, {

@@ -1,7 +1,17 @@
 // `/floor.json`: the static settings the page reads before anything else (03-floor 4.5).
 // The values come from `src/config/` — the build writes the same file into `public/` (FJ1).
 
-export const FEATURE_KEYS = ["held", "race", "undo", "green", "clef", "attempt_repos", "mcp", "text_merge", "try"] as const;
+export const FEATURE_KEYS = [
+  "held",
+  "race",
+  "undo",
+  "green",
+  "clef",
+  "attempt_repos",
+  "mcp",
+  "text_merge",
+  "try",
+] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 

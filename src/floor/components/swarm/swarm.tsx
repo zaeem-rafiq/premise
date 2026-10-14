@@ -112,8 +112,18 @@ export function SwarmView({
         <p className="swarm-empty">{t("swarm.empty")}</p>
       ) : (
         <>
-          {!swarm.running && swarm.ever_ran && (
+          {!swarm.running && swarm.ever_ran && floor.metrics_active != null && (
             <p className="swarm-final">{t("swarm.final", { time: timeOfDay(floor.ts) })}</p>
+          )}
+          {/* CO42c: Trunk measures while a page watches; a run nobody watched has no numbers here,
+              so the view points at the recorded Swarm run, which has them. */}
+          {!swarm.running && swarm.ever_ran && floor.metrics_active == null && (
+            <p className="swarm-final">
+              {t("swarm.final.unwatched")}{" "}
+              <a className="swarm-final-replay" href="/replay/swarm">
+                {t("swarm.final.replay")}
+              </a>
+            </p>
           )}
           {swarm.running && waitingSince !== null && (
             <p className="swarm-final">

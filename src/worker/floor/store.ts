@@ -153,6 +153,15 @@ export function loadState(sql: SqlStorage): { n: number; state: FloorState } {
   const snapshot = readNewestSnapshot(sql);
   const after = snapshot?.n ?? 0;
   const state = snapshot?.state ?? emptyFloorState();
+  // A snapshot written before `metrics_active` existed (CO42b, 2026-10-14) lacks it: fill it once
+  // from the stored events up to the snapshot, the value the reducer would have kept.
+  if (state.metrics_active === undefined) {
+    state.metrics_active = null;
+    for (const event of eventsAfter(sql, 0)) {
+      if (event.n > after) break;
+      if (event.type === "metrics" && event.landings_per_second > 0) state.metrics_active = event;
+    }
+  }
   let n = after;
   for (const event of eventsAfter(sql, after)) {
     reduce(state, event);

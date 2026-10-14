@@ -519,6 +519,10 @@ export const STRINGS: Readonly<Record<string, CopyEntry>> = {
   "swarm.final": {
     text: "The run has ended. These are its last measured numbers, at {time of day}.",
   },
+  "swarm.final.unwatched": {
+    text: "The run has ended. Its numbers are measured while a page watches it, and this run had none.",
+  },
+  "swarm.final.replay": { text: "Play the recorded Swarm run" },
   "swarm.no_agents": {
     text: "The Swarm is running and no scripted agent has started yet. Stop it and start again.",
   },

@@ -67,10 +67,21 @@ it("CP5 5.2: other counts keep the plural and the thousands comma", () => {
   expect(html).toContain("Last push: 1 push, 37 changes");
 });
 
-function ownerHtml(swarm: ReturnType<typeof emptyFloorState>["swarm"], ts = 5_000): string {
+function ownerHtml(swarm: ReturnType<typeof emptyFloorState>["swarm"], ts = 5_000, watched = false): string {
   const floor = emptyFloorState();
   floor.ts = ts;
   floor.swarm = swarm;
+  if (watched)
+    floor.metrics_active = {
+      window_ms: 10_000,
+      landings_per_second: 1,
+      time_to_land_ms: { p50: 1_000, p99: 2_000 },
+      go_around_rate: 0,
+      waiting_behind: 0,
+      push_backlog: 0,
+      false_abort_rate: null,
+      escape_rate: 0,
+    } as never;
   return renderToString(
     createElement(
       ShellContext.Provider,
@@ -84,7 +95,7 @@ function ownerHtml(swarm: ReturnType<typeof emptyFloorState>["swarm"], ts = 5_00
 // 2026-10-11: the view threw "no value for placeholder {time of day}" after a run stopped.
 it("3.15 ended: a stopped run says when its last numbers were measured", () => {
   const ts = new Date(2026, 9, 11, 4, 5, 6).getTime();
-  const html = ownerHtml({ running: false, agents: 64, collision_dial: 0, pools: ["swarm"], ever_ran: true }, ts);
+  const html = ownerHtml({ running: false, agents: 64, collision_dial: 0, pools: ["swarm"], ever_ran: true }, ts, true);
   expect(html).toContain("The run has ended. These are its last measured numbers, at 04:05:06.");
 });
 
@@ -141,4 +152,20 @@ it("CO42b: an ended run shows the last window that held landings", () => {
   );
   expect(html).toContain("1.60");
   expect(html).toContain("4%");
+});
+
+// CO42c: a run nobody watched has no measured window; the view points at the recorded run.
+it("CO42c: an ended, unwatched run links the Swarm recording instead of empty numbers", () => {
+  const floor = emptyFloorState();
+  floor.swarm = { running: false, agents: 256, collision_dial: 0.25, pools: ["swarm"], ever_ran: true };
+  const html = renderToString(
+    createElement(
+      ShellContext.Provider,
+      { value: makeShell(settings, false, false) },
+      createElement(SwarmView, { floor, owner: false, pool: "swarm" }),
+    ),
+  );
+  expect(html).toContain("Its numbers are measured while a page watches it, and this run had none.");
+  expect(html).toContain('href="/replay/swarm"');
+  expect(html).not.toContain("These are its last measured numbers");
 });

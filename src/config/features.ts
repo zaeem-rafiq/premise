@@ -19,4 +19,6 @@ export const FEATURES: Features = {
   attempt_repos: true,
   mcp: true,
   text_merge: true,
+  // 09-try: off on the branch that builds it; the lead switches it on after a live check.
+  try: false,
 };

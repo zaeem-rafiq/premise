@@ -304,9 +304,9 @@ describe("floorJson() (03-floor 4.5)", () => {
     });
   });
 
-  it("features carries the eight keys of Features (FJ1, with 07-mcp's mcp and PM3a's text_merge) and no other", () => {
+  it("features carries the nine keys of Features (FJ1, with 07-mcp's mcp, PM3a's text_merge and 09-try's try) and no other", () => {
     expect(Object.keys(json.features).sort()).toEqual(
-      ["attempt_repos", "clef", "green", "held", "mcp", "race", "text_merge", "undo"].sort(),
+      ["attempt_repos", "clef", "green", "held", "mcp", "race", "text_merge", "try", "undo"].sort(),
     );
   });
 });

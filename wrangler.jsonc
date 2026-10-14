@@ -72,7 +72,9 @@
   "workflows": [
     { "name": "premise-swarm", "binding": "SWARM", "class_name": "SwarmWorkflow" },
     { "name": "premise-green", "binding": "GREEN", "class_name": "GreenLineWorkflow" },
-    { "name": "premise-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" }
+    { "name": "premise-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" },
+    // 09-try TY9: a visitor's try pool, driven by the canned cast's conductor on the server.
+    { "name": "premise-try", "binding": "TRY", "class_name": "TryWorkflow" }
   ],
 
   // BP9: the sum of SPEND_CAP_USD over all deployed environments, plus what the early model measurement
@@ -109,7 +111,8 @@
       "workflows": [
         { "name": "premise-test-swarm", "binding": "SWARM", "class_name": "SwarmWorkflow" },
         { "name": "premise-test-green", "binding": "GREEN", "class_name": "GreenLineWorkflow" },
-        { "name": "premise-test-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" }
+        { "name": "premise-test-archive", "binding": "ARCHIVE", "class_name": "AttemptRepoWorkflow" },
+        { "name": "premise-test-try", "binding": "TRY", "class_name": "TryWorkflow" }
       ],
       "vars": {
         "SPEND_CAP_USD": "10",

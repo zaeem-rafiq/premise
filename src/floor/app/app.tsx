@@ -43,6 +43,7 @@ import { errorSentence } from "../../copy/errors.ts";
 import { text } from "../../copy/strings.ts";
 import { sessionPath } from "../stream/urls.ts";
 import { duration } from "../../copy/format.ts";
+import { TryButton } from "../components/try/try-button.tsx";
 
 /** Calls the registered component, or null when the entry is missing or unbound. A `value` may be
  * the component itself or its entry's tag, which the merged records of `bindings.tsx` resolve —
@@ -144,6 +145,8 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
   const connectionSession = session.connection === "lost" ? session : activeSession;
   const offline = !replay && connectionSession.connection === "lost";
   const shell = useMemo(() => makeShell(settings, owner, replay), [settings, owner, replay]);
+  // 09-try TY11: a visitor of a live page may start a try while `features.try` is on.
+  const tryOffered = !owner && !replay && settings.features.try === true;
 
   // ---- routing (client routes of 4.5; the page never reloads) ----
   const navigate = useCallback((path: string) => {
@@ -702,6 +705,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
             onOpenCard={(cardId) => openSheet({ kind: "card", card_id: cardId })}
             onOpenWhy={table.entries.has("sheet.why") ? (seq) => openSheet({ kind: "why", seq }) : undefined}
             onFloor={() => setView("floor")}
+            onTry={tryOffered ? navigate : undefined}
             replayOffer={
               showStartCard(owner, replay, quietPool(floor, clock), startDismissed, justLocked)
                 ? {
@@ -755,6 +759,7 @@ export function FloorApp({ settings, table }: { settings: FloorJson; table: Regi
                       <button type="button" className="primary" onClick={openDefaultRecording}>
                         {shell.t("start.play", { duration: defaultRecordingDuration() })}
                       </button>
+                      {tryOffered && <TryButton onOpen={navigate} />}
                       <button type="button" onClick={() => setStartDismissed(true)}>
                         {/* A repository pool has no live pool to look around (IR12). */}
                         {shell.t(floor.pool.app === null ? "start.look.repo" : "start.look")}

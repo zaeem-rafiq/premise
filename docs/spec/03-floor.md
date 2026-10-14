@@ -436,7 +436,7 @@ The Overview tells the run the way a product page would: one hero, one sentence,
 | Part | Content |
 | --- | --- |
 | Header and banners | As on every view (2.10, FL4). The strip is not drawn: its numbers are in the headline and the facts line. |
-| Headline | `overview.landed` then `overview.goarounds`, from `counters.landed_changes` and `counters.go_arounds`; `overview.landed.none` before the first landing; `overview.loading` before the first event. Under it `overview.waiting.none` when `metrics.waiting_behind` is 0 or unknown, else `overview.waiting`. For a visitor on a quiet pool the start card's `start.play` button sits under it (RY23). |
+| Headline | `overview.landed` then `overview.goarounds`, from `counters.landed_changes` and `counters.go_arounds`; `overview.landed.none` before the first landing; `overview.loading` before the first event. Under it `overview.waiting.none` when `metrics.waiting_behind` is 0 or unknown, else `overview.waiting`. For a visitor on a quiet pool the start card's `start.play` button sits under it (RY23). For a visitor of a live page while `features.try` is on, `try.button` sits under it too, and in the start card beside `start.play` (`09-try.md` TY11; added 2026-10-14). |
 | Hero | The main pool's live frame (3.5), rounded, with its caption bar, Pause and Compare. |
 | In flight | `overview.inflight`, then at most 3 attempts in flight, newest event first: status shape and word (5.3), intent, model and elapsed time. A card with an open decision opens its card sheet; any other opens the Floor view. `overview.more` opens the Floor view. |
 | Input | The intent box (3.1) with its rules, drawn as one pill. |
@@ -1730,6 +1730,14 @@ The first version of this file listed 25 things the stream or the interfaces did
 | `start.play` | Play the Replay ({duration}) |
 | `start.look` | Look around the live pool |
 | `start.look.repo` | Look around this repository |
+| `try.button` | Try it: watch agents adapt live |
+| `try.starting` | Starting your own copy of the tide pool… |
+| `try.off` | Try it is switched off on this deployment. |
+| `try.killed` | The owner has stopped all agents, so Try it cannot start now. |
+| `try.limited.address` | You started a try a few minutes ago. Open it again, or wait ten minutes. |
+| `try.limited.hour` | Many people are trying it right now. Play the Replay, or try again within the hour. |
+| `try.limited.total` | This deployment has run every try it allows. Play the Replay instead. |
+| `try.failed` | Try it could not start. Tap it again, or play the Replay. |
 | `owner.visitor` | Visitor |
 | `owner.unlocked` | Owner |
 | `owner.replay` | Replay |

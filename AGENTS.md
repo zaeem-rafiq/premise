@@ -25,7 +25,7 @@ build step.
 | Unit tests, offline               | `npm test` (`npm test -- <path filter>` narrows it)                                                | works            |
 | Cases                             | `npm run test:cases` (`CASES=list` prints the counts)                                              | works            |
 | Durable Objects in local workerd  | `npm run test:workerd`                                                                             | works            |
-| Browser                           | `npm run test:e2e` (`-- --project=deployed` runs against `PREMISE_URL`)                            | no tests yet     |
+| Browser                           | `npm run test:e2e` (`-- --project=deployed` runs against `PREMISE_URL`)                            | works            |
 | Integration                       | `npm run test:integration -- <names>`                                                              | works            |
 | Build                             | `npm run build` (`npm run clean`, then `build:seeds`, `build:host`, `build:floor`, `build:worker`) | works            |
 | One build step                    | `npm run build:seeds`, `npm run build:host`, `npm run build:floor`, `npm run build:worker`         | works            |
@@ -39,9 +39,9 @@ build step.
 | Local run, real service           | `npm run dev`                                                                                      | lead only        |
 | Deploy                            | `npm run deploy:test`, `npm run deploy`                                                            | lead only        |
 | Pools                             | `npm run pool:create -- <pool> <seed>`                                                             | works            |
-| Early model measurement           | `npm run measure:models -- --early`                                                                | not built        |
-| Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | hero: offline OK |
-| Recordings                        | `npm run record:export -- --pool <pool> --id <id>`                                                 | not built        |
+| Early model measurement           | `npm run measure:models -- --early`                                                                | works            |
+| Measurements                      | `npm run measure:models`, `npm run soak`, `npm run calibrate:clef`, `npm run rehearse:hero`        | works            |
+| Recordings                        | `npm run record:export -- --pool <pool> --id <id>`                                                 | works            |
 | Submission checks                 | `npm run check:submission`                                                                         | works            |
 | Cleanup of the `test` environment | `npm run cleanup:test`                                                                             | not built        |
 | Spend                             | `npm run spend`                                                                                    | not built        |

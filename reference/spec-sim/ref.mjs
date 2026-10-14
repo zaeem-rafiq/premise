@@ -1,6 +1,6 @@
 // Scratch reference for docs/spec/01-core.md sections 2 and 6.
 // Used only to check worked examples and test vectors by hand. Not product code.
-import * as acorn from "/Users/zaeemkhan/code/claude-os/node_modules/acorn/dist/acorn.mjs";
+import * as acorn from "acorn";
 import { createHash } from "node:crypto";
 
 export const PARSE = { ecmaVersion: 2025, sourceType: "module" };

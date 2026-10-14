@@ -1,6 +1,6 @@
-// The ports the deployment uses (plan 1.7): this file names the option in use for each port. Until a
-// lane builds its adapter, every port resolves to the not-built implementation of `./not-built.ts`,
-// whose methods fail closed with the code `not_built`.
+// The ports the deployment uses (plan 1.7): this file names the option in use for each port. A port
+// whose adapter is not built resolves to the implementation of `./not-built.ts`, whose methods fail
+// closed with the code `not_built`.
 //
 // `SyncTriage` has no not-built form: a synchronous judge is pure code (`ScriptedTriage` for
 // synthetic attempts, `OffTriage` when Clef is off, S6a) and lives with the engine.

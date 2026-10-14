@@ -105,6 +105,10 @@
 
 /* ---- Header: Apple's local nav - the product name, quiet links, a hairline, translucent ---- */
 .floor .header {
+  /* backdrop-filter makes the header its own stacking context; above the page, so the narrow
+     view menu (base.css .nav-menu-list) is not painted under the content below it. */
+  position: relative;
+  z-index: 40;
   background: var(--veil);
   backdrop-filter: saturate(180%) blur(20px);
   border-bottom: var(--border) solid var(--hairline);

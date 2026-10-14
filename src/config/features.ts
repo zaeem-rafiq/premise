@@ -2,11 +2,11 @@
 // read the same values. A slice turns its feature on when the lead merges it; a feature that fails
 // its acceptance check at the freeze is switched off here (BP4).
 //
-// On since 2026-10-06, after each slice's acceptance on main and a live check on `test`: `held`
-// (Slice 11), `race` (Slice 12) and `undo` (Slice 13). The green line, Clef and attempt repositories
-// remain off pending their live checks: `green` is "none", the others are false. Outside agents
-// over MCP (07-mcp) are built and off until the lead's live check on `test`. The minimal held form
-// of HD1 — `land` and `decline` on a `held` submit — exists in every build.
+// On, each after its acceptance on main and a live check on `test`: `held`, `race` and `undo`
+// (2026-10-06); the green line on the isolate runtime with the pre-landing self-test, attempt
+// repositories, outside agents over MCP and the three-way text merge (2026-10-10 to 2026-10-11);
+// Clef triage after its calibration and Try it (2026-10-14). The minimal held form of HD1 — `land`
+// and `decline` on a `held` submit — exists in every build.
 
 import type { Features } from "../protocol/floor-json.ts";
 

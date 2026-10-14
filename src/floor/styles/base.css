@@ -299,7 +299,8 @@ a {
 .nav-menu-list {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
+  max-width: calc(100vw - 32px);
   z-index: 30;
   display: flex;
   flex-direction: column;

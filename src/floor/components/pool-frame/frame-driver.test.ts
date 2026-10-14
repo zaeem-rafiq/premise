@@ -266,6 +266,33 @@ describe("load failure and stalls (FR20, FR28)", () => {
     expect(h.loads).toHaveLength(2);
   });
 
+  it("a frame that loads itself again after a restart gets the page-load time, not the stall time (FR28)", () => {
+    // Seen on production, 2026-10-14: the restart after a shared rule landed took over 5 s, and the
+    // second "stall" left frame.stalled on screen over a healthy pool.
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: C1 });
+    h.driver.onStats(stats(`c-${C1}`));
+    expect(h.armed("stall")).toBe(POOL_STALL_MS);
+    h.driver.onStats(stats(`c-${C1}`, { swap: { mode: "restart", arrived: [], failed: [] } }));
+    expect(h.armed("stall")).toBe(FRAME_LOAD_TIMEOUT_MS);
+    h.driver.onLoad();
+    expect(h.armed("stall")).toBe(FRAME_LOAD_TIMEOUT_MS);
+    h.driver.onStats(stats(`c-${C2}`));
+    expect(h.armed("stall")).toBe(POOL_STALL_MS);
+    expect(h.driver.stalledCaption).toBeNull();
+    expect(h.loads).toHaveLength(1);
+  });
+
+  it("a page that loads itself again and never answers still falls back (FR28)", () => {
+    const h = new Harness({ pool: POOL, mode: "live" });
+    h.target({ landedCommit: C1 });
+    h.driver.onStats(stats(`c-${C1}`));
+    h.driver.onLoad();
+    h.fire("stall");
+    expect(h.driver.stalledCaption?.id).toBe("frame.stalled.reloaded");
+    expect(h.loads).toHaveLength(2);
+  });
+
   it("a frame on green gets probe when green.advanced arrives (FR28)", () => {
     const h = new Harness({ pool: POOL, mode: "live" });
     h.target({ landedCommit: C1, greenCommit: "g1", greenSeq: 3 });

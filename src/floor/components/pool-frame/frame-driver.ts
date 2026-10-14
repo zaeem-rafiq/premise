@@ -188,8 +188,13 @@ export class FrameDriver {
   /** The iframe's `load` event: a document arrived — which is not yet the pool page (FR20).
    * An error document, an aborted navigation's error page or a server's fallback fires `load`
    * just the same, so `load` alone cannot make the frame live: the first `stats` message can.
-   * The `load` timer keeps running; a document that never speaks hits `error` (FR20/RY22). */
-  onLoad(): void {}
+   * The `load` timer keeps running; a document that never speaks hits `error` (FR20/RY22).
+   * A `load` while live is the frame loading itself again (`02-tidepool.md` 4.7 step 2, step 5):
+   * a page load, so the watch gives it FRAME_LOAD_TIMEOUT_MS, not POOL_STALL_MS (FR28, amended
+   * 2026-10-14; on `production` a restart after a shared rule landed took over 5 s). */
+  onLoad(): void {
+    if (this.phase === "live") this.armStall(FRAME_LOAD_TIMEOUT_MS);
+  }
 
   /** The iframe's `error` event — FR20's "reports an error" half of the load failure. */
   onLoadError(): void {
@@ -229,7 +234,8 @@ export class FrameDriver {
       this.highlightSent = true;
     }
     this.syncPausePost();
-    this.armStall();
+    // A `stats` that reports a restart is the page's last before it loads itself again (4.7).
+    this.armStall(stats.swap?.mode === "restart" ? FRAME_LOAD_TIMEOUT_MS : POOL_STALL_MS);
     this.sink.changed();
   }
 
@@ -348,10 +354,10 @@ export class FrameDriver {
 
   /** The FR28 watch: armed while the frame is live, visible and not paused — the only state in
    * which "sent no stats for POOL_STALL_MS" means stalled. Re-armed on every stats. */
-  private armStall(): void {
+  private armStall(ms: number = POOL_STALL_MS): void {
     this.sink.cancel("stall");
     if (this.phase === "live" && !this.effectivePaused()) {
-      this.sink.schedule("stall", POOL_STALL_MS);
+      this.sink.schedule("stall", ms);
     }
   }
 
